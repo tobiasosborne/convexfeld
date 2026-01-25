@@ -148,4 +148,4 @@ git status  # MUST show "up to date with origin"
 - TDD: Tests written BEFORE implementation
 - Test:Code ratio: 1:3 to 1:4
 - File size: 100-200 LOC max
-- Language: Rust
+- Language: C99

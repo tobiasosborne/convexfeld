@@ -8,6 +8,19 @@ This file captures learnings, gotchas, and useful patterns discovered during dev
 
 ## 2025-01-25: Initial Setup
 
+### CRITICAL ERROR: Wrong Language
+
+**FAILURE: Implementation plan written for Rust instead of C99.**
+
+- The PRD explicitly states C99
+- Agent failed to read the PRD carefully
+- Entire implementation plan has wrong file structure, syntax, tooling
+- This is a major error requiring full rewrite of implementation plan
+
+**Lesson: ALWAYS verify the target language from PRD before writing ANY implementation details.**
+
+---
+
 ### Planning Phase Learnings
 
 1. **Previous planning attempts failed** because they didn't:
@@ -27,7 +40,7 @@ This file captures learnings, gotchas, and useful patterns discovered during dev
 4. **Spec structure**
    - 142 functions across 17 modules in 6 layers
    - 8 core data structures
-   - Specs originally written for C, implementing in Rust
+   - Implementation language: C99
 
 ---
 
