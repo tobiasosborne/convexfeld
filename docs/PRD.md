@@ -18,10 +18,11 @@
 7. [API Design](#7-api-design)
 8. [Algorithm Specification](#8-algorithm-specification)
 9. [Non-Functional Requirements](#9-non-functional-requirements)
-10. [Dependencies & Technology Stack](#10-dependencies--technology-stack)
-11. [Implementation Roadmap](#11-implementation-roadmap)
-12. [Success Metrics](#12-success-metrics)
-13. [References](#13-references)
+10. [Test Driven Design & Quality Assurance](#10-test-driven-design--quality-assurance)
+11. [Dependencies & Technology Stack](#11-dependencies--technology-stack)
+12. [Implementation Roadmap](#12-implementation-roadmap)
+13. [Success Metrics](#13-success-metrics)
+14. [References](#14-references)
 
 ---
 
@@ -48,6 +49,7 @@
 | Data Structure Definitions | Complete | 8 structures with field layouts and lifecycles |
 | Module Organization | Complete | 17 modules with dependency ordering |
 | API Design | Complete | Public interface with error handling patterns |
+| **Test Suite** | Not Started | ~1,000 tests, 1:3-1:4 test:code ratio (TDD) |
 | Implementation Code | Not Started | Target: C language |
 | Formal Verification | Planned | Target: Lean 4 with mathlib |
 
@@ -78,6 +80,7 @@ To provide the most comprehensive, academically-grounded, and implementation-rea
 
 | Principle | Implementation |
 |-----------|----------------|
+| **Test Driven Design** | Tests written FIRST; 1:3-1:4 test:code ratio |
 | **Sparsity Exploitation** | CSC matrix format, sparse FTRAN/BTRAN |
 | **Numerical Stability** | Harris ratio test, periodic refactorization |
 | **Modularity** | Clear separation between pricing, pivot, basis operations |
@@ -782,9 +785,527 @@ where:
 
 ---
 
-## 10. Dependencies & Technology Stack
+## 10. Test Driven Design & Quality Assurance
 
-### 10.1 Implementation Language
+### 10.1 TDD Methodology
+
+**CRITICAL REQUIREMENT:** This project follows strict Test Driven Design (TDD) principles. Tests are written BEFORE implementation code.
+
+#### 10.1.1 TDD Workflow
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      TDD CYCLE (Red-Green-Refactor)             │
+│                                                                 │
+│   1. RED:    Write failing test for new functionality           │
+│   2. GREEN:  Write minimal code to pass the test                │
+│   3. REFACTOR: Improve code while keeping tests green           │
+│   4. REPEAT: Move to next test case                             │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### 10.1.2 Implementation Order
+
+For each function specification:
+
+1. **Write unit tests** covering:
+   - Normal operation (happy path)
+   - Edge cases (boundary conditions)
+   - Error conditions (invalid inputs)
+   - Numerical edge cases (tolerances, near-zero values)
+
+2. **Verify tests fail** (no implementation exists)
+
+3. **Implement function** to pass tests
+
+4. **Refactor** while maintaining green tests
+
+5. **Add integration tests** connecting to other modules
+
+### 10.2 Test Coverage Requirements
+
+#### 10.2.1 Code Ratio Target
+
+| Metric | Target Ratio | Description |
+|--------|--------------|-------------|
+| **Test:Implementation** | **1:3 to 1:4** | 1 line of test code per 3-4 lines of implementation |
+| **Minimum Coverage** | **90%** | Line coverage across all modules |
+| **Branch Coverage** | **85%** | Decision point coverage |
+| **Function Coverage** | **100%** | Every function has at least one test |
+
+#### 10.2.2 Coverage by Module
+
+| Module | Functions | Min Tests | Est. Test LOC | Priority |
+|--------|-----------|-----------|---------------|----------|
+| Memory Management | 9 | 45 | 400 | P0 |
+| Error Handling | 10 | 50 | 450 | P0 |
+| Validation | 2 | 20 | 200 | P0 |
+| Parameters | 4 | 24 | 200 | P0 |
+| Matrix Operations | 7 | 70 | 800 | P1 |
+| Basis Operations | 8 | 120 | 1,500 | P1 |
+| Pricing | 6 | 60 | 700 | P1 |
+| Ratio Test | 4 | 80 | 900 | P1 |
+| Simplex Core | 21 | 200 | 2,500 | P2 |
+| Public API | 30 | 180 | 2,000 | P2 |
+| **TOTAL** | **142** | **~1,000** | **~12,000** | |
+
+### 10.3 Test Categories
+
+#### 10.3.1 Unit Tests
+
+**Purpose:** Test individual functions in isolation
+
+**Characteristics:**
+- Mock all dependencies
+- Fast execution (< 10ms per test)
+- Deterministic (no randomness unless testing RNG)
+- Independent (no test order dependency)
+
+**Coverage per function:**
+
+| Category | Tests Required | Example |
+|----------|----------------|---------|
+| Happy path | 2-3 | Normal inputs, expected outputs |
+| Boundary values | 3-5 | Min/max values, empty inputs, single element |
+| Error conditions | 2-4 | NULL pointers, invalid indices, out of memory |
+| Numerical precision | 2-3 | Near-tolerance values, denormalized floats |
+
+#### 10.3.2 Edge Case Tests
+
+**Mandatory edge cases for LP solver:**
+
+| Edge Case | Test Description | Expected Behavior |
+|-----------|------------------|-------------------|
+| **Empty problem** | n=0, m=0 | Return OPTIMAL immediately |
+| **Single variable** | n=1, m=0 | Trivial optimization |
+| **Single constraint** | n>0, m=1 | Single-row LP |
+| **All fixed variables** | lb[i] = ub[i] ∀i | Verify feasibility only |
+| **Unbounded problem** | No finite optimum | Return UNBOUNDED + ray |
+| **Infeasible problem** | No feasible solution | Return INFEASIBLE |
+| **Highly degenerate** | Many variables at bounds | No cycling, finite termination |
+| **Dense matrix** | >10% nonzeros | Correct but slower |
+| **Extremely sparse** | <0.01% nonzeros | Exploit sparsity |
+| **Large coefficients** | |a_ij| > 10^9 | Scaling/numerical stability |
+| **Tiny coefficients** | |a_ij| < 10^-9 | Zero detection |
+| **Mixed scales** | Ratio > 10^12 | Scaling required |
+| **Parallel constraints** | Redundant rows | Detect/remove |
+| **Free variables** | lb = -∞, ub = +∞ | Handle unbounded vars |
+| **Integer bounds** | lb, ub ∈ Z | No special handling (LP) |
+| **Near-optimal start** | Warm start close to optimal | Fast convergence |
+| **Far-from-optimal start** | Crash basis far from optimal | Eventually optimal |
+
+#### 10.3.3 Integration Tests
+
+**Purpose:** Test interactions between modules
+
+**Test Suites:**
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    INTEGRATION TEST HIERARCHY                   │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  Level 1: Module Pairs                                          │
+│  ├── Memory + Error Handling                                    │
+│  ├── Matrix + Basis Operations                                  │
+│  ├── Pricing + Ratio Test                                       │
+│  └── Basis + Pivot Operations                                   │
+│                                                                 │
+│  Level 2: Subsystems                                            │
+│  ├── Data Layer (Matrix + Memory + Validation)                  │
+│  ├── Algorithm Core (Pricing + Ratio + Pivot + Basis)           │
+│  └── API Layer (Public API + Error + Logging)                   │
+│                                                                 │
+│  Level 3: End-to-End                                            │
+│  ├── Complete solve cycle (model → optimize → solution)         │
+│  ├── File I/O round-trip (read → solve → write → read)          │
+│  ├── Warm start (solve → modify → re-solve)                     │
+│  └── Multi-model (multiple models, shared environment)          │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### 10.3.4 Regression Tests
+
+**Purpose:** Prevent reintroduction of fixed bugs
+
+**Requirements:**
+- Every bug fix MUST include a regression test
+- Test must fail before fix, pass after
+- Document bug ID in test name/comment
+- Never delete regression tests
+
+#### 10.3.5 Benchmark Tests
+
+**Purpose:** Detect performance regressions
+
+**Standard Benchmarks:**
+
+| Benchmark | Source | Problems | Purpose |
+|-----------|--------|----------|---------|
+| Netlib LP | netlib.org | 95 | Correctness + performance baseline |
+| Kennington | netlib.org | 17 | Network flow problems |
+| Miplib (LP relaxations) | miplib.zib.de | 50 | Difficult LP relaxations |
+| Custom synthetic | Generated | 100 | Stress tests (size, sparsity, degeneracy) |
+
+### 10.4 Test Specifications by Module
+
+#### 10.4.1 Memory Management Tests
+
+```c
+// Unit tests for cxf_malloc
+TEST(Memory, MallocZeroBytes)           // Edge: size = 0
+TEST(Memory, MallocSmallAllocation)     // Normal: 64 bytes
+TEST(Memory, MallocLargeAllocation)     // Normal: 1GB
+TEST(Memory, MallocOverflow)            // Edge: size > SIZE_MAX/2
+TEST(Memory, MallocAfterOOM)            // Error: simulated OOM
+TEST(Memory, MallocAlignment)           // Verify 16-byte alignment
+TEST(Memory, MallocTrackingAccuracy)    // Integration: memory accounting
+
+// Unit tests for cxf_free
+TEST(Memory, FreeNull)                  // Edge: NULL pointer
+TEST(Memory, FreeValidPointer)          // Normal: allocated memory
+TEST(Memory, DoubleFree)                // Error: detect double-free
+TEST(Memory, FreeTrackingAccuracy)      // Integration: memory accounting
+
+// Similar pattern for realloc, calloc...
+```
+
+#### 10.4.2 Sparse Matrix Tests
+
+```c
+// Construction tests
+TEST(Matrix, CreateEmpty)               // Edge: 0x0 matrix
+TEST(Matrix, CreateSingleElement)       // Edge: 1x1 matrix
+TEST(Matrix, CreateFromCOO)             // Normal: COO → CSC conversion
+TEST(Matrix, CreateFromDense)           // Normal: dense → CSC
+TEST(Matrix, CreateWithDuplicates)      // Edge: duplicate entries (sum)
+
+// Access tests
+TEST(Matrix, GetColumnEmpty)            // Edge: empty column
+TEST(Matrix, GetColumnSparse)           // Normal: sparse column
+TEST(Matrix, GetColumnDense)            // Normal: dense column
+TEST(Matrix, GetRowLazy)                // Integration: CSR construction
+TEST(Matrix, GetCoeffExisting)          // Normal: existing entry
+TEST(Matrix, GetCoeffNonexisting)       // Normal: zero entry
+
+// Modification tests
+TEST(Matrix, AddColumnToEmpty)          // Edge: first column
+TEST(Matrix, AddColumnWithGrowth)       // Normal: reallocation
+TEST(Matrix, ModifyCoeffExisting)       // Normal: change value
+TEST(Matrix, ModifyCoeffNew)            // Normal: add new nonzero
+TEST(Matrix, DeleteColumn)              // Normal: remove column
+TEST(Matrix, TransposeSymmetric)        // Edge: symmetric matrix
+TEST(Matrix, TransposeRectangular)      // Normal: m ≠ n
+
+// Numerical edge cases
+TEST(Matrix, CoeffNearZero)             // Edge: |a| < 10^-15
+TEST(Matrix, CoeffVeryLarge)            // Edge: |a| > 10^15
+TEST(Matrix, CoeffSubnormal)            // Edge: denormalized float
+TEST(Matrix, CoeffInfNaN)               // Error: reject Inf/NaN
+```
+
+#### 10.4.3 Basis Operations Tests
+
+```c
+// FTRAN tests
+TEST(Basis, FtranIdentity)              // Edge: B = I, verify x = a
+TEST(Basis, FtranSinglePivot)           // Normal: one eta vector
+TEST(Basis, FtranManyEtas)              // Normal: 100 eta vectors
+TEST(Basis, FtranNearSingular)          // Edge: condition number > 10^12
+TEST(Basis, FtranSparseColumn)          // Normal: sparse RHS
+TEST(Basis, FtranDenseColumn)           // Normal: dense RHS
+TEST(Basis, FtranZeroColumn)            // Edge: all-zero RHS
+TEST(Basis, FtranAccuracy)              // Numerical: ||Bx - a|| < tol
+
+// BTRAN tests (mirror FTRAN)
+TEST(Basis, BtranIdentity)
+TEST(Basis, BtranSinglePivot)
+TEST(Basis, BtranManyEtas)
+TEST(Basis, BtranAccuracy)              // Numerical: ||B^T y - c|| < tol
+
+// Refactorization tests
+TEST(Basis, RefactorFresh)              // Normal: initial factorization
+TEST(Basis, RefactorAfterPivots)        // Normal: after 100 pivots
+TEST(Basis, RefactorSingular)           // Error: singular basis
+TEST(Basis, RefactorPreservesResult)    // Integration: FTRAN same before/after
+
+// Eta vector tests
+TEST(Basis, EtaAddSparse)               // Normal: sparse eta
+TEST(Basis, EtaAddDense)                // Edge: dense eta (column)
+TEST(Basis, EtaOverflow)                // Error: too many etas
+```
+
+#### 10.4.4 Simplex Algorithm Tests
+
+```c
+// Phase I tests
+TEST(Simplex, PhaseIFeasible)           // Normal: finds BFS
+TEST(Simplex, PhaseIInfeasible)         // Normal: detects infeasibility
+TEST(Simplex, PhaseIDegenerate)         // Edge: degenerate at start
+TEST(Simplex, PhaseIArtificialRemoval)  // Integration: clean up artificials
+
+// Phase II tests
+TEST(Simplex, PhaseIIOptimal)           // Normal: finds optimum
+TEST(Simplex, PhaseIIUnbounded)         // Normal: detects unboundedness
+TEST(Simplex, PhaseIICycling)           // Edge: cycling problem (Klee-Minty)
+TEST(Simplex, PhaseIIDegenerate)        // Edge: many degenerate pivots
+
+// Pricing tests
+TEST(Simplex, PricingSteepestEdge)      // Normal: SE pricing
+TEST(Simplex, PricingDantzig)           // Normal: largest reduced cost
+TEST(Simplex, PricingPartial)           // Normal: partial pricing
+TEST(Simplex, PricingAllOptimal)        // Edge: all reduced costs optimal
+TEST(Simplex, PricingTieBreaking)       // Edge: equal reduced costs
+
+// Ratio test tests
+TEST(Simplex, RatioTestNormal)          // Normal: clear winner
+TEST(Simplex, RatioTestDegenerate)      // Edge: ties in ratio
+TEST(Simplex, RatioTestUnbounded)       // Normal: all ratios infinite
+TEST(Simplex, RatioTestHarris)          // Normal: Harris two-pass
+TEST(Simplex, RatioTestNumerical)       // Edge: near-zero pivot elements
+```
+
+#### 10.4.5 Public API Tests
+
+```c
+// Environment tests
+TEST(API, CreateEnvDefault)             // Normal: default environment
+TEST(API, CreateEnvCustomAllocator)     // Normal: custom memory
+TEST(API, FreeEnvWithModels)            // Integration: cleanup cascade
+TEST(API, EnvThreadSafety)              // Integration: concurrent access
+
+// Model lifecycle tests
+TEST(API, CreateModelEmpty)             // Normal: empty model
+TEST(API, CreateModelNamed)             // Normal: with name
+TEST(API, CopyModelDeep)                // Normal: independent copy
+TEST(API, FreeModelCleanup)             // Normal: memory release
+
+// Variable operations tests
+TEST(API, AddVarSingle)                 // Normal: one variable
+TEST(API, AddVarsBatch)                 // Normal: batch add
+TEST(API, AddVarInvalidBounds)          // Error: lb > ub
+TEST(API, AddVarInfBounds)              // Normal: infinite bounds
+TEST(API, DeleteVarExisting)            // Normal: remove variable
+TEST(API, DeleteVarInvalid)             // Error: invalid index
+
+// Constraint operations tests
+TEST(API, AddConstrSingle)              // Normal: one constraint
+TEST(API, AddConstrsBatch)              // Normal: batch add
+TEST(API, AddConstrEmpty)               // Edge: zero coefficients
+TEST(API, AddConstrDuplicate)           // Edge: same variable twice
+
+// Optimization tests
+TEST(API, OptimizeTrivial)              // Edge: empty/trivial model
+TEST(API, OptimizeSmall)                // Normal: small LP
+TEST(API, OptimizeLarge)                // Normal: 10k vars
+TEST(API, OptimizeWithCallback)         // Integration: progress callback
+TEST(API, OptimizeTerminate)            // Integration: early termination
+TEST(API, OptimizeTimeLimit)            // Normal: time limit
+TEST(API, OptimizeIterLimit)            // Normal: iteration limit
+```
+
+### 10.5 Test Infrastructure
+
+#### 10.5.1 Test Framework
+
+**Recommended:** Google Test (gtest) or Unity (for pure C)
+
+```c
+// Example test structure
+#include "cxf_test.h"
+
+TEST_GROUP(Memory) {
+    CxfEnv* env;
+
+    void setup() {
+        env = cxf_emptyenv();
+    }
+
+    void teardown() {
+        cxf_freeenv(env);
+    }
+};
+
+TEST(Memory, MallocSmallAllocation) {
+    void* ptr = cxf_malloc(env, 64);
+    ASSERT_NOT_NULL(ptr);
+    ASSERT_EQ(cxf_get_allocated(env), 64);
+    cxf_free(env, ptr);
+    ASSERT_EQ(cxf_get_allocated(env), 0);
+}
+```
+
+#### 10.5.2 Test Organization
+
+```
+tests/
+├── unit/
+│   ├── test_memory.c           # Memory management unit tests
+│   ├── test_matrix.c           # Sparse matrix unit tests
+│   ├── test_basis.c            # Basis operations unit tests
+│   ├── test_pricing.c          # Pricing unit tests
+│   ├── test_ratio.c            # Ratio test unit tests
+│   ├── test_simplex.c          # Simplex core unit tests
+│   └── test_api.c              # Public API unit tests
+├── integration/
+│   ├── test_data_layer.c       # Matrix + Memory integration
+│   ├── test_algorithm.c        # Pricing + Ratio + Pivot integration
+│   └── test_end_to_end.c       # Complete solve cycle
+├── edge_cases/
+│   ├── test_empty_problems.c   # Empty/trivial LPs
+│   ├── test_degeneracy.c       # Degenerate problems
+│   ├── test_numerical.c        # Numerical edge cases
+│   └── test_large_scale.c      # Large problems
+├── benchmarks/
+│   ├── netlib/                 # Netlib test problems
+│   ├── synthetic/              # Generated test problems
+│   └── benchmark_runner.c      # Performance measurement
+├── regression/
+│   └── test_regressions.c      # Bug regression tests
+├── fixtures/
+│   ├── small_lps.h             # Small test problems
+│   ├── netlib_subset.h         # Netlib problem data
+│   └── generators.c            # Problem generators
+└── mocks/
+    ├── mock_memory.c           # Memory allocation mock
+    └── mock_file.c             # File I/O mock
+```
+
+#### 10.5.3 Continuous Integration
+
+```yaml
+# .github/workflows/test.yml
+name: Test Suite
+
+on: [push, pull_request]
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: cmake -B build && cmake --build build
+      - name: Run Unit Tests
+        run: ctest --test-dir build --output-on-failure -L unit
+      - name: Upload Coverage
+        run: gcov -b build/CMakeFiles/*.dir/*.c.gcno
+
+  integration-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: cmake -B build && cmake --build build
+      - name: Run Integration Tests
+        run: ctest --test-dir build --output-on-failure -L integration
+
+  edge-case-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build
+        run: cmake -B build && cmake --build build
+      - name: Run Edge Case Tests
+        run: ctest --test-dir build --output-on-failure -L edge
+
+  benchmark-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Release
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build
+      - name: Run Netlib Suite
+        run: ./build/benchmark_netlib --json > netlib_results.json
+      - name: Check Performance Regression
+        run: python3 scripts/check_perf_regression.py netlib_results.json
+```
+
+### 10.6 Test Metrics & Reporting
+
+#### 10.6.1 Required Metrics
+
+| Metric | Threshold | Action if Below |
+|--------|-----------|-----------------|
+| Line Coverage | ≥ 90% | Block merge |
+| Branch Coverage | ≥ 85% | Block merge |
+| Function Coverage | 100% | Block merge |
+| Test Pass Rate | 100% | Block merge |
+| Test:Code Ratio | ≥ 1:4 | Warning |
+| Mutation Score | ≥ 80% | Warning |
+
+#### 10.6.2 Test Reports
+
+```
+================================================================================
+                         CONVEXFELD TEST REPORT
+================================================================================
+Date: 2026-01-25
+Commit: abc123def
+Branch: feature/basis-operations
+
+SUMMARY
+-------
+Total Tests:     1,247
+Passed:          1,245
+Failed:              2
+Skipped:             0
+Duration:        45.3s
+
+COVERAGE
+--------
+Lines:           92.4% (8,234 / 8,912)
+Branches:        87.1% (2,145 / 2,463)
+Functions:      100.0% (142 / 142)
+
+TEST:CODE RATIO
+---------------
+Test LOC:       11,847
+Impl LOC:       38,234
+Ratio:          1:3.23 ✓
+
+FAILED TESTS
+------------
+[FAIL] Basis.FtranNearSingular
+       Expected: result within tolerance
+       Actual:   ||Bx - a|| = 1.2e-5 (tolerance: 1e-6)
+
+[FAIL] API.OptimizeTimeLimit
+       Expected: CXF_TIME_LIMIT
+       Actual:   CXF_OPTIMAL (finished before limit)
+
+NETLIB BENCHMARK
+----------------
+Problems solved: 95/95 (100%)
+Geomean iterations: 1.8x commercial baseline
+Geomean time: 2.3x commercial baseline
+================================================================================
+```
+
+### 10.7 Test-First Development Checklist
+
+For each function implementation:
+
+- [ ] Read function specification
+- [ ] Write happy-path tests (2-3 tests)
+- [ ] Write boundary condition tests (3-5 tests)
+- [ ] Write error condition tests (2-4 tests)
+- [ ] Write numerical edge case tests (if applicable)
+- [ ] Verify all tests FAIL (red)
+- [ ] Implement function
+- [ ] Verify all tests PASS (green)
+- [ ] Refactor if needed (keep green)
+- [ ] Check coverage ≥ 90%
+- [ ] Add integration tests connecting to dependent modules
+- [ ] Update test documentation
+
+---
+
+## 11. Dependencies & Technology Stack
+
+### 11.1 Implementation Language
 
 **Target:** C (C99 standard)
 
@@ -794,7 +1315,7 @@ where:
 - Standard in optimization community
 - Easy FFI for other languages
 
-### 10.2 External Dependencies
+### 11.2 External Dependencies
 
 | Dependency | Purpose | Required |
 |------------|---------|----------|
@@ -802,7 +1323,7 @@ where:
 | POSIX Threads | Threading (optional) | Optional |
 | BLAS | Dense operations (if needed) | Optional |
 
-### 10.3 Development Tools
+### 11.3 Development Tools
 
 | Tool | Purpose |
 |------|---------|
@@ -812,7 +1333,7 @@ where:
 | GDB | Debugging |
 | Lean 4 | Formal verification (future) |
 
-### 10.4 Formal Verification Stack
+### 11.4 Formal Verification Stack
 
 For formal verification in Lean 4:
 
@@ -830,9 +1351,9 @@ For formal verification in Lean 4:
 
 ---
 
-## 11. Implementation Roadmap
+## 12. Implementation Roadmap
 
-### 11.1 Phase 1: Foundation (Layers 0-1)
+### 12.1 Phase 1: Foundation (Layers 0-1)
 
 **Modules:**
 - Memory Management (9 functions)
@@ -846,7 +1367,7 @@ For formal verification in Lean 4:
 - Error code infrastructure
 - Logging framework
 
-### 11.2 Phase 2: Data Layer (Layer 2)
+### 12.2 Phase 2: Data Layer (Layer 2)
 
 **Modules:**
 - Matrix Operations (7 functions)
@@ -858,7 +1379,7 @@ For formal verification in Lean 4:
 - Thread pool (optional)
 - Configurable logging
 
-### 11.3 Phase 3: Core Operations (Layer 3)
+### 12.3 Phase 3: Core Operations (Layer 3)
 
 **Modules:**
 - Basis Operations (8 functions)
@@ -872,7 +1393,7 @@ For formal verification in Lean 4:
 - Eta vector management
 - Callback infrastructure
 
-### 11.4 Phase 4: Algorithm Components (Layer 4)
+### 12.4 Phase 4: Algorithm Components (Layer 4)
 
 **Modules:**
 - Pricing (6 functions)
@@ -885,7 +1406,7 @@ For formal verification in Lean 4:
 - Harris ratio test
 - Pivot execution
 
-### 11.5 Phase 5: Simplex Core (Layer 5)
+### 12.5 Phase 5: Simplex Core (Layer 5)
 
 **Modules:**
 - Simplex Core (21 functions)
@@ -898,7 +1419,7 @@ For formal verification in Lean 4:
 - Perturbation handling
 - Solution refinement
 
-### 11.6 Phase 6: Public API (Layer 6)
+### 12.6 Phase 6: Public API (Layer 6)
 
 **Modules:**
 - Public API (30 functions)
@@ -909,7 +1430,7 @@ For formal verification in Lean 4:
 - Documentation
 - Examples
 
-### 11.7 Phase 7: Verification (Optional)
+### 12.7 Phase 7: Verification (Optional)
 
 **Activities:**
 - Lean 4 formalization
@@ -918,9 +1439,9 @@ For formal verification in Lean 4:
 
 ---
 
-## 12. Success Metrics
+## 13. Success Metrics
 
-### 12.1 Correctness Metrics
+### 13.1 Correctness Metrics
 
 | Metric | Target |
 |--------|--------|
@@ -929,7 +1450,7 @@ For formal verification in Lean 4:
 | Unboundedness Detection | 100% accuracy |
 | Solution Accuracy | Within 10⁻⁶ of optimal |
 
-### 12.2 Performance Metrics
+### 13.2 Performance Metrics
 
 | Metric | Target |
 |--------|--------|
@@ -937,19 +1458,35 @@ For formal verification in Lean 4:
 | Memory Usage | < 2× problem size |
 | Iteration Count | Within 2× of commercial solvers |
 
-### 12.3 Quality Metrics
+### 13.3 Quality Metrics (TDD Requirements)
 
-| Metric | Target |
-|--------|--------|
-| Test Coverage | > 90% line coverage |
-| Documentation | 100% public API documented |
-| Static Analysis | Zero critical warnings |
+| Metric | Target | Enforcement |
+|--------|--------|-------------|
+| **Test:Code Ratio** | **1:3 to 1:4** | Block merge if below 1:4 |
+| Line Coverage | ≥ 90% | Block merge |
+| Branch Coverage | ≥ 85% | Block merge |
+| Function Coverage | 100% | Block merge |
+| Test Pass Rate | 100% | Block merge |
+| Mutation Score | ≥ 80% | Warning |
+| Documentation | 100% public API | Block merge |
+| Static Analysis | Zero critical warnings | Block merge |
+
+### 13.4 TDD Compliance Metrics
+
+| Phase | Required Tests Before Code | Verification |
+|-------|---------------------------|--------------|
+| Foundation (Memory, Error) | ~200 tests | CI gate |
+| Data Layer (Matrix, Threading) | ~300 tests | CI gate |
+| Core Operations (Basis, Pricing) | ~350 tests | CI gate |
+| Simplex Core | ~200 tests | CI gate |
+| Public API | ~180 tests | CI gate |
+| **Total** | **~1,000+ tests** | Pre-release audit |
 
 ---
 
-## 13. References
+## 14. References
 
-### 13.1 Foundational Literature
+### 14.1 Foundational Literature
 
 1. **Dantzig, G.B.** (1963). *Linear Programming and Extensions*. Princeton University Press.
 
@@ -957,7 +1494,7 @@ For formal verification in Lean 4:
 
 3. **Maros, I.** (2003). *Computational Techniques of the Simplex Method*. Springer.
 
-### 13.2 Algorithmic References
+### 14.2 Algorithmic References
 
 4. **Bartels, R.H. & Golub, G.H.** (1969). The Simplex Method of Linear Programming Using LU Decomposition. *Communications of the ACM*, 12(5), 266-268.
 
@@ -967,7 +1504,7 @@ For formal verification in Lean 4:
 
 7. **Wolfe, P.** (1963). A Technique for Resolving Degeneracy in Linear Programming. *Journal of the SIAM*, 11(2), 205-211.
 
-### 13.3 Implementation References
+### 14.3 Implementation References
 
 8. **Forrest, J.J. & Tomlin, J.A.** (1972). Updated Triangular Factors of the Basis to Maintain Sparsity in the Product Form Simplex Method. *Mathematical Programming*, 2(1), 263-278.
 
