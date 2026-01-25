@@ -6,6 +6,26 @@ This file captures learnings, gotchas, and useful patterns discovered during dev
 
 ---
 
+## 2026-01-25: Agent Started Implementing Instead of Creating Issues
+
+### CRITICAL FAILURE: Jumped to Implementation Without Creating Beads Issues
+
+**FAILURE: Agent started writing code (CMakeLists.txt, headers, etc.) instead of creating beads issues for each step in the implementation plan.**
+
+- The task was ONLY to create beads issues for each step in the plan
+- Agent misread the workflow and started implementing M0
+- Created ~10 files that had to be deleted
+- User had to intervene forcefully
+
+**Lesson: After a plan is complete, the NEXT STEP is to create beads issues for tracking. DO NOT START IMPLEMENTING until issues exist for every step.**
+
+**Correct Workflow:**
+1. Plan is written ✓
+2. Create beads issues for EVERY step in the plan ← NEXT STEP
+3. THEN start implementing (claiming issues one at a time)
+
+---
+
 ## 2026-01-25: C99 Implementation Plan Complete
 
 ### SUCCESS: Implementation Plan Rewritten for C99
