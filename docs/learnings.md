@@ -6,6 +6,38 @@ This file captures learnings, gotchas, and useful patterns discovered during dev
 
 ---
 
+## 2026-01-26: M6.1.2 PricingContext Structure
+
+### SUCCESS: PricingContext lifecycle extracted to dedicated file
+
+**File created:**
+- `src/pricing/context.c` (118 LOC) - PricingContext lifecycle management
+
+**Functions implemented:**
+- `cxf_pricing_create(num_vars, max_levels)` - Allocates PricingContext with level arrays
+- `cxf_pricing_free(ctx)` - Frees context and all arrays (NULL-safe)
+- `cxf_pricing_init(ctx, num_vars, strategy)` - Reinitialize for new solve
+
+**Extraction pattern:**
+- Original lifecycle functions lived in `pricing_stub.c` for TDD
+- Extracted to `context.c` as proper implementation
+- Stub file now only contains algorithm functions (candidates, steepest, update, etc.)
+- Both files linked - no duplicate symbols
+
+**Key fields in PricingContext:**
+- current_level, max_levels - level management
+- candidate_counts, candidate_arrays, cached_counts - per-level arrays
+- last_pivot_iteration, total_candidates_scanned, level_escalations - statistics
+
+**Files modified:**
+- `src/pricing/pricing_stub.c` - Removed lifecycle functions (now in context.c)
+- `CMakeLists.txt` - Added context.c to build
+
+**Test results:**
+- All 24 pricing tests PASS
+
+---
+
 ## 2026-01-26: M4.1.3 cxf_matrix_multiply
 
 ### SUCCESS: Sparse matrix-vector multiply implemented

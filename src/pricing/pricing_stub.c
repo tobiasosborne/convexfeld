@@ -1,9 +1,11 @@
 /**
  * @file pricing_stub.c
- * @brief Stub implementations for pricing operations (M6.1.1)
+ * @brief Stub implementations for pricing algorithm operations (M6.1.1)
  *
  * These stubs enable TDD by allowing tests to link and run.
- * Full implementation will replace these in M6.1.2-M6.1.7.
+ * Full implementations will replace these in M6.1.4-M6.1.7.
+ *
+ * PricingContext lifecycle (create/free/init) is in context.c (M6.1.2).
  */
 
 #include <stdlib.h>
@@ -12,82 +14,25 @@
 #include "convexfeld/cxf_pricing.h"
 
 /*============================================================================
- * PricingContext Lifecycle
- *===========================================================================*/
-
-PricingContext *cxf_pricing_create(int num_vars, int max_levels) {
-    if (num_vars <= 0 || max_levels <= 0) {
-        return NULL;
-    }
-
-    PricingContext *ctx = (PricingContext *)calloc(1, sizeof(PricingContext));
-    if (ctx == NULL) {
-        return NULL;
-    }
-
-    ctx->max_levels = max_levels;
-    ctx->current_level = 1;
-
-    /* Allocate level arrays */
-    ctx->candidate_counts = (int *)calloc(max_levels, sizeof(int));
-    ctx->candidate_arrays = (int **)calloc(max_levels, sizeof(int *));
-    ctx->cached_counts = (int *)calloc(max_levels, sizeof(int));
-
-    if (ctx->candidate_counts == NULL || ctx->candidate_arrays == NULL ||
-        ctx->cached_counts == NULL) {
-        cxf_pricing_free(ctx);
-        return NULL;
-    }
-
-    /* Initialize cached counts to -1 (invalid) */
-    for (int i = 0; i < max_levels; i++) {
-        ctx->cached_counts[i] = -1;
-    }
-
-    return ctx;
-}
-
-void cxf_pricing_free(PricingContext *ctx) {
-    if (ctx == NULL) {
-        return;
-    }
-
-    if (ctx->candidate_arrays != NULL) {
-        for (int i = 0; i < ctx->max_levels; i++) {
-            free(ctx->candidate_arrays[i]);
-        }
-        free(ctx->candidate_arrays);
-    }
-    free(ctx->candidate_counts);
-    free(ctx->cached_counts);
-    free(ctx);
-}
-
-int cxf_pricing_init(PricingContext *ctx, int num_vars, int strategy) {
-    if (ctx == NULL) {
-        return CXF_ERROR_NULL_ARGUMENT;
-    }
-
-    (void)num_vars;  /* Will be used in full implementation */
-    (void)strategy;
-
-    ctx->current_level = 1;
-    ctx->total_candidates_scanned = 0;
-    ctx->level_escalations = 0;
-    ctx->last_pivot_iteration = 0;
-
-    /* Mark all caches as invalid */
-    for (int i = 0; i < ctx->max_levels; i++) {
-        ctx->cached_counts[i] = -1;
-    }
-
-    return CXF_OK;
-}
-
-/*============================================================================
  * Candidate Selection - Stubs
  *===========================================================================*/
 
+/**
+ * @brief Find candidate entering variables at current level.
+ *
+ * Scans nonbasic variables for attractive reduced costs:
+ * - At lower bound: attractive if RC < -tolerance
+ * - At upper bound: attractive if RC > tolerance
+ *
+ * @param ctx Pricing context
+ * @param reduced_costs Reduced costs array [num_vars]
+ * @param var_status Variable status array [num_vars] (>=0 basic, -1 at lower, -2 at upper)
+ * @param num_vars Number of variables
+ * @param tolerance Optimality tolerance
+ * @param candidates Output array for candidate indices
+ * @param max_candidates Maximum candidates to return
+ * @return Number of candidates found
+ */
 int cxf_pricing_candidates(PricingContext *ctx, const double *reduced_costs,
                            const int *var_status, int num_vars, double tolerance,
                            int *candidates, int max_candidates) {
@@ -124,6 +69,20 @@ int cxf_pricing_candidates(PricingContext *ctx, const double *reduced_costs,
  * Steepest Edge - Stub
  *===========================================================================*/
 
+/**
+ * @brief Select entering variable using steepest edge pricing.
+ *
+ * Finds the nonbasic variable with the best steepest edge ratio:
+ *   ratio = |reduced_cost| / sqrt(weight)
+ *
+ * @param ctx Pricing context
+ * @param reduced_costs Reduced costs array [num_vars]
+ * @param weights Steepest edge weights array [num_vars]
+ * @param var_status Variable status array [num_vars]
+ * @param num_vars Number of variables
+ * @param tolerance Optimality tolerance
+ * @return Index of entering variable, or -1 if optimal
+ */
 int cxf_pricing_steepest(PricingContext *ctx, const double *reduced_costs,
                          const double *weights, const int *var_status,
                          int num_vars, double tolerance) {
@@ -143,7 +102,7 @@ int cxf_pricing_steepest(PricingContext *ctx, const double *reduced_costs,
         double rc = reduced_costs[j];
         double weight = weights[j];
         if (weight < 1e-10) {
-            weight = 1.0;  /* Safeguard */
+            weight = 1.0;  /* Safeguard against zero/negative weights */
         }
 
         int attractive = 0;
@@ -171,6 +130,19 @@ int cxf_pricing_steepest(PricingContext *ctx, const double *reduced_costs,
  * Update and Invalidation - Stubs
  *===========================================================================*/
 
+/**
+ * @brief Update pricing context after a pivot.
+ *
+ * Invalidates cached candidate lists and updates internal state.
+ *
+ * @param ctx Pricing context
+ * @param entering_var Index of entering variable
+ * @param leaving_row Leaving row index
+ * @param pivot_column Pivot column values
+ * @param pivot_row Pivot row values
+ * @param num_rows Number of rows
+ * @return CXF_OK on success
+ */
 int cxf_pricing_update(PricingContext *ctx, int entering_var, int leaving_row,
                        const double *pivot_column, const double *pivot_row,
                        int num_rows) {
@@ -192,6 +164,12 @@ int cxf_pricing_update(PricingContext *ctx, int entering_var, int leaving_row,
     return CXF_OK;
 }
 
+/**
+ * @brief Invalidate cached pricing information.
+ *
+ * @param ctx Pricing context
+ * @param flags Invalidation flags (CXF_INVALID_*)
+ */
 void cxf_pricing_invalidate(PricingContext *ctx, int flags) {
     if (ctx == NULL) {
         return;
@@ -209,6 +187,19 @@ void cxf_pricing_invalidate(PricingContext *ctx, int flags) {
  * Two-Phase Pricing - Stub
  *===========================================================================*/
 
+/**
+ * @brief Full scan for any attractive variable (phase 2 / fallback).
+ *
+ * Used when partial pricing at higher levels fails to find an
+ * improving variable. Does a complete scan of all nonbasic variables.
+ *
+ * @param ctx Pricing context
+ * @param reduced_costs Reduced costs array [num_vars]
+ * @param var_status Variable status array [num_vars]
+ * @param num_vars Number of variables
+ * @param tolerance Optimality tolerance
+ * @return Index of entering variable, or -1 if optimal
+ */
 int cxf_pricing_step2(PricingContext *ctx, const double *reduced_costs,
                       const int *var_status, int num_vars, double tolerance) {
     if (ctx == NULL || reduced_costs == NULL || var_status == NULL) {

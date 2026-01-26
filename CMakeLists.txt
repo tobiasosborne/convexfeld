@@ -95,7 +95,8 @@ target_sources(convexfeld PRIVATE
     src/api/env_stub.c
     src/api/model_stub.c
     src/api/api_stub.c
-    # Pricing module (M6.1.1 stubs)
+    # Pricing module (M6.1.2 context + M6.1.1 stubs)
+    src/pricing/context.c
     src/pricing/pricing_stub.c
 )
 
