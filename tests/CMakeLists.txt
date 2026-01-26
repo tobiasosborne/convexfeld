@@ -51,6 +51,5 @@ add_cxf_test(test_smoke unit/test_smoke.c)
 # Integration Tests
 ################################################################################
 
-# Integration tests will be added starting with M1.0: Tracer Bullet Test
-# Example:
-# add_cxf_test(test_tracer_bullet integration/test_tracer_bullet.c)
+# M1.0: Tracer Bullet Test - proves end-to-end architecture
+add_cxf_test(test_tracer_bullet integration/test_tracer_bullet.c)

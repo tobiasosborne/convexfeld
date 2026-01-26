@@ -6,6 +6,30 @@ This file captures learnings, gotchas, and useful patterns discovered during dev
 
 ---
 
+## 2026-01-26: M1.0 Tracer Bullet Test Created
+
+### SUCCESS: Integration test written following TDD
+
+**File created:** `tests/integration/test_tracer_bullet.c` (87 LOC)
+
+**What was done:**
+1. Created `tests/integration/` directory
+2. Wrote the tracer bullet test exercising all 8 API functions
+3. Updated `tests/CMakeLists.txt` to include the integration test
+4. Verified test compiles successfully (linker errors expected since implementations don't exist yet)
+
+**Key TDD insight:**
+- Test compiles to `.o` but fails to link - this is CORRECT for TDD
+- All 8 undefined references (cxf_loadenv, cxf_newmodel, cxf_addvar, cxf_optimize, cxf_getintattr, cxf_getdblattr, cxf_freemodel, cxf_freeenv) prove the test is properly calling the API
+- Implementations will be added in M1.1-M1.7
+
+**Test coverage:**
+- Problem: `min x subject to x >= 0`
+- Expected: `x* = 0`, `obj* = 0`
+- Uses `TEST_ASSERT_DOUBLE_WITHIN` for floating-point tolerance
+
+---
+
 ## 2026-01-26: M0.4 Module Headers (Stubs) Created
 
 ### SUCCESS: All 8 structure headers created
