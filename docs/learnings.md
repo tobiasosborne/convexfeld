@@ -6,6 +6,28 @@ This file captures learnings, gotchas, and useful patterns discovered during dev
 
 ---
 
+## 2026-01-26: M1.2 Stub CxfModel Structure Created
+
+### SUCCESS: Model stubs for tracer bullet
+
+**File created:** `src/api/model_stub.c` (129 LOC)
+
+**Functions implemented:**
+- `cxf_newmodel(env, modelP, name)` - Allocates model with initial variable arrays
+- `cxf_freemodel(model)` - Frees model and all arrays
+- `cxf_addvar(model, lb, ub, obj, vtype, name)` - Adds variable to arrays
+
+**Key decisions:**
+- Pre-allocate arrays with INITIAL_VAR_CAPACITY (16) to avoid realloc in stub
+- vtype and variable names ignored in stub
+- solution array initialized to 0.0
+
+**Build status:**
+- Model stubs compile successfully
+- Linker errors reduced to 3 (cxf_optimize, cxf_getintattr, cxf_getdblattr)
+
+---
+
 ## 2026-01-26: M1.1 Stub CxfEnv Structure Created
 
 ### SUCCESS: Environment stubs for tracer bullet
