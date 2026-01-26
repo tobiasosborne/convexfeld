@@ -14,58 +14,6 @@
 #include "convexfeld/cxf_pricing.h"
 
 /*============================================================================
- * Candidate Selection - Stubs
- *===========================================================================*/
-
-/**
- * @brief Find candidate entering variables at current level.
- *
- * Scans nonbasic variables for attractive reduced costs:
- * - At lower bound: attractive if RC < -tolerance
- * - At upper bound: attractive if RC > tolerance
- *
- * @param ctx Pricing context
- * @param reduced_costs Reduced costs array [num_vars]
- * @param var_status Variable status array [num_vars] (>=0 basic, -1 at lower, -2 at upper)
- * @param num_vars Number of variables
- * @param tolerance Optimality tolerance
- * @param candidates Output array for candidate indices
- * @param max_candidates Maximum candidates to return
- * @return Number of candidates found
- */
-int cxf_pricing_candidates(PricingContext *ctx, const double *reduced_costs,
-                           const int *var_status, int num_vars, double tolerance,
-                           int *candidates, int max_candidates) {
-    if (ctx == NULL || reduced_costs == NULL || var_status == NULL ||
-        candidates == NULL) {
-        return 0;
-    }
-
-    /* Stub: scan for attractive nonbasic variables */
-    int count = 0;
-    for (int j = 0; j < num_vars && count < max_candidates; j++) {
-        if (var_status[j] >= 0) {
-            continue;  /* Skip basic */
-        }
-
-        double rc = reduced_costs[j];
-        int attractive = 0;
-
-        if (var_status[j] == -1 && rc < -tolerance) {
-            attractive = 1;  /* At lower, negative RC */
-        } else if (var_status[j] == -2 && rc > tolerance) {
-            attractive = 1;  /* At upper, positive RC */
-        }
-
-        if (attractive) {
-            candidates[count++] = j;
-        }
-    }
-
-    return count;
-}
-
-/*============================================================================
  * Steepest Edge - Stub
  *===========================================================================*/
 

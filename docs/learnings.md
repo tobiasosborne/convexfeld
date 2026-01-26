@@ -6,6 +6,41 @@ This file captures learnings, gotchas, and useful patterns discovered during dev
 
 ---
 
+## 2026-01-26: M6.1.4 cxf_pricing_candidates
+
+### SUCCESS: Full candidate selection with partial pricing and sorting
+
+**File created:**
+- `src/pricing/candidates.c` (172 LOC)
+
+**Function implemented:**
+- `cxf_pricing_candidates(ctx, reduced_costs, var_status, num_vars, tolerance, candidates, max_candidates)` - Select candidate entering variables
+
+**Algorithm:**
+1. Determine scan range (full or section for partial pricing)
+2. Scan nonbasic variables for attractive reduced costs:
+   - At lower bound: attractive if RC < -tolerance
+   - At upper bound: attractive if RC > tolerance
+   - Free variable: attractive if |RC| > tolerance
+3. When array full, replace least attractive candidate
+4. Sort candidates by |reduced_cost| descending (most attractive first)
+5. Update statistics (total_candidates_scanned)
+
+**Key design decisions:**
+- Partial pricing uses 10 sections by default, cycling via last_pivot_iteration
+- qsort with file-static global for reduced_costs (C limitation, not thread-safe)
+- Replace-least-attractive strategy keeps best candidates when array full
+- Free variable handling (status -3) included per spec
+
+**Files modified:**
+- `src/pricing/pricing_stub.c` - Removed cxf_pricing_candidates stub
+- `CMakeLists.txt` - Added candidates.c to build
+
+**Test results:**
+- All 9 test suites PASS (100% tests passed)
+
+---
+
 ## 2026-01-26: M2.1.4 State Deallocators
 
 ### SUCCESS: State cleanup functions for complex structures
