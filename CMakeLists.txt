@@ -134,6 +134,11 @@ target_sources(convexfeld PRIVATE
     src/pricing/update.c
     src/pricing/phase.c
     src/pricing/pricing_stub.c
+    # Callbacks module (M5.2.2+)
+    src/callbacks/context.c
+    src/callbacks/callback_stub.c
+    # Validation module (M2.3.1 stubs)
+    src/validation/validation_stub.c
 )
 
 ################################################################################

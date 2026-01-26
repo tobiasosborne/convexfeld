@@ -103,8 +103,16 @@ add_cxf_test(test_parameters unit/test_parameters.c)
 # M7.1.1: Simplex Tests - Basic
 add_cxf_test(test_simplex_basic unit/test_simplex_basic.c)
 
-# M5.2.1: Callbacks tests
+# M5.2.1, M5.2.2: Callbacks tests
 add_cxf_test(test_callbacks unit/test_callbacks.c)
+target_link_libraries(test_callbacks PRIVATE m)  # For math functions (isinf)
+
+# M7.1.2: Simplex Tests - Iteration
+add_cxf_test(test_simplex_iteration unit/test_simplex_iteration.c)
+
+# M2.3.1: Validation tests
+add_cxf_test(test_validation unit/test_validation.c)
+target_link_libraries(test_validation PRIVATE m)  # For math functions (NAN, INFINITY)
 
 ################################################################################
 # Integration Tests

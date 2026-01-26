@@ -6,34 +6,31 @@
 
 ## Work Completed This Session
 
-### M5.1.8: Basis Validation/Warm Start (convexfeld-9f7) - CLOSED
-- Created `src/basis/warm.c` (115 LOC, 244 lines with comments)
-- Implemented basis validation and warm start functions:
-  - `cxf_basis_validate()` - Validate basis consistency (bounds, duplicates)
-  - `cxf_basis_validate_ex()` - Extended validation with flags
-  - `cxf_basis_warm()` - Warm start from basic variable array
-  - `cxf_basis_warm_snapshot()` - Warm start from BasisSnapshot
-- Added 15 new tests to test_basis.c (56 total tests pass)
-- Updated CMakeLists.txt to include warm.c
-- Removed stub implementations from basis_stub.c
+### M2.3.1: Validation Tests (convexfeld-0rs) - CLOSED
+- Created `tests/unit/test_validation.c` (151 LOC) - 14 tests
+- Created `src/validation/validation_stub.c` (64 LOC) - stub implementations
+- Added validation module to CMakeLists.txt
+- Tests for cxf_validate_array: NaN detection, Infinity allowed, NULL/empty handling
+- Tests for cxf_validate_vartypes: NULL model handling (other tests deferred until CxfModel implementation)
+- All 14 tests pass (12 active, 2 ignored for CxfModel dependency)
 
 ---
 
 ## Current State
 
 ### Build Status
-- All 18 core test suites PASS
-- test_simplex_basic and test_callbacks have expected linker errors (TDD tests)
-- 56 basis tests passing
-- No compiler warnings
+- All 20 core test suites PASS
+- test_simplex_basic and test_simplex_iteration have expected linker errors (TDD tests)
+- test_callbacks has expected linker errors (TDD tests)
+- No compiler warnings (except unused function in test_callbacks.c)
 
 ### Files Created/Modified
 ```
-src/basis/warm.c                   (NEW - 115 LOC, 244 lines)
-tests/unit/test_basis.c            (MODIFIED - 15 new tests, now 948 lines)
-CMakeLists.txt                     (MODIFIED - added warm.c)
-src/basis/basis_stub.c             (MODIFIED - removed warm.c functions)
-docs/learnings/m5-m6_core.md       (MODIFIED - added M5.1.8)
+tests/unit/test_validation.c       (NEW - 151 LOC, 14 tests)
+src/validation/validation_stub.c   (NEW - 64 LOC)
+tests/CMakeLists.txt               (MODIFIED - added test_validation)
+CMakeLists.txt                     (MODIFIED - added validation_stub.c)
+docs/learnings/m2-m4_foundation.md (MODIFIED - added M2.3.1)
 ```
 
 ---
@@ -42,14 +39,9 @@ docs/learnings/m5-m6_core.md       (MODIFIED - added M5.1.8)
 
 Run `bd ready` to see all available work.
 
-### Basis Module Now Complete (M5.1.2-M5.1.8)
-- M5.1.2: BasisState lifecycle - DONE
-- M5.1.3: EtaFactors structure - DONE
-- M5.1.4: FTRAN - DONE
-- M5.1.5: BTRAN - DONE
-- M5.1.6: Refactorization - DONE
-- M5.1.7: Snapshots - DONE
-- M5.1.8: Validation/Warm Start - DONE
+### Validation Module Next Steps
+- M2.3.2: Implement full cxf_validate_vartypes when CxfModel structure is complete (M8.1.8)
+- Current stub returns CXF_OK; real implementation needs MatrixData access
 
 ### Recommended Next Issues
 ```bash
@@ -62,7 +54,7 @@ bd ready
 ```
 
 ### Callback Implementation Path
-1. M5.2.2: Create CallbackContext structure in `src/callbacks/context.c`
+1. M5.2.2: Create CallbackContext structure in `src/callbacks/context.c` (may be done)
 2. M5.2.3: Implement cxf_init_callback_struct, cxf_reset_callback_state
 3. M5.2.4: Implement cxf_pre_optimize_callback, cxf_post_optimize_callback
 4. M5.2.5: Implement cxf_set_terminate, cxf_check_terminate, cxf_callback_terminate

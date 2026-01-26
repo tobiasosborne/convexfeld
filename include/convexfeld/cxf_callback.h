@@ -47,4 +47,49 @@ struct CallbackContext {
     double callback_time;     /**< Cumulative time in callbacks (seconds) */
 };
 
+/*******************************************************************************
+ * CallbackContext Lifecycle Functions (M5.2.2)
+ ******************************************************************************/
+
+/**
+ * @brief Create and initialize a CallbackContext.
+ *
+ * Allocates a new CallbackContext with magic numbers set and all
+ * fields initialized to default values. The callback is disabled
+ * initially (enabled=0).
+ *
+ * @return Pointer to new CallbackContext, or NULL on allocation failure.
+ */
+CallbackContext *cxf_callback_create(void);
+
+/**
+ * @brief Free a CallbackContext.
+ *
+ * Deallocates the CallbackContext. Safe to call with NULL.
+ *
+ * @param ctx CallbackContext to free (may be NULL).
+ */
+void cxf_callback_free(CallbackContext *ctx);
+
+/**
+ * @brief Validate a CallbackContext.
+ *
+ * Checks that magic numbers are valid and structure is usable.
+ *
+ * @param ctx CallbackContext to validate.
+ * @return CXF_OK if valid, error code otherwise.
+ */
+int cxf_callback_validate(const CallbackContext *ctx);
+
+/**
+ * @brief Reset CallbackContext statistics.
+ *
+ * Clears callback_calls, callback_time, and iteration_count.
+ * Does not change callback_func, user_data, or enabled state.
+ *
+ * @param ctx CallbackContext to reset.
+ * @return CXF_OK on success, error code if ctx is NULL or invalid.
+ */
+int cxf_callback_reset_stats(CallbackContext *ctx);
+
 #endif /* CXF_CALLBACK_H */

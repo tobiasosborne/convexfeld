@@ -361,3 +361,34 @@
 - Placed in logging module (system.c) per M3.2.4 plan, though spec says Threading module
 - Used `_POSIX_C_SOURCE 199309L` for `sysconf()` portability
 - Simple implementation without caching (fast enough at <1us, typically called once)
+
+---
+
+### 2026-01-26: M2.3.1 Validation Tests
+
+**Files created:**
+- `tests/unit/test_validation.c` (151 LOC) - 14 tests
+- `src/validation/validation_stub.c` (64 LOC) - Stub implementations
+
+**Tests implemented:**
+- `test_cxf_validate_array_valid` - Valid array with finite values passes
+- `test_cxf_validate_array_null_array` - NULL array returns success (indicates defaults)
+- `test_cxf_validate_array_zero_count` - Zero count returns success
+- `test_cxf_validate_array_negative_count` - Negative count returns success (defensive)
+- `test_cxf_validate_array_nan` - Array with NaN returns error
+- `test_cxf_validate_array_nan_first` - NaN at first position detected
+- `test_cxf_validate_array_nan_last` - NaN at last position detected
+- `test_cxf_validate_array_all_nan` - All NaN array detected
+- `test_cxf_validate_array_inf` - Infinity is allowed (valid for bounds)
+- `test_cxf_validate_array_single_element` - Single valid element
+- `test_cxf_validate_array_single_nan` - Single NaN element
+- `test_cxf_validate_vartypes_valid` - IGNORED (requires CxfModel)
+- `test_cxf_validate_vartypes_invalid` - IGNORED (requires CxfModel)
+- `test_cxf_validate_vartypes_null_model` - NULL model handled safely
+
+**Key decisions:**
+- Infinity is explicitly allowed per spec (valid for bound arrays like lb/ub)
+- NULL array treated as valid (indicates defaults should be used)
+- Zero/negative count treated as valid (defensive, empty array)
+- cxf_validate_vartypes tests deferred until CxfModel structure is fully implemented
+- Used `isnan()` from math.h for portable NaN detection
