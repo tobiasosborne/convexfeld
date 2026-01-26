@@ -73,6 +73,10 @@ add_cxf_test(test_memory_vectors unit/test_memory_vectors.c)
 add_cxf_test(test_error unit/test_error.c)
 target_link_libraries(test_error PRIVATE m)  # For math functions (NAN, INFINITY)
 
+# M4.2.1: Timing tests
+add_cxf_test(test_timing unit/test_timing.c)
+target_link_libraries(test_timing PRIVATE m)  # For math functions
+
 ################################################################################
 # Integration Tests
 ################################################################################

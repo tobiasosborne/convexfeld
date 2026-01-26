@@ -96,13 +96,15 @@ target_sources(convexfeld PRIVATE
     src/basis/basis_stub.c
     # Simplex module (M1.5 stubs)
     src/simplex/solve_lp_stub.c
-    # Error module (M1.7 stubs + M3.1.2-M3.1.4)
+    # Error module (M1.7 stubs + M3.1.2-M3.1.5)
     src/error/core.c
     src/error/nan_check.c
     src/error/env_check.c
+    src/error/model_flags.c
     src/error/error_stub.c
-    # Timing module (M4.2.2)
+    # Timing module (M4.2.2-M4.2.3)
     src/timing/timestamp.c
+    src/timing/sections.c
     # API module (M1.1, M1.2, M1.4 stubs)
     src/api/env_stub.c
     src/api/model_stub.c

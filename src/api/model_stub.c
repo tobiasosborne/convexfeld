@@ -62,10 +62,11 @@ int cxf_newmodel(CxfEnv *env, CxfModel **modelP, const char *name) {
     model->obj_coeffs = (double *)cxf_malloc(INITIAL_VAR_CAPACITY * sizeof(double));
     model->lb = (double *)cxf_malloc(INITIAL_VAR_CAPACITY * sizeof(double));
     model->ub = (double *)cxf_malloc(INITIAL_VAR_CAPACITY * sizeof(double));
+    model->vtype = (char *)cxf_malloc(INITIAL_VAR_CAPACITY * sizeof(char));
     model->solution = (double *)cxf_malloc(INITIAL_VAR_CAPACITY * sizeof(double));
 
     if (model->obj_coeffs == NULL || model->lb == NULL ||
-        model->ub == NULL || model->solution == NULL) {
+        model->ub == NULL || model->vtype == NULL || model->solution == NULL) {
         cxf_freemodel(model);
         return CXF_ERROR_OUT_OF_MEMORY;
     }
@@ -109,7 +110,7 @@ void cxf_freemodel(CxfModel *model) {
  * @param lb Lower bound
  * @param ub Upper bound
  * @param obj Objective coefficient
- * @param vtype Variable type (ignored in stub - all continuous)
+ * @param vtype Variable type ('C', 'B', 'I', 'S', 'N')
  * @param name Variable name (ignored in stub)
  * @return CXF_OK on success, error code otherwise
  */
@@ -117,7 +118,6 @@ int cxf_addvar(CxfModel *model, double lb, double ub, double obj,
                char vtype, const char *name) {
     int idx;
 
-    (void)vtype;  /* Unused in stub */
     (void)name;   /* Unused in stub */
 
     if (model == NULL) {
@@ -132,6 +132,7 @@ int cxf_addvar(CxfModel *model, double lb, double ub, double obj,
     model->obj_coeffs[idx] = obj;
     model->lb[idx] = lb;
     model->ub[idx] = ub;
+    model->vtype[idx] = vtype;
     model->solution[idx] = 0.0;
     model->num_vars++;
 

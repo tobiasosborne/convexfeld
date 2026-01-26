@@ -231,3 +231,46 @@
 
 **Key learning:**
 - `clock_gettime(CLOCK_MONOTONIC)` requires `#define _POSIX_C_SOURCE 199309L`
+
+---
+
+### 2026-01-26: M4.2.1 Timing Tests + M4.2.3 Timing Sections
+
+**Files created:**
+- `include/convexfeld/cxf_timing.h` (58 LOC) - TimingState structure
+- `src/timing/sections.c` (89 LOC) - Timing section functions
+- `tests/unit/test_timing.c` (260 LOC) - 17 tests
+
+**TimingState structure:**
+- `start_time` - Start timestamp
+- `elapsed` - Last computed elapsed time
+- `current_section` - Active section (0-7)
+- Per-section arrays: total_time[], operation_count[], last_elapsed[], avg_time[]
+- `iteration_rate` - Overall iterations per second
+
+**Functions implemented:**
+- `cxf_timing_start(timing)` - Record start timestamp
+- `cxf_timing_end(timing)` - Calculate elapsed, update section stats
+- `cxf_timing_update(timing, category)` - Accumulate stats by category
+
+**Key learnings:**
+1. **Shared headers for structures** - When tests and implementation both need a structure, put it in a header (cxf_timing.h), not defined locally in both files
+2. **Timing test robustness** - Use `>=` instead of `>` for elapsed time tests to avoid flakiness from fast execution or timer resolution
+3. **Prevent loop optimization** - Use `volatile double sum` and `sum += (double)i * 0.001` pattern to prevent compiler optimizing away busy loops. Also TEST_ASSERT_TRUE(sum > 0) to use the result
+
+---
+
+### 2026-01-26: M3.1.5 Model Flag Checks
+
+**File created:** `src/error/model_flags.c` (72 LOC)
+
+**Functions implemented:**
+- `cxf_check_model_flags1(model)` - Detect MIP features (integer vars)
+- `cxf_check_model_flags2(model, flag)` - Detect quadratic/conic features
+
+**Tests added to test_error.c:**
+- 8 new tests covering NULL models, empty models, continuous vars, binary/integer vars
+
+**Key learning:**
+- The stub `cxf_addvar` was ignoring vtype - had to fix model_stub.c to allocate and store vtype array for tests to work
+- Future-proofing: model_flags checks for fields not yet in SparseMatrix (sosCount, quadObjTerms, etc.) are commented with notes for later implementation

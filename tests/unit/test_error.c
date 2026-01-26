@@ -228,6 +228,106 @@ void test_pivot_check_nan(void) {
 }
 
 /*============================================================================
+ * cxf_check_model_flags1 Tests (MIP detection)
+ *===========================================================================*/
+
+void test_check_model_flags1_null_model(void) {
+    int result = cxf_check_model_flags1(NULL);
+    TEST_ASSERT_EQUAL_INT(0, result);  /* NULL returns 0 (pure continuous) */
+}
+
+void test_check_model_flags1_pure_continuous(void) {
+    CxfModel *model = NULL;
+    cxf_newmodel(env, &model, "test");
+    TEST_ASSERT_NOT_NULL(model);
+
+    /* Add some continuous variables */
+    cxf_addvar(model, 0.0, 10.0, 1.0, 'C', "x0");
+    cxf_addvar(model, 0.0, 10.0, 2.0, 'C', "x1");
+
+    int result = cxf_check_model_flags1(model);
+    TEST_ASSERT_EQUAL_INT(0, result);  /* Pure continuous */
+
+    cxf_freemodel(model);
+}
+
+void test_check_model_flags1_with_binary(void) {
+    CxfModel *model = NULL;
+    cxf_newmodel(env, &model, "test");
+    TEST_ASSERT_NOT_NULL(model);
+
+    /* Add one binary variable */
+    cxf_addvar(model, 0.0, 1.0, 1.0, 'B', "b0");
+
+    int result = cxf_check_model_flags1(model);
+    TEST_ASSERT_EQUAL_INT(1, result);  /* Has MIP feature */
+
+    cxf_freemodel(model);
+}
+
+void test_check_model_flags1_with_integer(void) {
+    CxfModel *model = NULL;
+    cxf_newmodel(env, &model, "test");
+    TEST_ASSERT_NOT_NULL(model);
+
+    /* Add one integer variable */
+    cxf_addvar(model, 0.0, 10.0, 1.0, 'I', "i0");
+
+    int result = cxf_check_model_flags1(model);
+    TEST_ASSERT_EQUAL_INT(1, result);  /* Has MIP feature */
+
+    cxf_freemodel(model);
+}
+
+void test_check_model_flags1_empty_model(void) {
+    CxfModel *model = NULL;
+    cxf_newmodel(env, &model, "test");
+    TEST_ASSERT_NOT_NULL(model);
+
+    /* Empty model (no variables) */
+    int result = cxf_check_model_flags1(model);
+    TEST_ASSERT_EQUAL_INT(0, result);  /* Empty is pure continuous */
+
+    cxf_freemodel(model);
+}
+
+/*============================================================================
+ * cxf_check_model_flags2 Tests (Quadratic/conic detection)
+ *===========================================================================*/
+
+void test_check_model_flags2_null_model(void) {
+    int result = cxf_check_model_flags2(NULL, 0);
+    TEST_ASSERT_EQUAL_INT(0, result);  /* NULL returns 0 (pure linear) */
+}
+
+void test_check_model_flags2_pure_linear(void) {
+    CxfModel *model = NULL;
+    cxf_newmodel(env, &model, "test");
+    TEST_ASSERT_NOT_NULL(model);
+
+    /* Add some variables */
+    cxf_addvar(model, 0.0, 10.0, 1.0, 'C', "x0");
+    cxf_addvar(model, 0.0, 10.0, 2.0, 'C', "x1");
+
+    int result = cxf_check_model_flags2(model, 0);
+    TEST_ASSERT_EQUAL_INT(0, result);  /* Pure linear */
+
+    cxf_freemodel(model);
+}
+
+void test_check_model_flags2_empty_model(void) {
+    CxfModel *model = NULL;
+    cxf_newmodel(env, &model, "test");
+    TEST_ASSERT_NOT_NULL(model);
+
+    /* Empty model */
+    int result = cxf_check_model_flags2(model, 0);
+    TEST_ASSERT_EQUAL_INT(0, result);  /* Empty is pure linear */
+
+    cxf_freemodel(model);
+}
+
+/*============================================================================
  * Main
  *===========================================================================*/
 
@@ -271,6 +371,18 @@ int main(void) {
     RUN_TEST(test_pivot_check_zero);
     RUN_TEST(test_pivot_check_negative);
     RUN_TEST(test_pivot_check_nan);
+
+    /* cxf_check_model_flags1 tests */
+    RUN_TEST(test_check_model_flags1_null_model);
+    RUN_TEST(test_check_model_flags1_pure_continuous);
+    RUN_TEST(test_check_model_flags1_with_binary);
+    RUN_TEST(test_check_model_flags1_with_integer);
+    RUN_TEST(test_check_model_flags1_empty_model);
+
+    /* cxf_check_model_flags2 tests */
+    RUN_TEST(test_check_model_flags2_null_model);
+    RUN_TEST(test_check_model_flags2_pure_linear);
+    RUN_TEST(test_check_model_flags2_empty_model);
 
     return UNITY_END();
 }
