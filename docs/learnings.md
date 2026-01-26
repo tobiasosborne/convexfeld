@@ -6,6 +6,28 @@ This file captures learnings, gotchas, and useful patterns discovered during dev
 
 ---
 
+## 2026-01-26: M1.1 Stub CxfEnv Structure Created
+
+### SUCCESS: Environment stubs for tracer bullet
+
+**File created:** `src/api/env_stub.c` (74 LOC)
+
+**Functions implemented:**
+- `cxf_loadenv(envP, logfilename)` - Allocates and initializes CxfEnv with defaults
+- `cxf_freeenv(env)` - Frees environment memory
+
+**Key decisions:**
+- Uses cxf_calloc for zero-initialized allocation
+- Sets magic number for validation (CXF_ENV_MAGIC = 0xC0FEFE1D)
+- Initializes tolerances to defaults (CXF_FEASIBILITY_TOL, CXF_OPTIMALITY_TOL)
+- logfilename parameter ignored in stub (logging comes later)
+
+**Build status:**
+- Env stubs compile successfully
+- Linker errors reduced to 6 (remaining M1.2-M1.5 stubs needed)
+
+---
+
 ## 2026-01-26: M1.7 Stub Error Functions Created
 
 ### SUCCESS: Error handling stubs for tracer bullet
