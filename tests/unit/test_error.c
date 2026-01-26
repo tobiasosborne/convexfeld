@@ -33,6 +33,8 @@ int cxf_check_model_flags2(CxfModel *model, int flag);
 
 /* Termination Check (M3.1.6) */
 int cxf_check_terminate(CxfEnv *env);
+void cxf_terminate(CxfEnv *env);
+void cxf_clear_terminate(CxfEnv *env);
 
 /* Pivot Validation (M3.1.7) */
 int cxf_pivot_check(double pivot_elem, double tolerance);
@@ -328,6 +330,44 @@ void test_check_model_flags2_empty_model(void) {
 }
 
 /*============================================================================
+ * cxf_check_terminate Tests
+ *===========================================================================*/
+
+void test_check_terminate_null_env(void) {
+    int result = cxf_check_terminate(NULL);
+    TEST_ASSERT_EQUAL_INT(0, result);  /* NULL returns 0 (no termination) */
+}
+
+void test_check_terminate_not_set(void) {
+    /* Fresh env should have no termination requested */
+    int result = cxf_check_terminate(env);
+    TEST_ASSERT_EQUAL_INT(0, result);
+}
+
+void test_check_terminate_after_terminate(void) {
+    cxf_terminate(env);
+    int result = cxf_check_terminate(env);
+    TEST_ASSERT_EQUAL_INT(1, result);  /* Termination requested */
+}
+
+void test_check_terminate_after_clear(void) {
+    cxf_terminate(env);
+    cxf_clear_terminate(env);
+    int result = cxf_check_terminate(env);
+    TEST_ASSERT_EQUAL_INT(0, result);  /* Cleared */
+}
+
+void test_terminate_null_env_safe(void) {
+    cxf_terminate(NULL);  /* Should not crash */
+    TEST_PASS();
+}
+
+void test_clear_terminate_null_env_safe(void) {
+    cxf_clear_terminate(NULL);  /* Should not crash */
+    TEST_PASS();
+}
+
+/*============================================================================
  * Main
  *===========================================================================*/
 
@@ -383,6 +423,14 @@ int main(void) {
     RUN_TEST(test_check_model_flags2_null_model);
     RUN_TEST(test_check_model_flags2_pure_linear);
     RUN_TEST(test_check_model_flags2_empty_model);
+
+    /* cxf_check_terminate tests */
+    RUN_TEST(test_check_terminate_null_env);
+    RUN_TEST(test_check_terminate_not_set);
+    RUN_TEST(test_check_terminate_after_terminate);
+    RUN_TEST(test_check_terminate_after_clear);
+    RUN_TEST(test_terminate_null_env_safe);
+    RUN_TEST(test_clear_terminate_null_env_safe);
 
     return UNITY_END();
 }

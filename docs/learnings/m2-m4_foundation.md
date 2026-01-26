@@ -274,3 +274,65 @@
 **Key learning:**
 - The stub `cxf_addvar` was ignoring vtype - had to fix model_stub.c to allocate and store vtype array for tests to work
 - Future-proofing: model_flags checks for fields not yet in SparseMatrix (sosCount, quadObjTerms, etc.) are commented with notes for later implementation
+
+---
+
+### 2026-01-26: M3.1.6 Termination Check
+
+**File created:** `src/error/terminate.c` (~70 LOC)
+
+**Functions implemented:**
+- `cxf_check_terminate(env)` - Check if termination requested (returns 0/1)
+- `cxf_terminate(env)` - Request termination (set flag)
+- `cxf_clear_terminate(env)` - Clear termination request
+
+**Structure changes to cxf_env.h:**
+- Added `volatile int *terminate_flag_ptr` - External termination flag (fastest check)
+- Added `volatile int terminate_flag` - Primary termination flag
+
+**Key learning:**
+- Use `volatile` for termination flags to prevent compiler optimizations that could miss flag changes
+- Priority-ordered checking (external pointer first, then internal flag) enables fast hot-loop termination
+
+---
+
+### 2026-01-26: M4.2.4 Operation Timing
+
+**File created:** `src/timing/operations.c` (~110 LOC)
+
+**Functions implemented:**
+- `cxf_timing_pivot(state, pricing_work, ratio_work, update_work)` - Record pivot work
+- `cxf_timing_refactor(state, env)` - Determine if refactorization needed (returns 0/1/2)
+
+**Structure changes:**
+
+**SolverContext (cxf_solver.h):**
+- Added `double *work_counter` - Accumulated work for refactor decisions
+- Added `double scale_factor` - Work scaling factor
+- Added `TimingState *timing` - Optional timing state
+- Added refactorization tracking: `eta_count`, `eta_memory`, `total_ftran_time`, `ftran_count`, `baseline_ftran`, `iteration`, `last_refactor_iter`
+
+**CxfEnv (cxf_env.h):**
+- Added `int max_eta_count` - Hard limit on eta vectors
+- Added `int64_t max_eta_memory` - Hard limit on eta memory
+- Added `int refactor_interval` - Soft limit on iterations
+
+**Key learnings:**
+1. **Return values for decisions** - Using 0/1/2 return allows caller to distinguish "not needed", "recommended", "required"
+2. **Include header to avoid typedef redefinition** - Changed cxf_solver.h to include cxf_timing.h directly instead of forward-declaring typedef
+
+---
+
+### 2026-01-26: M4.3.2 Model Type Checks
+
+**File created:** `src/analysis/model_type.c` (~110 LOC)
+**Test file created:** `tests/unit/test_analysis.c` (~200 LOC) - 11 tests
+
+**Functions implemented:**
+- `cxf_is_mip_model(model)` - Check for integer variables
+- `cxf_is_quadratic(model)` - Check for QP features (stub, returns 0)
+- `cxf_is_socp(model)` - Check for SOCP/QCP features (stub, returns 0)
+
+**Key learning:**
+- **Stub pattern for unimplemented dependencies** - `cxf_is_quadratic` and `cxf_is_socp` need SparseMatrix fields (`quadObjTerms`, `socConstrCount`, etc.) that don't exist yet. Implement with documented comments showing what the real check would be, return 0 for now.
+- This allows dependent code to compile and test the full control flow, while actual detection waits for matrix extensions

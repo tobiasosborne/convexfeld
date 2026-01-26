@@ -77,6 +77,9 @@ target_link_libraries(test_error PRIVATE m)  # For math functions (NAN, INFINITY
 add_cxf_test(test_timing unit/test_timing.c)
 target_link_libraries(test_timing PRIVATE m)  # For math functions
 
+# M4.3.1-M4.3.2: Analysis tests
+add_cxf_test(test_analysis unit/test_analysis.c)
+
 ################################################################################
 # Integration Tests
 ################################################################################

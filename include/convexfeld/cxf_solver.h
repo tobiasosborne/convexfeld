@@ -10,6 +10,7 @@
 #define CXF_SOLVER_H
 
 #include "cxf_types.h"
+#include "cxf_timing.h"
 
 /**
  * @brief Solver context for LP optimization.
@@ -43,6 +44,20 @@ struct SolverContext {
     /* Subcomponents */
     BasisState *basis;        /**< Current basis state */
     PricingContext *pricing;  /**< Pricing context */
+
+    /* Work tracking for refactorization decisions */
+    double *work_counter;     /**< Accumulated work counter (NULL to disable) */
+    double scale_factor;      /**< Work scaling factor */
+    TimingState *timing;      /**< Timing state (NULL to disable) */
+
+    /* Refactorization tracking */
+    int eta_count;            /**< Number of eta vectors since last refactor */
+    int64_t eta_memory;       /**< Memory used by eta vectors (bytes) */
+    double total_ftran_time;  /**< Accumulated FTRAN time */
+    int ftran_count;          /**< Number of FTRAN operations */
+    double baseline_ftran;    /**< Baseline FTRAN time (after refactor) */
+    int iteration;            /**< Current iteration number */
+    int last_refactor_iter;   /**< Iteration of last refactorization */
 };
 
 #endif /* CXF_SOLVER_H */

@@ -31,6 +31,15 @@ struct CxfEnv {
     int verbosity;            /**< Logging level: 0=silent, 1=normal, 2+=verbose */
     int output_flag;          /**< Master output control: 0=suppress, 1=enable */
 
+    /* Termination flags */
+    volatile int *terminate_flag_ptr; /**< External termination flag (fastest check) */
+    volatile int terminate_flag;      /**< Primary termination flag */
+
+    /* Refactorization parameters */
+    int max_eta_count;        /**< Maximum eta vectors before forced refactor */
+    int64_t max_eta_memory;   /**< Maximum eta memory before forced refactor */
+    int refactor_interval;    /**< Iterations between routine refactorizations */
+
     /* Reference counting */
     int ref_count;            /**< Reference counter for environment lifetime */
 };
