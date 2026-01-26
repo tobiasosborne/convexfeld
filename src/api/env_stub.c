@@ -56,6 +56,10 @@ int cxf_loadenv(CxfEnv **envP, const char *logfilename) {
     /* Reference counting */
     env->ref_count = 1;
 
+    /* Log callback (none by default) */
+    env->log_callback = NULL;
+    env->log_callback_data = NULL;
+
     *envP = env;
     return CXF_OK;
 }

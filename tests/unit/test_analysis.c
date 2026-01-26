@@ -18,6 +18,9 @@ int cxf_is_mip_model(CxfModel *model);
 int cxf_is_quadratic(CxfModel *model);
 int cxf_is_socp(CxfModel *model);
 
+/* Presolve Statistics (M4.3.4) */
+void cxf_presolve_stats(CxfModel *model);
+
 /* API functions for setup/teardown */
 int cxf_loadenv(CxfEnv **envP, const char *logfilename);
 void cxf_freeenv(CxfEnv *env);
@@ -176,6 +179,44 @@ void test_is_socp_linear_model(void) {
 }
 
 /*============================================================================
+ * cxf_presolve_stats Tests
+ *===========================================================================*/
+
+void test_presolve_stats_null_model(void) {
+    /* Should not crash with NULL */
+    cxf_presolve_stats(NULL);
+    TEST_PASS();
+}
+
+void test_presolve_stats_empty_model(void) {
+    CxfModel *model = NULL;
+    cxf_newmodel(env, &model, "empty");
+    TEST_ASSERT_NOT_NULL(model);
+
+    /* Should not crash with empty model */
+    cxf_presolve_stats(model);
+    TEST_PASS();
+
+    cxf_freemodel(model);
+}
+
+void test_presolve_stats_with_vars(void) {
+    CxfModel *model = NULL;
+    cxf_newmodel(env, &model, "test_lp");
+    TEST_ASSERT_NOT_NULL(model);
+
+    cxf_addvar(model, 0.0, 10.0, 1.0, 'C', "x0");
+    cxf_addvar(model, 0.0, 10.0, 2.0, 'C', "x1");
+    cxf_addvar(model, 0.0, 10.0, 3.0, 'C', "x2");
+
+    /* Should log model dimensions */
+    cxf_presolve_stats(model);
+    TEST_PASS();
+
+    cxf_freemodel(model);
+}
+
+/*============================================================================
  * Main
  *===========================================================================*/
 
@@ -198,6 +239,11 @@ int main(void) {
     /* cxf_is_socp tests */
     RUN_TEST(test_is_socp_null_model);
     RUN_TEST(test_is_socp_linear_model);
+
+    /* cxf_presolve_stats tests */
+    RUN_TEST(test_presolve_stats_null_model);
+    RUN_TEST(test_presolve_stats_empty_model);
+    RUN_TEST(test_presolve_stats_with_vars);
 
     return UNITY_END();
 }

@@ -42,6 +42,10 @@ struct CxfEnv {
 
     /* Reference counting */
     int ref_count;            /**< Reference counter for environment lifetime */
+
+    /* Log callback */
+    void (*log_callback)(const char *msg, void *data); /**< User log callback */
+    void *log_callback_data;  /**< User data for log callback */
 };
 
 /*******************************************************************************

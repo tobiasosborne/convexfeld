@@ -105,15 +105,19 @@ target_sources(convexfeld PRIVATE
     src/error/terminate.c
     src/error/pivot_check.c
     src/error/error_stub.c
-    # Logging module (M3.2.3)
+    # Parameters module (M2.2.1)
+    src/parameters/params.c
+    # Logging module (M3.2.2, M3.2.3)
+    src/logging/output.c
     src/logging/format.c
     # Timing module (M4.2.2-M4.2.4)
     src/timing/timestamp.c
     src/timing/sections.c
     src/timing/operations.c
-    # Analysis module (M4.3.2, M4.3.3)
+    # Analysis module (M4.3.2, M4.3.3, M4.3.4)
     src/analysis/model_type.c
     src/analysis/coef_stats.c
+    src/analysis/presolve_stats.c
     # API module (M1.1, M1.2, M1.4 stubs + M8.1.4 constr stubs)
     src/api/env_stub.c
     src/api/model_stub.c

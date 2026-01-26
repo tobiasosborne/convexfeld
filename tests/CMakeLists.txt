@@ -97,6 +97,9 @@ target_link_libraries(test_logging PRIVATE m)  # For math functions
 add_cxf_test(test_pivot_check unit/test_pivot_check.c)
 target_link_libraries(test_pivot_check PRIVATE m)  # For math functions
 
+# M2.2.1: Parameters tests
+add_cxf_test(test_parameters unit/test_parameters.c)
+
 ################################################################################
 # Integration Tests
 ################################################################################
