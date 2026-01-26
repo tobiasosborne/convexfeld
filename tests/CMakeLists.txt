@@ -103,6 +103,9 @@ add_cxf_test(test_parameters unit/test_parameters.c)
 # M7.1.1: Simplex Tests - Basic
 add_cxf_test(test_simplex_basic unit/test_simplex_basic.c)
 
+# M5.2.1: Callbacks tests
+add_cxf_test(test_callbacks unit/test_callbacks.c)
+
 ################################################################################
 # Integration Tests
 ################################################################################

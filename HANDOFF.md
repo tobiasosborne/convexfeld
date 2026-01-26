@@ -6,57 +6,34 @@
 
 ## Work Completed This Session
 
-### M3.2.3: Format Helpers (convexfeld-9pu) - CLOSED
-- Updated `src/logging/format.c` (82 LOC)
-- Fixed `cxf_snprintf_wrapper` to match spec:
-  - NULL buffer now returns -1 (was returning result of vsnprintf)
-  - size = 0 now returns -1 (was returning result of vsnprintf)
-  - Ensures null termination at buffer[size-1]
-- Updated tests in `test_logging.c`
-- All 25 tests in test_logging pass
-
-### M5.1.7: Basis Snapshots (convexfeld-2g8) - CLOSED
-- Created `src/basis/snapshot.c` (159 LOC)
-- Implemented BasisSnapshot API:
-  - `cxf_basis_snapshot_create()` - Deep copy basis state
-  - `cxf_basis_snapshot_diff()` - Count differences
-  - `cxf_basis_snapshot_equal()` - Check equality
-  - `cxf_basis_snapshot_free()` - Free memory
-- Added BasisSnapshot struct to `include/convexfeld/cxf_basis.h`
-- Extended BasisState with `n` and `iteration` fields
-- Added 12 new tests to test_basis.c (41 total tests pass)
-
-### M7.1.1: Simplex Tests - Basic (convexfeld-b2w) - CLOSED
-- Created `tests/unit/test_simplex_basic.c` (273 lines, 165 LOC)
-- TDD tests for simplex interface (17 tests):
-  - Init/Final lifecycle tests (8)
-  - Setup tests (3)
-  - Status/iteration/phase query tests (6)
-- Tests compile but linker errors expected (TDD - functions not implemented)
-- Defines expected simplex interface for implementation
+### M5.2.1: Callbacks Tests (convexfeld-bv4) - CLOSED
+- Created `tests/unit/test_callbacks.c` (237 lines, ~139 LOC)
+- TDD tests for callback module functions (17 tests):
+  - cxf_init_callback_struct tests (3)
+  - cxf_set_terminate tests (3)
+  - cxf_check_terminate tests (3)
+  - cxf_callback_terminate tests (2)
+  - cxf_reset_callback_state tests (1)
+  - cxf_pre_optimize_callback tests (2)
+  - cxf_post_optimize_callback tests (2)
+- Added test_callbacks to `tests/CMakeLists.txt`
+- Tests compile but linker errors expected (TDD - functions not implemented yet)
+- Updated `docs/learnings/m5-m6_core.md` with M5.2.1 learnings
 
 ---
 
 ## Current State
 
 ### Build Status
-- All 19 test suites PASS (excluding test_simplex_basic which expects linker errors)
+- All 19 test suites PASS (excluding test_simplex_basic and test_callbacks which expect linker errors)
 - No compiler warnings
-- 41 basis tests passing
-- `bench_tracer` passes
+- test_callbacks compiles, has expected linker errors (TDD pattern)
 
 ### Files Created/Modified
 ```
-src/basis/snapshot.c               (NEW - 159 LOC)
-tests/unit/test_simplex_basic.c    (NEW - TDD tests)
-src/logging/format.c               (MODIFIED - fixed snprintf edge cases)
-include/convexfeld/cxf_basis.h     (MODIFIED - BasisSnapshot struct)
-src/basis/basis_state.c            (MODIFIED - init n, iteration fields)
-tests/unit/test_basis.c            (MODIFIED - 12 new snapshot tests)
-tests/unit/test_logging.c          (MODIFIED - updated edge case tests)
-CMakeLists.txt                     (MODIFIED - added snapshot.c)
-tests/CMakeLists.txt               (MODIFIED - added test_simplex_basic)
-docs/learnings/m5-m6_core.md       (MODIFIED - added M5.1.7, M7.1.1)
+tests/unit/test_callbacks.c        (NEW - 237 lines, ~139 LOC)
+tests/CMakeLists.txt               (MODIFIED - added test_callbacks)
+docs/learnings/m5-m6_core.md       (MODIFIED - M5.2.1 learnings)
 ```
 
 ---
@@ -70,17 +47,18 @@ Run `bd ready` to see all available work.
 bd ready
 
 # High-value next tasks:
-# M7.1.2: Simplex Stubs - Implement stubs so TDD tests pass
-# M8.1.7-M8.1.8: Full CxfEnv/CxfModel Structures
-# M8.1.9-M8.1.11: More API functions
+# M5.2.2: CallbackContext Structure - implement to make callbacks tests pass
+# M5.2.3-M5.2.5: Callback function implementations
+# M7.1.2: Simplex Stubs - to make simplex TDD tests pass
 # M5.1.8: Basis Validation/Warm Start
+# M8.1.7-M8.1.8: Full CxfEnv/CxfModel Structures
 ```
 
-### Simplex Implementation Path
-1. M7.1.2: Create simplex stubs (src/simplex/simplex_stub.c) to make TDD tests pass
-2. M7.1.3-M7.1.4: Implement simplex init/final
-3. M7.1.5-M7.1.6: Implement simplex setup/iterate
-4. Continue with core simplex algorithm
+### Callback Implementation Path
+1. M5.2.2: Create CallbackContext structure in `src/callbacks/context.c`
+2. M5.2.3: Implement cxf_init_callback_struct, cxf_reset_callback_state
+3. M5.2.4: Implement cxf_pre_optimize_callback, cxf_post_optimize_callback
+4. M5.2.5: Implement cxf_set_terminate, cxf_check_terminate, cxf_callback_terminate
 
 ---
 
@@ -88,7 +66,7 @@ bd ready
 
 - **Plan:** `docs/plan/README.md` (index to all milestone files)
 - **Learnings:** `docs/learnings/README.md` (index to patterns, gotchas)
-- **Specs:** `docs/specs/`
+- **Specs:** `docs/specs/functions/callbacks/` (callback function specs)
 
 ---
 

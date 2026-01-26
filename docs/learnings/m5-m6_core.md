@@ -371,3 +371,37 @@ int cxf_simplex_get_phase(SolverContext *state);
 - Mode parameter: 0=auto, 1=primal, 2=dual
 - Status codes to implement: CXF_STATUS_UNSET, CXF_STATUS_LOADED, etc.
 - Phase: 1=Phase I (finding feasibility), 2=Phase II (optimizing)
+
+---
+
+### 2026-01-26: M5.2.1 Callbacks Tests (TDD)
+
+**File created:** `tests/unit/test_callbacks.c` (237 total lines, ~139 LOC)
+
+**TDD tests written (17 total):**
+- **cxf_init_callback_struct (3):** zeroes_memory, null_pointer_returns_error, null_env_succeeds
+- **cxf_set_terminate (3):** sets_flag, null_env_safe, idempotent
+- **cxf_check_terminate (3):** returns_zero_when_clear, returns_one_when_set, null_env_returns_zero
+- **cxf_callback_terminate (2):** sets_env_flag, null_model_safe
+- **cxf_reset_callback_state (1):** null_env_safe
+- **cxf_pre_optimize_callback (2):** null_env_returns_success, no_callback_returns_success
+- **cxf_post_optimize_callback (2):** null_env_returns_success, no_callback_returns_success
+
+**Expected interface defined (from specs):**
+```c
+int cxf_init_callback_struct(CxfEnv *env, void *callbackSubStruct);
+void cxf_set_terminate(CxfEnv *env);
+int cxf_check_terminate(CxfEnv *env);
+void cxf_callback_terminate(CxfModel *model);
+void cxf_reset_callback_state(CxfEnv *env);
+int cxf_pre_optimize_callback(CxfModel *model);
+int cxf_post_optimize_callback(CxfModel *model);
+```
+
+**Key learnings:**
+- Tests compile but linker errors expected (TDD - functions not implemented)
+- Follows test_logging.c and test_basis.c patterns
+- Uses CxfEnv and CxfModel structures from existing headers
+- cxf_init_callback_struct zeroes 48-byte substructure per spec
+- Termination functions are idempotent (safe to call multiple times)
+- NULL environment handling returns gracefully (0 or no-op per spec)
