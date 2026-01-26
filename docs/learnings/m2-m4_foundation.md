@@ -336,3 +336,28 @@
 **Key learning:**
 - **Stub pattern for unimplemented dependencies** - `cxf_is_quadratic` and `cxf_is_socp` need SparseMatrix fields (`quadObjTerms`, `socConstrCount`, etc.) that don't exist yet. Implement with documented comments showing what the real check would be, return 0 for now.
 - This allows dependent code to compile and test the full control flow, while actual detection waits for matrix extensions
+
+---
+
+### 2026-01-26: M3.2.4 System Info (cxf_get_logical_processors)
+
+**File created:** `src/logging/system.c` (47 LOC)
+
+**Function implemented:**
+- `cxf_get_logical_processors()` - Returns number of logical processors (including hyperthreads)
+
+**Platform support:**
+- Linux/POSIX: Uses `sysconf(_SC_NPROCESSORS_ONLN)`
+- Windows: Uses `GetSystemInfo()` and `dwNumberOfProcessors`
+
+**Tests added to test_logging.c:**
+- `test_get_logical_processors_returns_positive` - Count is > 0
+- `test_get_logical_processors_returns_at_least_one` - Count >= 1
+- `test_get_logical_processors_reasonable_range` - Count in [1, 1024]
+- `test_get_logical_processors_consistent` - Multiple calls return same value
+
+**Key decisions:**
+- Function always returns at least 1 (per spec) even if detection fails
+- Placed in logging module (system.c) per M3.2.4 plan, though spec says Threading module
+- Used `_POSIX_C_SOURCE 199309L` for `sysconf()` portability
+- Simple implementation without caching (fast enough at <1us, typically called once)

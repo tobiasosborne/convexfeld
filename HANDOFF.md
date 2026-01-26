@@ -6,19 +6,19 @@
 
 ## Work Completed This Session
 
-### M5.2.1: Callbacks Tests (convexfeld-bv4) - CLOSED
+### M3.2.4: System Info (convexfeld-9z2) - CLOSED
+- Created `src/logging/system.c` (47 LOC)
+- Implemented `cxf_get_logical_processors()` function:
+  - Linux/POSIX: Uses `sysconf(_SC_NPROCESSORS_ONLN)`
+  - Windows: Uses `GetSystemInfo()` and `dwNumberOfProcessors`
+  - Always returns at least 1 (per spec)
+- Added 4 new tests to `tests/unit/test_logging.c`
+- Added system.c to CMakeLists.txt
+- All 29 logging tests pass
+
+### M5.2.1: Callbacks Tests (convexfeld-bv4) - CLOSED (other agent)
 - Created `tests/unit/test_callbacks.c` (237 lines, ~139 LOC)
-- TDD tests for callback module functions (17 tests):
-  - cxf_init_callback_struct tests (3)
-  - cxf_set_terminate tests (3)
-  - cxf_check_terminate tests (3)
-  - cxf_callback_terminate tests (2)
-  - cxf_reset_callback_state tests (1)
-  - cxf_pre_optimize_callback tests (2)
-  - cxf_post_optimize_callback tests (2)
-- Added test_callbacks to `tests/CMakeLists.txt`
-- Tests compile but linker errors expected (TDD - functions not implemented yet)
-- Updated `docs/learnings/m5-m6_core.md` with M5.2.1 learnings
+- TDD tests for callback module functions (17 tests)
 
 ---
 
@@ -27,13 +27,18 @@
 ### Build Status
 - All 19 test suites PASS (excluding test_simplex_basic and test_callbacks which expect linker errors)
 - No compiler warnings
+- 29 logging tests passing
 - test_callbacks compiles, has expected linker errors (TDD pattern)
 
 ### Files Created/Modified
 ```
-tests/unit/test_callbacks.c        (NEW - 237 lines, ~139 LOC)
-tests/CMakeLists.txt               (MODIFIED - added test_callbacks)
-docs/learnings/m5-m6_core.md       (MODIFIED - M5.2.1 learnings)
+src/logging/system.c                (NEW - 47 LOC)
+tests/unit/test_logging.c           (MODIFIED - added 4 tests, now 300 LOC)
+CMakeLists.txt                      (MODIFIED - added system.c)
+docs/learnings/m2-m4_foundation.md  (MODIFIED - added M3.2.4 learnings)
+tests/unit/test_callbacks.c         (NEW - 237 lines, ~139 LOC)
+tests/CMakeLists.txt                (MODIFIED - added test_callbacks)
+docs/learnings/m5-m6_core.md        (MODIFIED - M5.2.1 learnings)
 ```
 
 ---
@@ -60,6 +65,12 @@ bd ready
 3. M5.2.4: Implement cxf_pre_optimize_callback, cxf_post_optimize_callback
 4. M5.2.5: Implement cxf_set_terminate, cxf_check_terminate, cxf_callback_terminate
 
+### Simplex Implementation Path
+1. M7.1.2: Create simplex stubs (src/simplex/simplex_stub.c) to make TDD tests pass
+2. M7.1.3-M7.1.4: Implement simplex init/final
+3. M7.1.5-M7.1.6: Implement simplex setup/iterate
+4. Continue with core simplex algorithm
+
 ---
 
 ## References
@@ -74,7 +85,7 @@ bd ready
 - `convexfeld-st1` - Refactor model_stub.c to < 200 LOC (now 228 LOC)
 - `convexfeld-hqo` - Refactor test_matrix.c to < 200 LOC (446 LOC)
 - `convexfeld-afb` - Refactor test_error.c to < 200 LOC (437 LOC)
-- `convexfeld-5w6` - Refactor test_logging.c to < 200 LOC (265 LOC)
+- `convexfeld-5w6` - Refactor test_logging.c to < 200 LOC (now 300 LOC)
 - Note: test_basis.c (703 LOC), test_api_constrs.c (247 LOC), test_api_query.c (243 LOC), test_parameters.c (227 LOC) also exceed limit
 
 Run `bd ready` to see all available work.

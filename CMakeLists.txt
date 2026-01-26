@@ -108,9 +108,10 @@ target_sources(convexfeld PRIVATE
     src/error/error_stub.c
     # Parameters module (M2.2.1)
     src/parameters/params.c
-    # Logging module (M3.2.2, M3.2.3)
+    # Logging module (M3.2.2, M3.2.3, M3.2.4)
     src/logging/output.c
     src/logging/format.c
+    src/logging/system.c
     # Timing module (M4.2.2-M4.2.4)
     src/timing/timestamp.c
     src/timing/sections.c
