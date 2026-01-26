@@ -6,39 +6,50 @@
 
 ## CRITICAL: READ THIS FIRST
 
-### M1 TRACER BULLET COMPLETE (INCLUDING BENCHMARK)
+### Documentation Refactored into Hierarchical Structure
 
-**18 tests pass (3 smoke + 12 memory + 1 tracer bullet + 1 sparse) + benchmark**
+**Large docs split for easier navigation (200-300 LOC per file):**
 
-All M1 milestones are now complete. Next steps: Continue with M2.x-M8.x implementation.
+- `docs/learnings/` - Learnings split by milestone + patterns + gotchas
+- `docs/plan/` - Implementation plan split by milestone + structures + functions
+
+See `CLAUDE.md` for updated agent startup protocol.
 
 ---
 
 ## Work Completed This Session
 
-### M3.1.2: Core Error Functions - Complete
-- `src/error/core.c` (82 LOC) - Enhanced cxf_error, cxf_geterrormsg, cxf_errorlog
-- cxf_errorlog now outputs to console based on output_flag
+### Documentation Refactoring
+- Split `docs/learnings.md` (1127 LOC) into 5 files under `docs/learnings/`
+- Split `docs/IMPLEMENTATION_PLAN.md` (2090 LOC) into 13 files under `docs/plan/`
+- Updated `CLAUDE.md` to reference new structure
 
-### M3.1.3: NaN/Inf Detection - Complete
-- `src/error/nan_check.c` (51 LOC) - Extracted from error_stub.c
+**New structure:**
 
-### M3.1.4: Environment Validation - Complete
-- `src/error/env_check.c` (28 LOC) - Extracted cxf_checkenv
-
-### M4.2.2: Timestamp - Complete
-- `src/timing/timestamp.c` (43 LOC) - cxf_get_timestamp using CLOCK_MONOTONIC
-- Requires `_POSIX_C_SOURCE 199309L` for clock_gettime
-
-### M6.1.6: Pricing Update/Invalidate - Complete
-- `src/pricing/update.c` (117 LOC) - cxf_pricing_update, cxf_pricing_invalidate
-- SE weight handling deferred until SolverContext integration
-
-### M6.1.7: Pricing Step2 - Complete
-- `src/pricing/phase.c` (81 LOC) - Full scan fallback pricing
-
-**Test results:**
-- All 11 test suites PASS (100% tests passed)
+```
+docs/
+├── learnings/
+│   ├── README.md           - Index and quick reference
+│   ├── m0-m1_setup.md      - Setup and tracer bullet learnings
+│   ├── m2-m4_foundation.md - Foundation/Infrastructure/Data layers
+│   ├── m5-m6_core.md       - Core Operations and Algorithm layers
+│   ├── patterns.md         - Reusable patterns and code examples
+│   └── gotchas.md          - Failures and things to avoid
+└── plan/
+    ├── README.md           - Overview, architecture, constraints
+    ├── m0_setup.md         - M0: Project Setup
+    ├── m1_tracer.md        - M1: Tracer Bullet
+    ├── m2_foundation.md    - M2: Foundation Layer
+    ├── m3_infrastructure.md - M3: Infrastructure Layer
+    ├── m4_data.md          - M4: Data Layer
+    ├── m5_core.md          - M5: Core Operations
+    ├── m6_algorithm.md     - M6: Algorithm Layer
+    ├── m7_simplex.md       - M7: Simplex Engine
+    ├── m8_api.md           - M8: Public API
+    ├── structures.md       - Structure definitions
+    ├── functions.md        - Function checklist
+    └── parallelization.md  - Parallelization guide
+```
 
 ---
 
@@ -49,38 +60,18 @@ All M1 milestones are now complete. Next steps: Continue with M2.x-M8.x implemen
 convexfeld/
 ├── CMakeLists.txt
 ├── include/convexfeld/
-│   ├── cxf_types.h
-│   ├── cxf_env.h
-│   ├── cxf_model.h
-│   ├── cxf_matrix.h
-│   ├── cxf_solver.h
-│   ├── cxf_basis.h
-│   ├── cxf_pricing.h
-│   ├── cxf_callback.h
-│   └── convexfeld.h
+│   ├── cxf_types.h, cxf_env.h, cxf_model.h
+│   ├── cxf_matrix.h, cxf_solver.h, cxf_basis.h
+│   ├── cxf_pricing.h, cxf_callback.h, convexfeld.h
 ├── src/
-│   ├── memory/
-│   │   ├── alloc.c, vectors.c, state_cleanup.c
-│   ├── matrix/
-│   │   ├── sparse_stub.c, sparse_matrix.c, multiply.c
-│   │   ├── vectors.c, row_major.c, sort.c
-│   ├── basis/
-│   │   ├── basis_state.c, eta_factors.c, ftran.c, btran.c, basis_stub.c
-│   ├── pricing/
-│   │   ├── context.c, init.c, candidates.c, steepest.c
-│   │   ├── update.c, phase.c, pricing_stub.c (empty)
-│   ├── simplex/
-│   │   └── solve_lp_stub.c
-│   ├── error/
-│   │   ├── core.c, nan_check.c, env_check.c, error_stub.c
-│   ├── timing/
-│   │   └── timestamp.c (NEW)
-│   └── api/
-│       ├── env_stub.c, model_stub.c, api_stub.c
-├── tests/
-│   └── unit/ (11 test files)
-└── benchmarks/
-    └── bench_tracer.c
+│   ├── memory/, matrix/, basis/, pricing/
+│   ├── simplex/, error/, timing/, api/
+├── tests/unit/ (11 test files)
+├── benchmarks/bench_tracer.c
+└── docs/
+    ├── learnings/  (NEW - hierarchical)
+    ├── plan/       (NEW - hierarchical)
+    └── specs/
 ```
 
 ### Build Status
@@ -109,23 +100,13 @@ bd ready
 
 ## References
 
-- **Implementation Plan:** `docs/IMPLEMENTATION_PLAN.md`
-- **Learnings:** `docs/learnings.md`
+- **Plan:** `docs/plan/README.md` (index to all milestone files)
+- **Learnings:** `docs/learnings/README.md` (index to patterns, gotchas)
 - **Specs:** `docs/specs/`
 
 ---
 
-## Issue Status
-
-### Completed This Session
-- `convexfeld-b60` - M3.1.2: Core Error Functions
-- `convexfeld-vml` - M6.1.6: cxf_pricing_update and cxf_pricing_invalidate
-- `convexfeld-dxw` - M3.1.3: NaN/Inf Detection
-- `convexfeld-p1u` - M6.1.7: cxf_pricing_step2
-- `convexfeld-tiv` - M3.1.4: Environment Validation
-- `convexfeld-6qe` - M4.2.2: Timestamp
-
-### Refactor Issues (200 LOC limit)
+## Refactor Issues (200 LOC limit)
 - `convexfeld-st1` - Refactor model_stub.c to < 200 LOC (227 LOC)
 - `convexfeld-hqo` - Refactor test_matrix.c to < 200 LOC (446 LOC)
 - `convexfeld-afb` - Refactor test_error.c to < 200 LOC (276 LOC)

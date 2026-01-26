@@ -9,9 +9,26 @@ This project uses **bd** (beads) for issue tracking. Run `bd onboard` to get sta
 **Upon invocation, EVERY agent MUST:**
 
 1. **Read HANDOFF.md** - Contains previous agent's work summary and next steps
-2. **Read docs/learnings.md** - Contains project learnings and gotchas
-3. **Read docs/IMPLEMENTATION_PLAN.md** - Contains the master plan and checklist
+2. **Read docs/learnings/README.md** - Index of learnings (see gotchas.md, patterns.md)
+3. **Read docs/plan/README.md** - Implementation plan overview (milestones in separate files)
 4. **Run `bd ready`** - Check for assigned/available work
+
+### Documentation Structure
+
+**Learnings** (docs/learnings/):
+- `README.md` - Index and quick reference
+- `m0-m1_setup.md` - Setup and tracer bullet learnings
+- `m2-m4_foundation.md` - Foundation/Infrastructure/Data layers
+- `m5-m6_core.md` - Core Operations and Algorithm layers
+- `patterns.md` - Reusable patterns and code examples
+- `gotchas.md` - Failures and things to avoid
+
+**Implementation Plan** (docs/plan/):
+- `README.md` - Overview, architecture, constraints
+- `m0_setup.md` through `m8_api.md` - Milestone-specific steps
+- `structures.md` - Structure definitions
+- `functions.md` - Function checklist
+- `parallelization.md` - Parallelization guide
 
 ---
 
@@ -45,7 +62,10 @@ bd add "Refactor <filename> to < 200 LOC" --label refactor
 
 - Errors are expected during development
 - An error becomes a success when you document what you learned
-- Record ALL learnings in `docs/learnings.md`
+- Record learnings in appropriate file under `docs/learnings/`:
+  - Milestone-specific: `m0-m1_setup.md`, `m2-m4_foundation.md`, `m5-m6_core.md`
+  - Reusable patterns: `patterns.md`
+  - Failures/gotchas: `gotchas.md`
 - Never hide or ignore errors - they are valuable data
 
 ### Rule 3: Proactive Issue Creation
@@ -80,11 +100,10 @@ bd add "Implement: <substep 2>" --label implementation
 ### MANDATORY WORKFLOW:
 
 #### 1. Record Learnings
-Add ALL learnings from this session to `docs/learnings.md`:
-- What worked
-- What didn't work
-- Gotchas discovered
-- Useful patterns found
+Add learnings to the appropriate file in `docs/learnings/`:
+- Milestone-specific (m0-m1, m2-m4, m5-m6): What worked, what didn't
+- `patterns.md`: Reusable code patterns discovered
+- `gotchas.md`: Failures and things to avoid
 
 #### 2. Update HANDOFF.md
 Write a handoff for the next agent containing:
@@ -121,7 +140,7 @@ git status  # MUST show "up to date with origin"
 #### 7. Verify
 - All changes committed AND pushed
 - HANDOFF.md updated
-- docs/learnings.md updated
+- Learnings recorded in docs/learnings/
 
 ---
 
@@ -140,8 +159,9 @@ git status  # MUST show "up to date with origin"
 
 **ConvexFeld** is an LP solver implementing the revised simplex method.
 
-- **Spec Location:** `docs/specs/` (142 functions, 8 structures, 17 modules)
-- **Implementation Plan:** `docs/IMPLEMENTATION_PLAN.md`
+- **Specs:** `docs/specs/` (142 functions, 8 structures, 17 modules)
+- **Plan:** `docs/plan/` (milestone files m0-m8, structures, functions, parallelization)
+- **Learnings:** `docs/learnings/` (patterns, gotchas, milestone learnings)
 - **Inventory:** `docs/inventory/all_functions.md`, `docs/inventory/module_assignment.md`
 
 **Key Constraints:**
