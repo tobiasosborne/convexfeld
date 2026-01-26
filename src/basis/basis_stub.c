@@ -24,24 +24,7 @@
  ******************************************************************************/
 
 /* cxf_ftran is implemented in ftran.c (M5.1.4) */
-
-/**
- * @brief Backward transformation stub.
- * @note Full implementation in M5.1.5
- */
-int cxf_btran(BasisState *basis, int row, double *result) {
-    if (basis == NULL || result == NULL) {
-        return CXF_ERROR_NULL_ARGUMENT;
-    }
-    if (row < 0 || row >= basis->m) {
-        return CXF_ERROR_INVALID_ARGUMENT;
-    }
-
-    /* Stub: For identity basis, result = e_row (unit vector) */
-    memset(result, 0, (size_t)basis->m * sizeof(double));
-    result[row] = 1.0;
-    return CXF_OK;
-}
+/* cxf_btran is implemented in btran.c (M5.1.5) */
 
 /*******************************************************************************
  * Refactorization - Implementation in M5.1.6

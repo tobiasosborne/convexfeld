@@ -16,26 +16,34 @@ All M1 milestones are now complete. Next steps: Continue with M2.x-M8.x implemen
 
 ## Work Completed This Session
 
-### M5.1.4: cxf_ftran - Complete
+### M5.1.5: cxf_btran - Complete
 
 | Issue | Description | Status |
 |-------|-------------|--------|
-| `convexfeld-ytv` | M5.1.4: cxf_ftran | CLOSED |
+| `convexfeld-o75` | M5.1.5: cxf_btran | CLOSED |
 
 **Files created:**
-- `src/basis/ftran.c` (95 LOC) - Forward transformation implementation
+- `src/basis/btran.c` (126 LOC) - Backward transformation implementation
 
 **Function implemented:**
-- `cxf_ftran(basis, column, result)` - Solve Bx = b using eta representation
+- `cxf_btran(basis, row, result)` - Solve y^T B = e_row^T using eta representation
 
-**Algorithm:**
-1. Copy input column to result (identity basis case)
-2. Apply eta vectors in chronological order (oldest to newest via linked list)
-3. For each eta, apply inverse transformation via pivot element and off-diagonal entries
+**Algorithm (Product Form of Inverse, reverse order):**
+1. Initialize result as unit vector e_row
+2. Collect eta pointers into array (to enable reverse traversal)
+3. Apply eta vectors in REVERSE order (newest to oldest):
+   - Compute dot product: temp = sum(eta_val[k] * result[indices[k]])
+   - Update pivot: result[pivot_row] = (result[pivot_row] - temp) / pivot_elem
+   - Other positions unchanged (unlike FTRAN)
+
+**Key design decisions:**
+- Uses stack allocation for ≤64 eta pointers, heap for larger
+- Reverse traversal via pointer array (singly-linked list only has next)
+- BTRAN applies (E^(-1))^T, which affects only the pivot position
 
 **Files modified:**
-- `CMakeLists.txt` - Added ftran.c to build
-- `src/basis/basis_stub.c` - Removed cxf_ftran stub
+- `CMakeLists.txt` - Added btran.c to build
+- `src/basis/basis_stub.c` - Removed cxf_btran stub
 
 **Test results:**
 - All 8 test suites PASS (100% tests passed)
@@ -70,7 +78,8 @@ convexfeld/
 │   ├── basis/
 │   │   ├── basis_state.c     (M5.1.2)
 │   │   ├── eta_factors.c     (M5.1.3)
-│   │   ├── ftran.c           (M5.1.4) NEW
+│   │   ├── ftran.c           (M5.1.4)
+│   │   ├── btran.c           (M5.1.5) NEW
 │   │   └── basis_stub.c      (M5.1.1)
 │   ├── pricing/
 │   │   ├── context.c         (M6.1.2)
@@ -102,7 +111,7 @@ convexfeld/
 ```
 
 ### Build Status
-- `libconvexfeld.a` builds (all M1 stubs + basis + sparse_matrix + pricing + memory vectors + ftran)
+- `libconvexfeld.a` builds (all M1 stubs + basis + sparse_matrix + pricing + memory vectors + ftran + btran)
 - `test_smoke` passes (3 tests)
 - `test_memory` passes (12 tests)
 - `test_memory_vectors` passes (16 tests)
@@ -128,7 +137,6 @@ bd ready
 # M6.1.3: cxf_pricing_init (full implementation)
 # M8.1.2: API Tests - Model
 # M4.1.5: Row-Major Conversion
-# M5.1.5: cxf_btran
 # M2.1.4: State Deallocators
 # M6.1.4: cxf_pricing_candidates
 # M8.1.3: API Tests - Variables
@@ -147,7 +155,8 @@ target_sources(convexfeld PRIVATE
     src/matrix/vectors.c        # M4.1.4
     src/basis/basis_state.c     # M5.1.2
     src/basis/eta_factors.c     # M5.1.3
-    src/basis/ftran.c           # M5.1.4 NEW
+    src/basis/ftran.c           # M5.1.4
+    src/basis/btran.c           # M5.1.5 NEW
     src/basis/basis_stub.c      # M5.1.1
     src/pricing/context.c       # M6.1.2
     src/pricing/pricing_stub.c  # M6.1.1
@@ -171,7 +180,7 @@ target_sources(convexfeld PRIVATE
 
 ## Issue Status
 
-### Completed (M0 + M1 Tracer Bullet + M2.1 + M4.1.2-M4.1.4 + M5.1.1-M5.1.4 + M6.1.1-M6.1.2 + M8.1.1)
+### Completed (M0 + M1 Tracer Bullet + M2.1 + M4.1.2-M4.1.4 + M5.1.1-M5.1.5 + M6.1.1-M6.1.2 + M8.1.1)
 - `convexfeld-2by` - M0.1: Create CMakeLists.txt
 - `convexfeld-x85` - M0.2: Create Core Types Header
 - `convexfeld-dw2` - M0.3: Setup Unity Test Framework
@@ -195,7 +204,8 @@ target_sources(convexfeld PRIVATE
 - `convexfeld-7g3` - M5.1.1: Basis Tests
 - `convexfeld-7f5` - M5.1.2: BasisState Structure
 - `convexfeld-san` - M5.1.3: EtaFactors Structure
-- `convexfeld-ytv` - M5.1.4: cxf_ftran NEW
+- `convexfeld-ytv` - M5.1.4: cxf_ftran
+- `convexfeld-o75` - M5.1.5: cxf_btran NEW
 - `convexfeld-mza` - M6.1.1: Pricing Tests
 - `convexfeld-mk6` - M6.1.2: PricingContext Structure
 - `convexfeld-1lj` - M8.1.1: API Tests - Environment

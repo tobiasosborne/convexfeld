@@ -6,6 +6,44 @@ This file captures learnings, gotchas, and useful patterns discovered during dev
 
 ---
 
+## 2026-01-26: M5.1.5 cxf_btran
+
+### SUCCESS: Backward transformation with Product Form of Inverse
+
+**File created:**
+- `src/basis/btran.c` (126 LOC) - Backward transformation implementation
+
+**Function implemented:**
+- `cxf_btran(basis, row, result)` - Solve y^T B = e_row^T using eta representation
+
+**Algorithm (Product Form of Inverse, REVERSE order):**
+1. Initialize result as unit vector e_row
+2. Collect eta pointers into array (singly-linked list only has next)
+3. Apply eta vectors in REVERSE order (newest to oldest):
+   - Compute dot product: temp = sum(eta_val[k] * result[indices[k]])
+   - Update pivot: result[pivot_row] = (result[pivot_row] - temp) / pivot_elem
+   - Other positions UNCHANGED (key difference from FTRAN)
+
+**Key mathematical insight - BTRAN vs FTRAN:**
+- FTRAN applies E^(-1): updates pivot AND off-diagonal positions
+- BTRAN applies (E^(-1))^T: updates ONLY pivot position
+- BTRAN traverses eta list in REVERSE order (newest to oldest)
+
+**Implementation pattern for reverse traversal:**
+- Singly-linked list with only `next` pointers
+- Collect pointers into array, then traverse backwards
+- Stack allocation for ≤64 etas, heap for larger (MAX_STACK_ETAS = 64)
+- This avoids recursion overhead and is cache-friendly
+
+**Files modified:**
+- `CMakeLists.txt` - Added btran.c to build
+- `src/basis/basis_stub.c` - Removed cxf_btran stub (now in btran.c)
+
+**Test results:**
+- All 8 test suites PASS (100% tests passed)
+
+---
+
 ## 2026-01-26: M5.1.4 cxf_ftran
 
 ### SUCCESS: Forward transformation with Product Form of Inverse
