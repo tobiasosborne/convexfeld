@@ -96,17 +96,24 @@ target_sources(convexfeld PRIVATE
     src/basis/basis_stub.c
     # Simplex module (M1.5 stubs)
     src/simplex/solve_lp_stub.c
-    # Error module (M1.7 stubs)
+    # Error module (M1.7 stubs + M3.1.2-M3.1.4)
+    src/error/core.c
+    src/error/nan_check.c
+    src/error/env_check.c
     src/error/error_stub.c
+    # Timing module (M4.2.2)
+    src/timing/timestamp.c
     # API module (M1.1, M1.2, M1.4 stubs)
     src/api/env_stub.c
     src/api/model_stub.c
     src/api/api_stub.c
-    # Pricing module (M6.1.2 context, M6.1.3 init, M6.1.4 candidates, M6.1.5 steepest + stubs)
+    # Pricing module (M6.1.2-M6.1.7 + stubs)
     src/pricing/context.c
     src/pricing/init.c
     src/pricing/candidates.c
     src/pricing/steepest.c
+    src/pricing/update.c
+    src/pricing/phase.c
     src/pricing/pricing_stub.c
 )
 

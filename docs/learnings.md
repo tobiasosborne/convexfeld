@@ -6,6 +6,36 @@ This file captures learnings, gotchas, and useful patterns discovered during dev
 
 ---
 
+## 2026-01-26: M3.1.2-M3.1.4, M4.2.2, M6.1.6-M6.1.7 Batch Implementation
+
+### SUCCESS: 6 milestones completed via stub extraction pattern
+
+**Files created:**
+- `src/error/core.c` (82 LOC) - cxf_error, cxf_geterrormsg, cxf_errorlog
+- `src/error/nan_check.c` (51 LOC) - cxf_check_nan, cxf_check_nan_or_inf
+- `src/error/env_check.c` (28 LOC) - cxf_checkenv
+- `src/pricing/update.c` (117 LOC) - cxf_pricing_update, cxf_pricing_invalidate
+- `src/pricing/phase.c` (81 LOC) - cxf_pricing_step2
+- `src/timing/timestamp.c` (43 LOC) - cxf_get_timestamp
+
+**Pattern: Stub Extraction**
+1. Functions start as stubs in *_stub.c files for TDD
+2. Once tests pass, extract to dedicated files for proper organization
+3. Update CMakeLists.txt to add new files
+4. Remove extracted functions from stub file
+5. Stub file shrinks over time, eventually becomes placeholder
+
+**Key learnings:**
+- `clock_gettime(CLOCK_MONOTONIC)` requires `#define _POSIX_C_SOURCE 199309L`
+- cxf_errorlog uses output_flag for console control (>= 1 enables)
+- SE weight update deferred until SolverContext integration
+- Invalidation flags defined locally in update.c (not in header yet)
+
+**Test results:**
+- All 11 test suites PASS (100% tests passed)
+
+---
+
 ## 2026-01-26: M6.1.5 cxf_pricing_steepest
 
 ### SUCCESS: Steepest edge pricing with free variable support

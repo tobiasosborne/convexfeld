@@ -16,29 +16,29 @@ All M1 milestones are now complete. Next steps: Continue with M2.x-M8.x implemen
 
 ## Work Completed This Session
 
-### M3.1.1: Error Tests - Complete
-- `tests/unit/test_error.c` (276 LOC) - 26 TDD tests:
-  - cxf_error tests (5)
-  - cxf_errorlog tests (3)
-  - cxf_check_nan tests (5)
-  - cxf_check_nan_or_inf tests (5)
-  - cxf_checkenv tests (3)
-  - cxf_pivot_check tests (5)
-- Added stub implementations to `src/error/error_stub.c` (139 LOC)
+### M3.1.2: Core Error Functions - Complete
+- `src/error/core.c` (82 LOC) - Enhanced cxf_error, cxf_geterrormsg, cxf_errorlog
+- cxf_errorlog now outputs to console based on output_flag
 
-### M6.1.5: cxf_pricing_steepest - Complete
-- `src/pricing/steepest.c` (143 LOC) - Steepest edge pricing:
-  - `cxf_pricing_steepest(...)` - Select entering variable using SE criterion
-  - `cxf_pricing_compute_weight(...)` - Compute SE weight helper
-  - Handles free variables (status -3)
-  - Weight safeguard for zero/negative weights
-  - Statistics tracking
+### M3.1.3: NaN/Inf Detection - Complete
+- `src/error/nan_check.c` (51 LOC) - Extracted from error_stub.c
+
+### M3.1.4: Environment Validation - Complete
+- `src/error/env_check.c` (28 LOC) - Extracted cxf_checkenv
+
+### M4.2.2: Timestamp - Complete
+- `src/timing/timestamp.c` (43 LOC) - cxf_get_timestamp using CLOCK_MONOTONIC
+- Requires `_POSIX_C_SOURCE 199309L` for clock_gettime
+
+### M6.1.6: Pricing Update/Invalidate - Complete
+- `src/pricing/update.c` (117 LOC) - cxf_pricing_update, cxf_pricing_invalidate
+- SE weight handling deferred until SolverContext integration
+
+### M6.1.7: Pricing Step2 - Complete
+- `src/pricing/phase.c` (81 LOC) - Full scan fallback pricing
 
 **Test results:**
 - All 11 test suites PASS (100% tests passed)
-
-**Refactor issues created:**
-- convexfeld-afb: Refactor test_error.c to < 200 LOC (276 LOC)
 
 ---
 
@@ -49,7 +49,7 @@ All M1 milestones are now complete. Next steps: Continue with M2.x-M8.x implemen
 convexfeld/
 ├── CMakeLists.txt
 ├── include/convexfeld/
-│   ├── cxf_types.h       (+ VectorContainer, EtaChunk, EtaBuffer)
+│   ├── cxf_types.h
 │   ├── cxf_env.h
 │   ├── cxf_model.h
 │   ├── cxf_matrix.h
@@ -60,70 +60,31 @@ convexfeld/
 │   └── convexfeld.h
 ├── src/
 │   ├── memory/
-│   │   ├── alloc.c           (M2.1.2)
-│   │   ├── vectors.c         (M2.1.3)
-│   │   └── state_cleanup.c   (M2.1.4)
+│   │   ├── alloc.c, vectors.c, state_cleanup.c
 │   ├── matrix/
-│   │   ├── sparse_stub.c     (M1.3)
-│   │   ├── sparse_matrix.c   (M4.1.2)
-│   │   ├── multiply.c        (M4.1.3)
-│   │   ├── vectors.c         (M4.1.4)
-│   │   ├── row_major.c       (M4.1.5)
-│   │   └── sort.c            (M4.1.6)
+│   │   ├── sparse_stub.c, sparse_matrix.c, multiply.c
+│   │   ├── vectors.c, row_major.c, sort.c
 │   ├── basis/
-│   │   ├── basis_state.c     (M5.1.2)
-│   │   ├── eta_factors.c     (M5.1.3)
-│   │   ├── ftran.c           (M5.1.4)
-│   │   ├── btran.c           (M5.1.5)
-│   │   └── basis_stub.c      (M5.1.1)
+│   │   ├── basis_state.c, eta_factors.c, ftran.c, btran.c, basis_stub.c
 │   ├── pricing/
-│   │   ├── context.c         (M6.1.2)
-│   │   ├── init.c            (M6.1.3)
-│   │   ├── candidates.c      (M6.1.4)
-│   │   ├── steepest.c        (M6.1.5) NEW
-│   │   └── pricing_stub.c    (M6.1.1)
+│   │   ├── context.c, init.c, candidates.c, steepest.c
+│   │   ├── update.c, phase.c, pricing_stub.c (empty)
 │   ├── simplex/
-│   │   └── solve_lp_stub.c   (M1.5)
+│   │   └── solve_lp_stub.c
 │   ├── error/
-│   │   └── error_stub.c      (M1.7 + M3.1.1 stubs)
+│   │   ├── core.c, nan_check.c, env_check.c, error_stub.c
+│   ├── timing/
+│   │   └── timestamp.c (NEW)
 │   └── api/
-│       ├── env_stub.c        (M1.1)
-│       ├── model_stub.c      (M1.2)
-│       └── api_stub.c        (M1.4)
+│       ├── env_stub.c, model_stub.c, api_stub.c
 ├── tests/
-│   ├── CMakeLists.txt
-│   ├── unity/
-│   ├── unit/
-│   │   ├── test_smoke.c
-│   │   ├── test_memory.c
-│   │   ├── test_memory_vectors.c   (M2.1.3)
-│   │   ├── test_matrix.c
-│   │   ├── test_basis.c
-│   │   ├── test_pricing.c
-│   │   ├── test_api_env.c
-│   │   ├── test_api_model.c
-│   │   ├── test_api_vars.c
-│   │   └── test_error.c           (M3.1.1) NEW
-│   └── integration/
-│       └── test_tracer_bullet.c
+│   └── unit/ (11 test files)
 └── benchmarks/
-    ├── CMakeLists.txt
     └── bench_tracer.c
 ```
 
 ### Build Status
-- `libconvexfeld.a` builds with all modules
-- `test_smoke` passes (3 tests)
-- `test_memory` passes (12 tests)
-- `test_memory_vectors` passes (16 tests)
-- `test_matrix` passes (20 tests)
-- `test_basis` passes (29 tests)
-- `test_pricing` passes (24 tests)
-- `test_api_env` passes (11 tests)
-- `test_api_model` passes (19 tests)
-- `test_api_vars` passes (16 tests)
-- `test_error` passes (26 tests) NEW
-- `test_tracer_bullet` passes (1 test)
+- All 11 test suites PASS
 - `bench_tracer` passes (< 1000 us/iter)
 
 ---
@@ -136,12 +97,12 @@ Run `bd ready` to see all available work.
 ```bash
 bd ready
 
-# Example available milestones:
-# M5.1.6: cxf_basis_refactor
-# M3.1.2: Core Error Functions
+# Available milestones include:
+# M5.1.6: cxf_basis_refactor (LU factorization, ~200 LOC)
 # M8.1.4: API Tests - Constraints
-# M6.1.6: cxf_pricing_update and cxf_pricing_invalidate
-# M3.1.3: NaN/Inf Detection
+# M4.2.1: Timing Tests
+# M4.2.3: Timing Sections
+# M8.1.5: API Tests - Optimize
 ```
 
 ---
@@ -157,12 +118,16 @@ bd ready
 ## Issue Status
 
 ### Completed This Session
-- `convexfeld-au3` - M3.1.1: Error Tests
-- `convexfeld-sfl` - M6.1.5: cxf_pricing_steepest
+- `convexfeld-b60` - M3.1.2: Core Error Functions
+- `convexfeld-vml` - M6.1.6: cxf_pricing_update and cxf_pricing_invalidate
+- `convexfeld-dxw` - M3.1.3: NaN/Inf Detection
+- `convexfeld-p1u` - M6.1.7: cxf_pricing_step2
+- `convexfeld-tiv` - M3.1.4: Environment Validation
+- `convexfeld-6qe` - M4.2.2: Timestamp
 
 ### Refactor Issues (200 LOC limit)
 - `convexfeld-st1` - Refactor model_stub.c to < 200 LOC (227 LOC)
 - `convexfeld-hqo` - Refactor test_matrix.c to < 200 LOC (446 LOC)
-- `convexfeld-afb` - Refactor test_error.c to < 200 LOC (276 LOC) NEW
+- `convexfeld-afb` - Refactor test_error.c to < 200 LOC (276 LOC)
 
 Run `bd ready` to see all available work.
