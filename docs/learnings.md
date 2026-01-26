@@ -6,6 +6,28 @@ This file captures learnings, gotchas, and useful patterns discovered during dev
 
 ---
 
+## 2026-01-26: M1.7 Stub Error Functions Created
+
+### SUCCESS: Error handling stubs for tracer bullet
+
+**File created:** `src/error/error_stub.c` (48 LOC)
+
+**Functions implemented:**
+- `cxf_error(env, format, ...)` - Formats and stores error message in env->error_buffer using vsnprintf
+- `cxf_geterrormsg(env)` - Returns error_buffer contents
+
+**Key decisions:**
+- Stub omits thread safety (no critical section locking) - full implementation later
+- NULL env check returns early (no crash)
+- Defensive null termination at buffer[511]
+
+**Build status:**
+- Error stubs compile successfully into libconvexfeld.a
+- Smoke tests pass
+- Remaining linker errors for API functions (M1.1-M1.5)
+
+---
+
 ## 2026-01-26: M1.0 Tracer Bullet Test Created
 
 ### SUCCESS: Integration test written following TDD
