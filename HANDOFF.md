@@ -6,11 +6,11 @@
 
 ## CRITICAL: READ THIS FIRST
 
-### M2.x IMPLEMENTATION STARTED - M2.1.1 Memory Tests DONE
+### M2.1 MEMORY MODULE COMPLETE
 
 **16 tests pass (3 smoke + 12 memory + 1 tracer bullet)**
 
-Next steps: Continue with M2.x Foundation Layer (Memory implementation, Parameters, Validation)
+Next steps: Continue M2.x Foundation Layer (M2.1.3 vectors, M2.1.4 state deallocators, M2.2 Parameters, M2.3 Validation)
 
 ---
 
@@ -22,16 +22,18 @@ Next steps: Continue with M2.x Foundation Layer (Memory implementation, Paramete
 |-------|-------------|--------|
 | `convexfeld-9in` | M2.1.1: Memory Tests | ✓ CLOSED |
 
-**Files created/modified:**
-- `tests/unit/test_memory.c` (154 LOC) - 12 tests
-- `src/memory/alloc_stub.c` - added `cxf_realloc`
-- `tests/CMakeLists.txt` - added test_memory
+**Files created:** `tests/unit/test_memory.c` (154 LOC) - 12 tests
 
-**Tests implemented:**
-- `test_cxf_malloc_basic`, `test_cxf_malloc_zero_size`, `test_cxf_malloc_large_size`
-- `test_cxf_calloc_zeroed`, `test_cxf_calloc_zero_count`, `test_cxf_calloc_zero_size`
-- `test_cxf_realloc_grow`, `test_cxf_realloc_shrink`, `test_cxf_realloc_null_ptr`, `test_cxf_realloc_zero_size`
-- `test_cxf_free_null_safe`, `test_cxf_free_after_malloc`
+### M2.1.2: Memory Implementation - Complete
+
+| Issue | Description | Status |
+|-------|-------------|--------|
+| `convexfeld-oq0` | M2.1.2: cxf_malloc, cxf_calloc, cxf_realloc, cxf_free | ✓ CLOSED |
+
+**Files created/modified:**
+- `src/memory/alloc.c` (103 LOC) - full implementation
+- `src/memory/alloc_stub.c` - DELETED (replaced by alloc.c)
+- `CMakeLists.txt` - updated to use alloc.c
 
 **Test results:**
 - `test_smoke`: 3 tests pass
@@ -119,7 +121,7 @@ target_sources(convexfeld PRIVATE
 
 ## Issue Status
 
-### Completed (M0 + M1 Tracer Bullet + M2.1.1)
+### Completed (M0 + M1 Tracer Bullet + M2.1)
 - `convexfeld-2by` - M0.1: Create CMakeLists.txt ✓
 - `convexfeld-x85` - M0.2: Create Core Types Header ✓
 - `convexfeld-dw2` - M0.3: Setup Unity Test Framework ✓
@@ -131,6 +133,7 @@ target_sources(convexfeld PRIVATE
 - `convexfeld-6uc` - M1.6: Stub Memory Functions ✓
 - `convexfeld-9t5` - M1.7: Stub Error Functions ✓
 - `convexfeld-9in` - M2.1.1: Memory Tests ✓
+- `convexfeld-oq0` - M2.1.2: Memory Implementation ✓
 
 ### Optional M1.x (can skip or do later)
 - `convexfeld-bko` - M1.3: Stub SparseMatrix Structure (not needed yet)

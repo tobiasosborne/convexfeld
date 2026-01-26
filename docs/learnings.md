@@ -6,6 +6,29 @@ This file captures learnings, gotchas, and useful patterns discovered during dev
 
 ---
 
+## 2026-01-26: M2.1.2 Memory Implementation - Full Implementation
+
+### SUCCESS: Promoted stub to proper implementation
+
+**File created:** `src/memory/alloc.c` (103 LOC)
+**File removed:** `src/memory/alloc_stub.c`
+
+**Functions implemented:**
+- `cxf_malloc(size)` - allocates memory, returns NULL for size=0
+- `cxf_calloc(count, size)` - allocates zero-initialized memory
+- `cxf_realloc(ptr, size)` - resizes memory with proper edge cases
+- `cxf_free(ptr)` - frees memory, NULL-safe
+
+**Key decisions:**
+- Kept simple signatures (no env parameter) - env-scoped allocation comes with M3 Threading
+- Spec describes full environment tracking, but that requires threading infrastructure
+- Current implementation passes all TDD tests from M2.1.1
+- Added detailed documentation referencing future env-scoped enhancements
+
+**Lesson learned:** Specs describe the full-featured version, but implementation can be staged. Simple working implementation first, then add features as dependencies are built.
+
+---
+
 ## 2026-01-26: M2.1.1 Memory Tests - TDD Tests Complete
 
 ### SUCCESS: 12 tests for memory management module

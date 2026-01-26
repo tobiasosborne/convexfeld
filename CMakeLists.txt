@@ -77,8 +77,8 @@ target_include_directories(convexfeld
 
 # Source files
 target_sources(convexfeld PRIVATE
-    # Memory module (M1.6 stubs)
-    src/memory/alloc_stub.c
+    # Memory module (M2.1.2)
+    src/memory/alloc.c
     # Error module (M1.7 stubs)
     src/error/error_stub.c
     # API module (M1.1, M1.2, M1.4 stubs)
