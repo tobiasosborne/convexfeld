@@ -81,7 +81,8 @@ target_sources(convexfeld PRIVATE
     src/memory/alloc.c
     # Matrix module (M1.3 stubs)
     src/matrix/sparse_stub.c
-    # Basis module (M5.1.1 stubs)
+    # Basis module (M5.1.2 BasisState + remaining stubs)
+    src/basis/basis_state.c
     src/basis/basis_stub.c
     # Simplex module (M1.5 stubs)
     src/simplex/solve_lp_stub.c

@@ -2,104 +2,15 @@
  * @file basis_stub.c
  * @brief Stub implementations for basis operations (M5.1.1 TDD).
  *
- * Provides minimal stubs for BasisState, EtaFactors, FTRAN, BTRAN,
- * and related functions. Full implementations in M5.1.2-M5.1.8.
+ * Provides minimal stubs for EtaFactors, FTRAN, BTRAN, and related
+ * functions. BasisState lifecycle in basis_state.c (M5.1.2).
+ * Full implementations in M5.1.3-M5.1.8.
  */
 
 #include "convexfeld/cxf_basis.h"
 #include "convexfeld/cxf_types.h"
 #include <stdlib.h>
 #include <string.h>
-
-/*******************************************************************************
- * BasisState lifecycle - Implementation in M5.1.2
- ******************************************************************************/
-
-/**
- * @brief Create and initialize a BasisState structure.
- *
- * @param m Number of constraints (basic variables).
- * @param n Number of variables.
- * @return Pointer to new BasisState, or NULL on failure.
- */
-BasisState *cxf_basis_create(int m, int n) {
-    BasisState *basis = (BasisState *)calloc(1, sizeof(BasisState));
-    if (basis == NULL) {
-        return NULL;
-    }
-
-    basis->m = m;
-    basis->eta_count = 0;
-    basis->eta_capacity = 0;
-    basis->eta_head = NULL;
-    basis->pivots_since_refactor = 0;
-    basis->refactor_freq = 100;  /* Default refactorization frequency */
-
-    if (m > 0) {
-        basis->basic_vars = (int *)calloc((size_t)m, sizeof(int));
-        basis->work = (double *)calloc((size_t)m, sizeof(double));
-        if (basis->basic_vars == NULL || basis->work == NULL) {
-            free(basis->basic_vars);
-            free(basis->work);
-            free(basis);
-            return NULL;
-        }
-    }
-
-    if (n > 0) {
-        basis->var_status = (int *)calloc((size_t)n, sizeof(int));
-        if (basis->var_status == NULL) {
-            free(basis->basic_vars);
-            free(basis->work);
-            free(basis);
-            return NULL;
-        }
-    }
-
-    return basis;
-}
-
-/**
- * @brief Free a BasisState and all associated memory.
- *
- * @param basis BasisState to free (may be NULL).
- */
-void cxf_basis_free(BasisState *basis) {
-    if (basis == NULL) {
-        return;
-    }
-
-    /* Free eta list */
-    EtaFactors *eta = basis->eta_head;
-    while (eta != NULL) {
-        EtaFactors *next = eta->next;
-        free(eta->indices);
-        free(eta->values);
-        free(eta);
-        eta = next;
-    }
-
-    free(basis->basic_vars);
-    free(basis->var_status);
-    free(basis->work);
-    free(basis);
-}
-
-/**
- * @brief Initialize a BasisState with given dimensions.
- *
- * @param basis BasisState to initialize.
- * @param m Number of constraints.
- * @param n Number of variables.
- * @return CXF_OK on success.
- */
-int cxf_basis_init(BasisState *basis, int m, int n) {
-    if (basis == NULL) {
-        return CXF_ERROR_NULL_ARGUMENT;
-    }
-    (void)m; (void)n;  /* Stub - just validate args */
-    return CXF_OK;
-}
 
 /*******************************************************************************
  * EtaFactors lifecycle - Implementation in M5.1.3

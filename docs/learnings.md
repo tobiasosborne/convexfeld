@@ -6,6 +6,35 @@ This file captures learnings, gotchas, and useful patterns discovered during dev
 
 ---
 
+## 2026-01-26: M5.1.2 BasisState Structure
+
+### SUCCESS: BasisState lifecycle extracted to dedicated file
+
+**Files created:**
+- `src/basis/basis_state.c` (127 LOC) - BasisState lifecycle functions
+
+**Files modified:**
+- `src/basis/basis_stub.c` - Removed BasisState lifecycle (now in basis_state.c)
+- `CMakeLists.txt` - Added basis_state.c to build
+
+**Functions implemented:**
+- `cxf_basis_create(m, n)` - Allocates BasisState with all arrays
+- `cxf_basis_free(basis)` - Frees BasisState and eta linked list
+- `cxf_basis_init(basis, m, n)` - Reinitializes existing BasisState
+
+**TDD integration pattern:**
+- Stub file (basis_stub.c) originally contained all functions for TDD
+- As implementations are completed, extract to dedicated files
+- Stub file retains only unimplemented functions (FTRAN, BTRAN, etc.)
+- Both files linked in CMakeLists.txt; no duplicate symbols
+
+**Key decisions:**
+- Added negative dimension checks (m < 0 || n < 0 return NULL/error)
+- Enhanced cxf_basis_init to clear arrays and validate dimension match
+- DEFAULT_REFACTOR_FREQ = 100 (pivots between refactorizations)
+
+---
+
 ## 2026-01-26: M5.1.1 Basis Tests
 
 ### SUCCESS: TDD tests for basis operations

@@ -16,29 +16,28 @@ All M1 milestones are now complete. Next steps: Continue with M2.x-M8.x implemen
 
 ## Work Completed This Session
 
-### M5.1.1: Basis Tests - Complete
+### M5.1.2: BasisState Structure - Complete
 
 | Issue | Description | Status |
 |-------|-------------|--------|
-| `convexfeld-7g3` | M5.1.1: Basis Tests | CLOSED |
+| `convexfeld-7f5` | M5.1.2: BasisState Structure | CLOSED |
 
 **Files created:**
-- `tests/unit/test_basis.c` (468 LOC) - TDD tests for basis operations
-- `src/basis/basis_stub.c` (337 LOC) - Stub implementations
+- `src/basis/basis_state.c` (127 LOC) - BasisState lifecycle implementation
 
 **Files modified:**
-- `tests/CMakeLists.txt` - Added test_basis target
-- `CMakeLists.txt` - Added basis_stub.c to library
+- `src/basis/basis_stub.c` - Removed BasisState lifecycle functions
+- `CMakeLists.txt` - Added basis_state.c to library
+
+**Functions implemented:**
+- `cxf_basis_create(m, n)` - Create and allocate BasisState
+- `cxf_basis_free(basis)` - Free BasisState and eta list
+- `cxf_basis_init(basis, m, n)` - Initialize/reinitialize BasisState
 
 **Test results:**
-- 29 tests total: 29 PASS (stubs implement identity basis case)
-- BasisState tests (4) - PASS
-- EtaFactors tests (4) - PASS
-- FTRAN tests (4) - PASS (identity basis)
-- BTRAN tests (4) - PASS (identity basis)
-- Refactorization tests (3) - PASS
-- Snapshot/comparison tests (6) - PASS
-- Validation/warm start tests (4) - PASS
+- All 29 test_basis tests PASS
+- All other tests PASS (smoke, memory, tracer_bullet)
+- test_matrix has expected TDD failures (awaiting M4.1.3/M4.1.4)
 
 ---
 
@@ -64,7 +63,8 @@ convexfeld/
 │   ├── matrix/
 │   │   └── sparse_stub.c       (M1.3)
 │   ├── basis/
-│   │   └── basis_stub.c        (M5.1.1) NEW
+│   │   ├── basis_state.c       (M5.1.2) NEW
+│   │   └── basis_stub.c        (M5.1.1)
 │   ├── simplex/
 │   │   └── solve_lp_stub.c     (M1.5)
 │   ├── error/
@@ -122,7 +122,8 @@ bd ready
 target_sources(convexfeld PRIVATE
     src/memory/alloc.c          # M2.1.2
     src/matrix/sparse_stub.c    # M1.3
-    src/basis/basis_stub.c      # M5.1.1 NEW
+    src/basis/basis_state.c     # M5.1.2 NEW
+    src/basis/basis_stub.c      # M5.1.1
     src/simplex/solve_lp_stub.c # M1.5
     src/error/error_stub.c      # M1.7
     src/api/env_stub.c          # M1.1
@@ -160,6 +161,7 @@ target_sources(convexfeld PRIVATE
 - `convexfeld-9in` - M2.1.1: Memory Tests
 - `convexfeld-oq0` - M2.1.2: Memory Implementation
 - `convexfeld-27y` - M4.1.1: Matrix Tests
-- `convexfeld-7g3` - M5.1.1: Basis Tests  NEW
+- `convexfeld-7g3` - M5.1.1: Basis Tests
+- `convexfeld-7f5` - M5.1.2: BasisState Structure  NEW
 
 Run `bd ready` to see all available work.
