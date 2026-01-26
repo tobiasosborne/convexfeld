@@ -297,3 +297,77 @@
 **Key learning:**
 - SE weight handling deferred until SolverContext integration
 - Invalidation flags defined locally in update.c (not in header yet)
+
+---
+
+### 2026-01-26: M5.1.7 Basis Snapshots
+
+**File created:** `src/basis/snapshot.c` (159 LOC)
+
+**Functions implemented:**
+- `cxf_basis_snapshot_create(basis, snapshot)` - Deep copy of basis state
+- `cxf_basis_snapshot_diff(s1, s2)` - Count element-wise differences
+- `cxf_basis_snapshot_equal(s1, s2)` - Returns 1 if identical (diff == 0)
+- `cxf_basis_snapshot_free(snapshot)` - Free arrays and clear valid flag
+
+**Structure added to cxf_basis.h:**
+```c
+typedef struct {
+    int numVars, numConstrs;
+    int* basisHeader;
+    int* varStatus;
+    int valid, iteration;
+    void *L, *U;        // Reserved for future factor copies
+    int* pivotPerm;
+} BasisSnapshot;
+```
+
+**Tests added to test_basis.c (12 new, 41 total):**
+- test_snapshot_create_copies_data
+- test_snapshot_create_null_args
+- test_snapshot_create_empty_basis
+- test_snapshot_diff_identical (returns 0)
+- test_snapshot_diff_one_header_change
+- test_snapshot_diff_var_status_change
+- test_snapshot_diff_dimension_mismatch (returns -1)
+- test_snapshot_diff_null_args
+- test_snapshot_equal_true/false
+- test_snapshot_free_null_safe
+- test_snapshot_free_clears_valid
+
+**Key design decisions:**
+- BasisState extended with `n` (numVars) and `iteration` fields
+- Dimension mismatch in diff returns -1 (not comparable)
+- NULL args in diff return -1 (error indicator)
+- Free sets valid=0 to prevent use-after-free bugs
+
+---
+
+## M7: Simplex Engine (Level 5)
+
+### 2026-01-26: M7.1.1 Simplex Tests - Basic (TDD)
+
+**File created:** `tests/unit/test_simplex_basic.c` (273 total lines, 165 LOC)
+
+**TDD tests written (17 total):**
+- **Init tests (6):** test_simplex_init_creates_state, null_model_fails, null_stateout_fails, empty_model, primal_mode, dual_mode
+- **Cleanup tests (2):** test_simplex_final_frees_state, null_safe
+- **Setup tests (3):** test_simplex_setup_basic, null_state_fails, null_env_fails
+- **Query tests (6):** get_status_initial, get_status_null, get_iteration_initial, get_iteration_null, get_phase_after_setup, get_phase_null
+
+**Expected interface defined:**
+```c
+int cxf_simplex_init(CxfModel *model, void *warmStart, int mode,
+                     double *timing, SolverContext **stateOut);
+int cxf_simplex_final(SolverContext *state);
+int cxf_simplex_setup(SolverContext *state, CxfEnv *env);
+int cxf_simplex_get_status(SolverContext *state);
+int cxf_simplex_get_iteration(SolverContext *state);
+int cxf_simplex_get_phase(SolverContext *state);
+```
+
+**Key learnings:**
+- Test file compiles but linker errors expected (TDD before implementation)
+- Mode parameter: 0=auto, 1=primal, 2=dual
+- Status codes to implement: CXF_STATUS_UNSET, CXF_STATUS_LOADED, etc.
+- Phase: 1=Phase I (finding feasibility), 2=Phase II (optimizing)
