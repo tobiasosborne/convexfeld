@@ -75,9 +75,10 @@ target_include_directories(convexfeld
         $<INSTALL_INTERFACE:include>
 )
 
-# Source files - placeholder until modules are implemented
+# Source files
 target_sources(convexfeld PRIVATE
-    src/placeholder.c
+    # Memory module (M1.6 stubs)
+    src/memory/alloc_stub.c
 )
 
 ################################################################################

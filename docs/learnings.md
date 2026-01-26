@@ -30,6 +30,28 @@ This file captures learnings, gotchas, and useful patterns discovered during dev
 
 ---
 
+## 2026-01-26: M1.6 Stub Memory Functions Created
+
+### SUCCESS: Simple memory wrappers for tracer bullet
+
+**File created:** `src/memory/alloc_stub.c` (44 LOC)
+
+**Functions implemented:**
+- `cxf_malloc(size)` - wraps malloc, returns NULL for size=0
+- `cxf_calloc(count, size)` - wraps calloc, returns NULL for count=0 or size=0
+- `cxf_free(ptr)` - wraps free, NULL-safe
+
+**Key decisions:**
+- Used simple signatures (no env parameter) for stubs
+- Full implementation with env tracking will come in M2.1
+- Removed placeholder.c - no longer needed
+
+**Build status:**
+- Memory stubs compile successfully into libconvexfeld.a
+- Remaining linker errors are for API functions (M1.1-M1.5, M1.7)
+
+---
+
 ## 2026-01-26: M0.4 Module Headers (Stubs) Created
 
 ### SUCCESS: All 8 structure headers created
