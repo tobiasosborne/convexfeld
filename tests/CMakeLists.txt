@@ -80,6 +80,15 @@ target_link_libraries(test_timing PRIVATE m)  # For math functions
 # M4.3.1-M4.3.2: Analysis tests
 add_cxf_test(test_analysis unit/test_analysis.c)
 
+# M8.1.4: API Tests - Constraints
+add_cxf_test(test_api_constrs unit/test_api_constrs.c)
+
+# M8.1.5: API Tests - Optimize
+add_cxf_test(test_api_optimize unit/test_api_optimize.c)
+
+# M8.1.6: API Tests - Queries
+add_cxf_test(test_api_query unit/test_api_query.c)
+
 ################################################################################
 # Integration Tests
 ################################################################################

@@ -42,7 +42,8 @@ typedef enum {
     CXF_ERROR_OUT_OF_MEMORY     = -1,  /**< Memory allocation failed */
     CXF_ERROR_NULL_ARGUMENT     = -2,  /**< NULL pointer passed as argument */
     CXF_ERROR_INVALID_ARGUMENT  = -3,  /**< Invalid argument value */
-    CXF_ERROR_DATA_NOT_AVAILABLE = -4  /**< Requested data not available */
+    CXF_ERROR_DATA_NOT_AVAILABLE = -4, /**< Requested data not available */
+    CXF_ERROR_NOT_SUPPORTED     = -5   /**< Feature not supported */
 } CxfStatus;
 
 /*******************************************************************************

@@ -107,11 +107,13 @@ target_sources(convexfeld PRIVATE
     src/timing/timestamp.c
     src/timing/sections.c
     src/timing/operations.c
-    # Analysis module (M4.3.2)
+    # Analysis module (M4.3.2, M4.3.3)
     src/analysis/model_type.c
-    # API module (M1.1, M1.2, M1.4 stubs)
+    src/analysis/coef_stats.c
+    # API module (M1.1, M1.2, M1.4 stubs + M8.1.4 constr stubs)
     src/api/env_stub.c
     src/api/model_stub.c
+    src/api/constr_stub.c
     src/api/api_stub.c
     # Pricing module (M6.1.2-M6.1.7 + stubs)
     src/pricing/context.c
