@@ -21,9 +21,17 @@ struct PricingContext {
     int current_level;        /**< Active pricing level (0=full) */
     int max_levels;           /**< Number of levels (typically 3-5) */
 
+    /* Problem dimensions */
+    int num_vars;             /**< Number of variables in the problem */
+    int strategy;             /**< Pricing strategy (0=auto, 1=partial, 2=SE, 3=Devex) */
+
     /* Candidate arrays per level */
     int *candidate_counts;    /**< Candidates at each level [max_levels] */
     int **candidate_arrays;   /**< Variable indices per level [max_levels] */
+    int *candidate_sizes;     /**< Allocated size per level [max_levels] */
+
+    /* Steepest edge weights */
+    double *weights;          /**< SE/Devex weights [num_vars], NULL if unused */
 
     /* Cache */
     int *cached_counts;       /**< Cached result count (-1=invalid) [max_levels] */

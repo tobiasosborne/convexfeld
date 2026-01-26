@@ -16,34 +16,37 @@ All M1 milestones are now complete. Next steps: Continue with M2.x-M8.x implemen
 
 ## Work Completed This Session
 
-### M5.1.5: cxf_btran - Complete
+### M6.1.3: cxf_pricing_init - Complete
 
 | Issue | Description | Status |
 |-------|-------------|--------|
-| `convexfeld-o75` | M5.1.5: cxf_btran | CLOSED |
+| `convexfeld-hul` | M6.1.3: cxf_pricing_init | CLOSED |
 
 **Files created:**
-- `src/basis/btran.c` (126 LOC) - Backward transformation implementation
+- `src/pricing/init.c` (179 LOC) - Full pricing initialization implementation
 
 **Function implemented:**
-- `cxf_btran(basis, row, result)` - Solve y^T B = e_row^T using eta representation
+- `cxf_pricing_init(ctx, num_vars, strategy)` - Initialize pricing context for new solve
 
-**Algorithm (Product Form of Inverse, reverse order):**
-1. Initialize result as unit vector e_row
-2. Collect eta pointers into array (to enable reverse traversal)
-3. Apply eta vectors in REVERSE order (newest to oldest):
-   - Compute dot product: temp = sum(eta_val[k] * result[indices[k]])
-   - Update pivot: result[pivot_row] = (result[pivot_row] - temp) / pivot_elem
-   - Other positions unchanged (unlike FTRAN)
+**Algorithm:**
+1. Auto-select strategy if requested (strategy=0)
+2. Store configuration (num_vars, strategy) in context
+3. Allocate candidate arrays per level (sized based on strategy):
+   - Level 0 (full): all variables
+   - Level 1+: sqrt(n) for partial pricing
+4. For steepest edge/Devex: allocate and initialize weights to 1.0
+5. Reset statistics and invalidate caches
 
 **Key design decisions:**
-- Uses stack allocation for ≤64 eta pointers, heap for larger
-- Reverse traversal via pointer array (singly-linked list only has next)
-- BTRAN applies (E^(-1))^T, which affects only the pivot position
+- Extended PricingContext with: num_vars, strategy, candidate_sizes, weights
+- Level sizing: MIN_CANDIDATES=100, sqrt(n) for partial pricing
+- Weights initialized to 1.0 (unit reference frame)
+- Proper cleanup on allocation failure
 
 **Files modified:**
-- `CMakeLists.txt` - Added btran.c to build
-- `src/basis/basis_stub.c` - Removed cxf_btran stub
+- `include/convexfeld/cxf_pricing.h` - Added new fields to PricingContext
+- `src/pricing/context.c` - Handle new fields in create/free, moved init to init.c
+- `CMakeLists.txt` - Added init.c to build
 
 **Test results:**
 - All 8 test suites PASS (100% tests passed)
@@ -83,6 +86,7 @@ convexfeld/
 │   │   └── basis_stub.c      (M5.1.1)
 │   ├── pricing/
 │   │   ├── context.c         (M6.1.2)
+│   │   ├── init.c            (M6.1.3) NEW
 │   │   └── pricing_stub.c    (M6.1.1)
 │   ├── simplex/
 │   │   └── solve_lp_stub.c   (M1.5)
@@ -134,14 +138,14 @@ M1 Tracer Bullet is complete. Continue with foundation and implementation layers
 bd ready
 
 # Available next milestones (as of this session):
-# M6.1.3: cxf_pricing_init (full implementation)
+# M6.1.4: cxf_pricing_candidates (full implementation)
 # M8.1.2: API Tests - Model
 # M4.1.5: Row-Major Conversion
 # M2.1.4: State Deallocators
-# M6.1.4: cxf_pricing_candidates
 # M8.1.3: API Tests - Variables
 # M4.1.6: cxf_sort_indices
 # M5.1.6: cxf_basis_refactor
+# M3.1.1: Error Tests
 ```
 
 ### Current Source Files
@@ -156,9 +160,10 @@ target_sources(convexfeld PRIVATE
     src/basis/basis_state.c     # M5.1.2
     src/basis/eta_factors.c     # M5.1.3
     src/basis/ftran.c           # M5.1.4
-    src/basis/btran.c           # M5.1.5 NEW
+    src/basis/btran.c           # M5.1.5
     src/basis/basis_stub.c      # M5.1.1
     src/pricing/context.c       # M6.1.2
+    src/pricing/init.c          # M6.1.3 NEW
     src/pricing/pricing_stub.c  # M6.1.1
     src/simplex/solve_lp_stub.c # M1.5
     src/error/error_stub.c      # M1.7
@@ -208,6 +213,7 @@ target_sources(convexfeld PRIVATE
 - `convexfeld-o75` - M5.1.5: cxf_btran NEW
 - `convexfeld-mza` - M6.1.1: Pricing Tests
 - `convexfeld-mk6` - M6.1.2: PricingContext Structure
+- `convexfeld-hul` - M6.1.3: cxf_pricing_init NEW
 - `convexfeld-1lj` - M8.1.1: API Tests - Environment
 
 Run `bd ready` to see all available work.

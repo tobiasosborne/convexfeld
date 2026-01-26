@@ -6,6 +6,47 @@ This file captures learnings, gotchas, and useful patterns discovered during dev
 
 ---
 
+## 2026-01-26: M6.1.3 cxf_pricing_init
+
+### SUCCESS: Full pricing initialization with strategy-specific allocation
+
+**File created:**
+- `src/pricing/init.c` (179 LOC) - Full pricing initialization
+
+**Function implemented:**
+- `cxf_pricing_init(ctx, num_vars, strategy)` - Initialize pricing context for new solve
+
+**Algorithm:**
+1. Auto-select strategy if requested (strategy=0, threshold n<1000 for small)
+2. Store num_vars and strategy in context
+3. Allocate candidate arrays per level:
+   - Level 0: full (all variables)
+   - Level 1+: sqrt(n) for partial pricing, minimum MIN_CANDIDATES=100
+4. For steepest edge/Devex: allocate weights array, initialize to 1.0
+5. Reset statistics and invalidate all caches
+
+**PricingContext structure extended with:**
+- `num_vars` - problem size
+- `strategy` - pricing strategy (0=auto, 1=partial, 2=SE, 3=Devex)
+- `candidate_sizes` - allocated size per level
+- `weights` - steepest edge weights array
+
+**Key implementation pattern:**
+- Helper function `compute_level_size()` for determining per-level allocation
+- Proper cleanup on allocation failure (free partial allocations)
+- Reinit case: free existing arrays before reallocating
+- Forward declaration needed when function called before definition
+
+**Files modified:**
+- `include/convexfeld/cxf_pricing.h` - Extended PricingContext
+- `src/pricing/context.c` - Handle new fields, moved init to init.c
+- `CMakeLists.txt` - Added init.c
+
+**Test results:**
+- All 8 test suites PASS (100% tests passed)
+
+---
+
 ## 2026-01-26: M5.1.5 cxf_btran
 
 ### SUCCESS: Backward transformation with Product Form of Inverse
