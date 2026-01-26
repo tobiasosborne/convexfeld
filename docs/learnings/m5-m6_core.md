@@ -564,3 +564,41 @@ int cxf_simplex_get_iteration_limit(SolverContext *state);
 **Dependencies:**
 - Uses `cxf_get_timestamp()` from timing module for start_time reset
 - Accesses env->callback_state (CallbackContext pointer)
+
+---
+
+### 2026-01-26: M7.1.3 Simplex Tests - Edge Cases (TDD)
+
+**File created:** `tests/unit/test_simplex_edge.c` (192 LOC, 15 tests)
+
+**TDD tests written (15 total):**
+- **Degeneracy handling (4):** perturbation_null_args, perturbation_basic, unperturb_null_args, unperturb_sequence
+- **Unbounded detection (2):** solve_unbounded_simple, unbounded_with_constraint
+- **Infeasible detection (2):** solve_infeasible_bounds, infeasible_constraints
+- **Numerical stability (3):** small_coefficients, large_coefficient_range, fixed_variable
+- **Empty/trivial (4):** solve_empty_model, solve_trivial, solve_all_fixed, solve_free_variable
+
+**Expected interface defined (perturbation functions):**
+```c
+int cxf_simplex_perturbation(SolverContext *state, CxfEnv *env);
+// Returns: CXF_OK on success, CXF_ERROR_NULL_ARGUMENT for null args
+// Idempotent - second call also returns CXF_OK
+
+int cxf_simplex_unperturb(SolverContext *state, CxfEnv *env);
+// Returns: CXF_OK if perturbation was applied, 1 if no perturbation to remove
+```
+
+**Expected edge case behaviors (to be implemented):**
+- Unbounded: `cxf_solve_lp` returns `CXF_UNBOUNDED` (status 3)
+- Infeasible (lb > ub): `cxf_solve_lp` returns `CXF_INFEASIBLE` (status 2)
+- Empty model (0 vars): returns `CXF_OPTIMAL` immediately
+- Fixed variables (lb == ub): handled correctly during solve
+
+**Key learnings:**
+- Tests compile but show expected linker errors for unimplemented functions
+- Current stub `cxf_solve_lp(model)` has single-arg signature (will be expanded)
+- Perturbation API from spec: Wolfe (1963) method for cycling prevention
+- Tests define expected behavior for full simplex implementation
+
+**Files modified:**
+- `tests/CMakeLists.txt` - Added test_simplex_edge
