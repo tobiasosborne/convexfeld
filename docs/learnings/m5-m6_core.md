@@ -128,6 +128,35 @@
 
 ---
 
+### 2026-01-26: M5.1.6 cxf_basis_refactor
+
+**File created:** `src/basis/refactor.c` (208 LOC)
+
+**Functions implemented:**
+- `cxf_basis_refactor(basis)` - Clear eta vectors, reset counters (PFI approach)
+- `cxf_solver_refactor(ctx, env)` - Full refactorization with solver context
+- `cxf_refactor_check(ctx, env)` - Determine if refactorization needed
+
+**Design decision - PFI vs LU:**
+- Spec describes full LU factorization with Markowitz ordering
+- Current architecture uses Product Form of Inverse (PFI) with eta vectors
+- FTRAN/BTRAN already work with eta vectors
+- Full LU would require BasisState structure changes (L, U storage)
+- Implemented PFI-compatible version for now
+
+**Refactorization triggers (cxf_refactor_check):**
+- eta_count >= max_eta_count → Required (return 2)
+- eta_memory >= max_eta_memory → Required (return 2)
+- iterations since refactor >= refactor_interval → Recommended (return 1)
+- FTRAN degradation (avg > 3x baseline) → Recommended (return 1)
+
+**Key insight:**
+- For identity basis (all slacks), no eta vectors needed (B = I)
+- For structural columns, full implementation needs matrix access via model_ref
+- TODO marker left for Markowitz-ordered LU when matrix access available
+
+---
+
 ## M6: Algorithm Layer (Level 4)
 
 ### 2026-01-26: M6.1.1 Pricing Tests

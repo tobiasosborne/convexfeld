@@ -27,34 +27,11 @@
 /* cxf_btran is implemented in btran.c (M5.1.5) */
 
 /*******************************************************************************
- * Refactorization - Implementation in M5.1.6
+ * Refactorization - Implemented in refactor.c (M5.1.6)
  ******************************************************************************/
 
-/**
- * @brief Basis refactorization stub.
- * @note Full implementation in M5.1.6
- */
-int cxf_basis_refactor(BasisState *basis) {
-    if (basis == NULL) {
-        return CXF_ERROR_NULL_ARGUMENT;
-    }
-
-    /* Clear eta list */
-    EtaFactors *eta = basis->eta_head;
-    while (eta != NULL) {
-        EtaFactors *next = eta->next;
-        free(eta->indices);
-        free(eta->values);
-        free(eta);
-        eta = next;
-    }
-
-    basis->eta_head = NULL;
-    basis->eta_count = 0;
-    basis->pivots_since_refactor = 0;
-
-    return CXF_OK;
-}
+/* cxf_basis_refactor, cxf_solver_refactor, cxf_refactor_check
+ * are implemented in refactor.c */
 
 /*******************************************************************************
  * Basis snapshot/comparison - Implementation in M5.1.7
