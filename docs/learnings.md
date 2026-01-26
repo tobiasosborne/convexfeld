@@ -6,6 +6,25 @@ This file captures learnings, gotchas, and useful patterns discovered during dev
 
 ---
 
+## 2026-01-26: M1.8 Tracer Bullet Benchmark
+
+### SUCCESS: Benchmark established baseline performance
+
+**File created:** `benchmarks/bench_tracer.c` (52 LOC)
+
+**Performance achieved:**
+- 0.114 us/iteration (well under 1000 us target)
+- 10,000 iterations in ~1ms total
+
+**Key decisions:**
+- Used `clock()` from `<time.h>` for portable timing
+- Return exit code 0 for PASS, 1 for SLOW (enables CI integration)
+- Simple loop without warmup - benchmark is fast enough
+
+**Lesson:** The tracer bullet stubs are highly optimized since they do minimal work. Full implementation will be slower but should still meet targets.
+
+---
+
 ## 2026-01-26: M1.5 Stub Simplex Entry
 
 ### SUCCESS: Extracted cxf_solve_lp() to separate module

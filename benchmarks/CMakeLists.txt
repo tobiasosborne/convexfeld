@@ -19,5 +19,5 @@ endfunction()
 # Benchmarks
 ################################################################################
 
-# Benchmarks will be added starting with M1.8: Tracer Bullet Benchmark
-# add_cxf_benchmark(bench_tracer bench_tracer.c)
+# M1.8: Tracer Bullet Benchmark
+add_cxf_benchmark(bench_tracer bench_tracer.c)

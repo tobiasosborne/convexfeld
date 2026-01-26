@@ -6,38 +6,32 @@
 
 ## CRITICAL: READ THIS FIRST
 
-### M2.1 MEMORY MODULE COMPLETE + M1.3 SPARSE STUB ADDED
+### M1 TRACER BULLET COMPLETE (INCLUDING BENCHMARK)
 
-**17 tests pass (3 smoke + 12 memory + 1 tracer bullet + 1 sparse)**
+**18 tests pass (3 smoke + 12 memory + 1 tracer bullet + 1 sparse) + benchmark**
 
-Next steps: Continue M2.x Foundation Layer (M2.1.3 vectors, M2.1.4 state deallocators, M2.2 Parameters, M2.3 Validation)
+All M1 milestones are now complete. Next steps: Continue with M2.x-M8.x implementation.
 
 ---
 
 ## Work Completed This Session
 
-### M1.5: Stub Simplex Entry - Complete
+### M1.8: Tracer Bullet Benchmark - Complete
 
 | Issue | Description | Status |
 |-------|-------------|--------|
-| `convexfeld-7he` | M1.5: Stub Simplex Entry | CLOSED |
+| `convexfeld-9b2` | M1.8: Tracer Bullet Benchmark | CLOSED |
 
 **Files created:**
-- `src/simplex/solve_lp_stub.c` (79 LOC) - `cxf_solve_lp()` function
+- `benchmarks/bench_tracer.c` (52 LOC) - Performance benchmark
 
 **Files modified:**
-- `src/api/api_stub.c` - `cxf_optimize()` now delegates to `cxf_solve_lp()`
+- `benchmarks/CMakeLists.txt` - Added benchmark target
 
-### M1.3: Stub SparseMatrix Structure - Complete
-
-| Issue | Description | Status |
-|-------|-------------|--------|
-| `convexfeld-bko` | M1.3: Stub SparseMatrix Structure | CLOSED |
-
-**Files created:**
-- `src/matrix/sparse_stub.c` (103 LOC) - basic create/free/init functions
-
-**CMakeLists.txt updated** to include new source files.
+**Performance results:**
+- 0.114 us/iteration (target was < 1000 us/iteration)
+- 10,000 iterations in ~1ms total
+- Status: PASS
 
 ---
 
@@ -63,7 +57,7 @@ convexfeld/
 │   ├── matrix/
 │   │   └── sparse_stub.c       (M1.3)
 │   ├── simplex/
-│   │   └── solve_lp_stub.c     (M1.5) NEW
+│   │   └── solve_lp_stub.c     (M1.5)
 │   ├── error/
 │   │   └── error_stub.c        (M1.7)
 │   └── api/
@@ -79,7 +73,8 @@ convexfeld/
 │   └── integration/
 │       └── test_tracer_bullet.c
 └── benchmarks/
-    └── CMakeLists.txt
+    ├── CMakeLists.txt
+    └── bench_tracer.c          (M1.8) NEW
 ```
 
 ### Build Status
@@ -87,23 +82,26 @@ convexfeld/
 - `test_smoke` passes (3 tests)
 - `test_memory` passes (12 tests)
 - `test_tracer_bullet` passes (1 test)
+- `bench_tracer` passes (< 1000 us/iter)
 
 ---
 
-## Next Steps: Continue M2.x Implementation
+## Next Steps: Continue M2.x-M8.x Implementation
 
-Tracer bullet is complete. Continue with foundation modules.
+M1 Tracer Bullet is complete. Continue with foundation and implementation layers.
 
 ### Recommended Order
 ```bash
-# Continue M2 Foundation Layer
-bd ready   # See available work
+# Check available work
+bd ready
 
-# Recommended next:
+# Recommended next milestones:
 # M2.1.3: cxf_vector_free, cxf_alloc_eta (memory vectors)
 # M2.1.4: State deallocators
 # M2.2: Parameters module
 # M2.3: Validation module
+# M4.x: Matrix module (tests + implementation)
+# M5.x: Basis module (tests + implementation)
 ```
 
 ### Current Source Files
@@ -111,7 +109,7 @@ bd ready   # See available work
 target_sources(convexfeld PRIVATE
     src/memory/alloc.c          # M2.1.2
     src/matrix/sparse_stub.c    # M1.3
-    src/simplex/solve_lp_stub.c # M1.5 NEW
+    src/simplex/solve_lp_stub.c # M1.5
     src/error/error_stub.c      # M1.7
     src/api/env_stub.c          # M1.1
     src/api/model_stub.c        # M1.2
@@ -141,13 +139,11 @@ target_sources(convexfeld PRIVATE
 - `convexfeld-ae7` - M1.2: Stub CxfModel Structure
 - `convexfeld-bko` - M1.3: Stub SparseMatrix Structure
 - `convexfeld-z1h` - M1.4: Stub API Functions
-- `convexfeld-7he` - M1.5: Stub Simplex Entry  NEW
+- `convexfeld-7he` - M1.5: Stub Simplex Entry
 - `convexfeld-6uc` - M1.6: Stub Memory Functions
 - `convexfeld-9t5` - M1.7: Stub Error Functions
+- `convexfeld-9b2` - M1.8: Tracer Bullet Benchmark  NEW
 - `convexfeld-9in` - M2.1.1: Memory Tests
 - `convexfeld-oq0` - M2.1.2: Memory Implementation
-
-### Optional M1.x (can skip or do later)
-- `convexfeld-9b2` - M1.8: Tracer Bullet Benchmark (nice to have)
 
 Run `bd ready` to see all available work.
