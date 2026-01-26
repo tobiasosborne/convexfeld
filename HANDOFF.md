@@ -16,29 +16,29 @@ All M1 milestones are now complete. Next steps: Continue with M2.x-M8.x implemen
 
 ## Work Completed This Session
 
-### M6.1.1: Pricing Tests - Complete
+### M5.1.3: EtaFactors Structure - Complete
 
 | Issue | Description | Status |
 |-------|-------------|--------|
-| `convexfeld-mza` | M6.1.1: Pricing Tests | CLOSED |
+| `convexfeld-san` | M5.1.3: EtaFactors Structure | CLOSED |
 
 **Files created:**
-- `tests/unit/test_pricing.c` (310 LOC) - 24 TDD tests for pricing operations
-- `src/pricing/pricing_stub.c` (233 LOC) - Stub implementations
+- `src/basis/eta_factors.c` (192 LOC) - EtaFactors lifecycle and utilities
 
-**Tests implemented (24 total):**
-- PricingContext create/free (4 tests)
-- cxf_pricing_init (4 tests)
-- cxf_pricing_candidates (4 tests)
-- cxf_pricing_steepest (4 tests)
-- cxf_pricing_update (2 tests)
-- cxf_pricing_invalidate (3 tests)
-- cxf_pricing_step2 (2 tests)
-- Statistics tracking (1 test)
+**Functions implemented:**
+- `cxf_eta_create(type, pivot_row, nnz)` - Allocates eta with sparse arrays
+- `cxf_eta_free(eta)` - Frees eta and arrays (NULL-safe)
+- `cxf_eta_init(eta, type, pivot_row, nnz)` - Reinitialize existing eta
+- `cxf_eta_validate(eta, max_rows)` - Validate eta invariants
+- `cxf_eta_set(eta, indices, values)` - Copy data into eta arrays
+
+**Files modified:**
+- `src/basis/basis_stub.c` - Removed duplicated EtaFactors functions
+- `CMakeLists.txt` - Added eta_factors.c to build
 
 **Test results:**
-- All pricing tests PASS (24 tests)
-- All other tests PASS (smoke, memory, basis, tracer_bullet)
+- All EtaFactors tests PASS (in test_basis)
+- All other tests PASS (smoke, memory, basis, pricing, tracer_bullet)
 - test_matrix has expected TDD failures (12 tests awaiting M4.1.3/M4.1.4)
 
 ---
@@ -67,9 +67,10 @@ convexfeld/
 │   │   └── sparse_matrix.c     (M4.1.2)
 │   ├── basis/
 │   │   ├── basis_state.c       (M5.1.2)
+│   │   ├── eta_factors.c       (M5.1.3) NEW
 │   │   └── basis_stub.c        (M5.1.1)
 │   ├── pricing/
-│   │   └── pricing_stub.c      (M6.1.1) NEW
+│   │   └── pricing_stub.c      (M6.1.1)
 │   ├── simplex/
 │   │   └── solve_lp_stub.c     (M1.5)
 │   ├── error/
@@ -131,8 +132,9 @@ target_sources(convexfeld PRIVATE
     src/matrix/sparse_stub.c    # M1.3
     src/matrix/sparse_matrix.c  # M4.1.2
     src/basis/basis_state.c     # M5.1.2
+    src/basis/eta_factors.c     # M5.1.3 NEW
     src/basis/basis_stub.c      # M5.1.1
-    src/pricing/pricing_stub.c  # M6.1.1 NEW
+    src/pricing/pricing_stub.c  # M6.1.1
     src/simplex/solve_lp_stub.c # M1.5
     src/error/error_stub.c      # M1.7
     src/api/env_stub.c          # M1.1
@@ -173,6 +175,7 @@ target_sources(convexfeld PRIVATE
 - `convexfeld-pcx` - M4.1.2: SparseMatrix Structure (Full)
 - `convexfeld-7g3` - M5.1.1: Basis Tests
 - `convexfeld-7f5` - M5.1.2: BasisState Structure
-- `convexfeld-mza` - M6.1.1: Pricing Tests NEW
+- `convexfeld-san` - M5.1.3: EtaFactors Structure NEW
+- `convexfeld-mza` - M6.1.1: Pricing Tests
 
 Run `bd ready` to see all available work.

@@ -13,56 +13,11 @@
 #include <string.h>
 
 /*******************************************************************************
- * EtaFactors lifecycle - Implementation in M5.1.3
+ * EtaFactors lifecycle - Implemented in eta_factors.c (M5.1.3)
  ******************************************************************************/
 
-/**
- * @brief Create an EtaFactors structure.
- *
- * @param type Eta type (1=refactor, 2=pivot).
- * @param pivot_row Row index for pivot.
- * @param nnz Number of non-zeros.
- * @return Pointer to new EtaFactors, or NULL on failure.
- */
-EtaFactors *cxf_eta_create(int type, int pivot_row, int nnz) {
-    EtaFactors *eta = (EtaFactors *)calloc(1, sizeof(EtaFactors));
-    if (eta == NULL) {
-        return NULL;
-    }
-
-    eta->type = type;
-    eta->pivot_row = pivot_row;
-    eta->nnz = nnz;
-    eta->pivot_elem = 1.0;
-    eta->next = NULL;
-
-    if (nnz > 0) {
-        eta->indices = (int *)calloc((size_t)nnz, sizeof(int));
-        eta->values = (double *)calloc((size_t)nnz, sizeof(double));
-        if (eta->indices == NULL || eta->values == NULL) {
-            free(eta->indices);
-            free(eta->values);
-            free(eta);
-            return NULL;
-        }
-    }
-
-    return eta;
-}
-
-/**
- * @brief Free an EtaFactors structure.
- *
- * @param eta EtaFactors to free (may be NULL).
- */
-void cxf_eta_free(EtaFactors *eta) {
-    if (eta == NULL) {
-        return;
-    }
-    free(eta->indices);
-    free(eta->values);
-    free(eta);
-}
+/* cxf_eta_create, cxf_eta_free, cxf_eta_init, cxf_eta_validate, cxf_eta_set
+ * are implemented in eta_factors.c */
 
 /*******************************************************************************
  * FTRAN/BTRAN - Implementation in M5.1.4 / M5.1.5

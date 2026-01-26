@@ -6,6 +6,43 @@ This file captures learnings, gotchas, and useful patterns discovered during dev
 
 ---
 
+## 2026-01-26: M5.1.3 EtaFactors Structure
+
+### SUCCESS: EtaFactors lifecycle extracted to dedicated file
+
+**File created:**
+- `src/basis/eta_factors.c` (192 LOC) - EtaFactors lifecycle and utilities
+
+**Functions implemented:**
+- `cxf_eta_create(type, pivot_row, nnz)` - Allocates eta with sparse arrays
+- `cxf_eta_free(eta)` - Frees eta and arrays (NULL-safe)
+- `cxf_eta_init(eta, type, pivot_row, nnz)` - Reinitialize existing eta
+- `cxf_eta_validate(eta, max_rows)` - Validate eta invariants
+- `cxf_eta_set(eta, indices, values)` - Copy data into eta arrays
+
+**Key validations in cxf_eta_validate:**
+- nnz >= 0
+- type is 1 (refactor) or 2 (pivot)
+- pivot_row in range [0, max_rows)
+- pivot_elem is finite and non-zero
+- All indices in range and values finite
+
+**Error code gotcha:**
+- Use `CXF_ERROR_OUT_OF_MEMORY`, not `CXF_ERROR_MEMORY`
+- Check cxf_types.h for correct error codes
+
+**Pattern: Stub extraction**
+- Original functions in basis_stub.c for TDD
+- Extract to dedicated file (eta_factors.c) when implementing
+- Update stub file to reference new location
+- Add new file to CMakeLists.txt
+
+**Files modified:**
+- `src/basis/basis_stub.c` - Removed duplicated functions
+- `CMakeLists.txt` - Added eta_factors.c to build
+
+---
+
 ## 2026-01-26: M6.1.1 Pricing Tests
 
 ### SUCCESS: TDD tests for pricing operations

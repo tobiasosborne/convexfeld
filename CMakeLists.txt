@@ -82,8 +82,9 @@ target_sources(convexfeld PRIVATE
     # Matrix module (M1.3 stubs + M4.1.2 full)
     src/matrix/sparse_stub.c
     src/matrix/sparse_matrix.c
-    # Basis module (M5.1.2 BasisState + remaining stubs)
+    # Basis module (M5.1.2 BasisState, M5.1.3 EtaFactors + remaining stubs)
     src/basis/basis_state.c
+    src/basis/eta_factors.c
     src/basis/basis_stub.c
     # Simplex module (M1.5 stubs)
     src/simplex/solve_lp_stub.c
