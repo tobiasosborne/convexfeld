@@ -55,24 +55,28 @@ double cxf_log10_wrapper(double value) {
  * Provides consistent behavior across platforms and
  * ensures null termination.
  *
- * @param buffer Output buffer (may be NULL if size is 0)
- * @param size Buffer size in bytes
+ * @param buffer Output buffer (must not be NULL)
+ * @param size Buffer size in bytes (must be > 0)
  * @param format Printf-style format string
  * @param ... Format arguments
- * @return Number of characters that would be written (excluding null)
+ * @return Number of characters that would be written (excluding null),
+ *         or -1 if buffer is NULL or size is 0
  */
 int cxf_snprintf_wrapper(char *buffer, size_t size, const char *format, ...) {
     va_list args;
     int result;
+
+    /* Validate inputs per specification */
+    if (buffer == NULL || size == 0) {
+        return -1;
+    }
 
     va_start(args, format);
     result = vsnprintf(buffer, size, format, args);
     va_end(args);
 
     /* Ensure null termination for safety */
-    if (buffer != NULL && size > 0) {
-        buffer[size - 1] = '\0';
-    }
+    buffer[size - 1] = '\0';
 
     return result;
 }

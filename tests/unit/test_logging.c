@@ -141,16 +141,16 @@ void test_snprintf_wrapper_truncation(void) {
     TEST_ASSERT_EQUAL_CHAR('\0', buffer[7]);  /* Null terminated */
 }
 
-void test_snprintf_wrapper_empty_buffer(void) {
-    char buffer[1] = {0};
+void test_snprintf_wrapper_zero_size_returns_error(void) {
+    char buffer[16];
     int result = cxf_snprintf_wrapper(buffer, 0, "test");
-    TEST_ASSERT_GREATER_OR_EQUAL(0, result);  /* Does not crash */
+    TEST_ASSERT_EQUAL_INT(-1, result);  /* Error per spec */
 }
 
-void test_snprintf_wrapper_null_buffer(void) {
-    /* Should return required length without crashing */
-    int result = cxf_snprintf_wrapper(NULL, 0, "test string");
-    TEST_ASSERT_EQUAL_INT(11, result);
+void test_snprintf_wrapper_null_buffer_returns_error(void) {
+    /* NULL buffer should return -1 per specification */
+    int result = cxf_snprintf_wrapper(NULL, 10, "test string");
+    TEST_ASSERT_EQUAL_INT(-1, result);
 }
 
 /*============================================================================
@@ -245,8 +245,8 @@ int main(void) {
     RUN_TEST(test_snprintf_wrapper_format_int);
     RUN_TEST(test_snprintf_wrapper_format_double);
     RUN_TEST(test_snprintf_wrapper_truncation);
-    RUN_TEST(test_snprintf_wrapper_empty_buffer);
-    RUN_TEST(test_snprintf_wrapper_null_buffer);
+    RUN_TEST(test_snprintf_wrapper_zero_size_returns_error);
+    RUN_TEST(test_snprintf_wrapper_null_buffer_returns_error);
 
     /* cxf_log_printf tests */
     RUN_TEST(test_log_printf_null_env_safe);

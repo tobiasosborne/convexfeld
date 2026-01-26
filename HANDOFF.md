@@ -6,34 +6,17 @@
 
 ## Work Completed This Session
 
-### M2.2.1: Parameters Tests (convexfeld-b57)
-- Created `tests/unit/test_parameters.c` (227 LOC, 23 tests)
-- Tests cover: feasibility_tol, optimality_tol, infinity getters
-- Added tests for cxf_getdblparam generic getter
-
-### M2.2.2: Parameter Getters (convexfeld-49c)
-- Created `src/parameters/params.c` (117 LOC)
-- Implemented:
-  - `cxf_getdblparam` - generic double parameter getter with case-insensitive lookup
-  - `cxf_get_feasibility_tol` - primal feasibility tolerance getter
-  - `cxf_get_optimality_tol` - dual optimality tolerance getter
-  - `cxf_get_infinity` - infinity constant getter (returns 1e100)
-
-### M3.2.2: Log Output (convexfeld-sr9)
-- Created `src/logging/output.c` (86 LOC)
-- Added log_callback field to CxfEnv header
-- Implemented:
-  - `cxf_log_printf` - printf-style logging with verbosity filtering
-  - `cxf_register_log_callback` - user callback registration
-- Updated test_logging.c with 9 new tests
-
-### M4.3.4: Presolve Statistics (convexfeld-ah5)
-- Created `src/analysis/presolve_stats.c` (196 LOC)
-- Full implementation per spec (forward-compatible for future features):
-  - Logs basic LP dimensions (vars, constraints, nonzeros)
-  - Structure for quadratic/SOS/general constraints when added
-  - General constraint type enumeration ready
-- Added 3 tests to test_analysis.c
+### M3.2.3: Format Helpers (convexfeld-9pu)
+- Updated `src/logging/format.c` (82 LOC)
+- Fixed `cxf_snprintf_wrapper` to match spec:
+  - NULL buffer now returns -1 (was returning result of vsnprintf)
+  - size = 0 now returns -1 (was returning result of vsnprintf)
+  - Ensures null termination at buffer[size-1]
+- Updated tests in `test_logging.c`:
+  - `test_snprintf_wrapper_zero_size_returns_error` - verifies -1 return
+  - `test_snprintf_wrapper_null_buffer_returns_error` - verifies -1 return
+- All 25 tests in test_logging pass
+- Created refactor issue convexfeld-5w6 for test_logging.c (265 LOC > 200 limit)
 
 ---
 
@@ -44,18 +27,10 @@
 - No compiler warnings
 - `bench_tracer` passes
 
-### Files Modified/Created
+### Files Modified
 ```
-src/parameters/params.c            (NEW - parameter getters)
-src/logging/output.c               (NEW - log output functions)
-src/analysis/presolve_stats.c      (NEW - model statistics)
-tests/unit/test_parameters.c       (NEW - parameter tests)
-include/convexfeld/cxf_env.h       (MODIFIED - added log_callback)
-src/api/env_stub.c                 (MODIFIED - init log_callback)
-CMakeLists.txt                     (MODIFIED - added new sources)
-tests/CMakeLists.txt               (MODIFIED - added test_parameters)
-tests/unit/test_logging.c          (MODIFIED - added log tests)
-tests/unit/test_analysis.c         (MODIFIED - added presolve tests)
+src/logging/format.c               (MODIFIED - fixed snprintf edge cases)
+tests/unit/test_logging.c          (MODIFIED - updated edge case tests)
 ```
 
 ---
@@ -90,6 +65,7 @@ bd ready
 - `convexfeld-st1` - Refactor model_stub.c to < 200 LOC (now 228 LOC)
 - `convexfeld-hqo` - Refactor test_matrix.c to < 200 LOC (446 LOC)
 - `convexfeld-afb` - Refactor test_error.c to < 200 LOC (437 LOC)
+- `convexfeld-5w6` - Refactor test_logging.c to < 200 LOC (265 LOC)
 - Note: test_api_constrs.c (247 LOC), test_api_query.c (243 LOC), test_parameters.c (227 LOC) also exceed limit
 
 Run `bd ready` to see all available work.
