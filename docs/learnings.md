@@ -6,6 +6,30 @@ This file captures learnings, gotchas, and useful patterns discovered during dev
 
 ---
 
+## 2026-01-26: M0.4 Module Headers (Stubs) Created
+
+### SUCCESS: All 8 structure headers created
+
+**Headers created (~280 LOC total):**
+- `cxf_env.h` - CxfEnv structure (environment)
+- `cxf_model.h` - CxfModel structure (problem instance)
+- `cxf_matrix.h` - SparseMatrix structure (CSC/CSR format)
+- `cxf_solver.h` - SolverContext structure (runtime state)
+- `cxf_basis.h` - BasisState + EtaFactors (basis representation)
+- `cxf_pricing.h` - PricingContext (partial pricing)
+- `cxf_callback.h` - CallbackContext + CxfCallbackFunc typedef
+- `convexfeld.h` - Main API header (includes all others)
+
+**Key design decisions:**
+- All headers include only `cxf_types.h` (forward declarations there)
+- Minimal fields for tracer bullet, full fields to be added later
+- Function declarations in structure headers (e.g., `cxf_loadenv` in `cxf_env.h`)
+- Version macros in `convexfeld.h`
+
+**M0 Complete!** Ready to start M1 (Tracer Bullet).
+
+---
+
 ## 2026-01-26: M0.3 Unity Test Framework Setup
 
 ### SUCCESS: Unity installed and verified with smoke test
