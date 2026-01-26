@@ -6,6 +6,23 @@ This file captures learnings, gotchas, and useful patterns discovered during dev
 
 ---
 
+## 2026-01-26: M0.3 Unity Test Framework Setup
+
+### SUCCESS: Unity installed and verified with smoke test
+
+**Setup:**
+- Downloaded unity.c, unity.h, unity_internals.h from ThrowTheSwitch/Unity
+- Updated tests/CMakeLists.txt with Unity library and `add_cxf_test()` helper
+- Created smoke test with 3 assertions (true, int equality, double within)
+
+**Configuration:**
+- `UNITY_INCLUDE_DOUBLE` - enables double precision assertions
+- `UNITY_DOUBLE_PRECISION=1e-12` - sets tolerance for double comparisons
+
+**Note:** Unity's own code has `-Wdouble-promotion` warnings (float→double), but this is expected from third-party code and doesn't affect functionality.
+
+---
+
 ## 2026-01-26: M0.2 Core Types Header Created
 
 ### SUCCESS: cxf_types.h created with all enums, constants, and forward declarations
