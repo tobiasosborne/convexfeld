@@ -16,29 +16,24 @@ All M1 milestones are now complete. Next steps: Continue with M2.x-M8.x implemen
 
 ## Work Completed This Session
 
-### M8.1.1: API Tests - Environment - Complete
+### M4.1.4: cxf_dot_product, cxf_vector_norm - Complete
 
 | Issue | Description | Status |
 |-------|-------------|--------|
 | `convexfeld-1lj` | M8.1.1: API Tests - Environment | CLOSED |
+| `convexfeld-snu` | M4.1.4: cxf_dot_product, cxf_vector_norm | CLOSED |
 
 **Files created:**
 - `tests/unit/test_api_env.c` (107 LOC) - TDD tests for env API
+- `src/matrix/vectors.c` (100 LOC) - Vector operations
 
-**Tests implemented (11 total):**
-- `test_loadenv_basic_creation` - Basic env creation succeeds
-- `test_loadenv_null_envp_returns_error` - NULL argument handling
-- `test_loadenv_sets_magic_number` - Magic number validation
-- `test_loadenv_sets_active_flag` - Active flag initialization
-- `test_loadenv_sets_default_tolerances` - Default tolerance values
-- `test_loadenv_sets_default_verbosity` - Verbosity/output defaults
-- `test_loadenv_sets_ref_count_to_one` - Reference counting init
-- `test_loadenv_clears_error_buffer` - Error buffer cleared
-- `test_loadenv_multiple_envs` - Multiple envs can coexist
-- `test_freeenv_null_is_safe` - NULL-safe free
-- `test_freeenv_clears_magic` - Magic cleared before free
+**Functions implemented:**
+- `cxf_dot_product(x, y, n)` - Dense dot product
+- `cxf_dot_product_sparse(x_indices, x_values, x_nnz, y_dense)` - Sparse-dense dot product
+- `cxf_vector_norm(x, n, norm_type)` - L1, L2, L-infinity norms
 
 **Test results:**
+- All 20 matrix tests PASS (previously 8 failing, now all pass)
 - All 11 API env tests PASS
 
 ---
@@ -65,7 +60,8 @@ convexfeld/
 │   ├── matrix/
 │   │   ├── sparse_stub.c       (M1.3)
 │   │   ├── sparse_matrix.c     (M4.1.2)
-│   │   └── multiply.c          (M4.1.3)
+│   │   ├── multiply.c          (M4.1.3)
+│   │   └── vectors.c           (M4.1.4) NEW
 │   ├── basis/
 │   │   ├── basis_state.c       (M5.1.2)
 │   │   ├── eta_factors.c       (M5.1.3)
@@ -102,7 +98,7 @@ convexfeld/
 - `libconvexfeld.a` builds (all M1 stubs + basis + sparse_matrix + pricing)
 - `test_smoke` passes (3 tests)
 - `test_memory` passes (12 tests)
-- `test_matrix` fails (8 tests - awaiting M4.1.4 implementation)
+- `test_matrix` passes (20 tests) - FIXED
 - `test_basis` passes (29 tests - stubs handle identity basis)
 - `test_pricing` passes (24 tests)
 - `test_api_env` passes (11 tests) - NEW
@@ -188,6 +184,7 @@ target_sources(convexfeld PRIVATE
 - `convexfeld-san` - M5.1.3: EtaFactors Structure
 - `convexfeld-mza` - M6.1.1: Pricing Tests
 - `convexfeld-mk6` - M6.1.2: PricingContext Structure
-- `convexfeld-1lj` - M8.1.1: API Tests - Environment NEW
+- `convexfeld-1lj` - M8.1.1: API Tests - Environment
+- `convexfeld-snu` - M4.1.4: cxf_dot_product, cxf_vector_norm NEW
 
 Run `bd ready` to see all available work.
