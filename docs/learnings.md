@@ -6,6 +6,45 @@ This file captures learnings, gotchas, and useful patterns discovered during dev
 
 ---
 
+## 2026-01-26: M6.1.1 Pricing Tests
+
+### SUCCESS: TDD tests for pricing operations
+
+**Files created:**
+- `tests/unit/test_pricing.c` (310 LOC) - 24 comprehensive TDD tests
+- `src/pricing/pricing_stub.c` (233 LOC) - Stub implementations for TDD
+
+**Tests written (24 total):**
+- PricingContext create/free (4 tests) - PASS
+- cxf_pricing_init (4 tests) - PASS
+- cxf_pricing_candidates (4 tests) - PASS
+- cxf_pricing_steepest (4 tests) - PASS
+- cxf_pricing_update (2 tests) - PASS
+- cxf_pricing_invalidate (3 tests) - PASS
+- cxf_pricing_step2 (2 tests) - PASS
+- Statistics tracking (1 test) - PASS
+
+**TDD pattern for pricing:**
+- Tests define expected behavior for partial pricing, steepest edge, Dantzig
+- Stubs implement working versions to enable test-first development
+- Variable status codes: VAR_BASIC (>=0), VAR_AT_LOWER (-1), VAR_AT_UPPER (-2)
+- Reduced cost attractiveness:
+  - At lower bound: attractive if RC < -tolerance
+  - At upper bound: attractive if RC > tolerance
+- Steepest edge ratio: |RC| / sqrt(weight)
+
+**Key design decisions:**
+- PricingContext owns candidate_counts, candidate_arrays, cached_counts arrays
+- Multi-level partial pricing support (max_levels typically 3-5)
+- Cache invalidation via flags (INVALID_CANDIDATES, INVALID_WEIGHTS, etc.)
+- Weights safeguard: zero/negative weights replaced with 1.0
+
+**Files modified:**
+- `tests/CMakeLists.txt` - Added test_pricing target
+- `CMakeLists.txt` - Added pricing_stub.c to library
+
+---
+
 ## 2026-01-26: M4.1.2 SparseMatrix Structure (Full)
 
 ### SUCCESS: CSC validation and CSR conversion implemented
