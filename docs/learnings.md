@@ -6,6 +6,26 @@ This file captures learnings, gotchas, and useful patterns discovered during dev
 
 ---
 
+## 2026-01-26: M1.5 Stub Simplex Entry
+
+### SUCCESS: Extracted cxf_solve_lp() to separate module
+
+**File created:** `src/simplex/solve_lp_stub.c` (79 LOC)
+
+**Refactoring done:**
+- Extracted simplex logic from `api_stub.c` into `cxf_solve_lp()`
+- `cxf_optimize()` now delegates to `cxf_solve_lp()`
+- Proper separation of concerns: API layer vs solver layer
+
+**Key decisions:**
+- Added empty model handling (0 vars = optimal with obj=0)
+- Forward declaration in api_stub.c instead of header (stub pattern)
+- Full simplex implementation will replace this in M7
+
+**Architecture benefit:** API layer now cleanly separated from solver logic.
+
+---
+
 ## 2026-01-26: M1.3 Stub SparseMatrix Structure
 
 ### SUCCESS: SparseMatrix stub implementation created

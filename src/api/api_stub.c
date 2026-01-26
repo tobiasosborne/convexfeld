@@ -3,64 +3,33 @@
  * @brief Stub optimization and attribute functions for tracer bullet.
  *
  * Minimal implementation of cxf_optimize and attribute getters.
- * The optimizer solves trivial unconstrained LPs by setting each
- * variable to its bound that minimizes the objective.
+ * Delegates actual solving to cxf_solve_lp() in simplex module.
  */
 
 #include <string.h>
 #include "convexfeld/cxf_model.h"
 #include "convexfeld/cxf_env.h"
 
+/* Forward declaration - implemented in src/simplex/solve_lp_stub.c */
+int cxf_solve_lp(CxfModel *model);
+
 /**
- * @brief Optimize the model (stub - trivial unconstrained solver).
+ * @brief Optimize the model.
  *
- * This stub solves unconstrained LPs by setting each variable to
- * its lower or upper bound based on the objective coefficient sign.
- *
- * For minimization:
- *   - If obj_coeff >= 0, set x = lb (lower is better)
- *   - If obj_coeff < 0, set x = ub (higher is better, but coeff negative)
+ * Public API entry point for optimization. Delegates to the
+ * appropriate solver based on model type. Currently only LP
+ * via simplex is supported.
  *
  * @param model Model to optimize
  * @return CXF_OK on success, error code otherwise
  */
 int cxf_optimize(CxfModel *model) {
-    int i;
-    double objval;
-
     if (model == NULL) {
         return CXF_ERROR_NULL_ARGUMENT;
     }
 
-    /* Trivial solver: set each variable to optimal bound */
-    objval = 0.0;
-    for (i = 0; i < model->num_vars; i++) {
-        double coeff = model->obj_coeffs[i];
-        double lb = model->lb[i];
-        double ub = model->ub[i];
-        double val;
-
-        /* For minimization: positive coeff -> use lb, negative -> use ub */
-        if (coeff >= 0.0) {
-            val = lb;
-        } else {
-            val = ub;
-        }
-
-        /* Check for unbounded */
-        if (val <= -CXF_INFINITY || val >= CXF_INFINITY) {
-            model->status = CXF_UNBOUNDED;
-            return CXF_OK;
-        }
-
-        model->solution[i] = val;
-        objval += coeff * val;
-    }
-
-    model->obj_val = objval;
-    model->status = CXF_OPTIMAL;
-
-    return CXF_OK;
+    /* Delegate to simplex solver */
+    return cxf_solve_lp(model);
 }
 
 /**

@@ -81,6 +81,8 @@ target_sources(convexfeld PRIVATE
     src/memory/alloc.c
     # Matrix module (M1.3 stubs)
     src/matrix/sparse_stub.c
+    # Simplex module (M1.5 stubs)
+    src/simplex/solve_lp_stub.c
     # Error module (M1.7 stubs)
     src/error/error_stub.c
     # API module (M1.1, M1.2, M1.4 stubs)

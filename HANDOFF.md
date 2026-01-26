@@ -16,6 +16,18 @@ Next steps: Continue M2.x Foundation Layer (M2.1.3 vectors, M2.1.4 state dealloc
 
 ## Work Completed This Session
 
+### M1.5: Stub Simplex Entry - Complete
+
+| Issue | Description | Status |
+|-------|-------------|--------|
+| `convexfeld-7he` | M1.5: Stub Simplex Entry | CLOSED |
+
+**Files created:**
+- `src/simplex/solve_lp_stub.c` (79 LOC) - `cxf_solve_lp()` function
+
+**Files modified:**
+- `src/api/api_stub.c` - `cxf_optimize()` now delegates to `cxf_solve_lp()`
+
 ### M1.3: Stub SparseMatrix Structure - Complete
 
 | Issue | Description | Status |
@@ -25,7 +37,7 @@ Next steps: Continue M2.x Foundation Layer (M2.1.3 vectors, M2.1.4 state dealloc
 **Files created:**
 - `src/matrix/sparse_stub.c` (103 LOC) - basic create/free/init functions
 
-**CMakeLists.txt updated** to include new source file.
+**CMakeLists.txt updated** to include new source files.
 
 ---
 
@@ -49,7 +61,9 @@ convexfeld/
 │   ├── memory/
 │   │   └── alloc.c             (M2.1.2)
 │   ├── matrix/
-│   │   └── sparse_stub.c       (M1.3) NEW
+│   │   └── sparse_stub.c       (M1.3)
+│   ├── simplex/
+│   │   └── solve_lp_stub.c     (M1.5) NEW
 │   ├── error/
 │   │   └── error_stub.c        (M1.7)
 │   └── api/
@@ -96,7 +110,8 @@ bd ready   # See available work
 ```cmake
 target_sources(convexfeld PRIVATE
     src/memory/alloc.c          # M2.1.2
-    src/matrix/sparse_stub.c    # M1.3 NEW
+    src/matrix/sparse_stub.c    # M1.3
+    src/simplex/solve_lp_stub.c # M1.5 NEW
     src/error/error_stub.c      # M1.7
     src/api/env_stub.c          # M1.1
     src/api/model_stub.c        # M1.2
@@ -116,7 +131,7 @@ target_sources(convexfeld PRIVATE
 
 ## Issue Status
 
-### Completed (M0 + M1 Tracer Bullet + M2.1 + M1.3)
+### Completed (M0 + M1 Tracer Bullet + M2.1)
 - `convexfeld-2by` - M0.1: Create CMakeLists.txt
 - `convexfeld-x85` - M0.2: Create Core Types Header
 - `convexfeld-dw2` - M0.3: Setup Unity Test Framework
@@ -124,15 +139,15 @@ target_sources(convexfeld PRIVATE
 - `convexfeld-cz6` - M1.0: Tracer Bullet Test
 - `convexfeld-z6p` - M1.1: Stub CxfEnv Structure
 - `convexfeld-ae7` - M1.2: Stub CxfModel Structure
+- `convexfeld-bko` - M1.3: Stub SparseMatrix Structure
 - `convexfeld-z1h` - M1.4: Stub API Functions
+- `convexfeld-7he` - M1.5: Stub Simplex Entry  NEW
 - `convexfeld-6uc` - M1.6: Stub Memory Functions
 - `convexfeld-9t5` - M1.7: Stub Error Functions
 - `convexfeld-9in` - M2.1.1: Memory Tests
 - `convexfeld-oq0` - M2.1.2: Memory Implementation
-- `convexfeld-bko` - M1.3: Stub SparseMatrix Structure  NEW
 
 ### Optional M1.x (can skip or do later)
-- `convexfeld-7he` - M1.5: Stub Simplex Entry (inlined in api_stub.c)
 - `convexfeld-9b2` - M1.8: Tracer Bullet Benchmark (nice to have)
 
 Run `bd ready` to see all available work.
