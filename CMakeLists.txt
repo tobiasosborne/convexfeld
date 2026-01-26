@@ -77,8 +77,9 @@ target_include_directories(convexfeld
 
 # Source files
 target_sources(convexfeld PRIVATE
-    # Memory module (M2.1.2)
+    # Memory module (M2.1.2, M2.1.3)
     src/memory/alloc.c
+    src/memory/vectors.c
     # Matrix module (M1.3 stubs + M4.1.2 full + M4.1.3 multiply + M4.1.4 vectors)
     src/matrix/sparse_stub.c
     src/matrix/sparse_matrix.c

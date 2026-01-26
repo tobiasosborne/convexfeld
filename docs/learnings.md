@@ -6,6 +6,43 @@ This file captures learnings, gotchas, and useful patterns discovered during dev
 
 ---
 
+## 2026-01-26: M2.1.3 cxf_vector_free, cxf_alloc_eta
+
+### SUCCESS: Vector memory management and eta arena allocator
+
+**File created:**
+- `src/memory/vectors.c` (100 LOC) - VectorContainer free and EtaBuffer arena allocator
+
+**Types added to cxf_types.h:**
+- `VectorContainer` - Sparse vector with indices, values, auxData
+- `EtaChunk` - Chunk in arena allocator chain
+- `EtaBuffer` - Arena allocator state
+
+**Functions implemented:**
+- `cxf_vector_free(vec)` - Deallocate VectorContainer and all arrays (NULL-safe)
+- `cxf_eta_buffer_init(buffer, min_chunk_size)` - Initialize arena allocator
+- `cxf_eta_buffer_free(buffer)` - Free all chunks in arena
+- `cxf_eta_buffer_reset(buffer)` - Reset for reuse without freeing
+- `cxf_alloc_eta(env, buffer, size)` - Arena allocation with exponential growth
+
+**Arena allocator pattern:**
+- Fast path: bump pointer in active chunk O(1)
+- Slow path: allocate new chunk, link to chain, double chunk size
+- Exponential growth caps at CXF_MAX_CHUNK_SIZE (64KB)
+- Reset enables reuse without deallocation (good for refactorization cycles)
+
+**TDD tests (16 total):**
+- VectorContainer free tests (4) - NULL, empty, partial, full
+- EtaBuffer init tests (2) - basic, custom size
+- cxf_alloc_eta tests (7) - NULL, first alloc, fast/slow path, large, growth, max
+- EtaBuffer free/reset tests (3) - empty, with chunks, reset
+
+**Test results:**
+- All 16 new tests PASS
+- All existing tests still PASS
+
+---
+
 ## 2026-01-26: M6.1.2 PricingContext Structure
 
 ### SUCCESS: PricingContext lifecycle extracted to dedicated file

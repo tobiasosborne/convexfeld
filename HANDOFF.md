@@ -16,25 +16,32 @@ All M1 milestones are now complete. Next steps: Continue with M2.x-M8.x implemen
 
 ## Work Completed This Session
 
-### M4.1.4: cxf_dot_product, cxf_vector_norm - Complete
+### M2.1.3: cxf_vector_free, cxf_alloc_eta - Complete
 
 | Issue | Description | Status |
 |-------|-------------|--------|
-| `convexfeld-1lj` | M8.1.1: API Tests - Environment | CLOSED |
-| `convexfeld-snu` | M4.1.4: cxf_dot_product, cxf_vector_norm | CLOSED |
+| `convexfeld-9sv` | M2.1.3: cxf_vector_free, cxf_alloc_eta | CLOSED |
 
 **Files created:**
-- `tests/unit/test_api_env.c` (107 LOC) - TDD tests for env API
-- `src/matrix/vectors.c` (100 LOC) - Vector operations
+- `src/memory/vectors.c` (100 LOC) - VectorContainer free and EtaBuffer arena allocator
+- `tests/unit/test_memory_vectors.c` (318 LOC) - TDD tests
+
+**Types added to cxf_types.h:**
+- `VectorContainer` - Sparse vector with indices, values, auxData
+- `EtaChunk` - Chunk in arena allocator chain
+- `EtaBuffer` - Arena allocator state
+- `CXF_MAX_CHUNK_SIZE` (64KB), `CXF_MIN_CHUNK_SIZE` (4KB) constants
 
 **Functions implemented:**
-- `cxf_dot_product(x, y, n)` - Dense dot product
-- `cxf_dot_product_sparse(x_indices, x_values, x_nnz, y_dense)` - Sparse-dense dot product
-- `cxf_vector_norm(x, n, norm_type)` - L1, L2, L-infinity norms
+- `cxf_vector_free(vec)` - Deallocate VectorContainer and all arrays
+- `cxf_eta_buffer_init(buffer, min_chunk_size)` - Initialize arena allocator
+- `cxf_eta_buffer_free(buffer)` - Free all chunks in arena
+- `cxf_eta_buffer_reset(buffer)` - Reset for reuse without freeing
+- `cxf_alloc_eta(env, buffer, size)` - Arena allocation with exponential growth
 
 **Test results:**
-- All 20 matrix tests PASS (previously 8 failing, now all pass)
-- All 11 API env tests PASS
+- All 16 new memory vector tests PASS
+- All 8 test suites PASS (100% tests passed)
 
 ---
 
@@ -45,7 +52,7 @@ All M1 milestones are now complete. Next steps: Continue with M2.x-M8.x implemen
 convexfeld/
 ├── CMakeLists.txt
 ├── include/convexfeld/
-│   ├── cxf_types.h
+│   ├── cxf_types.h       (+ VectorContainer, EtaChunk, EtaBuffer)
 │   ├── cxf_env.h
 │   ├── cxf_model.h
 │   ├── cxf_matrix.h
@@ -56,52 +63,55 @@ convexfeld/
 │   └── convexfeld.h
 ├── src/
 │   ├── memory/
-│   │   └── alloc.c             (M2.1.2)
+│   │   ├── alloc.c           (M2.1.2)
+│   │   └── vectors.c         (M2.1.3) NEW
 │   ├── matrix/
-│   │   ├── sparse_stub.c       (M1.3)
-│   │   ├── sparse_matrix.c     (M4.1.2)
-│   │   ├── multiply.c          (M4.1.3)
-│   │   └── vectors.c           (M4.1.4) NEW
+│   │   ├── sparse_stub.c     (M1.3)
+│   │   ├── sparse_matrix.c   (M4.1.2)
+│   │   ├── multiply.c        (M4.1.3)
+│   │   └── vectors.c         (M4.1.4)
 │   ├── basis/
-│   │   ├── basis_state.c       (M5.1.2)
-│   │   ├── eta_factors.c       (M5.1.3)
-│   │   └── basis_stub.c        (M5.1.1)
+│   │   ├── basis_state.c     (M5.1.2)
+│   │   ├── eta_factors.c     (M5.1.3)
+│   │   └── basis_stub.c      (M5.1.1)
 │   ├── pricing/
-│   │   ├── context.c           (M6.1.2) NEW
-│   │   └── pricing_stub.c      (M6.1.1)
+│   │   ├── context.c         (M6.1.2)
+│   │   └── pricing_stub.c    (M6.1.1)
 │   ├── simplex/
-│   │   └── solve_lp_stub.c     (M1.5)
+│   │   └── solve_lp_stub.c   (M1.5)
 │   ├── error/
-│   │   └── error_stub.c        (M1.7)
+│   │   └── error_stub.c      (M1.7)
 │   └── api/
-│       ├── env_stub.c          (M1.1)
-│       ├── model_stub.c        (M1.2)
-│       └── api_stub.c          (M1.4)
+│       ├── env_stub.c        (M1.1)
+│       ├── model_stub.c      (M1.2)
+│       └── api_stub.c        (M1.4)
 ├── tests/
 │   ├── CMakeLists.txt
 │   ├── unity/
 │   ├── unit/
 │   │   ├── test_smoke.c
 │   │   ├── test_memory.c
+│   │   ├── test_memory_vectors.c   (M2.1.3) NEW
 │   │   ├── test_matrix.c
 │   │   ├── test_basis.c
-│   │   ├── test_pricing.c      (M6.1.1)
-│   │   └── test_api_env.c      (M8.1.1) NEW
+│   │   ├── test_pricing.c
+│   │   └── test_api_env.c
 │   └── integration/
 │       └── test_tracer_bullet.c
 └── benchmarks/
     ├── CMakeLists.txt
-    └── bench_tracer.c          (M1.8)
+    └── bench_tracer.c
 ```
 
 ### Build Status
-- `libconvexfeld.a` builds (all M1 stubs + basis + sparse_matrix + pricing)
+- `libconvexfeld.a` builds (all M1 stubs + basis + sparse_matrix + pricing + memory vectors)
 - `test_smoke` passes (3 tests)
 - `test_memory` passes (12 tests)
-- `test_matrix` passes (20 tests) - FIXED
-- `test_basis` passes (29 tests - stubs handle identity basis)
+- `test_memory_vectors` passes (16 tests) - NEW
+- `test_matrix` passes (20 tests)
+- `test_basis` passes (29 tests)
 - `test_pricing` passes (24 tests)
-- `test_api_env` passes (11 tests) - NEW
+- `test_api_env` passes (11 tests)
 - `test_tracer_bullet` passes (1 test)
 - `bench_tracer` passes (< 1000 us/iter)
 
@@ -117,28 +127,30 @@ M1 Tracer Bullet is complete. Continue with foundation and implementation layers
 bd ready
 
 # Available next milestones:
-# M8.1.1: API Tests - Environment
-# M4.1.4: cxf_dot_product, cxf_vector_norm
-# M2.1.3: cxf_vector_free, cxf_alloc_eta (memory vectors)
 # M5.1.4: cxf_ftran
 # M6.1.3: cxf_pricing_init (full implementation)
 # M8.1.2: API Tests - Model
 # M4.1.5: Row-Major Conversion
 # M5.1.5: cxf_btran
 # M2.1.4: State Deallocators
+# M6.1.4: cxf_pricing_candidates
+# M8.1.3: API Tests - Variables
+# M4.1.6: cxf_sort_indices
 ```
 
 ### Current Source Files
 ```cmake
 target_sources(convexfeld PRIVATE
     src/memory/alloc.c          # M2.1.2
+    src/memory/vectors.c        # M2.1.3 NEW
     src/matrix/sparse_stub.c    # M1.3
     src/matrix/sparse_matrix.c  # M4.1.2
     src/matrix/multiply.c       # M4.1.3
+    src/matrix/vectors.c        # M4.1.4
     src/basis/basis_state.c     # M5.1.2
     src/basis/eta_factors.c     # M5.1.3
     src/basis/basis_stub.c      # M5.1.1
-    src/pricing/context.c       # M6.1.2 NEW
+    src/pricing/context.c       # M6.1.2
     src/pricing/pricing_stub.c  # M6.1.1
     src/simplex/solve_lp_stub.c # M1.5
     src/error/error_stub.c      # M1.7
@@ -160,7 +172,7 @@ target_sources(convexfeld PRIVATE
 
 ## Issue Status
 
-### Completed (M0 + M1 Tracer Bullet + M2.1 + M4.1.2-M4.1.3 + M5.1.1-M5.1.3 + M6.1.1-M6.1.2)
+### Completed (M0 + M1 Tracer Bullet + M2.1 + M4.1.2-M4.1.4 + M5.1.1-M5.1.3 + M6.1.1-M6.1.2 + M8.1.1)
 - `convexfeld-2by` - M0.1: Create CMakeLists.txt
 - `convexfeld-x85` - M0.2: Create Core Types Header
 - `convexfeld-dw2` - M0.3: Setup Unity Test Framework
@@ -176,15 +188,16 @@ target_sources(convexfeld PRIVATE
 - `convexfeld-9b2` - M1.8: Tracer Bullet Benchmark
 - `convexfeld-9in` - M2.1.1: Memory Tests
 - `convexfeld-oq0` - M2.1.2: Memory Implementation
+- `convexfeld-9sv` - M2.1.3: cxf_vector_free, cxf_alloc_eta NEW
 - `convexfeld-27y` - M4.1.1: Matrix Tests
 - `convexfeld-pcx` - M4.1.2: SparseMatrix Structure (Full)
 - `convexfeld-4z8` - M4.1.3: cxf_matrix_multiply
+- `convexfeld-snu` - M4.1.4: cxf_dot_product, cxf_vector_norm
 - `convexfeld-7g3` - M5.1.1: Basis Tests
 - `convexfeld-7f5` - M5.1.2: BasisState Structure
 - `convexfeld-san` - M5.1.3: EtaFactors Structure
 - `convexfeld-mza` - M6.1.1: Pricing Tests
 - `convexfeld-mk6` - M6.1.2: PricingContext Structure
 - `convexfeld-1lj` - M8.1.1: API Tests - Environment
-- `convexfeld-snu` - M4.1.4: cxf_dot_product, cxf_vector_norm NEW
 
 Run `bd ready` to see all available work.
