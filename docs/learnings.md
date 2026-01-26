@@ -6,6 +6,67 @@ This file captures learnings, gotchas, and useful patterns discovered during dev
 
 ---
 
+## 2026-01-26: M6.1.5 cxf_pricing_steepest
+
+### SUCCESS: Steepest edge pricing with free variable support
+
+**File created:**
+- `src/pricing/steepest.c` (143 LOC)
+
+**Function implemented:**
+- `cxf_pricing_steepest(ctx, reduced_costs, weights, var_status, num_vars, tolerance)` - Select entering variable using SE criterion
+- `cxf_pricing_compute_weight(column, num_rows)` - Compute SE weight (squared norm)
+
+**Algorithm:**
+- SE ratio = |reduced_cost| / sqrt(weight)
+- Variable attractiveness based on status:
+  - At lower bound (status -1): attractive if RC < -tolerance
+  - At upper bound (status -2): attractive if RC > tolerance
+  - Free variable (status -3): attractive if |RC| > tolerance
+- Weight safeguard: weights < 1e-10 replaced with 1.0
+- Statistics tracking: total_candidates_scanned updated
+
+**Files modified:**
+- `src/pricing/pricing_stub.c` - Removed cxf_pricing_steepest stub
+- `CMakeLists.txt` - Added steepest.c to build
+
+**Test results:**
+- All 11 test suites PASS (100% tests passed)
+
+---
+
+## 2026-01-26: M3.1.1 Error Tests
+
+### SUCCESS: TDD tests for error handling functions
+
+**File created:**
+- `tests/unit/test_error.c` (276 LOC) - 26 tests
+
+**Tests cover:**
+- cxf_error: basic message, formatted, null env, empty message
+- cxf_geterrormsg: null env handling
+- cxf_errorlog: null safety
+- cxf_check_nan: clean array, with NaN, empty, null, Inf not detected
+- cxf_check_nan_or_inf: finite detection, NaN, positive/negative infinity
+- cxf_checkenv: valid, null, invalid magic number
+- cxf_pivot_check: valid, too small, zero, negative, NaN
+
+**Stub implementations added to error_stub.c:**
+- `cxf_errorlog(env, message)` - No-op stub
+- `cxf_check_nan(arr, n)` - Check for NaN values
+- `cxf_check_nan_or_inf(arr, n)` - Check for NaN or infinity using isfinite()
+- `cxf_checkenv(env)` - Validate env pointer and magic number
+- `cxf_pivot_check(pivot_elem, tolerance)` - Check pivot magnitude
+
+**Key learnings:**
+- Use `isfinite()` from math.h for proper NaN/Inf detection
+- Simple `val > 1e308` check fails for DBL_MAX (~1.8e308)
+- NaN detection: `val != val` is the canonical portable check
+
+**Note:** test_error.c exceeds 200 LOC (276 LOC) - refactor issue created (convexfeld-afb)
+
+---
+
 ## 2026-01-26: M4.1.6 cxf_sort_indices
 
 ### SUCCESS: Index sorting with value synchronization

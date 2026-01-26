@@ -13,66 +13,7 @@
 #include "convexfeld/cxf_types.h"
 #include "convexfeld/cxf_pricing.h"
 
-/*============================================================================
- * Steepest Edge - Stub
- *===========================================================================*/
-
-/**
- * @brief Select entering variable using steepest edge pricing.
- *
- * Finds the nonbasic variable with the best steepest edge ratio:
- *   ratio = |reduced_cost| / sqrt(weight)
- *
- * @param ctx Pricing context
- * @param reduced_costs Reduced costs array [num_vars]
- * @param weights Steepest edge weights array [num_vars]
- * @param var_status Variable status array [num_vars]
- * @param num_vars Number of variables
- * @param tolerance Optimality tolerance
- * @return Index of entering variable, or -1 if optimal
- */
-int cxf_pricing_steepest(PricingContext *ctx, const double *reduced_costs,
-                         const double *weights, const int *var_status,
-                         int num_vars, double tolerance) {
-    if (ctx == NULL || reduced_costs == NULL || weights == NULL ||
-        var_status == NULL) {
-        return -1;
-    }
-
-    int best_var = -1;
-    double best_ratio = 0.0;
-
-    for (int j = 0; j < num_vars; j++) {
-        if (var_status[j] >= 0) {
-            continue;  /* Skip basic */
-        }
-
-        double rc = reduced_costs[j];
-        double weight = weights[j];
-        if (weight < 1e-10) {
-            weight = 1.0;  /* Safeguard against zero/negative weights */
-        }
-
-        int attractive = 0;
-        double abs_rc = (rc < 0) ? -rc : rc;
-
-        if (var_status[j] == -1 && rc < -tolerance) {
-            attractive = 1;
-        } else if (var_status[j] == -2 && rc > tolerance) {
-            attractive = 1;
-        }
-
-        if (attractive) {
-            double ratio = abs_rc / sqrt(weight);
-            if (ratio > best_ratio) {
-                best_ratio = ratio;
-                best_var = j;
-            }
-        }
-    }
-
-    return best_var;
-}
+/* cxf_pricing_steepest is now in steepest.c (M6.1.5) */
 
 /*============================================================================
  * Update and Invalidation - Stubs

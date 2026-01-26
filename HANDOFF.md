@@ -16,28 +16,29 @@ All M1 milestones are now complete. Next steps: Continue with M2.x-M8.x implemen
 
 ## Work Completed This Session
 
-### M6.1.4: cxf_pricing_candidates - Complete
-- `src/pricing/candidates.c` (172 LOC) - Full candidate selection implementation
+### M3.1.1: Error Tests - Complete
+- `tests/unit/test_error.c` (276 LOC) - 26 TDD tests:
+  - cxf_error tests (5)
+  - cxf_errorlog tests (3)
+  - cxf_check_nan tests (5)
+  - cxf_check_nan_or_inf tests (5)
+  - cxf_checkenv tests (3)
+  - cxf_pivot_check tests (5)
+- Added stub implementations to `src/error/error_stub.c` (139 LOC)
 
-### M8.1.3: API Tests - Variables - Complete
-- `tests/unit/test_api_vars.c` (266 LOC) - 16 TDD tests for variable operations:
-  - cxf_addvar extended tests (variable types, bounds)
-  - cxf_addvars batch addition tests
-  - cxf_delvars deletion tests
-- Added stub implementations in `model_stub.c` for cxf_addvars and cxf_delvars
-
-### M4.1.6: cxf_sort_indices - Complete
-- `src/matrix/sort.c` (83 LOC) - Index sorting with value synchronization:
-  - `cxf_sort_indices(indices, n)` - Sort indices only
-  - `cxf_sort_indices_values(indices, values, n)` - Sort with synchronized values
-  - Uses insertion sort (optimal for small arrays typical in sparse matrix work)
+### M6.1.5: cxf_pricing_steepest - Complete
+- `src/pricing/steepest.c` (143 LOC) - Steepest edge pricing:
+  - `cxf_pricing_steepest(...)` - Select entering variable using SE criterion
+  - `cxf_pricing_compute_weight(...)` - Compute SE weight helper
+  - Handles free variables (status -3)
+  - Weight safeguard for zero/negative weights
+  - Statistics tracking
 
 **Test results:**
-- All 10 test suites PASS (100% tests passed)
+- All 11 test suites PASS (100% tests passed)
 
 **Refactor issues created:**
-- convexfeld-st1: Refactor model_stub.c to < 200 LOC (227 LOC)
-- convexfeld-hqo: Refactor test_matrix.c to < 200 LOC (446 LOC)
+- convexfeld-afb: Refactor test_error.c to < 200 LOC (276 LOC)
 
 ---
 
@@ -67,7 +68,8 @@ convexfeld/
 │   │   ├── sparse_matrix.c   (M4.1.2)
 │   │   ├── multiply.c        (M4.1.3)
 │   │   ├── vectors.c         (M4.1.4)
-│   │   └── row_major.c       (M4.1.5)
+│   │   ├── row_major.c       (M4.1.5)
+│   │   └── sort.c            (M4.1.6)
 │   ├── basis/
 │   │   ├── basis_state.c     (M5.1.2)
 │   │   ├── eta_factors.c     (M5.1.3)
@@ -77,12 +79,13 @@ convexfeld/
 │   ├── pricing/
 │   │   ├── context.c         (M6.1.2)
 │   │   ├── init.c            (M6.1.3)
-│   │   ├── candidates.c      (M6.1.4) NEW
+│   │   ├── candidates.c      (M6.1.4)
+│   │   ├── steepest.c        (M6.1.5) NEW
 │   │   └── pricing_stub.c    (M6.1.1)
 │   ├── simplex/
 │   │   └── solve_lp_stub.c   (M1.5)
 │   ├── error/
-│   │   └── error_stub.c      (M1.7)
+│   │   └── error_stub.c      (M1.7 + M3.1.1 stubs)
 │   └── api/
 │       ├── env_stub.c        (M1.1)
 │       ├── model_stub.c      (M1.2)
@@ -97,7 +100,10 @@ convexfeld/
 │   │   ├── test_matrix.c
 │   │   ├── test_basis.c
 │   │   ├── test_pricing.c
-│   │   └── test_api_env.c
+│   │   ├── test_api_env.c
+│   │   ├── test_api_model.c
+│   │   ├── test_api_vars.c
+│   │   └── test_error.c           (M3.1.1) NEW
 │   └── integration/
 │       └── test_tracer_bullet.c
 └── benchmarks/
@@ -106,7 +112,7 @@ convexfeld/
 ```
 
 ### Build Status
-- `libconvexfeld.a` builds (all M1 stubs + basis + sparse_matrix + pricing + memory vectors + ftran + btran + candidates)
+- `libconvexfeld.a` builds with all modules
 - `test_smoke` passes (3 tests)
 - `test_memory` passes (12 tests)
 - `test_memory_vectors` passes (16 tests)
@@ -114,6 +120,9 @@ convexfeld/
 - `test_basis` passes (29 tests)
 - `test_pricing` passes (24 tests)
 - `test_api_env` passes (11 tests)
+- `test_api_model` passes (19 tests)
+- `test_api_vars` passes (16 tests)
+- `test_error` passes (26 tests) NEW
 - `test_tracer_bullet` passes (1 test)
 - `bench_tracer` passes (< 1000 us/iter)
 
@@ -121,48 +130,18 @@ convexfeld/
 
 ## Next Steps: Continue M2.x-M8.x Implementation
 
-M1 Tracer Bullet is complete. Continue with foundation and implementation layers.
+Run `bd ready` to see all available work.
 
 ### Recommended Order
 ```bash
-# Check available work
 bd ready
 
-# Available next milestones:
-# M8.1.3: API Tests - Variables
-# M4.1.6: cxf_sort_indices
+# Example available milestones:
 # M5.1.6: cxf_basis_refactor
-# M3.1.1: Error Tests
+# M3.1.2: Core Error Functions
 # M8.1.4: API Tests - Constraints
-# M6.1.5: cxf_pricing_steepest
-```
-
-### Current Source Files
-```cmake
-target_sources(convexfeld PRIVATE
-    src/memory/alloc.c          # M2.1.2
-    src/memory/vectors.c        # M2.1.3
-    src/memory/state_cleanup.c  # M2.1.4
-    src/matrix/sparse_stub.c    # M1.3
-    src/matrix/sparse_matrix.c  # M4.1.2
-    src/matrix/multiply.c       # M4.1.3
-    src/matrix/vectors.c        # M4.1.4
-    src/matrix/row_major.c      # M4.1.5
-    src/basis/basis_state.c     # M5.1.2
-    src/basis/eta_factors.c     # M5.1.3
-    src/basis/ftran.c           # M5.1.4
-    src/basis/btran.c           # M5.1.5
-    src/basis/basis_stub.c      # M5.1.1
-    src/pricing/context.c       # M6.1.2
-    src/pricing/init.c          # M6.1.3
-    src/pricing/candidates.c    # M6.1.4 NEW
-    src/pricing/pricing_stub.c  # M6.1.1
-    src/simplex/solve_lp_stub.c # M1.5
-    src/error/error_stub.c      # M1.7
-    src/api/env_stub.c          # M1.1
-    src/api/model_stub.c        # M1.2
-    src/api/api_stub.c          # M1.4
-)
+# M6.1.6: cxf_pricing_update and cxf_pricing_invalidate
+# M3.1.3: NaN/Inf Detection
 ```
 
 ---
@@ -177,39 +156,13 @@ target_sources(convexfeld PRIVATE
 
 ## Issue Status
 
-### Completed (M0 + M1 Tracer Bullet + M2.1 + M4.1.2-M4.1.5 + M5.1.1-M5.1.5 + M6.1.1-M6.1.4 + M8.1.1-M8.1.2)
-- `convexfeld-2by` - M0.1: Create CMakeLists.txt
-- `convexfeld-x85` - M0.2: Create Core Types Header
-- `convexfeld-dw2` - M0.3: Setup Unity Test Framework
-- `convexfeld-n99` - M0.4: Create Module Headers (Stubs)
-- `convexfeld-cz6` - M1.0: Tracer Bullet Test
-- `convexfeld-z6p` - M1.1: Stub CxfEnv Structure
-- `convexfeld-ae7` - M1.2: Stub CxfModel Structure
-- `convexfeld-bko` - M1.3: Stub SparseMatrix Structure
-- `convexfeld-z1h` - M1.4: Stub API Functions
-- `convexfeld-7he` - M1.5: Stub Simplex Entry
-- `convexfeld-6uc` - M1.6: Stub Memory Functions
-- `convexfeld-9t5` - M1.7: Stub Error Functions
-- `convexfeld-9b2` - M1.8: Tracer Bullet Benchmark
-- `convexfeld-9in` - M2.1.1: Memory Tests
-- `convexfeld-oq0` - M2.1.2: Memory Implementation
-- `convexfeld-9sv` - M2.1.3: cxf_vector_free, cxf_alloc_eta
-- `convexfeld-27y` - M4.1.1: Matrix Tests
-- `convexfeld-pcx` - M4.1.2: SparseMatrix Structure (Full)
-- `convexfeld-4z8` - M4.1.3: cxf_matrix_multiply
-- `convexfeld-snu` - M4.1.4: cxf_dot_product, cxf_vector_norm
-- `convexfeld-7g3` - M5.1.1: Basis Tests
-- `convexfeld-7f5` - M5.1.2: BasisState Structure
-- `convexfeld-san` - M5.1.3: EtaFactors Structure
-- `convexfeld-ytv` - M5.1.4: cxf_ftran
-- `convexfeld-o75` - M5.1.5: cxf_btran
-- `convexfeld-mza` - M6.1.1: Pricing Tests
-- `convexfeld-mk6` - M6.1.2: PricingContext Structure
-- `convexfeld-hul` - M6.1.3: cxf_pricing_init
-- `convexfeld-xjf` - M6.1.4: cxf_pricing_candidates NEW
-- `convexfeld-1lj` - M8.1.1: API Tests - Environment
-- `convexfeld-6ck` - M8.1.2: API Tests - Model
-- `convexfeld-zjf` - M4.1.5: Row-Major Conversion
-- `convexfeld-yp6` - M2.1.4: State Deallocators
+### Completed This Session
+- `convexfeld-au3` - M3.1.1: Error Tests
+- `convexfeld-sfl` - M6.1.5: cxf_pricing_steepest
+
+### Refactor Issues (200 LOC limit)
+- `convexfeld-st1` - Refactor model_stub.c to < 200 LOC (227 LOC)
+- `convexfeld-hqo` - Refactor test_matrix.c to < 200 LOC (446 LOC)
+- `convexfeld-afb` - Refactor test_error.c to < 200 LOC (276 LOC) NEW
 
 Run `bd ready` to see all available work.
