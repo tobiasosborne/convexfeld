@@ -42,10 +42,8 @@ endfunction()
 # Smoke test to verify Unity works
 add_cxf_test(test_smoke unit/test_smoke.c)
 
-# Unit tests will be added as modules are implemented
-# Example:
-# add_cxf_test(test_memory unit/test_memory.c)
-# add_cxf_test(test_matrix unit/test_matrix.c)
+# M2.1.1: Memory management tests
+add_cxf_test(test_memory unit/test_memory.c)
 
 ################################################################################
 # Integration Tests

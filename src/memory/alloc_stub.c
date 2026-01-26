@@ -36,6 +36,20 @@ void *cxf_calloc(size_t count, size_t size) {
 }
 
 /**
+ * @brief Reallocate memory (stub - wraps realloc).
+ * @param ptr Pointer to existing memory (NULL acts like malloc)
+ * @param size New size in bytes (0 frees and returns NULL)
+ * @return Pointer to reallocated memory, or NULL on failure
+ */
+void *cxf_realloc(void *ptr, size_t size) {
+    if (size == 0) {
+        free(ptr);
+        return NULL;
+    }
+    return realloc(ptr, size);
+}
+
+/**
  * @brief Free memory (stub - wraps free).
  * @param ptr Pointer to memory to free (NULL is safe)
  */

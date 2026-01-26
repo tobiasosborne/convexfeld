@@ -6,34 +6,37 @@
 
 ## CRITICAL: READ THIS FIRST
 
-### 🎉 TRACER BULLET COMPLETE - M1.0-M1.2, M1.4, M1.6, M1.7 DONE
+### M2.x IMPLEMENTATION STARTED - M2.1.1 Memory Tests DONE
 
-**All tests pass! End-to-end architecture proven.**
+**16 tests pass (3 smoke + 12 memory + 1 tracer bullet)**
 
-Next steps: **M2.x** (begin real implementation - memory, matrix, etc.)
+Next steps: Continue with M2.x Foundation Layer (Memory implementation, Parameters, Validation)
 
 ---
 
 ## Work Completed This Session
 
-### M1.4: Stub API Functions - TRACER BULLET COMPLETE 🎉
+### M2.1.1: Memory Tests - TDD Complete
 
 | Issue | Description | Status |
 |-------|-------------|--------|
-| `convexfeld-z1h` | M1.4: Stub API Functions | ✓ |
+| `convexfeld-9in` | M2.1.1: Memory Tests | ✓ CLOSED |
 
-**Files created:**
-- `src/api/api_stub.c` (115 LOC)
-- Updated `CMakeLists.txt`
+**Files created/modified:**
+- `tests/unit/test_memory.c` (154 LOC) - 12 tests
+- `src/memory/alloc_stub.c` - added `cxf_realloc`
+- `tests/CMakeLists.txt` - added test_memory
 
-**Functions:**
-- `cxf_optimize(model)` - trivial unconstrained LP solver
-- `cxf_getintattr(model, attrname, valueP)` - gets Status, NumVars, NumConstrs
-- `cxf_getdblattr(model, attrname, valueP)` - gets ObjVal
+**Tests implemented:**
+- `test_cxf_malloc_basic`, `test_cxf_malloc_zero_size`, `test_cxf_malloc_large_size`
+- `test_cxf_calloc_zeroed`, `test_cxf_calloc_zero_count`, `test_cxf_calloc_zero_size`
+- `test_cxf_realloc_grow`, `test_cxf_realloc_shrink`, `test_cxf_realloc_null_ptr`, `test_cxf_realloc_zero_size`
+- `test_cxf_free_null_safe`, `test_cxf_free_after_malloc`
 
 **Test results:**
 - `test_smoke`: 3 tests pass
-- `test_tracer_bullet`: 1 test passes (solves `min x s.t. x >= 0`)
+- `test_memory`: 12 tests pass
+- `test_tracer_bullet`: 1 test passes
 
 ---
 
@@ -116,7 +119,7 @@ target_sources(convexfeld PRIVATE
 
 ## Issue Status
 
-### Completed (M0 + M1 Tracer Bullet)
+### Completed (M0 + M1 Tracer Bullet + M2.1.1)
 - `convexfeld-2by` - M0.1: Create CMakeLists.txt ✓
 - `convexfeld-x85` - M0.2: Create Core Types Header ✓
 - `convexfeld-dw2` - M0.3: Setup Unity Test Framework ✓
@@ -127,6 +130,7 @@ target_sources(convexfeld PRIVATE
 - `convexfeld-z1h` - M1.4: Stub API Functions ✓
 - `convexfeld-6uc` - M1.6: Stub Memory Functions ✓
 - `convexfeld-9t5` - M1.7: Stub Error Functions ✓
+- `convexfeld-9in` - M2.1.1: Memory Tests ✓
 
 ### Optional M1.x (can skip or do later)
 - `convexfeld-bko` - M1.3: Stub SparseMatrix Structure (not needed yet)

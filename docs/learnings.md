@@ -6,6 +6,35 @@ This file captures learnings, gotchas, and useful patterns discovered during dev
 
 ---
 
+## 2026-01-26: M2.1.1 Memory Tests - TDD Tests Complete
+
+### SUCCESS: 12 tests for memory management module
+
+**File created:** `tests/unit/test_memory.c` (154 LOC)
+
+**Tests implemented:**
+- `test_cxf_malloc_basic` - basic allocation works
+- `test_cxf_malloc_zero_size` - returns NULL for size=0
+- `test_cxf_malloc_large_size` - 1MB allocation succeeds
+- `test_cxf_calloc_zeroed` - memory is zero-initialized
+- `test_cxf_calloc_zero_count` - returns NULL for count=0
+- `test_cxf_calloc_zero_size` - returns NULL for size=0
+- `test_cxf_realloc_grow` - preserves data when growing
+- `test_cxf_realloc_shrink` - preserves data when shrinking
+- `test_cxf_realloc_null_ptr` - NULL ptr acts like malloc
+- `test_cxf_realloc_zero_size` - returns NULL and frees
+- `test_cxf_free_null_safe` - NULL is safe to free
+- `test_cxf_free_after_malloc` - normal free works
+
+**Also done:** Added `cxf_realloc` to stub (was missing from M1.6 stub).
+
+**Key decisions:**
+- Tests use external function declarations (not header include) since memory module doesn't have a dedicated header yet
+- `cxf_realloc(ptr, 0)` frees memory and returns NULL (consistent with free-like behavior)
+- Tests are grouped by function type with clear section headers
+
+---
+
 ## 2026-01-26: M1.4 Stub API Functions - TRACER BULLET COMPLETE
 
 ### SUCCESS: Tracer bullet test passes end-to-end!
