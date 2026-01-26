@@ -6,44 +6,44 @@
 
 ## Work Completed This Session
 
-### M2.3.1: Validation Tests (convexfeld-0rs) - CLOSED
-- Created `tests/unit/test_validation.c` (151 LOC) - 14 tests
-- Created `src/validation/validation_stub.c` (64 LOC) - stub implementations
-- Tests for cxf_validate_array: NaN detection, Infinity allowed, NULL/empty handling
-- Tests for cxf_validate_vartypes: NULL model (other tests deferred until CxfModel)
-- All tests pass (12 active, 2 ignored for CxfModel dependency)
-
-### M7.1.2: Simplex Tests - Iteration (convexfeld-a7o) - CLOSED
-- Created `tests/unit/test_simplex_iteration.c` (223 LOC) - 15 tests
-- Added test_simplex_iteration to `tests/CMakeLists.txt`
-- TDD tests for:
-  - Iteration loop: `cxf_simplex_iterate` (null args, valid status, iteration increment)
-  - Phase transition: `cxf_simplex_phase_end` (null args, Phase I->II transition, infeasible detection)
-  - Termination: `cxf_simplex_post_iterate` (null args, continue/refactor return)
-  - Objective tracking: `cxf_simplex_get_objval` (null returns NaN, current value)
-  - Iteration limits: `cxf_simplex_set/get_iteration_limit` (null args, negative fails, valid)
-- Expected linker errors (TDD approach) - functions to be implemented in M7.1.8+
+### M5.2.2: CallbackContext Structure (convexfeld-hkd) - CLOSED
+- Created `src/callbacks/context.c` (138 LOC) - CallbackContext lifecycle
+- Created `src/callbacks/callback_stub.c` (112 LOC) - stub implementations for M5.2.3-M5.2.5
+- Updated `include/convexfeld/cxf_callback.h` (95 LOC) - added function declarations
+- Added 13 new tests to test_callbacks.c (now 29 tests total)
+- Implemented:
+  - `cxf_callback_create()` - allocate and initialize CallbackContext
+  - `cxf_callback_free()` - deallocate (NULL-safe)
+  - `cxf_callback_validate()` - magic number validation
+  - `cxf_callback_reset_stats()` - reset counters while preserving registration
+- Stub implementations for TDD tests:
+  - `cxf_init_callback_struct()` - zero 48-byte sub-structure
+  - `cxf_set_terminate()` - set env termination flag
+  - `cxf_callback_terminate()` - terminate from callback
+  - `cxf_reset_callback_state()` - reset callback state
+  - `cxf_pre_optimize_callback()` - pre-optimization callback
+  - `cxf_post_optimize_callback()` - post-optimization callback
 
 ---
 
 ## Current State
 
 ### Build Status
-- All 20 core test suites PASS
+- 21 of 23 tests PASS (91%)
 - TDD tests with expected linker errors:
-  - test_simplex_basic (M7.1.1)
-  - test_simplex_iteration (M7.1.2) - NEW
-  - test_callbacks (M5.2.1)
+  - test_simplex_basic (M7.1.1) - Not Run
+  - test_simplex_iteration (M7.1.2) - Not Run
+- test_callbacks now passes all 29 tests
 - No compiler warnings
 
 ### Files Created/Modified
 ```
-tests/unit/test_validation.c         (NEW - 151 LOC, 14 tests)
-src/validation/validation_stub.c     (NEW - 64 LOC)
-tests/unit/test_simplex_iteration.c  (NEW - 223 LOC, 15 tests)
-tests/CMakeLists.txt                 (MODIFIED - added test_validation, test_simplex_iteration)
-CMakeLists.txt                       (MODIFIED - added validation_stub.c)
-docs/learnings/m2-m4_foundation.md   (MODIFIED - added M2.3.1)
+src/callbacks/context.c              (NEW - 138 LOC)
+src/callbacks/callback_stub.c        (NEW - 112 LOC)
+include/convexfeld/cxf_callback.h    (MODIFIED - added function decls)
+tests/unit/test_callbacks.c          (MODIFIED - 13 new tests, now 29 total)
+tests/CMakeLists.txt                 (MODIFIED - added math lib for test_callbacks)
+CMakeLists.txt                       (MODIFIED - added callbacks source files)
 ```
 
 ---
@@ -52,29 +52,25 @@ docs/learnings/m2-m4_foundation.md   (MODIFIED - added M2.3.1)
 
 Run `bd ready` to see all available work.
 
-### Simplex Implementation Path
-The TDD tests in test_simplex_iteration.c define the interface for:
-- `cxf_simplex_iterate(state, env)` - single iteration, returns 0=continue, 1=optimal, 2=infeasible, 3=unbounded, 12=error
-- `cxf_simplex_phase_end(state, env)` - Phase I->II transition, returns 0=continue, 2=infeasible
-- `cxf_simplex_post_iterate(state, env)` - post-iteration housekeeping, returns 0=continue, 1=refactor
-- `cxf_simplex_get_objval(state)` - returns objective value or NaN if null
-- `cxf_simplex_set_iteration_limit(state, limit)` - set iteration limit
-- `cxf_simplex_get_iteration_limit(state)` - get iteration limit
+### Callback Implementation Path (M5.2.3-M5.2.5 ready)
+The stub implementations provide the interface. Full implementations need:
+1. M5.2.3: Complete cxf_init_callback_struct, cxf_reset_callback_state with actual callback context
+2. M5.2.4: Implement cxf_pre_optimize_callback, cxf_post_optimize_callback with actual invocation
+3. M5.2.5: Complete termination integration with callback context
 
-Next implementation steps:
+### Simplex Implementation Path
+The TDD tests define the interface:
 1. Create simplex stubs (src/simplex/simplex_stub.c) to make TDD tests pass
 2. M7.1.3: Implement test_simplex_edge.c (edge cases)
-3. M7.1.4: Implement cxf_solve_lp entry point
-4. M7.1.5: Implement cxf_simplex_init/final
-5. M7.1.8: Implement cxf_simplex_iterate
+3. M7.1.4+: Implement actual simplex functions
 
 ### Recommended Next Issues
 ```bash
 bd ready
 
 # High-value next tasks:
-# M7.1.3: Simplex Tests - Edge Cases
-# M5.2.2-M5.2.5: Callback implementation
+# M5.2.3-M5.2.5: Complete callback implementation (stubs exist)
+# M7.1.3+: Simplex implementation
 # M8.1.7-M8.1.8: Full CxfEnv/CxfModel Structures
 ```
 

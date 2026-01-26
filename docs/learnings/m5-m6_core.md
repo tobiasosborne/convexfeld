@@ -442,3 +442,41 @@ int cxf_post_optimize_callback(CxfModel *model);
 - cxf_init_callback_struct zeroes 48-byte substructure per spec
 - Termination functions are idempotent (safe to call multiple times)
 - NULL environment handling returns gracefully (0 or no-op per spec)
+
+---
+
+### 2026-01-26: M7.1.2 Simplex Tests - Iteration (TDD)
+
+**File created:** `tests/unit/test_simplex_iteration.c` (223 LOC, 15 tests)
+
+**TDD tests written (15 total):**
+- **Iteration loop (3):** null_args_fail, returns_valid_status, increments_iteration
+- **Phase transition (3):** null_args_fail, transitions_to_phase2, infeasible_returns_error
+- **Termination (2):** null_state_fails, returns_continue_or_refactor
+- **Objective tracking (2):** null_returns_nan, returns_current_objective
+- **Iteration limits (5):** set_null_fails, set_negative_fails, set_valid, get_null_returns_error, get_returns_current
+
+**Expected interface defined:**
+```c
+int cxf_simplex_iterate(SolverContext *state, CxfEnv *env);
+// Returns: 0=continue, 1=optimal, 2=infeasible, 3=unbounded, 12=error
+
+int cxf_simplex_phase_end(SolverContext *state, CxfEnv *env);
+// Returns: 0=transition to Phase II, 2=infeasible
+
+int cxf_simplex_post_iterate(SolverContext *state, CxfEnv *env);
+// Returns: 0=continue, 1=refactor triggered
+
+double cxf_simplex_get_objval(SolverContext *state);
+// Returns: objective value or NaN if null
+
+int cxf_simplex_set_iteration_limit(SolverContext *state, int limit);
+int cxf_simplex_get_iteration_limit(SolverContext *state);
+```
+
+**Key learnings:**
+- Test file compiles but linker errors expected (TDD before implementation)
+- Phase I->II transition based on obj_value (0 = feasible, >0 = infeasible)
+- cxf_simplex_iterate should increment state->iteration after pivot
+- Iteration limits use state->max_iterations field
+- SolverContext.obj_value tracks current objective value
