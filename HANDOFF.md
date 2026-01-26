@@ -16,28 +16,27 @@ All M1 milestones are now complete. Next steps: Continue with M2.x-M8.x implemen
 
 ## Work Completed This Session
 
-### M5.1.2: BasisState Structure - Complete
+### M4.1.2: SparseMatrix Structure (Full) - Complete
 
 | Issue | Description | Status |
 |-------|-------------|--------|
-| `convexfeld-7f5` | M5.1.2: BasisState Structure | CLOSED |
+| `convexfeld-pcx` | M4.1.2: SparseMatrix Structure (Full) | CLOSED |
 
 **Files created:**
-- `src/basis/basis_state.c` (127 LOC) - BasisState lifecycle implementation
+- `src/matrix/sparse_matrix.c` (171 LOC) - Full CSC/CSR implementation
 
 **Files modified:**
-- `src/basis/basis_stub.c` - Removed BasisState lifecycle functions
-- `CMakeLists.txt` - Added basis_state.c to library
+- `CMakeLists.txt` - Added sparse_matrix.c to library
 
 **Functions implemented:**
-- `cxf_basis_create(m, n)` - Create and allocate BasisState
-- `cxf_basis_free(basis)` - Free BasisState and eta list
-- `cxf_basis_init(basis, m, n)` - Initialize/reinitialize BasisState
+- `cxf_sparse_validate(mat)` - Validates CSC structure invariants
+- `cxf_sparse_build_csr(mat)` - Builds CSR format from existing CSC
+- `cxf_sparse_free_csr(mat)` - Frees only CSR arrays (keeps CSC)
 
 **Test results:**
-- All 29 test_basis tests PASS
-- All other tests PASS (smoke, memory, tracer_bullet)
-- test_matrix has expected TDD failures (awaiting M4.1.3/M4.1.4)
+- All SparseMatrix tests PASS (5 tests)
+- test_matrix has expected TDD failures (12 tests awaiting M4.1.3/M4.1.4)
+- All other tests PASS (smoke, memory, basis, tracer_bullet)
 
 ---
 
@@ -61,9 +60,10 @@ convexfeld/
 │   ├── memory/
 │   │   └── alloc.c             (M2.1.2)
 │   ├── matrix/
-│   │   └── sparse_stub.c       (M1.3)
+│   │   ├── sparse_stub.c       (M1.3)
+│   │   └── sparse_matrix.c     (M4.1.2) NEW
 │   ├── basis/
-│   │   ├── basis_state.c       (M5.1.2) NEW
+│   │   ├── basis_state.c       (M5.1.2)
 │   │   └── basis_stub.c        (M5.1.1)
 │   ├── simplex/
 │   │   └── solve_lp_stub.c     (M1.5)
@@ -80,7 +80,7 @@ convexfeld/
 │   │   ├── test_smoke.c
 │   │   ├── test_memory.c
 │   │   ├── test_matrix.c
-│   │   └── test_basis.c        (M5.1.1) NEW
+│   │   └── test_basis.c
 │   └── integration/
 │       └── test_tracer_bullet.c
 └── benchmarks/
@@ -89,7 +89,7 @@ convexfeld/
 ```
 
 ### Build Status
-- `libconvexfeld.a` builds (all M1 stubs + basis stubs)
+- `libconvexfeld.a` builds (all M1 stubs + basis + sparse_matrix)
 - `test_smoke` passes (3 tests)
 - `test_memory` passes (12 tests)
 - `test_matrix` fails (12 tests - awaiting M4.1.3/M4.1.4 implementation)
@@ -108,13 +108,12 @@ M1 Tracer Bullet is complete. Continue with foundation and implementation layers
 # Check available work
 bd ready
 
-# Recommended next milestones:
-# M5.1.2: BasisState Structure (depends on M5.1.1 - NOW AVAILABLE)
-# M5.1.3: EtaFactors Structure (depends on M5.1.1 - NOW AVAILABLE)
+# Available next milestones:
+# M5.1.3: EtaFactors Structure
 # M2.1.3: cxf_vector_free, cxf_alloc_eta (memory vectors)
-# M4.1.2: SparseMatrix Structure (Full)
 # M4.1.3: cxf_matrix_multiply
 # M4.1.4: cxf_dot_product, cxf_vector_norm
+# M6.1.1: Pricing Tests
 ```
 
 ### Current Source Files
@@ -122,7 +121,8 @@ bd ready
 target_sources(convexfeld PRIVATE
     src/memory/alloc.c          # M2.1.2
     src/matrix/sparse_stub.c    # M1.3
-    src/basis/basis_state.c     # M5.1.2 NEW
+    src/matrix/sparse_matrix.c  # M4.1.2 NEW
+    src/basis/basis_state.c     # M5.1.2
     src/basis/basis_stub.c      # M5.1.1
     src/simplex/solve_lp_stub.c # M1.5
     src/error/error_stub.c      # M1.7
@@ -144,7 +144,7 @@ target_sources(convexfeld PRIVATE
 
 ## Issue Status
 
-### Completed (M0 + M1 Tracer Bullet + M2.1 + M5.1.1)
+### Completed (M0 + M1 Tracer Bullet + M2.1 + M4.1.2 + M5.1.1-M5.1.2)
 - `convexfeld-2by` - M0.1: Create CMakeLists.txt
 - `convexfeld-x85` - M0.2: Create Core Types Header
 - `convexfeld-dw2` - M0.3: Setup Unity Test Framework
@@ -161,7 +161,8 @@ target_sources(convexfeld PRIVATE
 - `convexfeld-9in` - M2.1.1: Memory Tests
 - `convexfeld-oq0` - M2.1.2: Memory Implementation
 - `convexfeld-27y` - M4.1.1: Matrix Tests
+- `convexfeld-pcx` - M4.1.2: SparseMatrix Structure (Full) NEW
 - `convexfeld-7g3` - M5.1.1: Basis Tests
-- `convexfeld-7f5` - M5.1.2: BasisState Structure  NEW
+- `convexfeld-7f5` - M5.1.2: BasisState Structure
 
 Run `bd ready` to see all available work.

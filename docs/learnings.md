@@ -6,6 +6,39 @@ This file captures learnings, gotchas, and useful patterns discovered during dev
 
 ---
 
+## 2026-01-26: M4.1.2 SparseMatrix Structure (Full)
+
+### SUCCESS: CSC validation and CSR conversion implemented
+
+**Files created:**
+- `src/matrix/sparse_matrix.c` (171 LOC) - Full CSC/CSR implementation
+
+**Files modified:**
+- `CMakeLists.txt` - Added sparse_matrix.c to build
+
+**Functions implemented:**
+- `cxf_sparse_validate(mat)` - Validates CSC structure invariants
+- `cxf_sparse_build_csr(mat)` - Builds CSR format from existing CSC
+- `cxf_sparse_free_csr(mat)` - Frees only CSR arrays (keeps CSC)
+
+**Key validations checked:**
+- col_ptr monotonically non-decreasing
+- col_ptr[0] == 0, col_ptr[num_cols] == nnz
+- All row indices in range [0, num_rows)
+- Required arrays not NULL when dimensions > 0
+
+**CSR build algorithm:**
+1. Count entries per row (traverse CSC row_idx)
+2. Convert counts to cumulative offsets (prefix sum)
+3. Transpose CSC to CSR using working copy of row_ptr
+
+**TDD pattern:**
+- sparse_stub.c retained for create/free/init_csc and M4.1.3/M4.1.4 stubs
+- sparse_matrix.c adds validation and format conversion
+- Both files linked - no duplicate symbols
+
+---
+
 ## 2026-01-26: M5.1.2 BasisState Structure
 
 ### SUCCESS: BasisState lifecycle extracted to dedicated file
