@@ -111,21 +111,10 @@ int cxf_sparse_init_csc(SparseMatrix *mat, int num_rows, int num_cols,
 }
 
 /*******************************************************************************
- * TDD Stubs - To be implemented in M4.1.3 and M4.1.4
+ * TDD Stubs - To be implemented in M4.1.4
  ******************************************************************************/
 
-/**
- * @brief Sparse matrix-vector multiply stub (M4.1.3).
- * @note Full implementation in src/matrix/multiply.c
- */
-void cxf_matrix_multiply(const double *x, double *y, int num_vars,
-                         int num_constrs, const int64_t *col_start,
-                         const int *row_indices, const double *coeff_values,
-                         int accumulate) {
-    (void)x; (void)y; (void)num_vars; (void)num_constrs;
-    (void)col_start; (void)row_indices; (void)coeff_values; (void)accumulate;
-    /* Stub - tests will fail until implemented */
-}
+/* cxf_matrix_multiply implemented in multiply.c (M4.1.3) */
 
 /**
  * @brief Dense dot product stub (M4.1.4).

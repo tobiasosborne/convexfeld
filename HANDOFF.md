@@ -16,6 +16,25 @@ All M1 milestones are now complete. Next steps: Continue with M2.x-M8.x implemen
 
 ## Work Completed This Session
 
+### M4.1.3: cxf_matrix_multiply - Complete
+
+| Issue | Description | Status |
+|-------|-------------|--------|
+| `convexfeld-4z8` | M4.1.3: cxf_matrix_multiply | CLOSED |
+
+**Files created:**
+- `src/matrix/multiply.c` (103 LOC) - Sparse matrix-vector multiply
+
+**Functions implemented:**
+- `cxf_matrix_multiply(...)` - y = Ax or y += Ax using CSC format
+- `cxf_matrix_transpose_multiply(...)` - y = A^T x or y += A^T x (bonus)
+
+**Test results:**
+- All 4 SpMV tests PASS
+- test_matrix now has 8 failures (M4.1.4 dot product/norms)
+
+---
+
 ### M5.1.3: EtaFactors Structure - Complete
 
 | Issue | Description | Status |
@@ -32,14 +51,8 @@ All M1 milestones are now complete. Next steps: Continue with M2.x-M8.x implemen
 - `cxf_eta_validate(eta, max_rows)` - Validate eta invariants
 - `cxf_eta_set(eta, indices, values)` - Copy data into eta arrays
 
-**Files modified:**
-- `src/basis/basis_stub.c` - Removed duplicated EtaFactors functions
-- `CMakeLists.txt` - Added eta_factors.c to build
-
 **Test results:**
 - All EtaFactors tests PASS (in test_basis)
-- All other tests PASS (smoke, memory, basis, pricing, tracer_bullet)
-- test_matrix has expected TDD failures (12 tests awaiting M4.1.3/M4.1.4)
 
 ---
 
@@ -64,7 +77,8 @@ convexfeld/
 │   │   └── alloc.c             (M2.1.2)
 │   ├── matrix/
 │   │   ├── sparse_stub.c       (M1.3)
-│   │   └── sparse_matrix.c     (M4.1.2)
+│   │   ├── sparse_matrix.c     (M4.1.2)
+│   │   └── multiply.c          (M4.1.3) NEW
 │   ├── basis/
 │   │   ├── basis_state.c       (M5.1.2)
 │   │   ├── eta_factors.c       (M5.1.3) NEW
@@ -131,8 +145,9 @@ target_sources(convexfeld PRIVATE
     src/memory/alloc.c          # M2.1.2
     src/matrix/sparse_stub.c    # M1.3
     src/matrix/sparse_matrix.c  # M4.1.2
+    src/matrix/multiply.c       # M4.1.3 NEW
     src/basis/basis_state.c     # M5.1.2
-    src/basis/eta_factors.c     # M5.1.3 NEW
+    src/basis/eta_factors.c     # M5.1.3
     src/basis/basis_stub.c      # M5.1.1
     src/pricing/pricing_stub.c  # M6.1.1
     src/simplex/solve_lp_stub.c # M1.5
@@ -173,6 +188,7 @@ target_sources(convexfeld PRIVATE
 - `convexfeld-oq0` - M2.1.2: Memory Implementation
 - `convexfeld-27y` - M4.1.1: Matrix Tests
 - `convexfeld-pcx` - M4.1.2: SparseMatrix Structure (Full)
+- `convexfeld-4z8` - M4.1.3: cxf_matrix_multiply NEW
 - `convexfeld-7g3` - M5.1.1: Basis Tests
 - `convexfeld-7f5` - M5.1.2: BasisState Structure
 - `convexfeld-san` - M5.1.3: EtaFactors Structure NEW

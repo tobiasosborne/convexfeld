@@ -6,6 +6,36 @@ This file captures learnings, gotchas, and useful patterns discovered during dev
 
 ---
 
+## 2026-01-26: M4.1.3 cxf_matrix_multiply
+
+### SUCCESS: Sparse matrix-vector multiply implemented
+
+**File created:**
+- `src/matrix/multiply.c` (103 LOC) - SpMV implementation
+
+**Functions implemented:**
+- `cxf_matrix_multiply(x, y, num_vars, num_constrs, col_start, row_indices, coeff_values, accumulate)` - y = Ax or y += Ax
+- `cxf_matrix_transpose_multiply(...)` - y = A^T x or y += A^T x (bonus)
+
+**Algorithm:**
+1. If accumulate=0, zero out y with memset
+2. For each column j where x[j] != 0:
+   - Get column range from col_start[j] to col_start[j+1]
+   - For each entry k in range: y[row_indices[k]] += coeff_values[k] * x[j]
+
+**Key optimization:**
+- Skip columns where x[j] = 0.0 (common in simplex with sparse vectors)
+
+**Test results:**
+- All 4 SpMV tests pass (simple 2x2, accumulate, sparse column, zero skip)
+- Remaining M4.1.4 tests (dot product, norms) still fail as expected
+
+**Files modified:**
+- `src/matrix/sparse_stub.c` - Removed cxf_matrix_multiply stub
+- `CMakeLists.txt` - Added multiply.c to build
+
+---
+
 ## 2026-01-26: M5.1.3 EtaFactors Structure
 
 ### SUCCESS: EtaFactors lifecycle extracted to dedicated file
