@@ -6,6 +6,29 @@ This file captures learnings, gotchas, and useful patterns discovered during dev
 
 ---
 
+## 2026-01-26: M1.3 Stub SparseMatrix Structure
+
+### SUCCESS: SparseMatrix stub implementation created
+
+**File created:** `src/matrix/sparse_stub.c` (103 LOC)
+
+**Functions implemented:**
+- `cxf_sparse_create()` - Allocates empty SparseMatrix
+- `cxf_sparse_free(mat)` - Frees all arrays and structure
+- `cxf_sparse_init_csc(mat, rows, cols, nnz)` - Initializes CSC arrays
+
+**Key decisions:**
+- Header `cxf_matrix.h` already had the structure defined from M0.4
+- Stub provides basic create/free/init - full implementation in M4.1
+- Follows same pattern as memory stubs (calloc for zero-init, NULL-safe free)
+- CSR arrays remain NULL until explicitly built (lazy construction pattern)
+
+**Build status:**
+- New source added to CMakeLists.txt
+- All 3 tests pass (smoke, memory, tracer bullet)
+
+---
+
 ## 2026-01-26: M2.1.2 Memory Implementation - Full Implementation
 
 ### SUCCESS: Promoted stub to proper implementation
