@@ -16,23 +16,29 @@ All M1 milestones are now complete. Next steps: Continue with M2.x-M8.x implemen
 
 ## Work Completed This Session
 
-### M4.1.1: Matrix Tests - Complete
+### M5.1.1: Basis Tests - Complete
 
 | Issue | Description | Status |
 |-------|-------------|--------|
-| `convexfeld-27y` | M4.1.1: Matrix Tests | CLOSED |
+| `convexfeld-7g3` | M5.1.1: Basis Tests | CLOSED |
 
 **Files created:**
-- `tests/unit/test_matrix.c` (197 LOC) - TDD tests for matrix operations
+- `tests/unit/test_basis.c` (468 LOC) - TDD tests for basis operations
+- `src/basis/basis_stub.c` (337 LOC) - Stub implementations
 
 **Files modified:**
-- `tests/CMakeLists.txt` - Added test_matrix target
-- `src/matrix/sparse_stub.c` - Added function stubs for TDD
+- `tests/CMakeLists.txt` - Added test_basis target
+- `CMakeLists.txt` - Added basis_stub.c to library
 
-**Test results (TDD pattern):**
-- 20 tests total: 8 PASS, 12 FAIL (expected - awaiting implementation)
-- SparseMatrix tests pass (already implemented in stub)
-- SpMV, dot product, norm tests fail until M4.1.3/M4.1.4 implemented
+**Test results:**
+- 29 tests total: 29 PASS (stubs implement identity basis case)
+- BasisState tests (4) - PASS
+- EtaFactors tests (4) - PASS
+- FTRAN tests (4) - PASS (identity basis)
+- BTRAN tests (4) - PASS (identity basis)
+- Refactorization tests (3) - PASS
+- Snapshot/comparison tests (6) - PASS
+- Validation/warm start tests (4) - PASS
 
 ---
 
@@ -57,6 +63,8 @@ convexfeld/
 │   │   └── alloc.c             (M2.1.2)
 │   ├── matrix/
 │   │   └── sparse_stub.c       (M1.3)
+│   ├── basis/
+│   │   └── basis_stub.c        (M5.1.1) NEW
 │   ├── simplex/
 │   │   └── solve_lp_stub.c     (M1.5)
 │   ├── error/
@@ -70,18 +78,22 @@ convexfeld/
 │   ├── unity/
 │   ├── unit/
 │   │   ├── test_smoke.c
-│   │   └── test_memory.c
+│   │   ├── test_memory.c
+│   │   ├── test_matrix.c
+│   │   └── test_basis.c        (M5.1.1) NEW
 │   └── integration/
 │       └── test_tracer_bullet.c
 └── benchmarks/
     ├── CMakeLists.txt
-    └── bench_tracer.c          (M1.8) NEW
+    └── bench_tracer.c          (M1.8)
 ```
 
 ### Build Status
-- `libconvexfeld.a` builds (all M1 stubs complete)
+- `libconvexfeld.a` builds (all M1 stubs + basis stubs)
 - `test_smoke` passes (3 tests)
 - `test_memory` passes (12 tests)
+- `test_matrix` fails (12 tests - awaiting M4.1.3/M4.1.4 implementation)
+- `test_basis` passes (29 tests - stubs handle identity basis)
 - `test_tracer_bullet` passes (1 test)
 - `bench_tracer` passes (< 1000 us/iter)
 
@@ -97,12 +109,12 @@ M1 Tracer Bullet is complete. Continue with foundation and implementation layers
 bd ready
 
 # Recommended next milestones:
+# M5.1.2: BasisState Structure (depends on M5.1.1 - NOW AVAILABLE)
+# M5.1.3: EtaFactors Structure (depends on M5.1.1 - NOW AVAILABLE)
 # M2.1.3: cxf_vector_free, cxf_alloc_eta (memory vectors)
-# M2.1.4: State deallocators
-# M2.2: Parameters module
-# M2.3: Validation module
-# M4.x: Matrix module (tests + implementation)
-# M5.x: Basis module (tests + implementation)
+# M4.1.2: SparseMatrix Structure (Full)
+# M4.1.3: cxf_matrix_multiply
+# M4.1.4: cxf_dot_product, cxf_vector_norm
 ```
 
 ### Current Source Files
@@ -110,6 +122,7 @@ bd ready
 target_sources(convexfeld PRIVATE
     src/memory/alloc.c          # M2.1.2
     src/matrix/sparse_stub.c    # M1.3
+    src/basis/basis_stub.c      # M5.1.1 NEW
     src/simplex/solve_lp_stub.c # M1.5
     src/error/error_stub.c      # M1.7
     src/api/env_stub.c          # M1.1
@@ -130,7 +143,7 @@ target_sources(convexfeld PRIVATE
 
 ## Issue Status
 
-### Completed (M0 + M1 Tracer Bullet + M2.1)
+### Completed (M0 + M1 Tracer Bullet + M2.1 + M5.1.1)
 - `convexfeld-2by` - M0.1: Create CMakeLists.txt
 - `convexfeld-x85` - M0.2: Create Core Types Header
 - `convexfeld-dw2` - M0.3: Setup Unity Test Framework
@@ -146,6 +159,7 @@ target_sources(convexfeld PRIVATE
 - `convexfeld-9b2` - M1.8: Tracer Bullet Benchmark
 - `convexfeld-9in` - M2.1.1: Memory Tests
 - `convexfeld-oq0` - M2.1.2: Memory Implementation
-- `convexfeld-27y` - M4.1.1: Matrix Tests  NEW
+- `convexfeld-27y` - M4.1.1: Matrix Tests
+- `convexfeld-7g3` - M5.1.1: Basis Tests  NEW
 
 Run `bd ready` to see all available work.

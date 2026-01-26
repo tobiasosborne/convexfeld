@@ -49,6 +49,10 @@ add_cxf_test(test_memory unit/test_memory.c)
 add_cxf_test(test_matrix unit/test_matrix.c)
 target_link_libraries(test_matrix PRIVATE m)  # For math functions
 
+# M5.1.1: Basis operations tests
+add_cxf_test(test_basis unit/test_basis.c)
+target_link_libraries(test_basis PRIVATE m)  # For math functions
+
 ################################################################################
 # Integration Tests
 ################################################################################
