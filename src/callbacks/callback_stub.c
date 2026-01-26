@@ -4,6 +4,9 @@
  *
  * These stubs allow TDD tests to link. Functions will be replaced
  * with full implementations in subsequent milestones.
+ *
+ * Note: cxf_check_terminate, cxf_terminate, cxf_clear_terminate are
+ * already implemented in src/error/terminate.c (M3.1.6).
  */
 
 #include "convexfeld/cxf_types.h"
@@ -46,11 +49,14 @@ void cxf_reset_callback_state(CxfEnv *env) {
 }
 
 /*============================================================================
- * M5.2.5: Termination functions
+ * M5.2.5: Termination functions (callback-specific)
+ *
+ * Note: cxf_check_terminate is in src/error/terminate.c
+ * cxf_set_terminate is an alias/wrapper for cxf_terminate
  *===========================================================================*/
 
 /**
- * @brief Set termination flag in environment.
+ * @brief Set termination flag in environment (alias for cxf_terminate).
  *
  * @param env Environment to mark for termination.
  */
@@ -59,19 +65,6 @@ void cxf_set_terminate(CxfEnv *env) {
         return;
     }
     env->terminate_flag = 1;
-}
-
-/**
- * @brief Check if termination has been requested.
- *
- * @param env Environment to check.
- * @return 1 if termination requested, 0 otherwise.
- */
-int cxf_check_terminate(CxfEnv *env) {
-    if (env == NULL) {
-        return 0;
-    }
-    return env->terminate_flag != 0 ? 1 : 0;
 }
 
 /**

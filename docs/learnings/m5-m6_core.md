@@ -480,3 +480,53 @@ int cxf_simplex_get_iteration_limit(SolverContext *state);
 - cxf_simplex_iterate should increment state->iteration after pivot
 - Iteration limits use state->max_iterations field
 - SolverContext.obj_value tracks current objective value
+
+---
+
+### 2026-01-26: M5.2.2 CallbackContext Structure
+
+**Files created:**
+- `src/callbacks/context.c` (138 LOC) - CallbackContext lifecycle
+- `src/callbacks/callback_stub.c` (112 LOC) - stub implementations for M5.2.3-M5.2.5
+- Updated `include/convexfeld/cxf_callback.h` (95 LOC) - added function declarations
+
+**Functions implemented:**
+- `cxf_callback_create()` - allocate and initialize CallbackContext
+- `cxf_callback_free()` - deallocate (NULL-safe)
+- `cxf_callback_validate()` - magic number validation
+- `cxf_callback_reset_stats()` - reset counters while preserving registration
+
+**Stub implementations for TDD tests:**
+- `cxf_init_callback_struct()` - zero 48-byte sub-structure
+- `cxf_set_terminate()` - set env termination flag
+- `cxf_callback_terminate()` - terminate from callback
+- `cxf_reset_callback_state()` - reset callback state
+- `cxf_pre_optimize_callback()` - pre-optimization callback
+- `cxf_post_optimize_callback()` - post-optimization callback
+
+**Tests added (13 new, 29 total):**
+- test_callback_create_returns_non_null
+- test_callback_create_sets_magic
+- test_callback_create_initializes_fields
+- test_callback_create_best_obj_is_infinity
+- test_callback_free_null_safe
+- test_callback_validate_returns_ok_for_valid
+- test_callback_validate_null_returns_error
+- test_callback_validate_bad_magic_returns_error
+- test_callback_validate_bad_safety_magic_returns_error
+- test_callback_reset_stats_clears_counters
+- test_callback_reset_stats_preserves_registration
+- test_callback_reset_stats_null_returns_error
+- test_callback_reset_stats_invalid_magic_returns_error
+
+**Key design decisions:**
+- CallbackContext uses dual magic numbers (32-bit + 64-bit) for validation
+- best_obj initialized to INFINITY (no objective found yet)
+- cxf_callback_reset_stats preserves registration (callback_func, user_data, enabled)
+- cxf_set_terminate is alias for cxf_terminate (already in error module)
+- cxf_check_terminate already exists in src/error/terminate.c (M3.1.6)
+
+**Integration notes:**
+- Discovered cxf_check_terminate already implemented in M3.1.6
+- Avoid duplicate definitions - check existing code before adding stubs
+- Stubs enabled all 29 callback tests to pass (linking and execution)
