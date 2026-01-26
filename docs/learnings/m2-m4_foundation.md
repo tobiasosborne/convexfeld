@@ -392,3 +392,36 @@
 - Zero/negative count treated as valid (defensive, empty array)
 - cxf_validate_vartypes tests deferred until CxfModel structure is fully implemented
 - Used `isnan()` from math.h for portable NaN detection
+
+---
+
+### 2026-01-26: M3.3.1 Threading Tests
+
+**Files created:**
+- `tests/unit/test_threading.c` (180 LOC) - 16 TDD tests
+- `src/threading/threading_stub.c` (140 LOC) - Stub implementations
+
+**Tests implemented:**
+- `cxf_get_logical_processors`: positive result in [1, 1024], consistent across calls
+- `cxf_get_physical_cores`: positive result, <= logical, consistent
+- `cxf_set_thread_count`: success with valid args, null env error, 0/-1 invalid, caps at logical
+- `cxf_get_threads`: null env returns 0, default >= 0
+- `cxf_env_acquire_lock/cxf_leave_critical_section`: null safety, acquire/release, recursive
+- `cxf_generate_seed`: non-negative result, varies between calls
+
+**Stub implementations:**
+- `cxf_get_physical_cores()` - Returns logical processors as fallback (spec behavior)
+- `cxf_set_thread_count()` - Validates env != NULL and count >= 1
+- `cxf_get_threads()` - Returns 0 (auto mode default)
+- `cxf_env_acquire_lock()` - No-op for single-threaded stub
+- `cxf_leave_critical_section()` - No-op for single-threaded stub
+- `cxf_generate_seed()` - Timestamp + PID with MurmurHash3 finalizer mixing
+
+**Fixes made:**
+- Fixed `cxf_terminate` return type in terminate.c (void -> int per header)
+- Fixed `cxf_clear_terminate` -> `cxf_reset_terminate` naming in test_error.c
+
+**Key learnings:**
+1. **Stub patterns for locking** - Lock stubs can be no-ops since single-threaded code won't deadlock. Full implementation needs actual mutex/critical section primitives.
+2. **Seed generation** - Combining timestamp, process ID with hash mixing provides good entropy distribution even with poor input distribution.
+3. **Return type consistency** - Always check header declarations match implementation signatures.

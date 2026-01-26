@@ -13,19 +13,15 @@
 #include <float.h>
 
 /* Forward declarations for functions under test */
-/* These will be implemented in M3.1.2-M3.1.7 */
+/* Note: API functions are declared in headers, only internal ones here */
 
 /* Core Error Functions (M3.1.2) */
 void cxf_error(CxfEnv *env, const char *format, ...);
-const char *cxf_geterrormsg(CxfEnv *env);
 void cxf_errorlog(CxfEnv *env, const char *message);
 
 /* NaN/Inf Detection (M3.1.3) */
 int cxf_check_nan(const double *arr, int n);
 int cxf_check_nan_or_inf(const double *arr, int n);
-
-/* Environment Validation (M3.1.4) */
-int cxf_checkenv(CxfEnv *env);
 
 /* Model Flag Checks (M3.1.5) */
 int cxf_check_model_flags1(CxfModel *model);
@@ -33,17 +29,9 @@ int cxf_check_model_flags2(CxfModel *model, int flag);
 
 /* Termination Check (M3.1.6) */
 int cxf_check_terminate(CxfEnv *env);
-void cxf_terminate(CxfEnv *env);
-void cxf_clear_terminate(CxfEnv *env);
 
 /* Pivot Validation (M3.1.7) */
 int cxf_pivot_check(double pivot_elem, double tolerance);
-
-/* API functions for setup/teardown */
-int cxf_loadenv(CxfEnv **envP, const char *logfilename);
-void cxf_freeenv(CxfEnv *env);
-int cxf_newmodel(CxfEnv *env, CxfModel **modelP, const char *name);
-void cxf_freemodel(CxfModel *model);
 
 /* Test fixtures */
 static CxfEnv *env = NULL;
@@ -352,7 +340,7 @@ void test_check_terminate_after_terminate(void) {
 
 void test_check_terminate_after_clear(void) {
     cxf_terminate(env);
-    cxf_clear_terminate(env);
+    cxf_reset_terminate(env);
     int result = cxf_check_terminate(env);
     TEST_ASSERT_EQUAL_INT(0, result);  /* Cleared */
 }
@@ -363,7 +351,7 @@ void test_terminate_null_env_safe(void) {
 }
 
 void test_clear_terminate_null_env_safe(void) {
-    cxf_clear_terminate(NULL);  /* Should not crash */
+    cxf_reset_terminate(NULL);  /* Should not crash */
     TEST_PASS();
 }
 

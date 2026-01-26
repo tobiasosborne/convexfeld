@@ -121,8 +121,8 @@ target_sources(convexfeld PRIVATE
     src/analysis/model_type.c
     src/analysis/coef_stats.c
     src/analysis/presolve_stats.c
-    # API module (M1.1, M1.2, M1.4 stubs + M8.1.4 constr stubs)
-    src/api/env_stub.c
+    # API module (M1.1, M1.2, M1.4 stubs + M8.1.4 constr stubs + M8.1.7 env)
+    src/api/env.c
     src/api/model_stub.c
     src/api/constr_stub.c
     src/api/api_stub.c
@@ -139,6 +139,8 @@ target_sources(convexfeld PRIVATE
     src/callbacks/callback_stub.c
     # Validation module (M2.3.1 stubs)
     src/validation/validation_stub.c
+    # Threading module (M3.3.1 stubs)
+    src/threading/threading_stub.c
 )
 
 ################################################################################

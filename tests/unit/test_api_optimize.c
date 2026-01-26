@@ -13,9 +13,8 @@
 #include "convexfeld/cxf_types.h"
 
 /* Forward declarations for functions under test */
+/* Note: cxf_terminate is declared in cxf_env.h */
 int cxf_check_terminate(CxfEnv *env);
-void cxf_terminate(CxfEnv *env);
-void cxf_clear_terminate(CxfEnv *env);
 
 /* Test fixture - shared environment */
 static CxfEnv *env = NULL;
@@ -115,14 +114,14 @@ void test_clear_terminate_resets_flag(void) {
     cxf_terminate(env);
     TEST_ASSERT_EQUAL_INT(1, cxf_check_terminate(env));
 
-    cxf_clear_terminate(env);
+    cxf_reset_terminate(env);
     TEST_ASSERT_EQUAL_INT(0, cxf_check_terminate(env));
 }
 
 void test_terminate_null_env_safe(void) {
     /* Should not crash */
     cxf_terminate(NULL);
-    cxf_clear_terminate(NULL);
+    cxf_reset_terminate(NULL);
     int result = cxf_check_terminate(NULL);
     TEST_ASSERT_EQUAL_INT(0, result);
 }

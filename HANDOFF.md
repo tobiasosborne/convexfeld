@@ -6,44 +6,70 @@
 
 ## Work Completed This Session
 
-### M5.2.2: CallbackContext Structure (convexfeld-hkd) - CLOSED
-- Created `src/callbacks/context.c` (138 LOC) - CallbackContext lifecycle
-- Created `src/callbacks/callback_stub.c` (112 LOC) - stub implementations for M5.2.3-M5.2.5
-- Updated `include/convexfeld/cxf_callback.h` (95 LOC) - added function declarations
-- Added 13 new tests to test_callbacks.c (now 29 tests total)
-- Implemented:
-  - `cxf_callback_create()` - allocate and initialize CallbackContext
-  - `cxf_callback_free()` - deallocate (NULL-safe)
-  - `cxf_callback_validate()` - magic number validation
-  - `cxf_callback_reset_stats()` - reset counters while preserving registration
-- Stub implementations for TDD tests:
-  - `cxf_init_callback_struct()` - zero 48-byte sub-structure
-  - `cxf_set_terminate()` - set env termination flag
-  - `cxf_callback_terminate()` - terminate from callback
-  - `cxf_reset_callback_state()` - reset callback state
-  - `cxf_pre_optimize_callback()` - pre-optimization callback
-  - `cxf_post_optimize_callback()` - post-optimization callback
+### M8.1.7: CxfEnv Structure (Full) (convexfeld-1ex) - CLOSED
+- Created `src/api/env.c` (189 LOC) - Full CxfEnv implementation
+- Updated `include/convexfeld/cxf_env.h` (175 LOC) - Added new fields and API declarations
+- Updated `tests/unit/test_api_env.c` (270 LOC) - Added 12 new tests (now 22 tests total)
+- Removed `src/api/env_stub.c` - Replaced by full implementation
+
+**New CxfEnv fields added:**
+- `version` - Configuration version counter (incremented on param changes)
+- `session_ref` - Session counter (incremented per optimize call)
+- `session_id` - Unique ID for current session
+- `optimizing` - 1 if optimization is in progress
+- `error_buf_locked` - Prevents error buffer overwrites during nested errors
+- `anonymous_mode` - Suppress variable/constraint name tracking
+- `callback_state` - Pointer to CallbackContext (owned, allocated on demand)
+- `master_env` - Parent environment for copy/child environments (NULL for root)
+
+**New API functions:**
+- `cxf_emptyenv()` - Create inactive environment (active=0)
+- `cxf_startenv()` - Activate an inactive environment
+- `cxf_clearerrormsg()` - Clear the error message buffer
+- `cxf_set_callback_context()` - Set/transfer callback context ownership
+- `cxf_get_callback_context()` - Get callback context pointer
+
+### M3.3.1: Threading Tests (convexfeld-nzh) - CLOSED
+- Created `tests/unit/test_threading.c` (180 LOC) - TDD tests for threading module
+- Created `src/threading/threading_stub.c` (140 LOC) - Stub implementations
+- Added threading module to CMakeLists.txt
+- Fixed `cxf_terminate` return type mismatch (void -> int) in terminate.c
+- Fixed `cxf_clear_terminate` -> `cxf_reset_terminate` naming in test_error.c, test_api_optimize.c
+
+**Tests implemented (16 tests):**
+- `cxf_get_logical_processors`: positive result, consistent across calls
+- `cxf_get_physical_cores`: positive result, <= logical, consistent
+- `cxf_set_thread_count`: success, null env, invalid values, caps at logical
+- `cxf_get_threads`: null env returns 0, default value
+- `cxf_env_acquire_lock/cxf_leave_critical_section`: null safety, acquire/release, recursive
+- `cxf_generate_seed`: non-negative, varies between calls
 
 ---
 
 ## Current State
 
 ### Build Status
-- 21 of 23 tests PASS (91%)
+- 22 of 24 tests PASS (92%)
 - TDD tests with expected linker errors:
-  - test_simplex_basic (M7.1.1) - Not Run
-  - test_simplex_iteration (M7.1.2) - Not Run
-- test_callbacks now passes all 29 tests
+  - test_simplex_basic (M7.1.1) - Not Run (simplex stubs missing)
+  - test_simplex_iteration (M7.1.2) - Not Run (simplex stubs missing)
+- test_api_env: 22 tests PASS
+- test_threading: 16 tests PASS
 - No compiler warnings
 
-### Files Created/Modified
+### Files Created/Modified This Session
 ```
-src/callbacks/context.c              (NEW - 138 LOC)
-src/callbacks/callback_stub.c        (NEW - 112 LOC)
-include/convexfeld/cxf_callback.h    (MODIFIED - added function decls)
-tests/unit/test_callbacks.c          (MODIFIED - 13 new tests, now 29 total)
-tests/CMakeLists.txt                 (MODIFIED - added math lib for test_callbacks)
-CMakeLists.txt                       (MODIFIED - added callbacks source files)
+src/api/env.c                        (NEW - 189 LOC)
+tests/unit/test_threading.c          (NEW - 180 LOC)
+src/threading/threading_stub.c       (NEW - 140 LOC)
+include/convexfeld/cxf_env.h         (MODIFIED - added fields and API)
+tests/unit/test_api_env.c            (MODIFIED - 12 new tests)
+tests/unit/test_error.c              (MODIFIED - fixed conflicting declarations)
+tests/unit/test_api_optimize.c       (MODIFIED - cxf_clear_terminate -> cxf_reset_terminate)
+src/error/terminate.c                (MODIFIED - fixed return types)
+tests/CMakeLists.txt                 (MODIFIED - added test_threading)
+CMakeLists.txt                       (MODIFIED - env.c, threading_stub.c)
+src/api/env_stub.c                   (DELETED - replaced by env.c)
 ```
 
 ---
@@ -52,27 +78,23 @@ CMakeLists.txt                       (MODIFIED - added callbacks source files)
 
 Run `bd ready` to see all available work.
 
-### Callback Implementation Path (M5.2.3-M5.2.5 ready)
+### M8.1.8: CxfModel Structure (Full)
+The next logical step is implementing the full CxfModel structure:
+- Spec: `docs/specs/structures/cxf_model.md`
+- File: `src/api/model.c` (expand from model_stub.c)
+- Add constraint storage, variable names, solver context
+
+### Threading Implementation Path
 The stub implementations provide the interface. Full implementations need:
-1. M5.2.3: Complete cxf_init_callback_struct, cxf_reset_callback_state with actual callback context
-2. M5.2.4: Implement cxf_pre_optimize_callback, cxf_post_optimize_callback with actual invocation
-3. M5.2.5: Complete termination integration with callback context
+1. Physical core detection using GetLogicalProcessorInformation (Windows) or /proc/cpuinfo (Linux)
+2. Actual critical section/mutex implementation
+3. Thread count storage in CxfEnv structure
 
 ### Simplex Implementation Path
 The TDD tests define the interface:
 1. Create simplex stubs (src/simplex/simplex_stub.c) to make TDD tests pass
 2. M7.1.3: Implement test_simplex_edge.c (edge cases)
 3. M7.1.4+: Implement actual simplex functions
-
-### Recommended Next Issues
-```bash
-bd ready
-
-# High-value next tasks:
-# M5.2.3-M5.2.5: Complete callback implementation (stubs exist)
-# M7.1.3+: Simplex implementation
-# M8.1.7-M8.1.8: Full CxfEnv/CxfModel Structures
-```
 
 ---
 
@@ -89,6 +111,6 @@ bd ready
 - `convexfeld-hqo` - Refactor test_matrix.c to < 200 LOC (446 LOC)
 - `convexfeld-afb` - Refactor test_error.c to < 200 LOC (437 LOC)
 - `convexfeld-5w6` - Refactor test_logging.c to < 200 LOC (now 300 LOC)
-- Note: test_basis.c (948 LOC) also exceeds limit but is TDD test file
+- Note: test_basis.c (948 LOC), test_api_env.c (270 LOC) also exceed limit but are TDD test files
 
 Run `bd ready` to see all available work.

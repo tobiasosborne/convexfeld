@@ -49,24 +49,28 @@ int cxf_check_terminate(CxfEnv *env) {
  * should stop gracefully.
  *
  * @param env Environment to terminate (may be NULL)
+ * @return CXF_OK on success, CXF_ERROR_NULL_ARGUMENT if env is NULL
  */
-void cxf_terminate(CxfEnv *env) {
+int cxf_terminate(CxfEnv *env) {
     if (env == NULL) {
-        return;
+        return CXF_ERROR_NULL_ARGUMENT;
     }
     env->terminate_flag = 1;
+    return CXF_OK;
 }
 
 /**
- * @brief Clear termination request.
+ * @brief Reset the termination flag.
  *
- * Resets the termination flag to allow new optimization runs.
+ * Clears the termination flag to allow a new optimization.
  *
  * @param env Environment to reset (may be NULL)
+ * @return CXF_OK on success, CXF_ERROR_NULL_ARGUMENT if env is NULL
  */
-void cxf_clear_terminate(CxfEnv *env) {
+int cxf_reset_terminate(CxfEnv *env) {
     if (env == NULL) {
-        return;
+        return CXF_ERROR_NULL_ARGUMENT;
     }
     env->terminate_flag = 0;
+    return CXF_OK;
 }

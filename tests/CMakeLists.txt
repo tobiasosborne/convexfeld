@@ -114,6 +114,9 @@ add_cxf_test(test_simplex_iteration unit/test_simplex_iteration.c)
 add_cxf_test(test_validation unit/test_validation.c)
 target_link_libraries(test_validation PRIVATE m)  # For math functions (NAN, INFINITY)
 
+# M3.3.1: Threading tests
+add_cxf_test(test_threading unit/test_threading.c)
+
 ################################################################################
 # Integration Tests
 ################################################################################
