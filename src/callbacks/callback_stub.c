@@ -17,36 +17,8 @@
 
 /*============================================================================
  * M5.2.3: cxf_init_callback_struct, cxf_reset_callback_state
+ * NOTE: Moved to src/callbacks/init.c
  *===========================================================================*/
-
-/**
- * @brief Initialize a 48-byte callback sub-structure.
- *
- * Zeros the memory. The env parameter is unused but kept for API consistency.
- *
- * @param env Environment (unused).
- * @param callbackSubStruct Pointer to 48-byte buffer.
- * @return CXF_OK on success, CXF_ERROR_NULL_ARGUMENT if NULL.
- */
-int cxf_init_callback_struct(CxfEnv *env, void *callbackSubStruct) {
-    (void)env;  /* Unused per spec */
-    if (callbackSubStruct == NULL) {
-        return CXF_ERROR_NULL_ARGUMENT;
-    }
-    memset(callbackSubStruct, 0, 48);
-    return CXF_OK;
-}
-
-/**
- * @brief Reset callback state in environment.
- *
- * NULL-safe stub implementation.
- *
- * @param env Environment to reset callback state.
- */
-void cxf_reset_callback_state(CxfEnv *env) {
-    (void)env;  /* Stub - does nothing */
-}
 
 /*============================================================================
  * M5.2.5: Termination functions (callback-specific)

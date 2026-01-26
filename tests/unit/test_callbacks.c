@@ -297,6 +297,56 @@ void test_reset_callback_state_null_env_safe(void) {
     TEST_PASS();
 }
 
+void test_reset_callback_state_no_callback_state_safe(void) {
+    /* Env with no callback_state set should not crash */
+    env->callback_state = NULL;
+    cxf_reset_callback_state(env);  /* Should not crash */
+    TEST_PASS();
+}
+
+void test_reset_callback_state_clears_statistics(void) {
+    /* Create and set callback context */
+    CallbackContext *ctx = cxf_callback_create();
+    TEST_ASSERT_NOT_NULL(ctx);
+    env->callback_state = ctx;
+
+    /* Set some values */
+    ctx->callback_calls = 100.0;
+    ctx->callback_time = 5.5;
+    ctx->iteration_count = 50;
+    ctx->best_obj = 42.0;
+    ctx->start_time = 1234567890.0;
+    ctx->terminate_requested = 1;
+
+    /* Set registration info (should be preserved) */
+    ctx->callback_func = (CxfCallbackFunc)0x12345678;
+    ctx->user_data = (void *)0x87654321;
+    ctx->enabled = 1;
+
+    /* Reset */
+    cxf_reset_callback_state(env);
+
+    /* Verify statistics cleared */
+    TEST_ASSERT_EQUAL_DOUBLE(0.0, ctx->callback_calls);
+    TEST_ASSERT_EQUAL_DOUBLE(0.0, ctx->callback_time);
+    TEST_ASSERT_EQUAL_INT(0, ctx->iteration_count);
+    TEST_ASSERT_TRUE(isinf(ctx->best_obj));
+    TEST_ASSERT_EQUAL_INT(0, ctx->terminate_requested);
+    /* start_time should be updated to current timestamp (> 0) */
+    TEST_ASSERT_TRUE(ctx->start_time > 0.0);
+
+    /* Verify registration preserved */
+    TEST_ASSERT_EQUAL_PTR((void *)0x12345678, ctx->callback_func);
+    TEST_ASSERT_EQUAL_PTR((void *)0x87654321, ctx->user_data);
+    TEST_ASSERT_EQUAL_INT(1, ctx->enabled);
+
+    /* Verify magic preserved */
+    TEST_ASSERT_EQUAL_UINT32(CXF_CALLBACK_MAGIC, ctx->magic);
+    TEST_ASSERT_EQUAL_UINT64(CXF_CALLBACK_MAGIC2, ctx->safety_magic);
+
+    /* Cleanup: env will free the callback_state in tearDown via cxf_freeenv */
+}
+
 /*******************************************************************************
  * cxf_pre_optimize_callback Tests
  ******************************************************************************/
@@ -374,6 +424,8 @@ int main(void) {
 
     /* cxf_reset_callback_state tests */
     RUN_TEST(test_reset_callback_state_null_env_safe);
+    RUN_TEST(test_reset_callback_state_no_callback_state_safe);
+    RUN_TEST(test_reset_callback_state_clears_statistics);
 
     /* cxf_pre_optimize_callback tests */
     RUN_TEST(test_pre_optimize_callback_null_env_returns_success);

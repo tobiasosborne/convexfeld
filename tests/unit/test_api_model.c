@@ -114,6 +114,48 @@ void test_newmodel_multiple_models(void) {
     cxf_freemodel(model2);
 }
 
+void test_newmodel_initializes_var_capacity(void) {
+    CxfModel *model = NULL;
+    cxf_newmodel(env, &model, "test");
+    TEST_ASSERT_GREATER_THAN(0, model->var_capacity);
+    cxf_freemodel(model);
+}
+
+void test_newmodel_initializes_extended_fields(void) {
+    CxfModel *model = NULL;
+    cxf_newmodel(env, &model, "test");
+    TEST_ASSERT_EQUAL_UINT32(0, model->fingerprint);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-12, 0.0, model->update_time);
+    TEST_ASSERT_NULL(model->pending_buffer);
+    TEST_ASSERT_NULL(model->solution_data);
+    TEST_ASSERT_NULL(model->sos_data);
+    TEST_ASSERT_NULL(model->gen_constr_data);
+    cxf_freemodel(model);
+}
+
+void test_newmodel_primary_model_points_to_self(void) {
+    CxfModel *model = NULL;
+    cxf_newmodel(env, &model, "test");
+    TEST_ASSERT_EQUAL_PTR(model, model->primary_model);
+    cxf_freemodel(model);
+}
+
+void test_newmodel_self_ptr_null_initially(void) {
+    CxfModel *model = NULL;
+    cxf_newmodel(env, &model, "test");
+    TEST_ASSERT_NULL(model->self_ptr);
+    cxf_freemodel(model);
+}
+
+void test_newmodel_initializes_bookkeeping(void) {
+    CxfModel *model = NULL;
+    cxf_newmodel(env, &model, "test");
+    TEST_ASSERT_EQUAL_INT(0, model->callback_count);
+    TEST_ASSERT_EQUAL_INT(0, model->solve_mode);
+    TEST_ASSERT_EQUAL_INT(0, model->env_flag);
+    cxf_freemodel(model);
+}
+
 /*******************************************************************************
  * cxf_freemodel Tests
  ******************************************************************************/
@@ -203,6 +245,46 @@ void test_addvar_null_name_allowed(void) {
 }
 
 /*******************************************************************************
+ * cxf_checkmodel Tests
+ ******************************************************************************/
+
+void test_checkmodel_null_returns_error(void) {
+    int status = cxf_checkmodel(NULL);
+    TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT, status);
+}
+
+void test_checkmodel_valid_model_returns_ok(void) {
+    CxfModel *model = NULL;
+    cxf_newmodel(env, &model, "test");
+    TEST_ASSERT_EQUAL_INT(CXF_OK, cxf_checkmodel(model));
+    cxf_freemodel(model);
+}
+
+/*******************************************************************************
+ * cxf_model_is_blocked Tests
+ ******************************************************************************/
+
+void test_model_is_blocked_null_returns_error(void) {
+    int result = cxf_model_is_blocked(NULL);
+    TEST_ASSERT_EQUAL_INT(-1, result);
+}
+
+void test_model_is_blocked_initially_not_blocked(void) {
+    CxfModel *model = NULL;
+    cxf_newmodel(env, &model, "test");
+    TEST_ASSERT_EQUAL_INT(0, cxf_model_is_blocked(model));
+    cxf_freemodel(model);
+}
+
+void test_model_is_blocked_when_blocked(void) {
+    CxfModel *model = NULL;
+    cxf_newmodel(env, &model, "test");
+    model->modification_blocked = 1;
+    TEST_ASSERT_EQUAL_INT(1, cxf_model_is_blocked(model));
+    cxf_freemodel(model);
+}
+
+/*******************************************************************************
  * Main
  ******************************************************************************/
 
@@ -221,6 +303,11 @@ int main(void) {
     RUN_TEST(test_newmodel_allocates_variable_arrays);
     RUN_TEST(test_newmodel_copies_name);
     RUN_TEST(test_newmodel_multiple_models);
+    RUN_TEST(test_newmodel_initializes_var_capacity);
+    RUN_TEST(test_newmodel_initializes_extended_fields);
+    RUN_TEST(test_newmodel_primary_model_points_to_self);
+    RUN_TEST(test_newmodel_self_ptr_null_initially);
+    RUN_TEST(test_newmodel_initializes_bookkeeping);
 
     /* cxf_freemodel tests */
     RUN_TEST(test_freemodel_null_is_safe);
@@ -233,6 +320,15 @@ int main(void) {
     RUN_TEST(test_addvar_multiple_variables);
     RUN_TEST(test_addvar_initializes_solution_to_zero);
     RUN_TEST(test_addvar_null_name_allowed);
+
+    /* cxf_checkmodel tests */
+    RUN_TEST(test_checkmodel_null_returns_error);
+    RUN_TEST(test_checkmodel_valid_model_returns_ok);
+
+    /* cxf_model_is_blocked tests */
+    RUN_TEST(test_model_is_blocked_null_returns_error);
+    RUN_TEST(test_model_is_blocked_initially_not_blocked);
+    RUN_TEST(test_model_is_blocked_when_blocked);
 
     return UNITY_END();
 }

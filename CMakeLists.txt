@@ -121,8 +121,9 @@ target_sources(convexfeld PRIVATE
     src/analysis/model_type.c
     src/analysis/coef_stats.c
     src/analysis/presolve_stats.c
-    # API module (M1.1, M1.2, M1.4 stubs + M8.1.4 constr stubs + M8.1.7 env)
+    # API module (M1.1, M1.2, M1.4 stubs + M8.1.4 constr stubs + M8.1.7 env + M8.1.8 model)
     src/api/env.c
+    src/api/model.c
     src/api/model_stub.c
     src/api/constr_stub.c
     src/api/api_stub.c
@@ -136,6 +137,7 @@ target_sources(convexfeld PRIVATE
     src/pricing/pricing_stub.c
     # Callbacks module (M5.2.2+)
     src/callbacks/context.c
+    src/callbacks/init.c
     src/callbacks/callback_stub.c
     # Validation module (M2.3.1 stubs)
     src/validation/validation_stub.c

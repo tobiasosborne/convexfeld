@@ -530,3 +530,37 @@ int cxf_simplex_get_iteration_limit(SolverContext *state);
 - Discovered cxf_check_terminate already implemented in M3.1.6
 - Avoid duplicate definitions - check existing code before adding stubs
 - Stubs enabled all 29 callback tests to pass (linking and execution)
+
+---
+
+### 2026-01-26: M5.2.3 Callback Initialization
+
+**File created:** `src/callbacks/init.c` (114 LOC)
+
+**Functions implemented:**
+- `cxf_init_callback_struct(env, callbackSubStruct)` - Zero-initialize 48-byte substructure
+- `cxf_reset_callback_state(env)` - Reset callback counters while preserving configuration
+
+**Stub extraction pattern:**
+- Original stubs lived in `callback_stub.c` for TDD
+- Moved to dedicated `init.c` for proper implementation
+- Stub file retains only unimplemented functions (pre/post optimize, termination)
+- Removed duplicate function definitions to avoid linker errors
+
+**Tests added (2 new, 31 total):**
+- test_reset_callback_state_no_callback_state_safe - NULL callback_state handling
+- test_reset_callback_state_clears_statistics - Full reset behavior verification
+
+**Key implementation details:**
+- `cxf_init_callback_struct`: env parameter unused (reserved for future extensibility)
+- `cxf_reset_callback_state` resets:
+  - callback_calls, callback_time -> 0.0
+  - iteration_count -> 0
+  - best_obj -> INFINITY
+  - start_time -> cxf_get_timestamp()
+  - terminate_requested -> 0
+- Preserves: magic, safety_magic, callback_func, user_data, enabled
+
+**Dependencies:**
+- Uses `cxf_get_timestamp()` from timing module for start_time reset
+- Accesses env->callback_state (CallbackContext pointer)
