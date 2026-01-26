@@ -6,6 +6,28 @@ This file captures learnings, gotchas, and useful patterns discovered during dev
 
 ---
 
+## 2026-01-26: M1.4 Stub API Functions - TRACER BULLET COMPLETE
+
+### SUCCESS: Tracer bullet test passes end-to-end!
+
+**File created:** `src/api/api_stub.c` (115 LOC)
+
+**Functions implemented:**
+- `cxf_optimize(model)` - Trivial unconstrained LP solver
+- `cxf_getintattr(model, attrname, valueP)` - Gets Status, NumVars, NumConstrs
+- `cxf_getdblattr(model, attrname, valueP)` - Gets ObjVal
+
+**Trivial solver algorithm:**
+- For minimization: if obj_coeff >= 0, use lb; else use ub
+- Computes objective value as sum of coeff * solution
+- Sets status to CXF_OPTIMAL (or CXF_UNBOUNDED if bound is infinity)
+
+**Milestone achieved:**
+- `test_tracer_bullet` passes: solves `min x s.t. x >= 0` → x*=0, obj*=0
+- End-to-end architecture proven: API → Solver → Solution extraction
+
+---
+
 ## 2026-01-26: M1.2 Stub CxfModel Structure Created
 
 ### SUCCESS: Model stubs for tracer bullet

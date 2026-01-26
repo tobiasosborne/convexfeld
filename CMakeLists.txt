@@ -81,9 +81,10 @@ target_sources(convexfeld PRIVATE
     src/memory/alloc_stub.c
     # Error module (M1.7 stubs)
     src/error/error_stub.c
-    # API module (M1.1, M1.2 stubs)
+    # API module (M1.1, M1.2, M1.4 stubs)
     src/api/env_stub.c
     src/api/model_stub.c
+    src/api/api_stub.c
 )
 
 ################################################################################

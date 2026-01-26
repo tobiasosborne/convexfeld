@@ -6,30 +6,34 @@
 
 ## CRITICAL: READ THIS FIRST
 
-### M1.0-M1.2, M1.6, M1.7 COMPLETE - Continue with remaining M1.x stubs
+### 🎉 TRACER BULLET COMPLETE - M1.0-M1.2, M1.4, M1.6, M1.7 DONE
 
-**Tracer bullet test written. Memory + error + env + model stubs done.**
+**All tests pass! End-to-end architecture proven.**
 
-Next steps: **M1.4, M1.5** (API stubs and simplex entry to complete tracer bullet)
+Next steps: **M2.x** (begin real implementation - memory, matrix, etc.)
 
 ---
 
 ## Work Completed This Session
 
-### M1.2: Stub CxfModel Structure - COMPLETE
+### M1.4: Stub API Functions - TRACER BULLET COMPLETE 🎉
 
 | Issue | Description | Status |
 |-------|-------------|--------|
-| `convexfeld-ae7` | M1.2: Stub CxfModel Structure | ✓ |
+| `convexfeld-z1h` | M1.4: Stub API Functions | ✓ |
 
 **Files created:**
-- `src/api/model_stub.c` (129 LOC)
+- `src/api/api_stub.c` (115 LOC)
 - Updated `CMakeLists.txt`
 
 **Functions:**
-- `cxf_newmodel(env, modelP, name)` - allocates model
-- `cxf_freemodel(model)` - frees model
-- `cxf_addvar(model, lb, ub, obj, vtype, name)` - adds variable
+- `cxf_optimize(model)` - trivial unconstrained LP solver
+- `cxf_getintattr(model, attrname, valueP)` - gets Status, NumVars, NumConstrs
+- `cxf_getdblattr(model, attrname, valueP)` - gets ObjVal
+
+**Test results:**
+- `test_smoke`: 3 tests pass
+- `test_tracer_bullet`: 1 test passes (solves `min x s.t. x >= 0`)
 
 ---
 
@@ -56,7 +60,8 @@ convexfeld/
 │   │   └── error_stub.c        ✓ (M1.7)
 │   └── api/
 │       ├── env_stub.c          ✓ (M1.1)
-│       └── model_stub.c        ✓ (M1.2)
+│       ├── model_stub.c        ✓ (M1.2)
+│       └── api_stub.c          ✓ (M1.4)
 ├── tests/
 │   ├── CMakeLists.txt          ✓
 │   ├── unity/                  ✓
@@ -68,40 +73,34 @@ convexfeld/
 ```
 
 ### Build Status
-- `libconvexfeld.a` builds (includes memory + error + env + model stubs)
-- `test_smoke` passes
-- `test_tracer_bullet` fails to link (needs cxf_optimize, cxf_getintattr, cxf_getdblattr)
+- `libconvexfeld.a` builds (all M1 stubs complete)
+- `test_smoke` passes (3 tests)
+- `test_tracer_bullet` passes (1 test) ✅
 
 ---
 
-## Next Steps: Remaining M1.x Stubs
+## Next Steps: Begin M2.x Implementation
 
-These issues complete the tracer bullet by implementing API and simplex stubs.
+Tracer bullet is complete. Now begin real implementation.
 
 ### Recommended Order
 ```bash
-# 1. API stubs (cxf_optimize, cxf_getintattr, cxf_getdblattr)
-bd show convexfeld-z1h   # M1.4: Stub API Functions
+# Option A: Start with foundation modules
+bd show convexfeld-9in   # M2.1.1: Memory Tests
+bd show convexfeld-27y   # M4.1.1: Matrix Tests
 
-# 2. Simplex stub (trivial 1-var solver)
-bd show convexfeld-7he   # M1.5: Stub Simplex Entry
-
-# 3. Benchmark (after test passes)
+# Option B: Add benchmark first
 bd show convexfeld-9b2   # M1.8: Tracer Bullet Benchmark
 ```
 
-### Files to Create
-1. `src/api/api_stub.c` - cxf_optimize, cxf_getintattr, cxf_getdblattr
-2. `src/simplex/solve_lp_stub.c` - Trivial 1-var LP solver (optional, can inline in api_stub)
-
-### CMakeLists.txt Update Pattern
+### Current Source Files
 ```cmake
 target_sources(convexfeld PRIVATE
-    src/memory/alloc_stub.c    # Done
-    src/error/error_stub.c     # Done
-    src/api/env_stub.c         # Done
-    src/api/model_stub.c       # Done
-    src/api/api_stub.c         # Add this to complete tracer bullet
+    src/memory/alloc_stub.c    # M1.6 ✓
+    src/error/error_stub.c     # M1.7 ✓
+    src/api/env_stub.c         # M1.1 ✓
+    src/api/model_stub.c       # M1.2 ✓
+    src/api/api_stub.c         # M1.4 ✓
 )
 ```
 
@@ -117,7 +116,7 @@ target_sources(convexfeld PRIVATE
 
 ## Issue Status
 
-### Completed (M0 + M1.0-M1.2, M1.6, M1.7)
+### Completed (M0 + M1 Tracer Bullet)
 - `convexfeld-2by` - M0.1: Create CMakeLists.txt ✓
 - `convexfeld-x85` - M0.2: Create Core Types Header ✓
 - `convexfeld-dw2` - M0.3: Setup Unity Test Framework ✓
@@ -125,13 +124,13 @@ target_sources(convexfeld PRIVATE
 - `convexfeld-cz6` - M1.0: Tracer Bullet Test ✓
 - `convexfeld-z6p` - M1.1: Stub CxfEnv Structure ✓
 - `convexfeld-ae7` - M1.2: Stub CxfModel Structure ✓
+- `convexfeld-z1h` - M1.4: Stub API Functions ✓
 - `convexfeld-6uc` - M1.6: Stub Memory Functions ✓
 - `convexfeld-9t5` - M1.7: Stub Error Functions ✓
 
-### Remaining M1.x (P1)
-- `convexfeld-bko` - M1.3: Stub SparseMatrix Structure (not needed for tracer bullet)
-- `convexfeld-z1h` - M1.4: Stub API Functions ← NEXT
-- `convexfeld-7he` - M1.5: Stub Simplex Entry
-- `convexfeld-9b2` - M1.8: Tracer Bullet Benchmark
+### Optional M1.x (can skip or do later)
+- `convexfeld-bko` - M1.3: Stub SparseMatrix Structure (not needed yet)
+- `convexfeld-7he` - M1.5: Stub Simplex Entry (inlined in api_stub.c)
+- `convexfeld-9b2` - M1.8: Tracer Bullet Benchmark (nice to have)
 
 Run `bd ready` to see all available work.
