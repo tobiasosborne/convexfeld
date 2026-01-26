@@ -6,11 +6,11 @@
 
 ## CRITICAL: READ THIS FIRST
 
-### M0.1 COMPLETE - Continue with M0.2
+### M0.1 & M0.2 COMPLETE - Continue with M0.3
 
-**CMakeLists.txt has been created and verified to build successfully.**
+**CMakeLists.txt and cxf_types.h created.**
 
-Next step: **M0.2: Create Core Types Header** (`convexfeld-x85`)
+Next step: **M0.3: Setup Unity Test Framework** (`convexfeld-dw2`)
 
 ---
 
@@ -99,9 +99,9 @@ bd show convexfeld-n99  # View details
 
 ### Completed
 - `convexfeld-2by` - M0.1: Create CMakeLists.txt ✓
+- `convexfeld-x85` - M0.2: Create Core Types Header ✓
 
 ### Remaining M0 (P0)
-- `convexfeld-x85` - M0.2: Create Core Types Header
 - `convexfeld-dw2` - M0.3: Setup Unity Test Framework
 - `convexfeld-n99` - M0.4: Create Module Headers (Stubs)
 

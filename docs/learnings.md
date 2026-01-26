@@ -6,6 +6,24 @@ This file captures learnings, gotchas, and useful patterns discovered during dev
 
 ---
 
+## 2026-01-26: M0.2 Core Types Header Created
+
+### SUCCESS: cxf_types.h created with all enums, constants, and forward declarations
+
+**Contents (~170 LOC):**
+- `CxfStatus` enum - 8 success codes + 4 error codes
+- `CxfVarType` enum - 5 variable types (C, B, I, S, N)
+- `CxfSense` enum - 3 constraint senses (<, >, =)
+- `CxfObjSense` enum - minimize/maximize
+- `CxfVarStatus` enum - 5 basis status values
+- Constants: CXF_INFINITY, tolerances, CXF_MAX_NAME_LEN
+- Magic numbers: CXF_ENV_MAGIC, CXF_MODEL_MAGIC, CXF_CALLBACK_MAGIC/2
+- Forward declarations for all 8 structures
+
+**Note:** Spec file path in issue was wrong (`docs/specs/arch/` vs `docs/specs/architecture/`), but implementation plan had exact code.
+
+---
+
 ## 2026-01-26: M0.1 CMakeLists.txt Created
 
 ### SUCCESS: Project build system established
