@@ -17,39 +17,25 @@ All M1 milestones are now complete. Next steps: Continue with M2.x-M8.x implemen
 ## Work Completed This Session
 
 ### M6.1.3: cxf_pricing_init - Complete
+- `src/pricing/init.c` (179 LOC) - Full pricing initialization with strategy selection
 
-| Issue | Description | Status |
-|-------|-------------|--------|
-| `convexfeld-hul` | M6.1.3: cxf_pricing_init | CLOSED |
+### M8.1.2: API Tests - Model - Complete
+- `tests/unit/test_api_model.c` (238 LOC) - 19 TDD tests for cxf_newmodel, cxf_freemodel, cxf_addvar
 
-**Files created:**
-- `src/pricing/init.c` (179 LOC) - Full pricing initialization implementation
+### M4.1.5: Row-Major Conversion - Complete
+- `src/matrix/row_major.c` (167 LOC) - 3-stage CSC→CSR conversion pipeline:
+  - `cxf_prepare_row_data` - Validate and allocate CSR arrays
+  - `cxf_build_row_major` - Two-pass transpose algorithm
+  - `cxf_finalize_row_data` - Finalize conversion state
 
-**Function implemented:**
-- `cxf_pricing_init(ctx, num_vars, strategy)` - Initialize pricing context for new solve
-
-**Algorithm:**
-1. Auto-select strategy if requested (strategy=0)
-2. Store configuration (num_vars, strategy) in context
-3. Allocate candidate arrays per level (sized based on strategy):
-   - Level 0 (full): all variables
-   - Level 1+: sqrt(n) for partial pricing
-4. For steepest edge/Devex: allocate and initialize weights to 1.0
-5. Reset statistics and invalidate caches
-
-**Key design decisions:**
-- Extended PricingContext with: num_vars, strategy, candidate_sizes, weights
-- Level sizing: MIN_CANDIDATES=100, sqrt(n) for partial pricing
-- Weights initialized to 1.0 (unit reference frame)
-- Proper cleanup on allocation failure
-
-**Files modified:**
-- `include/convexfeld/cxf_pricing.h` - Added new fields to PricingContext
-- `src/pricing/context.c` - Handle new fields in create/free, moved init to init.c
-- `CMakeLists.txt` - Added init.c to build
+### M2.1.4: State Deallocators - Complete
+- `src/memory/state_cleanup.c` (107 LOC) - State cleanup functions:
+  - `cxf_free_solver_state` - Free SolverContext with subcomponents
+  - `cxf_free_basis_state` - Wrapper for cxf_basis_free
+  - `cxf_free_callback_state` - Free CallbackContext (not user_data)
 
 **Test results:**
-- All 8 test suites PASS (100% tests passed)
+- All 9 test suites PASS (100% tests passed)
 
 ---
 
@@ -72,12 +58,14 @@ convexfeld/
 ├── src/
 │   ├── memory/
 │   │   ├── alloc.c           (M2.1.2)
-│   │   └── vectors.c         (M2.1.3)
+│   │   ├── vectors.c         (M2.1.3)
+│   │   └── state_cleanup.c   (M2.1.4) NEW
 │   ├── matrix/
 │   │   ├── sparse_stub.c     (M1.3)
 │   │   ├── sparse_matrix.c   (M4.1.2)
 │   │   ├── multiply.c        (M4.1.3)
-│   │   └── vectors.c         (M4.1.4)
+│   │   ├── vectors.c         (M4.1.4)
+│   │   └── row_major.c       (M4.1.5) NEW
 │   ├── basis/
 │   │   ├── basis_state.c     (M5.1.2)
 │   │   ├── eta_factors.c     (M5.1.3)
@@ -139,13 +127,11 @@ bd ready
 
 # Available next milestones (as of this session):
 # M6.1.4: cxf_pricing_candidates (full implementation)
-# M8.1.2: API Tests - Model
-# M4.1.5: Row-Major Conversion
-# M2.1.4: State Deallocators
 # M8.1.3: API Tests - Variables
 # M4.1.6: cxf_sort_indices
 # M5.1.6: cxf_basis_refactor
 # M3.1.1: Error Tests
+# M8.1.4: API Tests - Constraints
 ```
 
 ### Current Source Files
@@ -153,17 +139,19 @@ bd ready
 target_sources(convexfeld PRIVATE
     src/memory/alloc.c          # M2.1.2
     src/memory/vectors.c        # M2.1.3
+    src/memory/state_cleanup.c  # M2.1.4 NEW
     src/matrix/sparse_stub.c    # M1.3
     src/matrix/sparse_matrix.c  # M4.1.2
     src/matrix/multiply.c       # M4.1.3
     src/matrix/vectors.c        # M4.1.4
+    src/matrix/row_major.c      # M4.1.5 NEW
     src/basis/basis_state.c     # M5.1.2
     src/basis/eta_factors.c     # M5.1.3
     src/basis/ftran.c           # M5.1.4
     src/basis/btran.c           # M5.1.5
     src/basis/basis_stub.c      # M5.1.1
     src/pricing/context.c       # M6.1.2
-    src/pricing/init.c          # M6.1.3 NEW
+    src/pricing/init.c          # M6.1.3
     src/pricing/pricing_stub.c  # M6.1.1
     src/simplex/solve_lp_stub.c # M1.5
     src/error/error_stub.c      # M1.7
@@ -213,7 +201,10 @@ target_sources(convexfeld PRIVATE
 - `convexfeld-o75` - M5.1.5: cxf_btran NEW
 - `convexfeld-mza` - M6.1.1: Pricing Tests
 - `convexfeld-mk6` - M6.1.2: PricingContext Structure
-- `convexfeld-hul` - M6.1.3: cxf_pricing_init NEW
+- `convexfeld-hul` - M6.1.3: cxf_pricing_init
 - `convexfeld-1lj` - M8.1.1: API Tests - Environment
+- `convexfeld-6ck` - M8.1.2: API Tests - Model NEW
+- `convexfeld-zjf` - M4.1.5: Row-Major Conversion NEW
+- `convexfeld-yp6` - M2.1.4: State Deallocators NEW
 
 Run `bd ready` to see all available work.

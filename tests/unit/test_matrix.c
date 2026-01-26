@@ -33,6 +33,11 @@ double cxf_dot_product_sparse(const int *x_indices, const double *x_values,
                               int x_nnz, const double *y_dense);
 double cxf_vector_norm(const double *x, int n, int norm_type);
 
+/* Functions to be implemented in M4.1.5 */
+int cxf_prepare_row_data(SparseMatrix *mat);
+int cxf_build_row_major(SparseMatrix *mat);
+int cxf_finalize_row_data(SparseMatrix *mat);
+
 /*******************************************************************************
  * Test fixtures
  ******************************************************************************/
@@ -252,6 +257,81 @@ void test_vector_norm_single_element(void) {
 }
 
 /*******************************************************************************
+ * Row-major conversion tests (M4.1.5)
+ ******************************************************************************/
+
+void test_row_major_full_pipeline(void) {
+    /* Create 2x3 matrix: A = [[1, 2, 0], [3, 0, 4]] in CSC */
+    SparseMatrix *mat = cxf_sparse_create();
+    cxf_sparse_init_csc(mat, 2, 3, 4);
+
+    /* CSC: col 0 has [1,3], col 1 has [2], col 2 has [4] */
+    mat->col_ptr[0] = 0; mat->col_ptr[1] = 2; mat->col_ptr[2] = 3; mat->col_ptr[3] = 4;
+    mat->row_idx[0] = 0; mat->row_idx[1] = 1; mat->row_idx[2] = 0; mat->row_idx[3] = 1;
+    mat->values[0] = 1.0; mat->values[1] = 3.0; mat->values[2] = 2.0; mat->values[3] = 4.0;
+
+    /* Run 3-stage pipeline */
+    TEST_ASSERT_EQUAL_INT(CXF_OK, cxf_prepare_row_data(mat));
+    TEST_ASSERT_NOT_NULL(mat->row_ptr);
+
+    TEST_ASSERT_EQUAL_INT(CXF_OK, cxf_build_row_major(mat));
+
+    TEST_ASSERT_EQUAL_INT(CXF_OK, cxf_finalize_row_data(mat));
+
+    /* Verify CSR: row 0 has [1,2] at cols [0,1], row 1 has [3,4] at cols [0,2] */
+    TEST_ASSERT_EQUAL_INT64(0, mat->row_ptr[0]);
+    TEST_ASSERT_EQUAL_INT64(2, mat->row_ptr[1]);
+    TEST_ASSERT_EQUAL_INT64(4, mat->row_ptr[2]);
+
+    /* Row 0 entries */
+    TEST_ASSERT_EQUAL_INT(0, mat->col_idx[0]);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-10, 1.0, mat->row_values[0]);
+    TEST_ASSERT_EQUAL_INT(1, mat->col_idx[1]);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-10, 2.0, mat->row_values[1]);
+
+    /* Row 1 entries */
+    TEST_ASSERT_EQUAL_INT(0, mat->col_idx[2]);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-10, 3.0, mat->row_values[2]);
+    TEST_ASSERT_EQUAL_INT(2, mat->col_idx[3]);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-10, 4.0, mat->row_values[3]);
+
+    cxf_sparse_free(mat);
+}
+
+void test_prepare_row_data_null_returns_error(void) {
+    TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT, cxf_prepare_row_data(NULL));
+}
+
+void test_build_row_major_without_prepare_returns_error(void) {
+    SparseMatrix *mat = cxf_sparse_create();
+    cxf_sparse_init_csc(mat, 2, 2, 1);
+    mat->col_ptr[0] = 0; mat->col_ptr[1] = 1; mat->col_ptr[2] = 1;
+    mat->row_idx[0] = 0; mat->values[0] = 1.0;
+
+    /* row_ptr is NULL since prepare wasn't called */
+    TEST_ASSERT_EQUAL_INT(CXF_ERROR_INVALID_ARGUMENT, cxf_build_row_major(mat));
+
+    cxf_sparse_free(mat);
+}
+
+void test_row_major_empty_matrix(void) {
+    SparseMatrix *mat = cxf_sparse_create();
+    cxf_sparse_init_csc(mat, 3, 3, 0);
+    mat->col_ptr[0] = 0; mat->col_ptr[1] = 0; mat->col_ptr[2] = 0; mat->col_ptr[3] = 0;
+
+    TEST_ASSERT_EQUAL_INT(CXF_OK, cxf_prepare_row_data(mat));
+    TEST_ASSERT_EQUAL_INT(CXF_OK, cxf_build_row_major(mat));
+    TEST_ASSERT_EQUAL_INT(CXF_OK, cxf_finalize_row_data(mat));
+
+    /* All row pointers should be 0 */
+    for (int i = 0; i <= 3; i++) {
+        TEST_ASSERT_EQUAL_INT64(0, mat->row_ptr[i]);
+    }
+
+    cxf_sparse_free(mat);
+}
+
+/*******************************************************************************
  * Main test runner
  ******************************************************************************/
 
@@ -285,6 +365,12 @@ int main(void) {
     RUN_TEST(test_vector_norm_linf);
     RUN_TEST(test_vector_norm_zero_vector);
     RUN_TEST(test_vector_norm_single_element);
+
+    /* Row-major conversion tests (M4.1.5) */
+    RUN_TEST(test_row_major_full_pipeline);
+    RUN_TEST(test_prepare_row_data_null_returns_error);
+    RUN_TEST(test_build_row_major_without_prepare_returns_error);
+    RUN_TEST(test_row_major_empty_matrix);
 
     return UNITY_END();
 }

@@ -14,6 +14,19 @@ void *cxf_calloc(size_t count, size_t size);
 void *cxf_realloc(void *ptr, size_t size);
 void cxf_free(void *ptr);
 
+/* Forward declarations for structures */
+struct SolverContext;
+struct BasisState;
+struct CallbackContext;
+typedef struct SolverContext SolverContext;
+typedef struct BasisState BasisState;
+typedef struct CallbackContext CallbackContext;
+
+/* State cleanup functions (M2.1.4) */
+void cxf_free_solver_state(SolverContext *ctx);
+void cxf_free_basis_state(BasisState *basis);
+void cxf_free_callback_state(CallbackContext *ctx);
+
 void setUp(void) {}
 void tearDown(void) {}
 
@@ -126,6 +139,25 @@ void test_cxf_free_after_malloc(void) {
 }
 
 /*----------------------------------------------------------------------------*/
+/* State cleanup tests (M2.1.4)                                               */
+/*----------------------------------------------------------------------------*/
+
+void test_free_solver_state_null_safe(void) {
+    cxf_free_solver_state(NULL);  /* Should not crash */
+    TEST_PASS();
+}
+
+void test_free_basis_state_null_safe(void) {
+    cxf_free_basis_state(NULL);  /* Should not crash */
+    TEST_PASS();
+}
+
+void test_free_callback_state_null_safe(void) {
+    cxf_free_callback_state(NULL);  /* Should not crash */
+    TEST_PASS();
+}
+
+/*----------------------------------------------------------------------------*/
 /* Main test runner                                                           */
 /*----------------------------------------------------------------------------*/
 
@@ -151,6 +183,11 @@ int main(void) {
     /* free tests */
     RUN_TEST(test_cxf_free_null_safe);
     RUN_TEST(test_cxf_free_after_malloc);
+
+    /* State cleanup tests (M2.1.4) */
+    RUN_TEST(test_free_solver_state_null_safe);
+    RUN_TEST(test_free_basis_state_null_safe);
+    RUN_TEST(test_free_callback_state_null_safe);
 
     return UNITY_END();
 }

@@ -60,6 +60,9 @@ target_link_libraries(test_pricing PRIVATE m)  # For math functions
 # M8.1.1: API Tests - Environment
 add_cxf_test(test_api_env unit/test_api_env.c)
 
+# M8.1.2: API Tests - Model
+add_cxf_test(test_api_model unit/test_api_model.c)
+
 # M2.1.3: Vector memory management tests
 add_cxf_test(test_memory_vectors unit/test_memory_vectors.c)
 

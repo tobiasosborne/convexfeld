@@ -6,6 +6,67 @@ This file captures learnings, gotchas, and useful patterns discovered during dev
 
 ---
 
+## 2026-01-26: M2.1.4 State Deallocators
+
+### SUCCESS: State cleanup functions for complex structures
+
+**File created:**
+- `src/memory/state_cleanup.c` (107 LOC)
+
+**Functions implemented:**
+- `cxf_free_solver_state(ctx)` - Free SolverContext with working arrays and subcomponents
+- `cxf_free_basis_state(basis)` - Wrapper for cxf_basis_free
+- `cxf_free_callback_state(ctx)` - Free CallbackContext (does NOT free user_data)
+
+**Key design decisions:**
+- SolverContext frees all 6 working arrays plus basis and pricing subcomponents
+- Does NOT free model_ref (owned by caller)
+- Clears magic numbers before freeing CallbackContext
+- All functions are NULL-safe
+
+---
+
+## 2026-01-26: M4.1.5 Row-Major Conversion
+
+### SUCCESS: 3-stage CSC→CSR conversion pipeline
+
+**File created:**
+- `src/matrix/row_major.c` (167 LOC)
+
+**Functions implemented:**
+- `cxf_prepare_row_data(mat)` - Validate CSC, allocate CSR arrays
+- `cxf_build_row_major(mat)` - Two-pass transpose algorithm
+- `cxf_finalize_row_data(mat)` - Finalize conversion state
+
+**Algorithm (cxf_build_row_major):**
+1. Pass 1: Count entries per row, compute cumulative offsets
+2. Pass 2: Fill CSR arrays using working pointer copy
+
+**Key design decisions:**
+- Separate prepare/build/finalize for fine-grained control
+- Empty matrix handled correctly (row_ptr zeroed)
+- Returns error if prepare not called before build
+
+---
+
+## 2026-01-26: M8.1.2 API Tests - Model
+
+### SUCCESS: TDD tests for model API functions
+
+**File created:**
+- `tests/unit/test_api_model.c` (238 LOC) - 19 tests
+
+**Tests cover:**
+- cxf_newmodel: creation, null checks, magic, name, dimensions, arrays
+- cxf_freemodel: null safety
+- cxf_addvar: basic add, bounds/obj storage, multiple vars, null checks
+
+**TDD pattern:**
+- Tests use shared environment fixture (setUp/tearDown)
+- Each test creates/frees its own model for isolation
+
+---
+
 ## 2026-01-26: M6.1.3 cxf_pricing_init
 
 ### SUCCESS: Full pricing initialization with strategy-specific allocation

@@ -77,14 +77,16 @@ target_include_directories(convexfeld
 
 # Source files
 target_sources(convexfeld PRIVATE
-    # Memory module (M2.1.2, M2.1.3)
+    # Memory module (M2.1.2, M2.1.3, M2.1.4)
     src/memory/alloc.c
     src/memory/vectors.c
-    # Matrix module (M1.3 stubs + M4.1.2 full + M4.1.3 multiply + M4.1.4 vectors)
+    src/memory/state_cleanup.c
+    # Matrix module (M1.3 stubs + M4.1.2 full + M4.1.3 multiply + M4.1.4 vectors + M4.1.5 row_major)
     src/matrix/sparse_stub.c
     src/matrix/sparse_matrix.c
     src/matrix/multiply.c
     src/matrix/vectors.c
+    src/matrix/row_major.c
     # Basis module (M5.1.2 BasisState, M5.1.3 EtaFactors, M5.1.4-M5.1.5 ftran/btran + remaining stubs)
     src/basis/basis_state.c
     src/basis/eta_factors.c
