@@ -57,6 +57,9 @@ target_link_libraries(test_basis PRIVATE m)  # For math functions
 add_cxf_test(test_pricing unit/test_pricing.c)
 target_link_libraries(test_pricing PRIVATE m)  # For math functions
 
+# M8.1.1: API Tests - Environment
+add_cxf_test(test_api_env unit/test_api_env.c)
+
 ################################################################################
 # Integration Tests
 ################################################################################

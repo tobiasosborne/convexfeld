@@ -16,22 +16,30 @@ All M1 milestones are now complete. Next steps: Continue with M2.x-M8.x implemen
 
 ## Work Completed This Session
 
-### M6.1.2: PricingContext Structure - Complete
+### M8.1.1: API Tests - Environment - Complete
 
 | Issue | Description | Status |
 |-------|-------------|--------|
-| `convexfeld-mk6` | M6.1.2: PricingContext Structure | CLOSED |
+| `convexfeld-1lj` | M8.1.1: API Tests - Environment | CLOSED |
 
 **Files created:**
-- `src/pricing/context.c` (118 LOC) - PricingContext lifecycle management
+- `tests/unit/test_api_env.c` (107 LOC) - TDD tests for env API
 
-**Functions implemented:**
-- `cxf_pricing_create(num_vars, max_levels)` - Allocates PricingContext with level arrays
-- `cxf_pricing_free(ctx)` - Frees context and all arrays (NULL-safe)
-- `cxf_pricing_init(ctx, num_vars, strategy)` - Reinitialize for new solve
+**Tests implemented (11 total):**
+- `test_loadenv_basic_creation` - Basic env creation succeeds
+- `test_loadenv_null_envp_returns_error` - NULL argument handling
+- `test_loadenv_sets_magic_number` - Magic number validation
+- `test_loadenv_sets_active_flag` - Active flag initialization
+- `test_loadenv_sets_default_tolerances` - Default tolerance values
+- `test_loadenv_sets_default_verbosity` - Verbosity/output defaults
+- `test_loadenv_sets_ref_count_to_one` - Reference counting init
+- `test_loadenv_clears_error_buffer` - Error buffer cleared
+- `test_loadenv_multiple_envs` - Multiple envs can coexist
+- `test_freeenv_null_is_safe` - NULL-safe free
+- `test_freeenv_clears_magic` - Magic cleared before free
 
 **Test results:**
-- All 24 pricing tests PASS
+- All 11 API env tests PASS
 
 ---
 
@@ -81,7 +89,8 @@ convexfeld/
 │   │   ├── test_memory.c
 │   │   ├── test_matrix.c
 │   │   ├── test_basis.c
-│   │   └── test_pricing.c      (M6.1.1)
+│   │   ├── test_pricing.c      (M6.1.1)
+│   │   └── test_api_env.c      (M8.1.1) NEW
 │   └── integration/
 │       └── test_tracer_bullet.c
 └── benchmarks/
@@ -96,6 +105,7 @@ convexfeld/
 - `test_matrix` fails (8 tests - awaiting M4.1.4 implementation)
 - `test_basis` passes (29 tests - stubs handle identity basis)
 - `test_pricing` passes (24 tests)
+- `test_api_env` passes (11 tests) - NEW
 - `test_tracer_bullet` passes (1 test)
 - `bench_tracer` passes (< 1000 us/iter)
 
@@ -177,6 +187,7 @@ target_sources(convexfeld PRIVATE
 - `convexfeld-7f5` - M5.1.2: BasisState Structure
 - `convexfeld-san` - M5.1.3: EtaFactors Structure
 - `convexfeld-mza` - M6.1.1: Pricing Tests
-- `convexfeld-mk6` - M6.1.2: PricingContext Structure NEW
+- `convexfeld-mk6` - M6.1.2: PricingContext Structure
+- `convexfeld-1lj` - M8.1.1: API Tests - Environment NEW
 
 Run `bd ready` to see all available work.
