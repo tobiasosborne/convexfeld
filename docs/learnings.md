@@ -6,6 +6,31 @@ This file captures learnings, gotchas, and useful patterns discovered during dev
 
 ---
 
+## 2026-01-26: M0.1 CMakeLists.txt Created
+
+### SUCCESS: Project build system established
+
+**What worked:**
+1. Followed the implementation plan exactly for Step 0.1
+2. Created root CMakeLists.txt with:
+   - CMake 3.16+ requirement
+   - C99 standard enforcement (CMAKE_C_STANDARD 99, CMAKE_C_STANDARD_REQUIRED ON)
+   - Compiler flags: -Wall -Wextra -Wpedantic -O2 plus additional warnings
+   - Static library target with proper include directories
+   - Conditional tests and benchmarks subdirectories
+3. Created tests/CMakeLists.txt and benchmarks/CMakeLists.txt stubs
+4. Added placeholder.c so library builds (CMake requires at least one source file)
+
+**Build verification:**
+- `cmake ..` succeeded
+- `cmake --build .` produced `libconvexfeld.a`
+
+**Gotcha discovered:**
+- CMake STATIC libraries require at least one source file
+- Created src/placeholder.c as a workaround until real modules added
+
+---
+
 ## 2026-01-26: Beads Issues Created Successfully
 
 ### SUCCESS: All 122 Implementation Issues Created

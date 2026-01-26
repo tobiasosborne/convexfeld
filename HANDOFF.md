@@ -6,110 +6,107 @@
 
 ## CRITICAL: READ THIS FIRST
 
-### ALL BEADS ISSUES ARE NOW CREATED
+### M0.1 COMPLETE - Continue with M0.2
 
-**122 issues have been created for every step in the implementation plan.**
+**CMakeLists.txt has been created and verified to build successfully.**
 
-The next step is: **BEGIN IMPLEMENTATION starting with M0 (Project Setup)**
+Next step: **M0.2: Create Core Types Header** (`convexfeld-x85`)
 
 ---
 
 ## Work Completed This Session
 
-Created beads issues for all 9 milestones:
+### M0.1: Create CMakeLists.txt - DONE
 
-| Milestone | Issues | Priority | Description |
-|-----------|--------|----------|-------------|
-| M0 | 4 | P0 | Project Setup (CMakeLists.txt, headers, Unity) |
-| M1 | 9 | P1 | Tracer Bullet (end-to-end minimal test) |
-| M2 | 8 | P2 | Foundation Layer (Memory, Parameters, Validation) |
-| M3 | 16 | P2 | Infrastructure Layer (Error, Logging, Threading) |
-| M4 | 14 | P2 | Data Layer (Matrix, Timing, Analysis) |
-| M5 | 18 | P2 | Core Operations (Basis, Callbacks, Solver State) |
-| M6 | 7 | P2 | Algorithm Layer (Pricing) |
-| M7 | 28 | P2 | Simplex Engine (Simplex Core, Crossover, Utilities) |
-| M8 | 18 | P2 | Public API (30 functions) |
+Created the following files:
 
-**Total: 122 open issues ready for implementation**
+| File | Purpose |
+|------|---------|
+| `CMakeLists.txt` | Root build configuration (~95 LOC) |
+| `tests/CMakeLists.txt` | Test suite stub with helper function |
+| `benchmarks/CMakeLists.txt` | Benchmark suite stub with helper function |
+| `src/placeholder.c` | Placeholder source (CMake requires ≥1 source file) |
+
+**Verified:**
+- `cmake ..` configures successfully (GCC 13.3.0)
+- `cmake --build .` produces `libconvexfeld.a`
 
 ---
 
 ## Current State
 
-### Issue Tracking
-```bash
-bd ready              # Show available work (122 issues)
-bd list --status=open # List all open issues
-bd show <id>          # View issue details with spec references
+### Directory Structure Created
+```
+convexfeld/
+├── CMakeLists.txt          ✓ CREATED
+├── include/
+│   └── convexfeld/         (empty, ready for headers)
+├── src/
+│   └── placeholder.c       ✓ CREATED
+├── tests/
+│   ├── CMakeLists.txt      ✓ CREATED
+│   ├── unity/              (empty, ready for Unity)
+│   ├── unit/               (empty)
+│   └── integration/        (empty)
+└── benchmarks/
+    └── CMakeLists.txt      ✓ CREATED
 ```
 
-### Implementation Order
-1. **M0 (P0)** - Must complete first: Project setup, headers, test framework
-2. **M1 (P1)** - Tracer bullet proves architecture end-to-end
-3. **M2-M8 (P2)** - Can parallelize within milestones per plan
-
-### Key Commands for Next Agent
-```bash
-# Find work to start
-bd ready
-
-# Claim an issue
-bd update convexfeld-2by --status in_progress
-
-# View issue details (includes spec references)
-bd show convexfeld-2by
-
-# When done
-bd close convexfeld-2by
+### Build Directory
+```
+build/
+├── CMakeCache.txt
+├── libconvexfeld.a         ✓ BUILDS SUCCESSFULLY
+└── ...
 ```
 
 ---
 
 ## Next Steps for Implementation
 
-### Start with M0.1: Create CMakeLists.txt
+### 1. M0.2: Create Core Types Header
 ```bash
-bd show convexfeld-2by  # View details
-bd update convexfeld-2by --status in_progress  # Claim it
-# Implement per docs/IMPLEMENTATION_PLAN.md Step 0.1
-bd close convexfeld-2by  # When done
+bd show convexfeld-x85  # View details
+bd update convexfeld-x85 --status in_progress  # Claim it
+# Create include/convexfeld/cxf_types.h per docs/IMPLEMENTATION_PLAN.md Step 0.2
+bd close convexfeld-x85  # When done
 ```
 
-### TDD Workflow
-1. **Tests FIRST** - Each module has a "Tests" issue (e.g., M2.1.1: Memory Tests)
-2. **Then implementation** - Write code to make tests pass
-3. **Test:Code ratio** - Target 1:3 to 1:4
+### 2. M0.3: Setup Unity Test Framework
+```bash
+bd show convexfeld-dw2  # View details
+# Download Unity, add to tests/unity/
+# Update tests/CMakeLists.txt
+```
 
-### Parallelization
-- Within each milestone, modules can run in parallel
-- See `docs/IMPLEMENTATION_PLAN.md` Parallelization Guide section
+### 3. M0.4: Create Module Headers (Stubs)
+```bash
+bd show convexfeld-n99  # View details
+# Create stub headers for all 8 structures
+```
 
 ---
 
 ## References
 
 - **Implementation Plan:** `docs/IMPLEMENTATION_PLAN.md`
-- **Learnings:** `docs/learnings.md`
-- **All Specs:** `docs/specs/`
-- **Issue descriptions** contain spec file references (e.g., `docs/specs/functions/memory/cxf_malloc.md`)
+- **Learnings:** `docs/learnings.md` (updated with M0.1 learnings)
+- **Specs:** `docs/specs/`
 
 ---
 
-## Issue ID Quick Reference
+## Issue Status
 
-### M0 (Project Setup) - P0
-- `convexfeld-2by` - M0.1: Create CMakeLists.txt
+### Completed
+- `convexfeld-2by` - M0.1: Create CMakeLists.txt ✓
+
+### Remaining M0 (P0)
 - `convexfeld-x85` - M0.2: Create Core Types Header
 - `convexfeld-dw2` - M0.3: Setup Unity Test Framework
 - `convexfeld-n99` - M0.4: Create Module Headers (Stubs)
 
-### M1 (Tracer Bullet) - P1
+### M1 (P1) - After M0
 - `convexfeld-cz6` - M1.0: Tracer Bullet Test
-- `convexfeld-z6p` - M1.1: Stub CxfEnv Structure
-- `convexfeld-ae7` - M1.2: Stub CxfModel Structure
-- `convexfeld-bko` - M1.3: Stub SparseMatrix Structure
-- `convexfeld-z1h` - M1.4: Stub API Functions
-- `convexfeld-7he` - M1.5: Stub Simplex Entry
-- `convexfeld-6uc` - M1.6: Stub Memory Functions
-- `convexfeld-9t5` - M1.7: Stub Error Functions
-- `convexfeld-9b2` - M1.8: Tracer Bullet Benchmark
+- 8 more M1 issues...
+
+Run `bd ready` to see all available work.
