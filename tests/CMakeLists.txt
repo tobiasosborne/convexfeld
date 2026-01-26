@@ -63,6 +63,9 @@ add_cxf_test(test_api_env unit/test_api_env.c)
 # M8.1.2: API Tests - Model
 add_cxf_test(test_api_model unit/test_api_model.c)
 
+# M8.1.3: API Tests - Variables
+add_cxf_test(test_api_vars unit/test_api_vars.c)
+
 # M2.1.3: Vector memory management tests
 add_cxf_test(test_memory_vectors unit/test_memory_vectors.c)
 

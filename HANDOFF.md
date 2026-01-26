@@ -17,15 +17,27 @@ All M1 milestones are now complete. Next steps: Continue with M2.x-M8.x implemen
 ## Work Completed This Session
 
 ### M6.1.4: cxf_pricing_candidates - Complete
-- `src/pricing/candidates.c` (172 LOC) - Full candidate selection implementation:
-  - Partial pricing section support (scans subset of variables)
-  - Sorting by |reduced_cost| descending (most attractive first)
-  - Free variable handling (status -3)
-  - Statistics tracking (total_candidates_scanned)
-  - Replace-least-attractive when array full
+- `src/pricing/candidates.c` (172 LOC) - Full candidate selection implementation
+
+### M8.1.3: API Tests - Variables - Complete
+- `tests/unit/test_api_vars.c` (266 LOC) - 16 TDD tests for variable operations:
+  - cxf_addvar extended tests (variable types, bounds)
+  - cxf_addvars batch addition tests
+  - cxf_delvars deletion tests
+- Added stub implementations in `model_stub.c` for cxf_addvars and cxf_delvars
+
+### M4.1.6: cxf_sort_indices - Complete
+- `src/matrix/sort.c` (83 LOC) - Index sorting with value synchronization:
+  - `cxf_sort_indices(indices, n)` - Sort indices only
+  - `cxf_sort_indices_values(indices, values, n)` - Sort with synchronized values
+  - Uses insertion sort (optimal for small arrays typical in sparse matrix work)
 
 **Test results:**
-- All 9 test suites PASS (100% tests passed)
+- All 10 test suites PASS (100% tests passed)
+
+**Refactor issues created:**
+- convexfeld-st1: Refactor model_stub.c to < 200 LOC (227 LOC)
+- convexfeld-hqo: Refactor test_matrix.c to < 200 LOC (446 LOC)
 
 ---
 

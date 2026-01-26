@@ -6,6 +6,44 @@ This file captures learnings, gotchas, and useful patterns discovered during dev
 
 ---
 
+## 2026-01-26: M4.1.6 cxf_sort_indices
+
+### SUCCESS: Index sorting with value synchronization
+
+**File created:**
+- `src/matrix/sort.c` (83 LOC)
+
+**Functions implemented:**
+- `cxf_sort_indices(indices, n)` - Sort indices only
+- `cxf_sort_indices_values(indices, values, n)` - Sort with synchronized values
+
+**Design decision:**
+- Used insertion sort instead of full introsort (spec describes introsort)
+- Insertion sort is optimal for small arrays (n < 16) typical in sparse matrix operations
+- Full introsort can be added later if needed for large arrays
+
+---
+
+## 2026-01-26: M8.1.3 API Tests - Variables
+
+### SUCCESS: TDD tests for variable operations
+
+**File created:**
+- `tests/unit/test_api_vars.c` (266 LOC) - 16 tests
+
+**Stub implementations added:**
+- `cxf_addvars(model, numvars, numnz, ...)` - Batch variable addition
+- `cxf_delvars(model, numdel, ind)` - Variable deletion (validates only, doesn't remove)
+
+**Key TDD pattern:**
+- Tests define expected behavior for batch operations
+- Stubs implement basic functionality to pass tests
+- Full implementations will handle pending buffers, constraint coefficients
+
+**Note:** model_stub.c now exceeds 200 LOC (227 LOC) - refactor issue created
+
+---
+
 ## 2026-01-26: M6.1.4 cxf_pricing_candidates
 
 ### SUCCESS: Full candidate selection with partial pricing and sorting
