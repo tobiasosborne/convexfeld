@@ -343,6 +343,43 @@ typedef struct {
 
 ---
 
+### 2026-01-26: M5.1.8 Basis Validation/Warm Start
+
+**File created:** `src/basis/warm.c` (115 LOC, 244 lines with comments)
+
+**Functions implemented:**
+- `cxf_basis_validate(basis)` - Validate basis for consistency
+- `cxf_basis_validate_ex(basis, flags)` - Extended validation with selective checks
+- `cxf_basis_warm(basis, basic_vars, m)` - Warm start from basic variable array
+- `cxf_basis_warm_snapshot(basis, snapshot)` - Warm start from BasisSnapshot
+
+**Validation flags defined:**
+```c
+#define CXF_CHECK_COUNT       0x01  // Verify m basic variables
+#define CXF_CHECK_BOUNDS      0x02  // Check indices in [0, n)
+#define CXF_CHECK_DUPLICATES  0x04  // Check no duplicate basic vars
+#define CXF_CHECK_CONSISTENCY 0x10  // Check varStatus matches basisHeader
+#define CXF_CHECK_ALL         0xFF  // Run all checks
+```
+
+**Tests added to test_basis.c (15 new, 56 total):**
+- Validation tests (9): valid_basis, duplicate_vars, null_arg, empty_basis, out_of_bounds, negative_index, check_count, check_all, no_flags
+- Warm start tests (6): loads_basis, clears_eta_list, null_args, size_mismatch, resets_pivot_count, warm_snapshot variants
+
+**Key design decisions:**
+- Simplified validation vs full spec (uses BasisState, not SolverState)
+- Out-of-bounds check: 0 <= var < n (not n + m as in full solver)
+- cxf_basis_validate_ex with flags=0 returns OK immediately (no checks)
+- Warm start clears eta list and resets pivots_since_refactor
+- BasisSnapshot warm start copies both basisHeader and varStatus
+
+**Spec adaptation notes:**
+- Full spec has cxf_basis_validate(state, env, flags) with SolverState
+- Implemented simpler version compatible with current BasisState structure
+- Future work: integrate with full SolverState when simplex implemented
+
+---
+
 ## M7: Simplex Engine (Level 5)
 
 ### 2026-01-26: M7.1.1 Simplex Tests - Basic (TDD)

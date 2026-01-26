@@ -94,58 +94,8 @@ int cxf_basis_equal(BasisState *basis, const int *snapshot, int m) {
 }
 
 /*******************************************************************************
- * Validation/warm start - Implementation in M5.1.8
+ * Validation/warm start - Implemented in warm.c (M5.1.8)
  ******************************************************************************/
 
-/**
- * @brief Validate basis consistency.
- * @note Full implementation in M5.1.8
- */
-int cxf_basis_validate(BasisState *basis) {
-    if (basis == NULL) {
-        return CXF_ERROR_NULL_ARGUMENT;
-    }
-
-    /* Check for duplicate basic variables */
-    for (int i = 0; i < basis->m; i++) {
-        for (int j = i + 1; j < basis->m; j++) {
-            if (basis->basic_vars[i] == basis->basic_vars[j]) {
-                return CXF_ERROR_INVALID_ARGUMENT;
-            }
-        }
-    }
-
-    return CXF_OK;
-}
-
-/**
- * @brief Warm start from saved basis.
- * @note Full implementation in M5.1.8
- */
-int cxf_basis_warm(BasisState *basis, const int *basic_vars, int m) {
-    if (basis == NULL || basic_vars == NULL) {
-        return CXF_ERROR_NULL_ARGUMENT;
-    }
-    if (m != basis->m) {
-        return CXF_ERROR_INVALID_ARGUMENT;
-    }
-
-    /* Copy basic variables */
-    memcpy(basis->basic_vars, basic_vars, (size_t)m * sizeof(int));
-
-    /* Clear eta list (refactorization will be needed) */
-    EtaFactors *eta = basis->eta_head;
-    while (eta != NULL) {
-        EtaFactors *next = eta->next;
-        free(eta->indices);
-        free(eta->values);
-        free(eta);
-        eta = next;
-    }
-
-    basis->eta_head = NULL;
-    basis->eta_count = 0;
-    basis->pivots_since_refactor = 0;
-
-    return CXF_OK;
-}
+/* cxf_basis_validate, cxf_basis_validate_ex, cxf_basis_warm,
+ * cxf_basis_warm_snapshot are all implemented in warm.c */

@@ -44,9 +44,22 @@ int cxf_basis_snapshot_diff(const BasisSnapshot *s1, const BasisSnapshot *s2);
 int cxf_basis_snapshot_equal(const BasisSnapshot *s1, const BasisSnapshot *s2);
 void cxf_basis_snapshot_free(BasisSnapshot *snapshot);
 
-/* Validation/warm start - to be implemented in M5.1.8 */
+/* Validation/warm start - implemented in warm.c (M5.1.8) */
 int cxf_basis_validate(BasisState *basis);
 int cxf_basis_warm(BasisState *basis, const int *basic_vars, int m);
+
+/* Validation flags for extended validation */
+#define CXF_CHECK_COUNT       0x01
+#define CXF_CHECK_BOUNDS      0x02
+#define CXF_CHECK_DUPLICATES  0x04
+#define CXF_CHECK_CONSISTENCY 0x10
+#define CXF_CHECK_ALL         0xFF
+
+/* Extended validation with flags */
+int cxf_basis_validate_ex(BasisState *basis, int flags);
+
+/* Warm start from BasisSnapshot */
+int cxf_basis_warm_snapshot(BasisState *basis, const BasisSnapshot *snapshot);
 
 /*******************************************************************************
  * Test fixtures
@@ -577,7 +590,7 @@ void test_snapshot_free_clears_valid(void) {
 }
 
 /*******************************************************************************
- * Validation/warm start tests
+ * Validation/warm start tests (M5.1.8)
  ******************************************************************************/
 
 void test_basis_validate_valid_basis(void) {
@@ -608,6 +621,85 @@ void test_basis_validate_duplicate_vars(void) {
     cxf_basis_free(basis);
 }
 
+void test_basis_validate_null_arg(void) {
+    int status = cxf_basis_validate(NULL);
+    TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT, status);
+}
+
+void test_basis_validate_empty_basis(void) {
+    BasisState *basis = cxf_basis_create(0, 0);
+    int status = cxf_basis_validate(basis);
+    TEST_ASSERT_EQUAL_INT(CXF_OK, status);  /* Trivially valid */
+    cxf_basis_free(basis);
+}
+
+void test_basis_validate_out_of_bounds(void) {
+    BasisState *basis = cxf_basis_create(3, 5);
+
+    /* Invalid: variable index out of bounds */
+    basis->basic_vars[0] = 0;
+    basis->basic_vars[1] = 2;
+    basis->basic_vars[2] = 10;  /* Out of bounds (n=5) */
+
+    int status = cxf_basis_validate(basis);
+    TEST_ASSERT_EQUAL_INT(CXF_ERROR_INVALID_ARGUMENT, status);
+
+    cxf_basis_free(basis);
+}
+
+void test_basis_validate_negative_index(void) {
+    BasisState *basis = cxf_basis_create(3, 5);
+
+    /* Invalid: negative variable index */
+    basis->basic_vars[0] = 0;
+    basis->basic_vars[1] = -1;  /* Invalid */
+    basis->basic_vars[2] = 2;
+
+    int status = cxf_basis_validate(basis);
+    TEST_ASSERT_EQUAL_INT(CXF_ERROR_INVALID_ARGUMENT, status);
+
+    cxf_basis_free(basis);
+}
+
+void test_basis_validate_ex_check_count(void) {
+    BasisState *basis = cxf_basis_create(3, 5);
+    basis->basic_vars[0] = 0;
+    basis->basic_vars[1] = 1;
+    basis->basic_vars[2] = 2;
+
+    /* With only count check, should pass */
+    int status = cxf_basis_validate_ex(basis, CXF_CHECK_COUNT);
+    TEST_ASSERT_EQUAL_INT(CXF_OK, status);
+
+    cxf_basis_free(basis);
+}
+
+void test_basis_validate_ex_check_all(void) {
+    BasisState *basis = cxf_basis_create(3, 5);
+    basis->basic_vars[0] = 0;
+    basis->basic_vars[1] = 2;
+    basis->basic_vars[2] = 4;
+
+    /* With all checks, valid basis should pass */
+    int status = cxf_basis_validate_ex(basis, CXF_CHECK_ALL);
+    TEST_ASSERT_EQUAL_INT(CXF_OK, status);
+
+    cxf_basis_free(basis);
+}
+
+void test_basis_validate_ex_no_flags(void) {
+    BasisState *basis = cxf_basis_create(3, 5);
+    basis->basic_vars[0] = 0;
+    basis->basic_vars[1] = 0;  /* Duplicate, but no check */
+    basis->basic_vars[2] = 10; /* Out of bounds, but no check */
+
+    /* With no flags, returns OK immediately */
+    int status = cxf_basis_validate_ex(basis, 0);
+    TEST_ASSERT_EQUAL_INT(CXF_OK, status);
+
+    cxf_basis_free(basis);
+}
+
 void test_basis_warm_loads_basis(void) {
     BasisState *basis = cxf_basis_create(3, 5);
 
@@ -633,6 +725,141 @@ void test_basis_warm_clears_eta_list(void) {
     TEST_ASSERT_EQUAL_INT(0, basis->eta_count);  /* Etas cleared */
 
     cxf_basis_free(basis);
+}
+
+void test_basis_warm_null_args(void) {
+    BasisState *basis = cxf_basis_create(2, 4);
+    int warm_vars[] = {0, 1};
+
+    int status = cxf_basis_warm(NULL, warm_vars, 2);
+    TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT, status);
+
+    status = cxf_basis_warm(basis, NULL, 2);
+    TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT, status);
+
+    cxf_basis_free(basis);
+}
+
+void test_basis_warm_size_mismatch(void) {
+    BasisState *basis = cxf_basis_create(2, 4);
+    int warm_vars[] = {0, 1, 2};  /* 3 vars, but basis has m=2 */
+
+    int status = cxf_basis_warm(basis, warm_vars, 3);
+    TEST_ASSERT_EQUAL_INT(CXF_ERROR_INVALID_ARGUMENT, status);
+
+    cxf_basis_free(basis);
+}
+
+void test_basis_warm_resets_pivot_count(void) {
+    BasisState *basis = cxf_basis_create(2, 4);
+    basis->pivots_since_refactor = 50;  /* Simulate pivots */
+
+    int warm_vars[] = {0, 2};
+
+    int status = cxf_basis_warm(basis, warm_vars, 2);
+    TEST_ASSERT_EQUAL_INT(CXF_OK, status);
+    TEST_ASSERT_EQUAL_INT(0, basis->pivots_since_refactor);
+
+    cxf_basis_free(basis);
+}
+
+void test_basis_warm_snapshot_copies_basis(void) {
+    /* Create source basis and snapshot */
+    BasisState *source = cxf_basis_create(3, 5);
+    source->basic_vars[0] = 1;
+    source->basic_vars[1] = 3;
+    source->basic_vars[2] = 4;
+    source->var_status[0] = CXF_BASIC;
+    source->var_status[1] = CXF_NONBASIC_L;
+    source->var_status[2] = CXF_BASIC;
+
+    BasisSnapshot snap;
+    cxf_basis_snapshot_create(source, &snap, 0);
+
+    /* Create target basis and warm start from snapshot */
+    BasisState *target = cxf_basis_create(3, 5);
+    int status = cxf_basis_warm_snapshot(target, &snap);
+    TEST_ASSERT_EQUAL_INT(CXF_OK, status);
+
+    /* Verify basis copied */
+    TEST_ASSERT_EQUAL_INT(1, target->basic_vars[0]);
+    TEST_ASSERT_EQUAL_INT(3, target->basic_vars[1]);
+    TEST_ASSERT_EQUAL_INT(4, target->basic_vars[2]);
+
+    /* Verify var status copied */
+    TEST_ASSERT_EQUAL_INT(CXF_BASIC, target->var_status[0]);
+    TEST_ASSERT_EQUAL_INT(CXF_NONBASIC_L, target->var_status[1]);
+    TEST_ASSERT_EQUAL_INT(CXF_BASIC, target->var_status[2]);
+
+    cxf_basis_snapshot_free(&snap);
+    cxf_basis_free(source);
+    cxf_basis_free(target);
+}
+
+void test_basis_warm_snapshot_null_args(void) {
+    BasisState *basis = cxf_basis_create(2, 3);
+    BasisSnapshot snap;
+    snap.valid = 1;
+
+    int status = cxf_basis_warm_snapshot(NULL, &snap);
+    TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT, status);
+
+    status = cxf_basis_warm_snapshot(basis, NULL);
+    TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT, status);
+
+    cxf_basis_free(basis);
+}
+
+void test_basis_warm_snapshot_invalid_snap(void) {
+    BasisState *basis = cxf_basis_create(2, 3);
+    BasisSnapshot snap;
+    snap.valid = 0;  /* Invalid snapshot */
+
+    int status = cxf_basis_warm_snapshot(basis, &snap);
+    TEST_ASSERT_EQUAL_INT(CXF_ERROR_INVALID_ARGUMENT, status);
+
+    cxf_basis_free(basis);
+}
+
+void test_basis_warm_snapshot_dimension_mismatch(void) {
+    BasisState *source = cxf_basis_create(3, 5);
+    source->basic_vars[0] = 0;
+    source->basic_vars[1] = 1;
+    source->basic_vars[2] = 2;
+
+    BasisSnapshot snap;
+    cxf_basis_snapshot_create(source, &snap, 0);
+
+    /* Create target with different dimensions */
+    BasisState *target = cxf_basis_create(2, 4);
+    int status = cxf_basis_warm_snapshot(target, &snap);
+    TEST_ASSERT_EQUAL_INT(CXF_ERROR_INVALID_ARGUMENT, status);
+
+    cxf_basis_snapshot_free(&snap);
+    cxf_basis_free(source);
+    cxf_basis_free(target);
+}
+
+void test_basis_warm_snapshot_clears_etas(void) {
+    BasisState *source = cxf_basis_create(2, 3);
+    source->basic_vars[0] = 0;
+    source->basic_vars[1] = 1;
+
+    BasisSnapshot snap;
+    cxf_basis_snapshot_create(source, &snap, 0);
+
+    BasisState *target = cxf_basis_create(2, 3);
+    target->eta_count = 15;
+    target->pivots_since_refactor = 25;
+
+    int status = cxf_basis_warm_snapshot(target, &snap);
+    TEST_ASSERT_EQUAL_INT(CXF_OK, status);
+    TEST_ASSERT_EQUAL_INT(0, target->eta_count);
+    TEST_ASSERT_EQUAL_INT(0, target->pivots_since_refactor);
+
+    cxf_basis_snapshot_free(&snap);
+    cxf_basis_free(source);
+    cxf_basis_free(target);
 }
 
 /*******************************************************************************
@@ -693,11 +920,28 @@ int main(void) {
     RUN_TEST(test_snapshot_free_null_safe);
     RUN_TEST(test_snapshot_free_clears_valid);
 
-    /* Validation/warm start tests */
+    /* Validation tests (M5.1.8) */
     RUN_TEST(test_basis_validate_valid_basis);
     RUN_TEST(test_basis_validate_duplicate_vars);
+    RUN_TEST(test_basis_validate_null_arg);
+    RUN_TEST(test_basis_validate_empty_basis);
+    RUN_TEST(test_basis_validate_out_of_bounds);
+    RUN_TEST(test_basis_validate_negative_index);
+    RUN_TEST(test_basis_validate_ex_check_count);
+    RUN_TEST(test_basis_validate_ex_check_all);
+    RUN_TEST(test_basis_validate_ex_no_flags);
+
+    /* Warm start tests (M5.1.8) */
     RUN_TEST(test_basis_warm_loads_basis);
     RUN_TEST(test_basis_warm_clears_eta_list);
+    RUN_TEST(test_basis_warm_null_args);
+    RUN_TEST(test_basis_warm_size_mismatch);
+    RUN_TEST(test_basis_warm_resets_pivot_count);
+    RUN_TEST(test_basis_warm_snapshot_copies_basis);
+    RUN_TEST(test_basis_warm_snapshot_null_args);
+    RUN_TEST(test_basis_warm_snapshot_invalid_snap);
+    RUN_TEST(test_basis_warm_snapshot_dimension_mismatch);
+    RUN_TEST(test_basis_warm_snapshot_clears_etas);
 
     return UNITY_END();
 }
