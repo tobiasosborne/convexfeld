@@ -1,73 +1,115 @@
 # Agent Handoff
 
-*Last updated: 2026-01-25*
+*Last updated: 2026-01-26*
 
 ---
 
 ## CRITICAL: READ THIS FIRST
 
-### NEXT STEP IS **NOT** IMPLEMENTATION
+### ALL BEADS ISSUES ARE NOW CREATED
 
-**DO NOT START WRITING CODE.**
+**122 issues have been created for every step in the implementation plan.**
 
-The implementation plan is complete. The **ONLY** next step is:
-
-## CREATE BEADS ISSUES FOR EVERY STEP IN THE PLAN
-
-Read `docs/IMPLEMENTATION_PLAN.md` and create a beads issue for **EACH STEP**.
-
-Example:
-```bash
-bd create --title "M0.1: Create CMakeLists.txt" --type task --priority 1 \
-  --description "Create root CMakeLists.txt per docs/IMPLEMENTATION_PLAN.md Step 0.1"
-
-bd create --title "M0.2: Create cxf_types.h" --type task --priority 1 \
-  --description "Create include/convexfeld/cxf_types.h per Step 0.2"
-```
-
-**DO THIS FOR ALL ~50+ STEPS IN THE PLAN.**
-
-Only AFTER all issues are created should ANY implementation begin.
+The next step is: **BEGIN IMPLEMENTATION starting with M0 (Project Setup)**
 
 ---
 
-## Previous Agent Error (This Session)
+## Work Completed This Session
 
-An agent started implementing M0 (created CMakeLists.txt, headers, etc.) instead of creating beads issues. This was wrong. Those files were deleted.
+Created beads issues for all 9 milestones:
 
-**Correct workflow:**
-1. Plan written ✓
-2. **Create beads issues for every step** ← YOU ARE HERE
-3. Then implementation begins (one issue at a time)
+| Milestone | Issues | Priority | Description |
+|-----------|--------|----------|-------------|
+| M0 | 4 | P0 | Project Setup (CMakeLists.txt, headers, Unity) |
+| M1 | 9 | P1 | Tracer Bullet (end-to-end minimal test) |
+| M2 | 8 | P2 | Foundation Layer (Memory, Parameters, Validation) |
+| M3 | 16 | P2 | Infrastructure Layer (Error, Logging, Threading) |
+| M4 | 14 | P2 | Data Layer (Matrix, Timing, Analysis) |
+| M5 | 18 | P2 | Core Operations (Basis, Callbacks, Solver State) |
+| M6 | 7 | P2 | Algorithm Layer (Pricing) |
+| M7 | 28 | P2 | Simplex Engine (Simplex Core, Crossover, Utilities) |
+| M8 | 18 | P2 | Public API (30 functions) |
+
+**Total: 122 open issues ready for implementation**
 
 ---
 
 ## Current State
 
-### Implementation Plan
-- **Location:** `docs/IMPLEMENTATION_PLAN.md`
-- **Language:** C99 (ISO/IEC 9899:1999)
-- **Functions:** 142 (112 internal + 30 API)
-- **Structures:** 8 core data structures
-- **Milestones:** 9 (M0-M8)
+### Issue Tracking
+```bash
+bd ready              # Show available work (122 issues)
+bd list --status=open # List all open issues
+bd show <id>          # View issue details with spec references
+```
 
-### Milestones to Create Issues For
+### Implementation Order
+1. **M0 (P0)** - Must complete first: Project setup, headers, test framework
+2. **M1 (P1)** - Tracer bullet proves architecture end-to-end
+3. **M2-M8 (P2)** - Can parallelize within milestones per plan
+
+### Key Commands for Next Agent
+```bash
+# Find work to start
+bd ready
+
+# Claim an issue
+bd update convexfeld-2by --status in_progress
+
+# View issue details (includes spec references)
+bd show convexfeld-2by
+
+# When done
+bd close convexfeld-2by
 ```
-M0: Project Setup (~4 steps)
-M1: Tracer Bullet (~8 steps)
-M2: Foundation Layer (~15 steps)
-M3: Infrastructure Layer (~22 steps)
-M4: Data Layer (~18 steps)
-M5: Core Operations (~18 steps)
-M6: Algorithm Layer (~6 steps)
-M7: Simplex Engine (~23 steps)
-M8: Public API (~30 steps)
+
+---
+
+## Next Steps for Implementation
+
+### Start with M0.1: Create CMakeLists.txt
+```bash
+bd show convexfeld-2by  # View details
+bd update convexfeld-2by --status in_progress  # Claim it
+# Implement per docs/IMPLEMENTATION_PLAN.md Step 0.1
+bd close convexfeld-2by  # When done
 ```
+
+### TDD Workflow
+1. **Tests FIRST** - Each module has a "Tests" issue (e.g., M2.1.1: Memory Tests)
+2. **Then implementation** - Write code to make tests pass
+3. **Test:Code ratio** - Target 1:3 to 1:4
+
+### Parallelization
+- Within each milestone, modules can run in parallel
+- See `docs/IMPLEMENTATION_PLAN.md` Parallelization Guide section
 
 ---
 
 ## References
 
-- Implementation Plan: `docs/IMPLEMENTATION_PLAN.md`
-- Learnings: `docs/learnings.md`
-- All Specs: `docs/specs/`
+- **Implementation Plan:** `docs/IMPLEMENTATION_PLAN.md`
+- **Learnings:** `docs/learnings.md`
+- **All Specs:** `docs/specs/`
+- **Issue descriptions** contain spec file references (e.g., `docs/specs/functions/memory/cxf_malloc.md`)
+
+---
+
+## Issue ID Quick Reference
+
+### M0 (Project Setup) - P0
+- `convexfeld-2by` - M0.1: Create CMakeLists.txt
+- `convexfeld-x85` - M0.2: Create Core Types Header
+- `convexfeld-dw2` - M0.3: Setup Unity Test Framework
+- `convexfeld-n99` - M0.4: Create Module Headers (Stubs)
+
+### M1 (Tracer Bullet) - P1
+- `convexfeld-cz6` - M1.0: Tracer Bullet Test
+- `convexfeld-z6p` - M1.1: Stub CxfEnv Structure
+- `convexfeld-ae7` - M1.2: Stub CxfModel Structure
+- `convexfeld-bko` - M1.3: Stub SparseMatrix Structure
+- `convexfeld-z1h` - M1.4: Stub API Functions
+- `convexfeld-7he` - M1.5: Stub Simplex Entry
+- `convexfeld-6uc` - M1.6: Stub Memory Functions
+- `convexfeld-9t5` - M1.7: Stub Error Functions
+- `convexfeld-9b2` - M1.8: Tracer Bullet Benchmark
