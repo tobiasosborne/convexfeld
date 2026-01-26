@@ -6,6 +6,39 @@ This file captures learnings, gotchas, and useful patterns discovered during dev
 
 ---
 
+## 2026-01-26: M5.1.4 cxf_ftran
+
+### SUCCESS: Forward transformation with Product Form of Inverse
+
+**File created:**
+- `src/basis/ftran.c` (95 LOC) - Forward transformation implementation
+
+**Function implemented:**
+- `cxf_ftran(basis, column, result)` - Solve Bx = b using eta representation
+
+**Algorithm (Product Form of Inverse):**
+1. Copy input column to result (identity basis case)
+2. Apply eta vectors in chronological order (oldest to newest via linked list)
+3. For each eta E with pivot row r and pivot element p:
+   - Save temp = result[r]
+   - result[r] = temp / pivot_elem
+   - For each off-diagonal entry: result[j] -= eta_value[j] * temp
+
+**Key design decisions:**
+- Follows linked list from eta_head → next → next (oldest to newest)
+- Separate input/output arrays to preserve original column
+- Bounds checking on pivot_row and division by zero check on pivot_elem
+- Sparse off-diagonal entries stored in indices/values arrays
+
+**Files modified:**
+- `CMakeLists.txt` - Added ftran.c to build
+- `src/basis/basis_stub.c` - Removed cxf_ftran stub (now in ftran.c)
+
+**Test results:**
+- All 8 test suites PASS (100% tests passed)
+
+---
+
 ## 2026-01-26: M2.1.3 cxf_vector_free, cxf_alloc_eta
 
 ### SUCCESS: Vector memory management and eta arena allocator

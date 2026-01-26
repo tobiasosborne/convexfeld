@@ -23,19 +23,7 @@
  * FTRAN/BTRAN - Implementation in M5.1.4 / M5.1.5
  ******************************************************************************/
 
-/**
- * @brief Forward transformation stub.
- * @note Full implementation in M5.1.4
- */
-int cxf_ftran(BasisState *basis, const double *column, double *result) {
-    if (basis == NULL || column == NULL || result == NULL) {
-        return CXF_ERROR_NULL_ARGUMENT;
-    }
-
-    /* Stub: For identity basis, just copy column to result */
-    memcpy(result, column, (size_t)basis->m * sizeof(double));
-    return CXF_OK;
-}
+/* cxf_ftran is implemented in ftran.c (M5.1.4) */
 
 /**
  * @brief Backward transformation stub.
