@@ -32,10 +32,17 @@ int cxf_btran(BasisState *basis, int row, double *result);
 /* Refactorization - to be implemented in M5.1.6 */
 int cxf_basis_refactor(BasisState *basis);
 
-/* Basis snapshot/comparison - to be implemented in M5.1.7 */
+/* Basis snapshot/comparison - legacy API (still in basis_stub.c) */
 int *cxf_basis_snapshot(BasisState *basis);
 int cxf_basis_diff(const int *snap1, const int *snap2, int m);
 int cxf_basis_equal(BasisState *basis, const int *snapshot, int m);
+
+/* BasisSnapshot API - implemented in snapshot.c (M5.1.7) */
+int cxf_basis_snapshot_create(BasisState *basis, BasisSnapshot *snapshot,
+                              int includeFactors);
+int cxf_basis_snapshot_diff(const BasisSnapshot *s1, const BasisSnapshot *s2);
+int cxf_basis_snapshot_equal(const BasisSnapshot *s1, const BasisSnapshot *s2);
+void cxf_basis_snapshot_free(BasisSnapshot *snapshot);
 
 /* Validation/warm start - to be implemented in M5.1.8 */
 int cxf_basis_validate(BasisState *basis);
@@ -356,6 +363,220 @@ void test_basis_equal_false(void) {
 }
 
 /*******************************************************************************
+ * BasisSnapshot API tests (M5.1.7)
+ ******************************************************************************/
+
+void test_snapshot_create_copies_data(void) {
+    BasisState *basis = cxf_basis_create(3, 5);
+    basis->basic_vars[0] = 2;
+    basis->basic_vars[1] = 4;
+    basis->basic_vars[2] = 0;
+    basis->var_status[0] = CXF_BASIC;
+    basis->var_status[1] = CXF_NONBASIC_L;
+    basis->var_status[2] = CXF_BASIC;
+    basis->iteration = 42;
+
+    BasisSnapshot snap;
+    int status = cxf_basis_snapshot_create(basis, &snap, 0);
+
+    TEST_ASSERT_EQUAL_INT(CXF_OK, status);
+    TEST_ASSERT_EQUAL_INT(1, snap.valid);
+    TEST_ASSERT_EQUAL_INT(5, snap.numVars);
+    TEST_ASSERT_EQUAL_INT(3, snap.numConstrs);
+    TEST_ASSERT_EQUAL_INT(42, snap.iteration);
+    TEST_ASSERT_NOT_NULL(snap.basisHeader);
+    TEST_ASSERT_NOT_NULL(snap.varStatus);
+
+    /* Check basisHeader copied correctly */
+    TEST_ASSERT_EQUAL_INT(2, snap.basisHeader[0]);
+    TEST_ASSERT_EQUAL_INT(4, snap.basisHeader[1]);
+    TEST_ASSERT_EQUAL_INT(0, snap.basisHeader[2]);
+
+    /* Modifying basis should not affect snapshot */
+    basis->basic_vars[0] = 99;
+    TEST_ASSERT_EQUAL_INT(2, snap.basisHeader[0]);
+
+    cxf_basis_snapshot_free(&snap);
+    cxf_basis_free(basis);
+}
+
+void test_snapshot_create_null_args(void) {
+    BasisSnapshot snap;
+    int status = cxf_basis_snapshot_create(NULL, &snap, 0);
+    TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT, status);
+
+    BasisState *basis = cxf_basis_create(2, 3);
+    status = cxf_basis_snapshot_create(basis, NULL, 0);
+    TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT, status);
+
+    cxf_basis_free(basis);
+}
+
+void test_snapshot_create_empty_basis(void) {
+    BasisState *basis = cxf_basis_create(0, 0);
+    BasisSnapshot snap;
+
+    int status = cxf_basis_snapshot_create(basis, &snap, 0);
+    TEST_ASSERT_EQUAL_INT(CXF_OK, status);
+    TEST_ASSERT_EQUAL_INT(1, snap.valid);
+    TEST_ASSERT_EQUAL_INT(0, snap.numConstrs);
+    TEST_ASSERT_EQUAL_INT(0, snap.numVars);
+
+    cxf_basis_snapshot_free(&snap);
+    cxf_basis_free(basis);
+}
+
+void test_snapshot_diff_identical(void) {
+    BasisState *basis = cxf_basis_create(3, 5);
+    basis->basic_vars[0] = 1;
+    basis->basic_vars[1] = 2;
+    basis->basic_vars[2] = 3;
+    basis->var_status[0] = CXF_BASIC;
+    basis->var_status[1] = CXF_BASIC;
+
+    BasisSnapshot snap1, snap2;
+    cxf_basis_snapshot_create(basis, &snap1, 0);
+    cxf_basis_snapshot_create(basis, &snap2, 0);
+
+    int diff = cxf_basis_snapshot_diff(&snap1, &snap2);
+    TEST_ASSERT_EQUAL_INT(0, diff);
+
+    cxf_basis_snapshot_free(&snap1);
+    cxf_basis_snapshot_free(&snap2);
+    cxf_basis_free(basis);
+}
+
+void test_snapshot_diff_one_header_change(void) {
+    BasisState *basis = cxf_basis_create(3, 5);
+    basis->basic_vars[0] = 1;
+    basis->basic_vars[1] = 2;
+    basis->basic_vars[2] = 3;
+
+    BasisSnapshot snap1;
+    cxf_basis_snapshot_create(basis, &snap1, 0);
+
+    basis->basic_vars[1] = 4;  /* Change one value */
+    BasisSnapshot snap2;
+    cxf_basis_snapshot_create(basis, &snap2, 0);
+
+    int diff = cxf_basis_snapshot_diff(&snap1, &snap2);
+    TEST_ASSERT_EQUAL_INT(1, diff);
+
+    cxf_basis_snapshot_free(&snap1);
+    cxf_basis_snapshot_free(&snap2);
+    cxf_basis_free(basis);
+}
+
+void test_snapshot_diff_var_status_change(void) {
+    BasisState *basis = cxf_basis_create(2, 3);
+    basis->basic_vars[0] = 0;
+    basis->basic_vars[1] = 1;
+    basis->var_status[0] = CXF_BASIC;
+    basis->var_status[1] = CXF_BASIC;
+    basis->var_status[2] = CXF_NONBASIC_L;
+
+    BasisSnapshot snap1;
+    cxf_basis_snapshot_create(basis, &snap1, 0);
+
+    basis->var_status[2] = CXF_NONBASIC_U;  /* Change var status */
+    BasisSnapshot snap2;
+    cxf_basis_snapshot_create(basis, &snap2, 0);
+
+    int diff = cxf_basis_snapshot_diff(&snap1, &snap2);
+    TEST_ASSERT_EQUAL_INT(1, diff);  /* One varStatus differs */
+
+    cxf_basis_snapshot_free(&snap1);
+    cxf_basis_snapshot_free(&snap2);
+    cxf_basis_free(basis);
+}
+
+void test_snapshot_diff_dimension_mismatch(void) {
+    BasisState *basis1 = cxf_basis_create(2, 3);
+    BasisState *basis2 = cxf_basis_create(3, 4);
+
+    BasisSnapshot snap1, snap2;
+    cxf_basis_snapshot_create(basis1, &snap1, 0);
+    cxf_basis_snapshot_create(basis2, &snap2, 0);
+
+    int diff = cxf_basis_snapshot_diff(&snap1, &snap2);
+    TEST_ASSERT_EQUAL_INT(-1, diff);  /* Dimension mismatch */
+
+    cxf_basis_snapshot_free(&snap1);
+    cxf_basis_snapshot_free(&snap2);
+    cxf_basis_free(basis1);
+    cxf_basis_free(basis2);
+}
+
+void test_snapshot_diff_null_args(void) {
+    BasisSnapshot snap;
+    snap.valid = 1;
+    snap.numVars = 1;
+    snap.numConstrs = 1;
+
+    int diff = cxf_basis_snapshot_diff(NULL, &snap);
+    TEST_ASSERT_EQUAL_INT(-1, diff);
+
+    diff = cxf_basis_snapshot_diff(&snap, NULL);
+    TEST_ASSERT_EQUAL_INT(-1, diff);
+}
+
+void test_snapshot_equal_true(void) {
+    BasisState *basis = cxf_basis_create(3, 5);
+    basis->basic_vars[0] = 1;
+    basis->basic_vars[1] = 3;
+    basis->basic_vars[2] = 4;
+
+    BasisSnapshot snap1, snap2;
+    cxf_basis_snapshot_create(basis, &snap1, 0);
+    cxf_basis_snapshot_create(basis, &snap2, 0);
+
+    int equal = cxf_basis_snapshot_equal(&snap1, &snap2);
+    TEST_ASSERT_EQUAL_INT(1, equal);
+
+    cxf_basis_snapshot_free(&snap1);
+    cxf_basis_snapshot_free(&snap2);
+    cxf_basis_free(basis);
+}
+
+void test_snapshot_equal_false(void) {
+    BasisState *basis = cxf_basis_create(3, 5);
+    basis->basic_vars[0] = 1;
+    basis->basic_vars[1] = 3;
+    basis->basic_vars[2] = 4;
+
+    BasisSnapshot snap1;
+    cxf_basis_snapshot_create(basis, &snap1, 0);
+
+    basis->basic_vars[1] = 2;  /* Change value */
+    BasisSnapshot snap2;
+    cxf_basis_snapshot_create(basis, &snap2, 0);
+
+    int equal = cxf_basis_snapshot_equal(&snap1, &snap2);
+    TEST_ASSERT_EQUAL_INT(0, equal);
+
+    cxf_basis_snapshot_free(&snap1);
+    cxf_basis_snapshot_free(&snap2);
+    cxf_basis_free(basis);
+}
+
+void test_snapshot_free_null_safe(void) {
+    cxf_basis_snapshot_free(NULL);  /* Should not crash */
+    TEST_PASS();
+}
+
+void test_snapshot_free_clears_valid(void) {
+    BasisState *basis = cxf_basis_create(2, 3);
+    BasisSnapshot snap;
+    cxf_basis_snapshot_create(basis, &snap, 0);
+
+    TEST_ASSERT_EQUAL_INT(1, snap.valid);
+    cxf_basis_snapshot_free(&snap);
+    TEST_ASSERT_EQUAL_INT(0, snap.valid);
+
+    cxf_basis_free(basis);
+}
+
+/*******************************************************************************
  * Validation/warm start tests
  ******************************************************************************/
 
@@ -450,13 +671,27 @@ int main(void) {
     RUN_TEST(test_basis_refactor_identity_basis);
     RUN_TEST(test_basis_refactor_null_arg);
 
-    /* Snapshot/comparison tests */
+    /* Legacy snapshot/comparison tests */
     RUN_TEST(test_basis_snapshot_returns_copy);
     RUN_TEST(test_basis_diff_identical);
     RUN_TEST(test_basis_diff_one_change);
     RUN_TEST(test_basis_diff_all_different);
     RUN_TEST(test_basis_equal_true);
     RUN_TEST(test_basis_equal_false);
+
+    /* BasisSnapshot API tests (M5.1.7) */
+    RUN_TEST(test_snapshot_create_copies_data);
+    RUN_TEST(test_snapshot_create_null_args);
+    RUN_TEST(test_snapshot_create_empty_basis);
+    RUN_TEST(test_snapshot_diff_identical);
+    RUN_TEST(test_snapshot_diff_one_header_change);
+    RUN_TEST(test_snapshot_diff_var_status_change);
+    RUN_TEST(test_snapshot_diff_dimension_mismatch);
+    RUN_TEST(test_snapshot_diff_null_args);
+    RUN_TEST(test_snapshot_equal_true);
+    RUN_TEST(test_snapshot_equal_false);
+    RUN_TEST(test_snapshot_free_null_safe);
+    RUN_TEST(test_snapshot_free_clears_valid);
 
     /* Validation/warm start tests */
     RUN_TEST(test_basis_validate_valid_basis);

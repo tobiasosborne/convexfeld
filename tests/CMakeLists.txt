@@ -100,6 +100,9 @@ target_link_libraries(test_pivot_check PRIVATE m)  # For math functions
 # M2.2.1: Parameters tests
 add_cxf_test(test_parameters unit/test_parameters.c)
 
+# M7.1.1: Simplex Tests - Basic
+add_cxf_test(test_simplex_basic unit/test_simplex_basic.c)
+
 ################################################################################
 # Integration Tests
 ################################################################################
