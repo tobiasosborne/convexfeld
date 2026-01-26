@@ -109,3 +109,48 @@ int cxf_sparse_init_csc(SparseMatrix *mat, int num_rows, int num_cols,
 
     return CXF_OK;
 }
+
+/*******************************************************************************
+ * TDD Stubs - To be implemented in M4.1.3 and M4.1.4
+ ******************************************************************************/
+
+/**
+ * @brief Sparse matrix-vector multiply stub (M4.1.3).
+ * @note Full implementation in src/matrix/multiply.c
+ */
+void cxf_matrix_multiply(const double *x, double *y, int num_vars,
+                         int num_constrs, const int64_t *col_start,
+                         const int *row_indices, const double *coeff_values,
+                         int accumulate) {
+    (void)x; (void)y; (void)num_vars; (void)num_constrs;
+    (void)col_start; (void)row_indices; (void)coeff_values; (void)accumulate;
+    /* Stub - tests will fail until implemented */
+}
+
+/**
+ * @brief Dense dot product stub (M4.1.4).
+ * @note Full implementation in src/matrix/vectors.c
+ */
+double cxf_dot_product(const double *x, const double *y, int n) {
+    (void)x; (void)y; (void)n;
+    return 0.0;  /* Stub - tests will fail */
+}
+
+/**
+ * @brief Sparse-dense dot product stub (M4.1.4).
+ * @note Full implementation in src/matrix/vectors.c
+ */
+double cxf_dot_product_sparse(const int *x_indices, const double *x_values,
+                              int x_nnz, const double *y_dense) {
+    (void)x_indices; (void)x_values; (void)x_nnz; (void)y_dense;
+    return 0.0;  /* Stub - tests will fail */
+}
+
+/**
+ * @brief Vector norm stub (M4.1.4).
+ * @note Full implementation in src/matrix/vectors.c
+ */
+double cxf_vector_norm(const double *x, int n, int norm_type) {
+    (void)x; (void)n; (void)norm_type;
+    return 0.0;  /* Stub - tests will fail */
+}

@@ -6,6 +6,30 @@ This file captures learnings, gotchas, and useful patterns discovered during dev
 
 ---
 
+## 2026-01-26: M4.1.1 Matrix Tests
+
+### SUCCESS: TDD tests for matrix operations
+
+**File created:** `tests/unit/test_matrix.c` (197 LOC)
+
+**Tests written (20 total):**
+- SparseMatrix creation/init/free (5 tests) - PASS (stub exists)
+- cxf_matrix_multiply SpMV (4 tests) - FAIL (awaiting M4.1.3)
+- cxf_dot_product dense/sparse (6 tests) - FAIL (awaiting M4.1.4)
+- cxf_vector_norm L1/L2/L∞ (5 tests) - FAIL (awaiting M4.1.4)
+
+**TDD pattern:**
+- Added function stubs that return 0 so tests link and run
+- Stubs live in sparse_stub.c until proper implementation
+- Edge cases (zero vectors, orthogonal, empty sparse) pass by design
+
+**Key decisions:**
+- Tests use explicit function declarations (not headers) for TDD
+- Tolerance of 1e-10 for floating-point comparisons
+- Tests cover basic cases, edge cases, and accumulate modes
+
+---
+
 ## 2026-01-26: M1.8 Tracer Bullet Benchmark
 
 ### SUCCESS: Benchmark established baseline performance

@@ -16,22 +16,23 @@ All M1 milestones are now complete. Next steps: Continue with M2.x-M8.x implemen
 
 ## Work Completed This Session
 
-### M1.8: Tracer Bullet Benchmark - Complete
+### M4.1.1: Matrix Tests - Complete
 
 | Issue | Description | Status |
 |-------|-------------|--------|
-| `convexfeld-9b2` | M1.8: Tracer Bullet Benchmark | CLOSED |
+| `convexfeld-27y` | M4.1.1: Matrix Tests | CLOSED |
 
 **Files created:**
-- `benchmarks/bench_tracer.c` (52 LOC) - Performance benchmark
+- `tests/unit/test_matrix.c` (197 LOC) - TDD tests for matrix operations
 
 **Files modified:**
-- `benchmarks/CMakeLists.txt` - Added benchmark target
+- `tests/CMakeLists.txt` - Added test_matrix target
+- `src/matrix/sparse_stub.c` - Added function stubs for TDD
 
-**Performance results:**
-- 0.114 us/iteration (target was < 1000 us/iteration)
-- 10,000 iterations in ~1ms total
-- Status: PASS
+**Test results (TDD pattern):**
+- 20 tests total: 8 PASS, 12 FAIL (expected - awaiting implementation)
+- SparseMatrix tests pass (already implemented in stub)
+- SpMV, dot product, norm tests fail until M4.1.3/M4.1.4 implemented
 
 ---
 
@@ -142,8 +143,9 @@ target_sources(convexfeld PRIVATE
 - `convexfeld-7he` - M1.5: Stub Simplex Entry
 - `convexfeld-6uc` - M1.6: Stub Memory Functions
 - `convexfeld-9t5` - M1.7: Stub Error Functions
-- `convexfeld-9b2` - M1.8: Tracer Bullet Benchmark  NEW
+- `convexfeld-9b2` - M1.8: Tracer Bullet Benchmark
 - `convexfeld-9in` - M2.1.1: Memory Tests
 - `convexfeld-oq0` - M2.1.2: Memory Implementation
+- `convexfeld-27y` - M4.1.1: Matrix Tests  NEW
 
 Run `bd ready` to see all available work.
