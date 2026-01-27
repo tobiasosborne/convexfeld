@@ -6,48 +6,43 @@
 
 ## Work Completed This Session
 
-**M8.1.11: Variable API Dynamic Resizing** ✅
+**4 API issues completed via parallel sonnet subagents:**
 
 | Issue | Description | Files | Status |
 |-------|-------------|-------|--------|
-| M8.1.11 | Variable API with dynamic resizing | `src/api/model_stub.c` (+74 LOC → 213) | 18 tests pass |
+| M8.1.9 | Environment API | `src/api/env.c` (189 LOC) | 23 tests pass - VERIFIED |
+| M8.1.10 | Model Creation API | `src/api/model.c` (+78 LOC → 229) | 37 tests pass |
+| M8.1.11 | Variable API | `src/api/model_stub.c` (+74 LOC → 213) | 18 tests pass |
+| M8.1.12 | Constraint API | `src/api/constr_stub.c` (119 LOC) | 19 tests pass |
 
-**Implemented:**
-- `cxf_model_grow_vars(model, needed_capacity)` - Helper function to double capacity
-- Updated `cxf_addvar` - Calls grow helper when capacity exceeded
-- Updated `cxf_addvars` - Calls grow helper for batch additions
-- Reallocates 5 parallel arrays: obj_coeffs, lb, ub, vtype, solution
+### M8.1.9: Environment API (VERIFIED COMPLETE)
+- `cxf_loadenv`, `cxf_emptyenv`, `cxf_freeenv` - all implemented
+- `cxf_startenv`, `cxf_clearerrormsg`, callback context functions
+- 23 tests cover all API functions
 
-**Tests added (3 new):**
-- test_addvar_exceeds_initial_capacity - Add 20 vars (exceeds initial 16)
-- test_addvars_batch_exceeds_capacity - Add 50 vars at once
-- test_addvar_grows_capacity - Verify capacity increases correctly
-
-**Pattern documented:**
-- Added "Dynamic Array Growth Pattern" to docs/learnings/patterns.md
-- Doubling strategy: 16 → 32 → 64 → 128 (amortized O(1) insertion)
-- Forward declaration pattern: `extern void *cxf_realloc(void *ptr, size_t size);`
-
----
-
-## Previous Session
-
-**M8.1.10: Model Creation API** - cxf_copymodel and cxf_updatemodel implementation
-
-**Implemented:**
+### M8.1.10: Model Creation API
 - `cxf_copymodel(model)` - Deep copy of model (variables, bounds, status)
 - `cxf_updatemodel(model)` - Lazy update stub (validates, returns CXF_OK)
-- File size: 229 LOC (convexfeld-447 created for refactor)
+- 8 new tests for copy/update functionality
+
+### M8.1.11: Variable API Dynamic Resizing
+- `cxf_model_grow_vars(model, needed_capacity)` - Doubling capacity strategy
+- Updated `cxf_addvar`, `cxf_addvars` to call grow helper
+- Reallocates 5 parallel arrays: obj_coeffs, lb, ub, vtype, solution
+
+### M8.1.12: Constraint API Enhanced Validation
+- Enhanced `cxf_addconstr` with sense/index/finite validation
+- Enhanced `cxf_addconstrs` with batch validation
+- Added `cxf_chgcoeffs` stub with full input validation
+- 6 new validation tests
 
 ---
 
 ## Current State
 
 ### Build Status
-- **All core tests pass** (100%)
-- test_api_vars: 18 tests (3 new for dynamic resizing)
-- test_api_model: 37 tests (copymodel/updatemodel)
-- 3 TDD simplex test files have expected linker errors (functions not yet implemented)
+- **21/25 tests pass** (84%)
+- 4 "Not Run" are TDD simplex tests (expected linker errors - functions not yet implemented)
 - All code compiles without warnings
 
 ### Test Summary
@@ -56,9 +51,12 @@
 | Basis | 56 |
 | Callbacks | 31 |
 | Validation | 14 |
-| Threading | 16 |
 | Logging | 29 |
-| API (env, model, vars, constrs, query, optimize) | 110+ |
+| API (env) | 23 |
+| API (model) | 37 |
+| API (vars) | 18 |
+| API (constrs) | 19 |
+| Other | 50+ |
 
 ---
 
@@ -67,10 +65,10 @@
 Run `bd ready` to see all available work.
 
 ### Recommended Priority
-1. **M8.1.12**: Constraint API (cxf_addconstr, cxf_addconstrs, cxf_delconstrs)
-2. **M8.1.13**: Quadratic API (cxf_addqconstr, cxf_addqpterms, cxf_delq)
-3. **M8.1.14**: Optimize API (cxf_optimize implementation)
-4. **M7.x**: Simplex stubs to make TDD tests link, then implement simplex algorithm
+1. **M8.1.13**: Quadratic API (cxf_addqconstr, cxf_addqpterms)
+2. **M8.1.14**: Optimize API (cxf_optimize implementation)
+3. **M8.1.15**: Attribute API (cxf_getintattr, cxf_getdblattr)
+4. **M7.1.4**: cxf_solve_lp - main simplex entry point
 5. **M2.3.2**: Array Validation implementation
 6. **M3.3.2**: Lock Management
 
@@ -80,7 +78,6 @@ TDD tests define the interface. Next steps:
 2. Implement cxf_solve_lp (main entry point)
 3. Implement cxf_simplex_init/final (lifecycle)
 4. Implement cxf_simplex_iterate (core loop)
-5. Implement perturbation/unperturbation for cycling
 
 ---
 
@@ -93,8 +90,7 @@ TDD tests define the interface. Next steps:
 ---
 
 ## Refactor Issues (200 LOC limit)
-- `convexfeld-447` - model.c (229 LOC) - NEW
+- `convexfeld-447` - model.c (229 LOC)
 - `convexfeld-hqo` - test_matrix.c (446 LOC)
 - `convexfeld-afb` - test_error.c (437 LOC)
 - `convexfeld-5w6` - test_logging.c (300 LOC)
-- Note: test_basis.c, test_api_env.c, test_api_vars.c exceed limit but are growing TDD test files
