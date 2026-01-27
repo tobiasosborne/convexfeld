@@ -6,33 +6,33 @@
 
 ## Work Completed This Session
 
-### Implemented M7.1.8-M7.1.19 Simplex Core Functions Using Parallel Subagents
+### Spec Compliance Review: Callbacks, Validation, Statistics, Utilities
 
-Used parallel sonnet subagents to implement multiple simplex functions:
+Completed comprehensive spec compliance analysis for 4 modules (27 function specs):
 
-**Already Implemented (closed as complete):**
-- M7.1.8: cxf_simplex_iterate - `src/simplex/iterate.c` (234 LOC)
-- M7.1.9: cxf_simplex_step - `src/simplex/step.c` (115 LOC)
-- M7.1.17: cxf_pivot_with_eta - `src/basis/pivot_eta.c` (126 LOC)
-- M7.1.18: cxf_ratio_test - `src/simplex/ratio_test.c` (178 LOC)
+**Report:** `reports/callbacks_validation_stats_compliance.md`
 
-**Newly Implemented:**
-- M7.1.13: `src/simplex/perturbation.c` (199 LOC)
-  - `cxf_simplex_perturbation()` - Wolfe anti-cycling perturbation
-  - `cxf_simplex_unperturb()` - Restore original bounds
-- M7.1.14: `src/simplex/cleanup.c` (76 LOC)
-  - `cxf_simplex_cleanup()` - Post-preprocessing restoration stub
-- M7.1.15: `src/simplex/pivot_primal.c` (189 LOC)
-  - `cxf_pivot_primal()` - Primal pivot operation
-- M7.1.16: `src/simplex/pivot_special.c` (191 LOC)
-  - `cxf_pivot_bound()` - Move variable to bound
-  - `cxf_pivot_special()` - Unboundedness detection
-- M7.1.19: `src/simplex/quadratic.c` (100 LOC)
-  - `cxf_quadratic_adjust()` - QP reduced cost adjustment stub
+**Key Findings:**
+- **Callbacks Module:** 7/7 implemented, mostly compliant
+  - Issue: Callback signature mismatch (missing where/cbdata params)
+  - Issue: AsyncState checks not implemented (documented limitation)
+- **Validation Module:** 7/10 implemented
+  - 3 functions missing (cxf_check_model_flags1/2, special check)
+  - Implemented functions fully compliant
+- **Statistics Module:** 2/4 implemented (LP-only subset)
+  - cxf_compute_coef_stats, cxf_coefficient_stats working
+  - Missing quadratic support (expected)
+- **Utilities Module:** 0/9 implemented
+  - All math wrappers, constraint helpers missing
+  - Blocks M7.3 work
 
-### Build System Updates
-- Added 5 new source files to CMakeLists.txt
-- Added test_quadratic.c unit tests
+**Critical Discovery:**
+- Callback signature inconsistency between spec and implementation
+- Spec: `callback(model, cbdata, where, usrdata)` (4 params)
+- Impl: `callback(model, usrdata)` (2 params)
+- Decision needed: Update spec OR update implementation
+
+**Files Reviewed:** 10 implementation files, 27 spec files, 2 headers
 
 ---
 
@@ -96,23 +96,34 @@ Current ready issues:
 
 ## Learnings This Session
 
-### Parallel Subagent Git Safety (Confirmed Pattern)
-- Each subagent writes ONLY to completely NEW files
-- Main agent handles ALL git operations (add, commit, push)
-- This prevents git race conditions between parallel subagents
-- Some subagents may modify shared files (headers, CMakeLists) - verify and consolidate
+### Spec Compliance Review Process
+- **Methodology:** Read all specs in module → Find implementations → Compare signatures, behavior, error handling
+- **Structure:** Summary → Per-function detailed analysis → Structure compliance → Recommendations
+- **Severity Ratings:** Critical (breaks API) → Major (limits features) → Minor (documented limitations)
+- **Key Metrics:** Compliant functions, non-compliant functions, not implemented, overall percentage
 
-### Stub Implementation Pattern
-- Many specs describe complex functionality (QP, preprocessing)
-- Current codebase doesn't have full infrastructure (Q matrix, constraint matrix)
-- Implement as validated stubs with clear TODO comments
-- Return early with success for unimplemented paths
-- Tests should verify stub behavior works correctly
+### Callback Signature Design Decision Needed
+- **Issue:** Spec shows 4-parameter callback (model, cbdata, where, usrdata)
+- **Reality:** Implementation uses 2-parameter callback (model, usrdata)
+- **Impact:** Callbacks can't distinguish invocation context (pre/during/post optimize)
+- **Options:**
+  1. Update implementation to match spec (more flexible, breaking change)
+  2. Update spec to match implementation (simpler, documents current design)
+- **Recommendation:** Decide based on intended use cases
 
-### Check Existing Implementations
-- Before implementing, verify file doesn't already exist
-- Several M7.1.x issues (iterate, step, ratio_test, pivot_with_eta) were already done
-- Close these promptly to avoid duplicate work
+### LP-Only Implementation Strategy Confirmed
+- Many specs describe quadratic/SOCP features not yet in codebase
+- Functions return 0/"not present" for missing features (compliant stubs)
+- Deferred features documented with comments explaining missing infrastructure
+- This is CORRECT approach - implement stubs that work, add features later
+- Example: cxf_is_quadratic returns 0 until Q matrix added to SparseMatrix
+
+### Missing Utilities Module
+- No src/utilities/ directory exists
+- All 9 utility function specs have no implementation
+- Math wrappers (log10, floor/ceil) needed for coefficient analysis
+- Constraint helpers needed for QP/QCP when added
+- This blocks M7.3 work (utilities milestone)
 
 ---
 

@@ -2,6 +2,75 @@
 
 ## M5: Core Operations (Level 3)
 
+### 2026-01-27: Spec Compliance Review - Callbacks, Validation, Statistics
+
+**Report created:** `reports/callbacks_validation_stats_compliance.md`
+
+**SUCCESS: Comprehensive spec compliance analysis completed**
+
+**Modules reviewed:**
+- Callbacks (7 specs, 7 implementations)
+- Validation (10 specs, 7 implementations)
+- Statistics (4 specs, 2 implementations)
+- Utilities (9 specs, 0 implementations)
+
+**Key findings:**
+
+1. **Callback Signature Mismatch (Critical Decision Needed)**
+   - Spec shows: `int callback(CxfModel *model, void *cbdata, int where, void *usrdata)`
+   - Implementation: `int callback(CxfModel *model, void *usrdata)`
+   - Missing `cbdata` and `where` parameters prevents context awareness
+   - Affects: cxf_pre_optimize_callback, cxf_post_optimize_callback
+   - **Decision needed:** Update spec OR update implementation
+
+2. **AsyncState Missing (Documented Limitation)**
+   - cxf_check_terminate, cxf_callback_terminate, cxf_set_terminate
+   - All skip AsyncState flag checks (Priority 3 in spec)
+   - Code comments: "Note: AsyncState not implemented yet"
+   - Not critical for single-threaded LP solver
+   - Add when concurrent optimization needed
+
+3. **Utilities Module Completely Missing**
+   - No src/utilities/ directory
+   - 0/9 functions implemented
+   - Blocks M7.3 work (Math Wrappers, Constraint Helpers)
+   - Math wrappers needed for coefficient statistics logging
+
+4. **LP-Only Implementation Pattern (Correct)**
+   - Many functions are stubs for quadratic features
+   - Example: cxf_is_quadratic returns 0 (no Q matrix yet)
+   - This is CORRECT - implement working stubs, add features later
+   - All stubs have comments explaining missing infrastructure
+
+**Learnings:**
+
+- **Spec Review Methodology:**
+  - Read all specs in module
+  - Find implementations (Grep, Glob, ls)
+  - Compare: signatures, return values, error handling, algorithms
+  - Rate severity: Critical/Major/Minor
+  - Document not-implemented functions
+
+- **Stub vs. Non-Compliant:**
+  - Stub that returns "feature not present" is COMPLIANT
+  - Stub that returns wrong type or crashes is NON-COMPLIANT
+  - Example: cxf_is_quadratic returning 0 is compliant stub
+
+- **Structure Compliance:**
+  - CallbackContext has fewer fields than spec
+  - Missing: env, primaryModel, suppressCallbackLog, 48-byte subStruct
+  - Possible: Spec describes full commercial solver, impl is simplified
+  - Impact: Moderate - some features may need these references
+
+**Files reviewed:** 10 implementation files, 27 spec files, 2 headers
+
+**Next actions:**
+1. Decide on callback signature (spec vs impl)
+2. Implement math wrappers (M7.3.3) - unblocks coefficient stats
+3. Add model flag validation functions (M2.2.4, M2.2.5)
+
+---
+
 ### 2026-01-26: M5.1.1 Basis Tests
 
 **Files created:**
