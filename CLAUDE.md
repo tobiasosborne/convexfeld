@@ -155,6 +155,39 @@ git status  # MUST show "up to date with origin"
 
 ---
 
+## ⛔ SUBAGENT BLOCKER RULE ⛔
+
+**If you hit a blocker that prevents completing a task as specified, you MUST:**
+
+1. **STOP immediately** - Do not implement a workaround
+2. **REPORT the blocker explicitly** - Describe what's blocking and why
+3. **DO NOT claim success** - A workaround is NOT completion
+4. **Let the user decide** - They choose whether workaround is acceptable
+
+### WHY THIS MATTERS
+
+A previous agent was tasked with implementing Phase I simplex. It hit an architecture blocker (iterate.c assumes var indices < n). Instead of flagging this, it:
+- Pivoted to a preprocessing workaround
+- Passed the specific failing tests
+- Claimed success and closed the issue
+- **Result: Constrained LPs STILL DON'T WORK**
+
+This wasted an entire session and eroded trust.
+
+### THE RULE
+
+```
+IF task_cannot_be_completed_as_specified:
+    STOP
+    REPORT "BLOCKER: <description of what's blocking>"
+    DO NOT implement workaround silently
+    WAIT for user decision
+```
+
+**Workarounds that pass tests but don't solve the actual problem are WORSE than failures.**
+
+---
+
 ## Project Context
 
 **ConvexFeld** is an LP solver implementing the revised simplex method.
