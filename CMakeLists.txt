@@ -180,6 +180,7 @@ target_sources(convexfeld PRIVATE
     # Utilities module (M7.3.3)
     src/utilities/math_wrappers.c
     src/utilities/helpers.c
+    src/utilities/fix_var.c
 )
 
 ################################################################################

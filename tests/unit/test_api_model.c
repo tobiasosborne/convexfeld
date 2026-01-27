@@ -383,7 +383,7 @@ void test_copymodel_independent_modification(void) {
 
 void test_updatemodel_null_returns_error(void) {
     int status = cxf_updatemodel(NULL);
-    TEST_ASSERT_EQUAL_INT(CXF_ERROR_INVALID_ARGUMENT, status);
+    TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT, status);
 }
 
 void test_updatemodel_valid_model_returns_ok(void) {

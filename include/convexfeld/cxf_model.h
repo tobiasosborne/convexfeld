@@ -168,6 +168,15 @@ int cxf_addvars(CxfModel *model, int numvars, int numnz,
  */
 int cxf_delvars(CxfModel *model, int numdel, const int *ind);
 
+/**
+ * @brief Fix a variable to a specified value.
+ * @param model Target model
+ * @param var_index Variable index
+ * @param value Value to fix the variable at
+ * @return CXF_OK on success, error code otherwise
+ */
+int cxf_fix_variable(CxfModel *model, int var_index, double value);
+
 /*******************************************************************************
  * Optimization API
  ******************************************************************************/
