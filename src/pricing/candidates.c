@@ -8,6 +8,8 @@
  * Spec: docs/specs/functions/pricing/cxf_pricing_candidates.md
  */
 
+#define _GNU_SOURCE  /* for qsort_r on Linux */
+
 #include <stdlib.h>
 #include <math.h>
 #include "convexfeld/cxf_types.h"
@@ -29,22 +31,18 @@
  *===========================================================================*/
 
 /**
- * @brief Context for qsort comparison function.
- *
- * Since qsort doesn't pass context, we use a file-static variable.
- * Thread-safety note: This function is not thread-safe.
- */
-static const double *g_reduced_costs = NULL;
-
-/**
  * @brief Compare two candidate indices by |reduced_cost| descending.
+ * @param a First candidate index pointer
+ * @param b Second candidate index pointer
+ * @param context Pointer to reduced_costs array
  */
-static int compare_by_abs_rc_desc(const void *a, const void *b) {
+static int compare_by_abs_rc_desc(const void *a, const void *b, void *context) {
+    const double *reduced_costs = (const double *)context;
     int idx_a = *(const int *)a;
     int idx_b = *(const int *)b;
 
-    double abs_rc_a = fabs(g_reduced_costs[idx_a]);
-    double abs_rc_b = fabs(g_reduced_costs[idx_b]);
+    double abs_rc_a = fabs(reduced_costs[idx_a]);
+    double abs_rc_b = fabs(reduced_costs[idx_b]);
 
     /* Sort descending: larger |RC| first */
     if (abs_rc_a > abs_rc_b) {
@@ -163,9 +161,8 @@ int cxf_pricing_candidates(PricingContext *ctx, const double *reduced_costs,
 
     /* Sort candidates by |reduced_cost| descending */
     if (count > 1) {
-        g_reduced_costs = reduced_costs;
-        qsort(candidates, (size_t)count, sizeof(int), compare_by_abs_rc_desc);
-        g_reduced_costs = NULL;
+        qsort_r(candidates, (size_t)count, sizeof(int),
+                compare_by_abs_rc_desc, (void *)reduced_costs);
     }
 
     return count;

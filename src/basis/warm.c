@@ -79,22 +79,29 @@ int cxf_basis_validate(BasisState *basis) {
         return CXF_OK;
     }
 
-    /* Check bounds and duplicates */
+    /* Use seen array for O(n) duplicate detection */
+    int *seen = (int *)calloc((size_t)basis->n, sizeof(int));
+    if (seen == NULL) {
+        return CXF_ERROR_OUT_OF_MEMORY;
+    }
+
     for (int i = 0; i < basis->m; i++) {
         int var = basis->basic_vars[i];
 
         /* Check bounds: 0 <= var < n */
         if (var < 0 || var >= basis->n) {
+            free(seen);
             return CXF_ERROR_INVALID_ARGUMENT;
         }
 
-        /* Check for duplicates (O(m^2) but m is typically small) */
-        for (int j = i + 1; j < basis->m; j++) {
-            if (var == basis->basic_vars[j]) {
-                return CXF_ERROR_INVALID_ARGUMENT;
-            }
+        /* Check for duplicates using seen array O(1) */
+        if (seen[var]) {
+            free(seen);
+            return CXF_ERROR_INVALID_ARGUMENT;
         }
+        seen[var] = 1;
     }
+    free(seen);
 
     return CXF_OK;
 }
@@ -141,15 +148,22 @@ int cxf_basis_validate_ex(BasisState *basis, int flags) {
         }
     }
 
-    /* Duplicate check */
+    /* Duplicate check using seen array O(n) */
     if (flags & CXF_CHECK_DUPLICATES) {
-        for (int i = 0; i < basis->m; i++) {
-            for (int j = i + 1; j < basis->m; j++) {
-                if (basis->basic_vars[i] == basis->basic_vars[j]) {
-                    return CXF_ERROR_INVALID_ARGUMENT;
-                }
-            }
+        int *seen = (int *)calloc((size_t)basis->n, sizeof(int));
+        if (seen == NULL) {
+            return CXF_ERROR_OUT_OF_MEMORY;
         }
+
+        for (int i = 0; i < basis->m; i++) {
+            int var = basis->basic_vars[i];
+            if (seen[var]) {
+                free(seen);
+                return CXF_ERROR_INVALID_ARGUMENT;
+            }
+            seen[var] = 1;
+        }
+        free(seen);
     }
 
     /* Consistency check: varStatus matches basisHeader */

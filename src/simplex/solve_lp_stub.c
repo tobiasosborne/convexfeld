@@ -12,12 +12,8 @@
 /**
  * @brief Solve an LP using the simplex method (stub).
  *
- * This stub solves unconstrained LPs by setting each variable to
- * its lower or upper bound based on the objective coefficient sign.
- *
- * For minimization:
- *   - If obj_coeff >= 0, set x = lb (lower is better)
- *   - If obj_coeff < 0, set x = ub (higher is better, but coeff negative)
+ * This is a stub implementation that returns CXF_ERROR_NOT_SUPPORTED
+ * for non-empty models. The real simplex solver is not yet implemented.
  *
  * Full implementation will handle:
  *   - Constraint matrix A
@@ -26,20 +22,16 @@
  *   - Pricing strategies
  *
  * @param model Model to solve (must have variables added)
- * @return CXF_OK on success, error code otherwise
+ * @return CXF_OK for empty models, CXF_ERROR_NOT_SUPPORTED for non-empty,
+ *         CXF_ERROR_NULL_ARGUMENT if model is NULL
  *
  * @pre model != NULL
  * @pre model->num_vars >= 0
- * @pre model->solution array allocated
  *
- * @post model->status set to CXF_OPTIMAL or CXF_UNBOUNDED
- * @post model->obj_val set to optimal objective value
- * @post model->solution filled with optimal variable values
+ * @post For empty models: model->status set to CXF_OPTIMAL, obj_val = 0.0
+ * @post For non-empty models: returns NOT_SUPPORTED error
  */
 int cxf_solve_lp(CxfModel *model) {
-    int i;
-    double objval;
-
     if (model == NULL) {
         return CXF_ERROR_NULL_ARGUMENT;
     }
@@ -51,33 +43,6 @@ int cxf_solve_lp(CxfModel *model) {
         return CXF_OK;
     }
 
-    /* Trivial solver: set each variable to optimal bound */
-    objval = 0.0;
-    for (i = 0; i < model->num_vars; i++) {
-        double coeff = model->obj_coeffs[i];
-        double lb = model->lb[i];
-        double ub = model->ub[i];
-        double val;
-
-        /* For minimization: positive coeff -> use lb, negative -> use ub */
-        if (coeff >= 0.0) {
-            val = lb;
-        } else {
-            val = ub;
-        }
-
-        /* Check for unbounded */
-        if (val <= -CXF_INFINITY || val >= CXF_INFINITY) {
-            model->status = CXF_UNBOUNDED;
-            return CXF_OK;
-        }
-
-        model->solution[i] = val;
-        objval += coeff * val;
-    }
-
-    model->obj_val = objval;
-    model->status = CXF_OPTIMAL;
-
-    return CXF_OK;
+    /* Stub: Real simplex not implemented yet */
+    return CXF_ERROR_NOT_SUPPORTED;
 }

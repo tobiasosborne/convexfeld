@@ -15,6 +15,10 @@ extern void *cxf_calloc(size_t count, size_t size);
 extern void *cxf_malloc(size_t size);
 extern void cxf_free(void *ptr);
 
+/* Forward declare sparse matrix functions */
+extern SparseMatrix *cxf_sparse_create(void);
+extern void cxf_sparse_free(SparseMatrix *mat);
+
 /* Initial capacity for variable arrays */
 #define INITIAL_VAR_CAPACITY 16
 
@@ -101,6 +105,13 @@ int cxf_newmodel(CxfEnv *env, CxfModel **modelP, const char *name) {
         return CXF_ERROR_OUT_OF_MEMORY;
     }
 
+    /* Allocate constraint matrix */
+    model->matrix = cxf_sparse_create();
+    if (model->matrix == NULL) {
+        cxf_freemodel(model);
+        return CXF_ERROR_OUT_OF_MEMORY;
+    }
+
     *modelP = model;
     return CXF_OK;
 }
@@ -109,6 +120,9 @@ void cxf_freemodel(CxfModel *model) {
     if (model == NULL) {
         return;
     }
+
+    /* Free constraint matrix */
+    cxf_sparse_free(model->matrix);
 
     /* Free variable arrays */
     cxf_free(model->obj_coeffs);
