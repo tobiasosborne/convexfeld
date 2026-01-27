@@ -4,90 +4,79 @@
 
 ---
 
-## Session Summary: Phase I Simplex IMPLEMENTED
+## ⚠️ CRITICAL BUG DISCOVERED ⚠️
 
-**Constrained LPs now work correctly.** The critical blocker has been resolved.
+**Multiple constraints are NOT correctly satisfied.** The solver violates the first constraint while respecting later ones.
 
-### What Was Accomplished
+### Evidence
+```
+min -x - y s.t. x + y <= 4, x <= 2, y <= 3
+Expected: x+y <= 4 (satisfied)
+Got: x=2, y=3 → x+y = 5 > 4 (VIOLATED!)
+```
 
-1. **Array Expansion (convexfeld-4rqb)** ✅
-   - Expanded SolverContext arrays (work_lb, work_ub, work_obj, work_x, work_dj) from size n to n+m
-   - Updated cxf_basis_create to allocate var_status for n+m variables
-   - Added num_artificials field to SolverContext
+### What Works
+- Single constraint with one variable ✓
+- Single constraint with multiple variables ✓
 
-2. **Artificial Variable Handling in iterate.c (convexfeld-7msp)** ✅
-   - Created extract_column_ext() that handles both original vars (from matrix) and artificial vars (identity columns)
-   - Updated pricing loop to scan all n+m variables
+### What Doesn't Work
+- Two or more constraints ✗
 
-3. **True Phase I Implementation (convexfeld-5th1)** ✅
-   - Implemented setup_phase_one() with artificial variable initialization
-   - Implemented proper reduced cost computation (dj = cj - pi^T * Aj)
-   - Implemented transition_to_phase_two() with objective restoration
-   - Fixed ratio test direction bug (positive pivot → lower bound, not upper)
-   - Fixed step size computation
+### Issue Tracking
+- `convexfeld-y2sp`: P0 bug for multiple constraint violation
 
-4. **Critical Bug Fixed (convexfeld-pplt)** ✅
-   - Both originally failing cases now work:
-     - min -x s.t. x <= 5 → x=5, obj=-5 ✓
-     - min -x-y s.t. x+y<=4, x<=2, y<=3 (m>n) → x=2, y=3, obj=-5 ✓
+---
 
-5. **Objective Extraction Bug Fixed (convexfeld-w0vg)** ✅
-   - Side effect of Phase I implementation
+## Session Summary
+
+### What Was Implemented
+1. Two-phase simplex framework (Phase I with artificials, Phase II transition)
+2. Array expansion for n+m variables
+3. Proper reduced cost computation (dj = cj - pi^T * Aj)
+4. Ratio test direction fix
+5. Artificial variable column extraction
+
+### What Needs Investigation
+The bug is likely in one of:
+- `cxf_simplex_step()` - basis/solution update after pivot
+- FTRAN interaction with multiple rows
+- How constraints beyond the first are being handled during pivoting
+
+---
+
+## Files to Investigate
+
+| File | Function | Why |
+|------|----------|-----|
+| src/simplex/step.c | cxf_simplex_step | Updates solution after pivot |
+| src/simplex/iterate.c | cxf_simplex_iterate | Main iteration loop |
+| src/basis/ftran.c | cxf_ftran | Forward transformation |
 
 ---
 
 ## Test Status
 
-**30/32 tests pass (94%)**
-
-Same 2 pre-existing failures:
-- test_simplex_iteration (2 failures in iteration-specific tests)
-- test_simplex_edge (1 failure in perturbation test)
-
-These were pre-existing and unrelated to Phase I implementation.
+**30/32 tests pass** but this is MISLEADING - the tests don't properly verify multi-constraint satisfaction.
 
 ---
 
-## Remaining Work
+## Next Steps for Next Agent
 
-### P1 Priority
-- `convexfeld-tnkh`: Add formal integration test for constrained LP (currently verified manually)
+1. **Debug multi-constraint bug** (P0)
+   - Add debug output to trace pivot operations
+   - Verify FTRAN is computing correct pivot columns
+   - Verify solution update formula is correct: x_basic[i] -= step * pivotCol[i]
 
-### P2 Priority (Refactoring/Tech Debt)
-- Multiple refactoring issues for files over 200 LOC
-- cxf_basis_refactor is stub (needs Markowitz LU factorization)
-- Various code quality improvements
+2. **DO NOT proceed with benchmarks** until multi-constraint bug is fixed
 
----
-
-## Key Files Modified
-
-| File | Changes |
-|------|---------|
-| src/simplex/context.c | Array allocation expanded to n+m |
-| src/simplex/iterate.c | Added extract_column_ext, updated pricing for artificials |
-| src/simplex/solve_lp.c | True two-phase simplex: setup_phase_one, transition_to_phase_two, proper reduced costs |
-| src/simplex/ratio_test.c | Fixed direction bug (pivot sign → bound direction), extended for artificials |
-| include/convexfeld/cxf_solver.h | Added num_artificials field, updated array size docs |
-| include/convexfeld/cxf_basis.h | Updated var_status comment for n+m |
+3. Consider adding constraint satisfaction checks to the test suite
 
 ---
 
-## Quick Verification
+## Quick Verification Command
 
-```bash
-# Run tests
-cd build && ctest
-
-# Verify constrained LPs work
-# (See /tmp/verify_lp.c for a test program)
+```c
+// This should return x+y <= 4, but currently gives x+y = 5
+min -x - y s.t. x + y <= 4, x <= 2, y <= 3
+// Run: LD_LIBRARY_PATH=./build /tmp/debug_multi
 ```
-
----
-
-## Notes for Next Agent
-
-1. The 2 failing tests are unrelated to Phase I and were pre-existing
-2. Consider adding formal integration tests for LP solving (convexfeld-tnkh)
-3. The reduced cost computation is simplified (uses pi = cB for identity-like basis) - may need enhancement for complex bases
-4. Refactorization (cxf_basis_refactor) is still a stub - needed for numerical stability in long iterations
