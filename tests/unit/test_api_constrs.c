@@ -28,6 +28,8 @@ int cxf_addgenconstrIndicator(CxfModel *model, const char *name,
                               int binvar, int binval, int nvars,
                               const int *ind, const double *val,
                               char sense, double rhs);
+int cxf_chgcoeffs(CxfModel *model, int cnt, const int *cind,
+                  const int *vind, const double *val);
 
 /* Test fixture - shared environment */
 static CxfEnv *env = NULL;
@@ -114,6 +116,45 @@ void test_addconstr_negative_rhs(void) {
     double cval[] = {1.0};
     int status = cxf_addconstr(model, 1, cind, cval, '>', -5.0, NULL);
     TEST_ASSERT_EQUAL_INT(CXF_OK, status);
+
+    cxf_freemodel(model);
+}
+
+void test_addconstr_validates_sense(void) {
+    CxfModel *model = NULL;
+    cxf_newmodel(env, &model, "test");
+    cxf_addvar(model, 0.0, 10.0, 1.0, 'C', "x0");
+
+    int cind[] = {0};
+    double cval[] = {1.0};
+    int status = cxf_addconstr(model, 1, cind, cval, 'X', 5.0, NULL);
+    TEST_ASSERT_EQUAL_INT(CXF_ERROR_INVALID_ARGUMENT, status);
+
+    cxf_freemodel(model);
+}
+
+void test_addconstr_validates_indices(void) {
+    CxfModel *model = NULL;
+    cxf_newmodel(env, &model, "test");
+    cxf_addvar(model, 0.0, 10.0, 1.0, 'C', "x0");
+
+    int cind[] = {5};  /* Out of range */
+    double cval[] = {1.0};
+    int status = cxf_addconstr(model, 1, cind, cval, '<', 5.0, NULL);
+    TEST_ASSERT_EQUAL_INT(CXF_ERROR_INVALID_ARGUMENT, status);
+
+    cxf_freemodel(model);
+}
+
+void test_addconstr_validates_finite(void) {
+    CxfModel *model = NULL;
+    cxf_newmodel(env, &model, "test");
+    cxf_addvar(model, 0.0, 10.0, 1.0, 'C', "x0");
+
+    int cind[] = {0};
+    double cval[] = {1.0 / 0.0};  /* Infinity */
+    int status = cxf_addconstr(model, 1, cind, cval, '<', 5.0, NULL);
+    TEST_ASSERT_EQUAL_INT(CXF_ERROR_INVALID_ARGUMENT, status);
 
     cxf_freemodel(model);
 }
@@ -217,6 +258,65 @@ void test_addgenconstr_indicator_returns_not_supported(void) {
 }
 
 /*******************************************************************************
+ * cxf_chgcoeffs Tests - Change Constraint Coefficients
+ ******************************************************************************/
+
+void test_chgcoeffs_null_model_fails(void) {
+    int cind[] = {0};
+    int vind[] = {0};
+    double val[] = {1.0};
+    int status = cxf_chgcoeffs(NULL, 1, cind, vind, val);
+    TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT, status);
+}
+
+void test_chgcoeffs_empty_is_ok(void) {
+    CxfModel *model = NULL;
+    cxf_newmodel(env, &model, "test");
+    int status = cxf_chgcoeffs(model, 0, NULL, NULL, NULL);
+    TEST_ASSERT_EQUAL_INT(CXF_OK, status);
+    cxf_freemodel(model);
+}
+
+void test_chgcoeffs_basic(void) {
+    CxfModel *model = NULL;
+    cxf_newmodel(env, &model, "test");
+    cxf_addvar(model, 0.0, 10.0, 1.0, 'C', "x0");
+    cxf_addvar(model, 0.0, 10.0, 2.0, 'C', "x1");
+
+    double cval[] = {1.0, 2.0};
+    int vind_add[] = {0, 1};
+    cxf_addconstr(model, 2, vind_add, cval, '<', 20.0, "c1");
+
+    /* Change coefficient (0,0) to 3.0 */
+    int cind_chg[] = {0};
+    int vind_chg[] = {0};
+    double val[] = {3.0};
+    int status = cxf_chgcoeffs(model, 1, cind_chg, vind_chg, val);
+    TEST_ASSERT_EQUAL_INT(CXF_OK, status);
+
+    cxf_freemodel(model);
+}
+
+void test_chgcoeffs_validates_indices(void) {
+    CxfModel *model = NULL;
+    cxf_newmodel(env, &model, "test");
+    cxf_addvar(model, 0.0, 10.0, 1.0, 'C', "x0");
+
+    int cind[] = {0};
+    double cval[] = {1.0};
+    cxf_addconstr(model, 1, cind, cval, '<', 20.0, "c1");
+
+    /* Try to change with invalid variable index */
+    int cind_chg[] = {0};
+    int vind_chg[] = {5};  /* Out of range */
+    double val[] = {3.0};
+    int status = cxf_chgcoeffs(model, 1, cind_chg, vind_chg, val);
+    TEST_ASSERT_EQUAL_INT(CXF_ERROR_INVALID_ARGUMENT, status);
+
+    cxf_freemodel(model);
+}
+
+/*******************************************************************************
  * Main
  ******************************************************************************/
 
@@ -230,6 +330,9 @@ int main(void) {
     RUN_TEST(test_addconstr_ge_constraint);
     RUN_TEST(test_addconstr_empty_constraint);
     RUN_TEST(test_addconstr_negative_rhs);
+    RUN_TEST(test_addconstr_validates_sense);
+    RUN_TEST(test_addconstr_validates_indices);
+    RUN_TEST(test_addconstr_validates_finite);
 
     /* cxf_addconstrs tests */
     RUN_TEST(test_addconstrs_null_model_fails);
@@ -242,6 +345,12 @@ int main(void) {
 
     /* cxf_addgenconstrIndicator tests */
     RUN_TEST(test_addgenconstr_indicator_returns_not_supported);
+
+    /* cxf_chgcoeffs tests */
+    RUN_TEST(test_chgcoeffs_null_model_fails);
+    RUN_TEST(test_chgcoeffs_empty_is_ok);
+    RUN_TEST(test_chgcoeffs_basic);
+    RUN_TEST(test_chgcoeffs_validates_indices);
 
     return UNITY_END();
 }

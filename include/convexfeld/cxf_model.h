@@ -97,6 +97,20 @@ int cxf_checkmodel(CxfModel *model);
  */
 int cxf_model_is_blocked(CxfModel *model);
 
+/**
+ * @brief Create an independent copy of a model.
+ * @param model Source model to copy
+ * @return Pointer to new model copy, or NULL on error
+ */
+CxfModel *cxf_copymodel(CxfModel *model);
+
+/**
+ * @brief Apply pending model modifications.
+ * @param model Model to update
+ * @return CXF_OK on success, error code otherwise
+ */
+int cxf_updatemodel(CxfModel *model);
+
 /*******************************************************************************
  * Variable API
  ******************************************************************************/

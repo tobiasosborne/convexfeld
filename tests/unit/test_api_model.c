@@ -285,6 +285,131 @@ void test_model_is_blocked_when_blocked(void) {
 }
 
 /*******************************************************************************
+ * cxf_copymodel Tests
+ ******************************************************************************/
+
+void test_copymodel_basic(void) {
+    CxfModel *model = NULL;
+    CxfModel *copy = NULL;
+
+    cxf_newmodel(env, &model, "original");
+    copy = cxf_copymodel(model);
+
+    TEST_ASSERT_NOT_NULL(copy);
+    TEST_ASSERT_NOT_EQUAL(model, copy);
+    TEST_ASSERT_EQUAL_STRING("original", copy->name);
+    TEST_ASSERT_EQUAL_PTR(env, copy->env);
+
+    cxf_freemodel(copy);
+    cxf_freemodel(model);
+}
+
+void test_copymodel_null_returns_null(void) {
+    CxfModel *copy = cxf_copymodel(NULL);
+    TEST_ASSERT_NULL(copy);
+}
+
+void test_copymodel_copies_variables(void) {
+    CxfModel *model = NULL;
+    CxfModel *copy = NULL;
+
+    cxf_newmodel(env, &model, "test");
+    cxf_addvar(model, 0.0, 10.0, 1.5, 'C', "x1");
+    cxf_addvar(model, 5.0, 20.0, 2.5, 'C', "x2");
+    cxf_addvar(model, 0.0, 15.0, 3.5, 'C', "x3");
+
+    copy = cxf_copymodel(model);
+    TEST_ASSERT_NOT_NULL(copy);
+    TEST_ASSERT_EQUAL_INT(3, copy->num_vars);
+
+    TEST_ASSERT_DOUBLE_WITHIN(1e-12, 0.0, copy->lb[0]);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-12, 10.0, copy->ub[0]);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-12, 1.5, copy->obj_coeffs[0]);
+
+    TEST_ASSERT_DOUBLE_WITHIN(1e-12, 5.0, copy->lb[1]);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-12, 20.0, copy->ub[1]);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-12, 2.5, copy->obj_coeffs[1]);
+
+    TEST_ASSERT_DOUBLE_WITHIN(1e-12, 0.0, copy->lb[2]);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-12, 15.0, copy->ub[2]);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-12, 3.5, copy->obj_coeffs[2]);
+
+    cxf_freemodel(copy);
+    cxf_freemodel(model);
+}
+
+void test_copymodel_copies_status(void) {
+    CxfModel *model = NULL;
+    CxfModel *copy = NULL;
+
+    cxf_newmodel(env, &model, "test");
+    model->status = CXF_OPTIMAL;
+    model->obj_val = 42.5;
+    model->initialized = 1;
+
+    copy = cxf_copymodel(model);
+    TEST_ASSERT_NOT_NULL(copy);
+    TEST_ASSERT_EQUAL_INT(CXF_OPTIMAL, copy->status);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-12, 42.5, copy->obj_val);
+    TEST_ASSERT_EQUAL_INT(1, copy->initialized);
+
+    cxf_freemodel(copy);
+    cxf_freemodel(model);
+}
+
+void test_copymodel_independent_modification(void) {
+    CxfModel *model = NULL;
+    CxfModel *copy = NULL;
+
+    cxf_newmodel(env, &model, "test");
+    cxf_addvar(model, 0.0, 10.0, 1.0, 'C', "x");
+
+    copy = cxf_copymodel(model);
+    TEST_ASSERT_NOT_NULL(copy);
+
+    /* Modify original */
+    model->obj_coeffs[0] = 99.9;
+
+    /* Copy should be unaffected */
+    TEST_ASSERT_DOUBLE_WITHIN(1e-12, 1.0, copy->obj_coeffs[0]);
+
+    cxf_freemodel(copy);
+    cxf_freemodel(model);
+}
+
+/*******************************************************************************
+ * cxf_updatemodel Tests
+ ******************************************************************************/
+
+void test_updatemodel_null_returns_error(void) {
+    int status = cxf_updatemodel(NULL);
+    TEST_ASSERT_EQUAL_INT(CXF_ERROR_INVALID_ARGUMENT, status);
+}
+
+void test_updatemodel_valid_model_returns_ok(void) {
+    CxfModel *model = NULL;
+    cxf_newmodel(env, &model, "test");
+
+    int status = cxf_updatemodel(model);
+    TEST_ASSERT_EQUAL_INT(CXF_OK, status);
+
+    cxf_freemodel(model);
+}
+
+void test_updatemodel_idempotent(void) {
+    CxfModel *model = NULL;
+    cxf_newmodel(env, &model, "test");
+
+    int status1 = cxf_updatemodel(model);
+    int status2 = cxf_updatemodel(model);
+
+    TEST_ASSERT_EQUAL_INT(CXF_OK, status1);
+    TEST_ASSERT_EQUAL_INT(CXF_OK, status2);
+
+    cxf_freemodel(model);
+}
+
+/*******************************************************************************
  * Main
  ******************************************************************************/
 
@@ -329,6 +454,18 @@ int main(void) {
     RUN_TEST(test_model_is_blocked_null_returns_error);
     RUN_TEST(test_model_is_blocked_initially_not_blocked);
     RUN_TEST(test_model_is_blocked_when_blocked);
+
+    /* cxf_copymodel tests */
+    RUN_TEST(test_copymodel_basic);
+    RUN_TEST(test_copymodel_null_returns_null);
+    RUN_TEST(test_copymodel_copies_variables);
+    RUN_TEST(test_copymodel_copies_status);
+    RUN_TEST(test_copymodel_independent_modification);
+
+    /* cxf_updatemodel tests */
+    RUN_TEST(test_updatemodel_null_returns_error);
+    RUN_TEST(test_updatemodel_valid_model_returns_ok);
+    RUN_TEST(test_updatemodel_idempotent);
 
     return UNITY_END();
 }
