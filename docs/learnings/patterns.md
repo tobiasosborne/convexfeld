@@ -262,3 +262,70 @@ static int cxf_model_grow_vars(CxfModel *model, int needed_capacity) {
 - test_addvar_exceeds_initial_capacity - add 20 vars (> 16)
 - test_addvars_batch_exceeds_capacity - add 50 vars at once
 - test_addvar_grows_capacity - verify capacity increased
+
+---
+
+## Development Workflow Patterns
+
+### Parallel Subagent Pattern
+For independent implementation tasks, launch multiple sonnet subagents in parallel:
+
+```
+1. Identify independent tasks (no dependencies between them)
+2. Read specs and existing code patterns for context
+3. Launch 3-4 subagents simultaneously with clear prompts:
+   - Task description and file paths
+   - Existing code patterns to follow
+   - Specific functions to implement
+   - Tests to add
+   - Build/test commands
+4. Each subagent commits its own changes
+5. Verify all tests pass after subagents complete
+6. Close issues and update documentation
+```
+
+**Example (API implementation session):**
+```
+Subagent 1: M8.1.10 - Model API (copymodel, updatemodel)
+Subagent 2: M8.1.11 - Variable API (dynamic resizing)
+Subagent 3: M8.1.12 - Constraint API (validation)
+Subagent 4: M8.1.9 - Environment API (verification)
+```
+
+**Benefits:**
+- 4x throughput for independent tasks
+- Each subagent has focused context
+- Reduces main agent context usage
+- Parallel commits don't conflict if files are independent
+
+**Gotchas:**
+- Ensure tasks modify different files (avoid merge conflicts)
+- Provide enough context in prompts (subagents don't share state)
+- Verify combined build passes after all complete
+
+### Code Review Checklist
+Before major milestones, perform full-scale code review:
+
+```
+1. Duplicate code detection
+   - grep for similar function signatures
+   - Look for copy-pasted validation patterns
+   - Identify candidates for extraction
+
+2. Consistency check
+   - Error code usage consistent across modules
+   - NULL handling follows same pattern
+   - Magic number validation in all public APIs
+
+3. File size compliance
+   - Find files > 200 LOC
+   - Create refactor issues for violations
+
+4. Test coverage gaps
+   - Functions without corresponding tests
+   - Error paths not exercised
+
+5. Documentation sync
+   - Function signatures match headers
+   - Specs match implementation
+```
