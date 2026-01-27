@@ -60,4 +60,113 @@ struct SolverContext {
     int last_refactor_iter;   /**< Iteration of last refactorization */
 };
 
+/*******************************************************************************
+ * SolverContext Lifecycle API
+ ******************************************************************************/
+
+/**
+ * @brief Create and initialize solver context from model.
+ * @param model Model to solve
+ * @param stateP Output pointer for new context
+ * @return CXF_OK on success, error code otherwise
+ */
+int cxf_simplex_init(CxfModel *model, SolverContext **stateP);
+
+/**
+ * @brief Free solver context and all resources.
+ * @param state Context to free (may be NULL)
+ */
+void cxf_simplex_final(SolverContext *state);
+
+/**
+ * @brief Set up solver context (stub - to be implemented in M7.1.6).
+ * @param state Solver context
+ * @param env Environment
+ * @return CXF_OK on success, error code otherwise
+ */
+int cxf_simplex_setup(SolverContext *state, CxfEnv *env);
+
+/**
+ * @brief Get solver status (stub - to be implemented).
+ * @param state Solver context
+ * @return Status code or error
+ */
+int cxf_simplex_get_status(SolverContext *state);
+
+/**
+ * @brief Get iteration count (stub - to be implemented).
+ * @param state Solver context
+ * @return Iteration count or error
+ */
+int cxf_simplex_get_iteration(SolverContext *state);
+
+/**
+ * @brief Get solver phase (stub - to be implemented).
+ * @param state Solver context
+ * @return Phase (0, 1, or 2) or error
+ */
+int cxf_simplex_get_phase(SolverContext *state);
+
+/**
+ * @brief Perform one simplex iteration (stub - to be implemented in M7.1.2).
+ * @param state Solver context
+ * @param env Environment
+ * @return CXF_OK on success, error code otherwise
+ */
+int cxf_simplex_iterate(SolverContext *state, CxfEnv *env);
+
+/**
+ * @brief Handle phase end transition (stub - to be implemented in M7.1.2).
+ * @param state Solver context
+ * @param env Environment
+ * @return CXF_OK on success, error code otherwise
+ */
+int cxf_simplex_phase_end(SolverContext *state, CxfEnv *env);
+
+/**
+ * @brief Post-iteration processing (stub - to be implemented in M7.1.2).
+ * @param state Solver context
+ * @param env Environment
+ * @return CXF_OK on success, error code otherwise
+ */
+int cxf_simplex_post_iterate(SolverContext *state, CxfEnv *env);
+
+/**
+ * @brief Get current objective value (stub - to be implemented).
+ * @param state Solver context
+ * @return Objective value or NaN on error
+ */
+double cxf_simplex_get_objval(SolverContext *state);
+
+/**
+ * @brief Set iteration limit (stub - to be implemented).
+ * @param state Solver context
+ * @param limit Iteration limit (must be >= 0)
+ * @return CXF_OK on success, error code otherwise
+ */
+int cxf_simplex_set_iteration_limit(SolverContext *state, int limit);
+
+/**
+ * @brief Get iteration limit (stub - to be implemented).
+ * @param state Solver context
+ * @return Iteration limit or error code
+ */
+int cxf_simplex_get_iteration_limit(SolverContext *state);
+
+/**
+ * @brief Apply perturbation for degeneracy handling (stub - to be implemented in M7.1.3).
+ * @param state Solver context
+ * @param env Environment
+ * @return CXF_OK on success, error code otherwise
+ */
+int cxf_simplex_perturbation(SolverContext *state, CxfEnv *env);
+
+/**
+ * @brief Remove perturbation (stub - to be implemented in M7.1.3).
+ * @param state Solver context
+ * @param env Environment
+ * @return CXF_OK on success, error code otherwise
+ */
+int cxf_simplex_unperturb(SolverContext *state, CxfEnv *env);
+
 #endif /* CXF_SOLVER_H */

@@ -13,10 +13,6 @@
 #include "convexfeld/cxf_types.h"
 
 /* External declarations - simplex functions to be implemented in M7.1.x */
-int cxf_simplex_init(CxfModel *model, void *warmStart, int mode,
-                     double *timing, SolverContext **stateOut);
-int cxf_simplex_final(SolverContext *state);
-int cxf_simplex_setup(SolverContext *state, CxfEnv *env);
 int cxf_simplex_perturbation(SolverContext *state, CxfEnv *env);
 int cxf_simplex_unperturb(SolverContext *state, CxfEnv *env);
 int cxf_solve_lp(CxfModel *model);  /* Stub signature */
@@ -47,7 +43,7 @@ void test_perturbation_null_args(void) {
     TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT, cxf_simplex_perturbation(NULL, env));
     cxf_addvar(model, 0.0, 10.0, 1.0, 'C', "x");
     SolverContext *state = NULL;
-    cxf_simplex_init(model, NULL, 0, timing, &state);
+    cxf_simplex_init(model, &state);
     TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT, cxf_simplex_perturbation(state, NULL));
     cxf_simplex_final(state);
 }
@@ -55,7 +51,7 @@ void test_perturbation_null_args(void) {
 void test_perturbation_basic(void) {
     cxf_addvar(model, 0.0, 10.0, 1.0, 'C', "x");
     SolverContext *state = NULL;
-    cxf_simplex_init(model, NULL, 0, timing, &state);
+    cxf_simplex_init(model, &state);
     cxf_simplex_setup(state, env);
     TEST_ASSERT_EQUAL_INT(CXF_OK, cxf_simplex_perturbation(state, env));
     /* Idempotent - calling again should also return OK */
@@ -70,7 +66,7 @@ void test_unperturb_null_args(void) {
 void test_unperturb_sequence(void) {
     cxf_addvar(model, 0.0, 10.0, 1.0, 'C', "x");
     SolverContext *state = NULL;
-    cxf_simplex_init(model, NULL, 0, timing, &state);
+    cxf_simplex_init(model, &state);
     cxf_simplex_setup(state, env);
     /* Without perturbation: returns 1 */
     TEST_ASSERT_EQUAL_INT(1, cxf_simplex_unperturb(state, env));
@@ -122,7 +118,7 @@ void test_infeasible_constraints(void) {
 void test_small_coefficients(void) {
     cxf_addvar(model, 0.0, 10.0, 1e-12, 'C', "x");
     SolverContext *state = NULL;
-    TEST_ASSERT_EQUAL_INT(CXF_OK, cxf_simplex_init(model, NULL, 0, timing, &state));
+    TEST_ASSERT_EQUAL_INT(CXF_OK, cxf_simplex_init(model, &state));
     cxf_simplex_final(state);
 }
 
@@ -130,14 +126,14 @@ void test_large_coefficient_range(void) {
     cxf_addvar(model, 0.0, 1e10, 1e-8, 'C', "x");
     cxf_addvar(model, 0.0, 1e-10, 1e8, 'C', "y");
     SolverContext *state = NULL;
-    TEST_ASSERT_EQUAL_INT(CXF_OK, cxf_simplex_init(model, NULL, 0, timing, &state));
+    TEST_ASSERT_EQUAL_INT(CXF_OK, cxf_simplex_init(model, &state));
     cxf_simplex_final(state);
 }
 
 void test_fixed_variable(void) {
     cxf_addvar(model, 5.0, 5.0, 1.0, 'C', "x_fixed");
     SolverContext *state = NULL;
-    TEST_ASSERT_EQUAL_INT(CXF_OK, cxf_simplex_init(model, NULL, 0, timing, &state));
+    TEST_ASSERT_EQUAL_INT(CXF_OK, cxf_simplex_init(model, &state));
     cxf_simplex_final(state);
 }
 

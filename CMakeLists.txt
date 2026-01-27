@@ -99,6 +99,7 @@ target_sources(convexfeld PRIVATE
     src/basis/basis_stub.c
     # Simplex module (M1.5 stubs)
     src/simplex/solve_lp_stub.c
+    src/simplex/context.c
     # Error module (M1.7 stubs + M3.1.2-M3.1.7)
     src/error/core.c
     src/error/nan_check.c

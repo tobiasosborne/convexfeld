@@ -20,10 +20,13 @@
 struct EtaFactors {
     int type;                 /**< 1=refactorization, 2=pivot */
     int pivot_row;            /**< Row index for pivot */
+    int pivot_var;            /**< Variable index involved in transformation */
     int nnz;                  /**< Non-zeros in eta vector */
     int *indices;             /**< Row indices [nnz] */
     double *values;           /**< Values [nnz] */
     double pivot_elem;        /**< Pivot element */
+    double obj_coeff;         /**< Objective coefficient of pivot_var */
+    int status;               /**< New status of pivot_var: -1=lower, -2=upper, -3=superbasic, >=0=basic */
     EtaFactors *next;         /**< Link to next eta (newer) */
 };
 
