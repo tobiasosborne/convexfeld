@@ -147,22 +147,7 @@ void cxf_simplex_final(SolverContext *state) {
     free(state);
 }
 
-/**
- * @brief Set up solver context (stub - to be implemented in M7.1.6).
- *
- * @param state Solver context
- * @param env Environment
- * @return CXF_OK on success, error code otherwise
- */
-int cxf_simplex_setup(SolverContext *state, CxfEnv *env) {
-    if (state == NULL || env == NULL) {
-        return CXF_ERROR_NULL_ARGUMENT;
-    }
-
-    /* Stub: transition to phase 1 or 2 */
-    state->phase = 1;
-    return CXF_OK;
-}
+/* cxf_simplex_setup is implemented in setup.c */
 
 /**
  * @brief Get solver status (stub - to be implemented).

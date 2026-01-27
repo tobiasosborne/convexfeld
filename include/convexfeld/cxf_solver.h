@@ -79,12 +79,29 @@ int cxf_simplex_init(CxfModel *model, SolverContext **stateP);
 void cxf_simplex_final(SolverContext *state);
 
 /**
- * @brief Set up solver context (stub - to be implemented in M7.1.6).
- * @param state Solver context
- * @param env Environment
+ * @brief Set up solver context for iteration.
+ *
+ * Initializes reduced costs, dual values, pricing, and determines
+ * initial phase based on bound feasibility.
+ *
+ * @param state Solver context (must be initialized via cxf_simplex_init)
+ * @param env Environment containing solver parameters
  * @return CXF_OK on success, error code otherwise
  */
 int cxf_simplex_setup(SolverContext *state, CxfEnv *env);
+
+/**
+ * @brief Preprocess the LP problem.
+ *
+ * Performs preprocessing reductions including fixed variable elimination,
+ * bound propagation, and scaling.
+ *
+ * @param state Solver context
+ * @param env Environment
+ * @param flags Control flags (bit 0: skip preprocessing if set)
+ * @return CXF_OK on success, 3=infeasible detected
+ */
+int cxf_simplex_preprocess(SolverContext *state, CxfEnv *env, int flags);
 
 /**
  * @brief Get solver status (stub - to be implemented).

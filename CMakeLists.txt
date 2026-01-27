@@ -104,6 +104,7 @@ target_sources(convexfeld PRIVATE
     src/simplex/step.c
     src/simplex/ratio_test.c
     src/simplex/context.c
+    src/simplex/setup.c
     # Error module (M1.7 stubs + M3.1.2-M3.1.7)
     src/error/core.c
     src/error/nan_check.c

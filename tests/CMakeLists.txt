@@ -124,6 +124,10 @@ add_cxf_test(test_simplex_edge unit/test_simplex_edge.c)
 add_cxf_test(test_pivot_eta unit/test_pivot_eta.c)
 target_link_libraries(test_pivot_eta PRIVATE m)  # For math functions
 
+# M7.1.6: Simplex Setup and Preprocess tests
+add_cxf_test(test_simplex_setup unit/test_simplex_setup.c)
+target_link_libraries(test_simplex_setup PRIVATE m)  # For math functions
+
 ################################################################################
 # Integration Tests
 ################################################################################

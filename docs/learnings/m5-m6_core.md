@@ -736,3 +736,69 @@ int cxf_simplex_unperturb(SolverContext *state, CxfEnv *env);
 - Code quality good where complete - just incomplete coverage
 
 ---
+
+### 2026-01-27: M7.1.6 Simplex Setup and Preprocessing
+
+**Files created:**
+- `src/simplex/setup.c` (198 LOC) - cxf_simplex_setup and cxf_simplex_preprocess
+- `tests/unit/test_simplex_setup.c` (295 LOC) - 18 comprehensive tests
+
+**Functions implemented:**
+
+**cxf_simplex_setup:**
+- Initializes reduced costs from objective coefficients (memcpy from work_obj to work_dj)
+- Zero-initializes dual values (memset work_pi)
+- Creates and initializes pricing context via cxf_pricing_create/init
+- Determines initial phase (1 if bounds infeasible, 2 otherwise)
+- Resets iteration tracking (iteration=0, eta_count=0)
+- Sets tolerance from environment
+
+**cxf_simplex_preprocess:**
+- Checks skip flag (bit 0 of flags parameter)
+- Detects infeasible bounds (lb > ub + tolerance) → returns 3
+- Placeholder for full preprocessing (singleton elimination, bound propagation, scaling)
+
+**Tests written (18 total):**
+- Setup tests (10): NULL handling, empty model, reduced cost init, dual values, iteration reset, phase determination (feasible/infeasible), pricing init, tolerance setting
+- Preprocess tests (7): NULL handling, skip flag, empty model, feasible bounds, infeasibility detection (single/multiple vars)
+- Integration test (1): setup + preprocess sequence
+
+**Key design decisions:**
+
+1. **Adapted to existing SolverContext structure:**
+   - Spec uses `reducedCosts` but code uses `work_dj`
+   - Spec uses `dualValues` but code uses `work_pi`
+   - Used direct field access since cxf_get_intparam doesn't exist
+
+2. **Phase determination:**
+   - Phase 1: Any variable has lb > ub + tolerance
+   - Phase 2: All bounds feasible
+   - Uses env->feasibility_tol with 1e-6 default fallback
+
+3. **Pricing initialization:**
+   - Creates 3-level pricing context
+   - Uses auto strategy (0)
+   - Only allocates if n > 0
+
+4. **Preprocessing scope:**
+   - Full preprocessing (singleton elimination, bound propagation, geometric scaling) requires constraint matrix access
+   - Current cxf_addconstr is stub, so full preprocessing deferred
+   - Basic infeasibility detection implemented
+
+**Gotchas:**
+- Stub for cxf_simplex_setup was in context.c - had to remove to avoid duplicate definition
+- Header declaration for cxf_simplex_preprocess was missing - had to add
+- cxf_get_intparam doesn't exist - use direct env field access or defaults
+
+**Files modified:**
+- `CMakeLists.txt` - Added src/simplex/setup.c
+- `tests/CMakeLists.txt` - Added test_simplex_setup
+- `include/convexfeld/cxf_solver.h` - Added cxf_simplex_preprocess declaration
+- `src/simplex/context.c` - Removed cxf_simplex_setup stub
+
+**Test results:**
+- All 18 new tests pass
+- All existing simplex_basic tests (17) still pass
+- Pre-existing failures unchanged (api_optimize, simplex_iteration, simplex_edge)
+
+---
