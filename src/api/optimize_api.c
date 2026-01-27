@@ -93,11 +93,12 @@ int cxf_optimize_internal(CxfModel *model) {
     (void)cxf_post_optimize_callback(model);
 
     /* Log optimization completion */
-    if (status == CXF_OK) {
+    if (status == CXF_OPTIMAL) {
         cxf_log_printf(env, 0, "Optimization completed successfully");
         cxf_log_printf(env, 0, "Objective value: %.6f", model->obj_val);
+        status = CXF_OK;  /* Convert OPTIMAL status to OK for API */
     } else {
-        cxf_log_printf(env, 0, "Optimization failed with error code: %d", status);
+        cxf_log_printf(env, 0, "Optimization completed with status: %d", status);
     }
 
     /* Clear optimization flag */

@@ -115,7 +115,7 @@ int cxf_solve_lp(CxfModel *model) {
     if (model->num_vars == 0) {
         model->obj_val = 0.0;
         model->status = CXF_OPTIMAL;
-        return CXF_OK;
+        return CXF_OPTIMAL;
     }
 
     /* Handle unconstrained model (no constraints) */
@@ -172,7 +172,7 @@ int cxf_solve_lp(CxfModel *model) {
         }
         model->obj_val = obj_val;
         model->status = CXF_OPTIMAL;
-        return CXF_OK;
+        return CXF_OPTIMAL;
     }
 
     CxfEnv *env = model->env;
@@ -256,6 +256,6 @@ int cxf_solve_lp(CxfModel *model) {
      *=========================================================================*/
     cxf_simplex_final(state);
 
-    /* Return CXF_OK on success, error code otherwise */
-    return (model->status == CXF_OPTIMAL) ? CXF_OK : model->status;
+    /* Return status code */
+    return model->status;
 }
