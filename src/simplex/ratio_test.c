@@ -77,8 +77,10 @@ int cxf_ratio_test(SolverContext *state, CxfEnv *env, int enteringVar,
         /* Get basic variable at this row */
         basicVar = state->basis->basic_vars[i];
 
-        /* Skip if not a structural variable (slack/artificial) */
-        if (basicVar < 0 || basicVar >= state->num_vars) {
+        /* Skip invalid variable indices
+         * Valid range: [0, num_vars + num_constrs) to include artificials */
+        int total_vars = state->num_vars + state->num_constrs;
+        if (basicVar < 0 || basicVar >= total_vars) {
             continue;
         }
 
@@ -87,19 +89,23 @@ int cxf_ratio_test(SolverContext *state, CxfEnv *env, int enteringVar,
         lb = state->work_lb[basicVar];
         ub = state->work_ub[basicVar];
 
-        /* Compute ratio based on sign of pivot coefficient */
+        /* Compute ratio based on sign of pivot coefficient.
+         * When entering var increases by theta, basic var changes by -theta * d_i.
+         * - If d_i > 0: basic var decreases, hits lower bound
+         * - If d_i < 0: basic var increases, hits upper bound
+         */
         if (d_i > relaxedTol) {
-            /* Positive coefficient: variable hits upper bound */
-            if (ub >= infinity) {
-                continue;  /* Upper bound is infinite */
-            }
-            ratio = (ub - x_i) / d_i;
-        } else if (d_i < -relaxedTol) {
-            /* Negative coefficient: variable hits lower bound */
+            /* Positive coefficient: basic var decreases toward lower bound */
             if (lb <= -infinity) {
                 continue;  /* Lower bound is infinite */
             }
-            ratio = (lb - x_i) / d_i;
+            ratio = (x_i - lb) / d_i;
+        } else if (d_i < -relaxedTol) {
+            /* Negative coefficient: basic var increases toward upper bound */
+            if (ub >= infinity) {
+                continue;  /* Upper bound is infinite */
+            }
+            ratio = (x_i - ub) / d_i;  /* d_i < 0 makes this positive */
         } else {
             continue;  /* Coefficient too small */
         }
@@ -135,8 +141,9 @@ int cxf_ratio_test(SolverContext *state, CxfEnv *env, int enteringVar,
         /* Get basic variable at this row */
         basicVar = state->basis->basic_vars[i];
 
-        /* Skip if not a structural variable */
-        if (basicVar < 0 || basicVar >= state->num_vars) {
+        /* Skip invalid variable indices (include artificials) */
+        int total_vars2 = state->num_vars + state->num_constrs;
+        if (basicVar < 0 || basicVar >= total_vars2) {
             continue;
         }
 
@@ -147,15 +154,17 @@ int cxf_ratio_test(SolverContext *state, CxfEnv *env, int enteringVar,
 
         /* Compute ratio (same logic as first pass) */
         if (d_i > relaxedTol) {
-            if (ub >= infinity) {
-                continue;
-            }
-            ratio = (ub - x_i) / d_i;
-        } else if (d_i < -relaxedTol) {
+            /* Positive coefficient: basic var decreases toward lower bound */
             if (lb <= -infinity) {
                 continue;
             }
-            ratio = (lb - x_i) / d_i;
+            ratio = (x_i - lb) / d_i;
+        } else if (d_i < -relaxedTol) {
+            /* Negative coefficient: basic var increases toward upper bound */
+            if (ub >= infinity) {
+                continue;
+            }
+            ratio = (x_i - ub) / d_i;
         } else {
             continue;
         }

@@ -22,8 +22,9 @@ struct SolverContext {
     CxfModel *model_ref;      /**< Back-pointer to model */
 
     /* Problem dimensions */
-    int num_vars;             /**< Number of variables */
+    int num_vars;             /**< Number of original variables */
     int num_constrs;          /**< Number of constraints */
+    int num_artificials;      /**< Number of artificial variables (for Phase I) */
     int64_t num_nonzeros;     /**< Number of non-zeros */
 
     /* Solver state */
@@ -33,13 +34,13 @@ struct SolverContext {
     double tolerance;         /**< Optimality tolerance */
     double obj_value;         /**< Current objective value */
 
-    /* Working arrays */
-    double *work_lb;          /**< Working lower bounds [num_vars] */
-    double *work_ub;          /**< Working upper bounds [num_vars] */
-    double *work_obj;         /**< Working objective [num_vars] */
-    double *work_x;           /**< Current solution [num_vars] */
+    /* Working arrays - sized for num_vars + num_constrs to hold artificials */
+    double *work_lb;          /**< Working lower bounds [num_vars + num_constrs] */
+    double *work_ub;          /**< Working upper bounds [num_vars + num_constrs] */
+    double *work_obj;         /**< Working objective [num_vars + num_constrs] */
+    double *work_x;           /**< Current solution [num_vars + num_constrs] */
     double *work_pi;          /**< Dual values [num_constrs] */
-    double *work_dj;          /**< Reduced costs [num_vars] */
+    double *work_dj;          /**< Reduced costs [num_vars + num_constrs] */
 
     /* Subcomponents */
     BasisState *basis;        /**< Current basis state */

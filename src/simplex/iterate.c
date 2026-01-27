@@ -41,25 +41,40 @@ extern int cxf_simplex_step(SolverContext *state, int entering, int leavingRow,
 extern int cxf_basis_refactor(BasisState *basis);
 
 /**
- * @brief Extract a sparse column into a dense array.
+ * @brief Extract a column into a dense array.
  *
- * @param matrix Sparse matrix
- * @param col Column index
- * @param dense Output dense array (must be size num_rows)
+ * For original variables (col < n): extracts from sparse matrix.
+ * For artificial variables (col >= n): generates identity column
+ * with +1 in row (col - n).
+ *
+ * @param matrix Sparse matrix (may be NULL for artificial vars)
+ * @param col Column index (0 to n+m-1)
+ * @param n Number of original variables
+ * @param m Number of constraints (rows)
+ * @param dense Output dense array (must be size m)
  */
-static void extract_column(const SparseMatrix *matrix, int col, double *dense) {
-    int num_rows = matrix->num_rows;
-
+static void extract_column_ext(const SparseMatrix *matrix, int col, int n, int m,
+                               double *dense) {
     /* Clear the dense array */
-    memset(dense, 0, (size_t)num_rows * sizeof(double));
+    memset(dense, 0, (size_t)m * sizeof(double));
 
-    /* Fill in nonzeros from CSC format */
-    int64_t start = matrix->col_ptr[col];
-    int64_t end = matrix->col_ptr[col + 1];
+    if (col < n) {
+        /* Original variable: extract from sparse matrix */
+        if (matrix == NULL) return;
+        int64_t start = matrix->col_ptr[col];
+        int64_t end = matrix->col_ptr[col + 1];
 
-    for (int64_t k = start; k < end; k++) {
-        int row = matrix->row_idx[k];
-        dense[row] = matrix->values[k];
+        for (int64_t k = start; k < end; k++) {
+            int row = matrix->row_idx[k];
+            dense[row] = matrix->values[k];
+        }
+    } else {
+        /* Artificial variable: identity column */
+        /* Artificial var col corresponds to constraint row (col - n) */
+        int row = col - n;
+        if (row >= 0 && row < m) {
+            dense[row] = 1.0;
+        }
     }
 }
 
@@ -92,6 +107,9 @@ int cxf_simplex_iterate(SolverContext *state, CxfEnv *env) {
     int m = state->num_constrs;
     int n = state->num_vars;
 
+    /* Total variables = original + artificials for Phase I */
+    int total_vars = n + m;
+
     /* Allocate work arrays if needed */
     double *pivotCol = basis->work;
     if (pivotCol == NULL) {
@@ -106,13 +124,14 @@ int cxf_simplex_iterate(SolverContext *state, CxfEnv *env) {
 
     /*=========================================================================
      * Step 1: Pricing - select entering variable
+     * Scan all variables including artificials (indices n to n+m-1)
      *=========================================================================*/
     if (state->pricing != NULL) {
         num_candidates = cxf_pricing_candidates(
             state->pricing,
             state->work_dj,       /* reduced costs */
             basis->var_status,    /* variable status */
-            n,
+            total_vars,           /* Include artificial variables */
             env->optimality_tol,
             candidates,
             10
@@ -121,7 +140,7 @@ int cxf_simplex_iterate(SolverContext *state, CxfEnv *env) {
         /* Fallback: scan all variables for most negative reduced cost */
         num_candidates = 0;
         double best_rc = -env->optimality_tol;
-        for (int j = 0; j < n; j++) {
+        for (int j = 0; j < total_vars; j++) {
             if (basis->var_status[j] >= 0) {
                 continue;  /* Skip basic variables */
             }
@@ -152,8 +171,9 @@ int cxf_simplex_iterate(SolverContext *state, CxfEnv *env) {
 
     /*=========================================================================
      * Step 2: FTRAN - compute pivot column B^(-1) * a_entering
+     * For artificial vars (entering >= n), generates identity column
      *=========================================================================*/
-    extract_column(model->matrix, entering, column);
+    extract_column_ext(model->matrix, entering, n, m, column);
     rc = cxf_ftran(basis, column, pivotCol);
     if (rc != CXF_OK) {
         free(column);
@@ -182,16 +202,22 @@ int cxf_simplex_iterate(SolverContext *state, CxfEnv *env) {
         return CXF_NUMERIC;  /* Pivot too small */
     }
 
-    /* Step size based on ratio test */
+    /* Step size based on ratio test.
+     * When entering var increases by stepSize, basic var changes by -stepSize * pivotElement.
+     * - pivotElement > 0: basic var decreases toward lb
+     * - pivotElement < 0: basic var increases toward ub
+     */
     int leaving = basis->basic_vars[leavingRow];
     double x_leaving = state->work_x[leaving];
     double lb_leaving = state->work_lb[leaving];
     double ub_leaving = state->work_ub[leaving];
 
     if (pivotElement > 0) {
-        stepSize = (ub_leaving - x_leaving) / pivotElement;
+        /* Basic var decreases toward lower bound */
+        stepSize = (x_leaving - lb_leaving) / pivotElement;
     } else {
-        stepSize = (lb_leaving - x_leaving) / pivotElement;
+        /* Basic var increases toward upper bound */
+        stepSize = (x_leaving - ub_leaving) / pivotElement;
     }
 
     if (stepSize < 0) {

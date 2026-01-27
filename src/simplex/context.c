@@ -64,13 +64,20 @@ int cxf_simplex_init(CxfModel *model, SolverContext **stateP) {
     ctx->iteration = 0;
     ctx->last_refactor_iter = 0;
 
-    /* Allocate working arrays for variables */
-    if (n > 0) {
-        ctx->work_lb = (double *)malloc((size_t)n * sizeof(double));
-        ctx->work_ub = (double *)malloc((size_t)n * sizeof(double));
-        ctx->work_obj = (double *)malloc((size_t)n * sizeof(double));
-        ctx->work_x = (double *)calloc((size_t)n, sizeof(double));
-        ctx->work_dj = (double *)calloc((size_t)n, sizeof(double));
+    /* Allocate working arrays for variables
+     * Size is n + m to accommodate artificial variables for Phase I.
+     * Original vars: indices [0, n-1]
+     * Artificial vars: indices [n, n+m-1]
+     */
+    int total_vars = n + m;
+    ctx->num_artificials = 0;  /* Set during Phase I setup */
+
+    if (total_vars > 0) {
+        ctx->work_lb = (double *)malloc((size_t)total_vars * sizeof(double));
+        ctx->work_ub = (double *)malloc((size_t)total_vars * sizeof(double));
+        ctx->work_obj = (double *)malloc((size_t)total_vars * sizeof(double));
+        ctx->work_x = (double *)calloc((size_t)total_vars, sizeof(double));
+        ctx->work_dj = (double *)calloc((size_t)total_vars, sizeof(double));
 
         if (ctx->work_lb == NULL || ctx->work_ub == NULL ||
             ctx->work_obj == NULL || ctx->work_x == NULL ||
@@ -79,10 +86,19 @@ int cxf_simplex_init(CxfModel *model, SolverContext **stateP) {
             return CXF_ERROR_OUT_OF_MEMORY;
         }
 
-        /* Copy bounds and objective from model */
-        memcpy(ctx->work_lb, model->lb, (size_t)n * sizeof(double));
-        memcpy(ctx->work_ub, model->ub, (size_t)n * sizeof(double));
-        memcpy(ctx->work_obj, model->obj_coeffs, (size_t)n * sizeof(double));
+        /* Copy bounds and objective from model for original variables */
+        if (n > 0) {
+            memcpy(ctx->work_lb, model->lb, (size_t)n * sizeof(double));
+            memcpy(ctx->work_ub, model->ub, (size_t)n * sizeof(double));
+            memcpy(ctx->work_obj, model->obj_coeffs, (size_t)n * sizeof(double));
+        }
+
+        /* Initialize artificial variable slots with default values */
+        for (int i = n; i < total_vars; i++) {
+            ctx->work_lb[i] = 0.0;       /* Artificials have lb = 0 */
+            ctx->work_ub[i] = CXF_INFINITY;  /* Artificials unbounded above */
+            ctx->work_obj[i] = 0.0;      /* Set during Phase I */
+        }
     }
 
     /* Allocate dual values array for constraints */
@@ -94,9 +110,9 @@ int cxf_simplex_init(CxfModel *model, SolverContext **stateP) {
         }
     }
 
-    /* Create basis state */
-    ctx->basis = cxf_basis_create(m, n);
-    if (ctx->basis == NULL && (m > 0 || n > 0)) {
+    /* Create basis state with space for artificial variables */
+    ctx->basis = cxf_basis_create(m, total_vars);
+    if (ctx->basis == NULL && (m > 0 || total_vars > 0)) {
         cxf_simplex_final(ctx);
         return CXF_ERROR_OUT_OF_MEMORY;
     }

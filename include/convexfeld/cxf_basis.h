@@ -35,12 +35,14 @@ struct EtaFactors {
  *
  * Tracks which variables are basic and maintains the
  * basis factorization using eta vectors.
+ *
+ * Note: n includes artificial variables (original vars + artificials).
  */
 struct BasisState {
     int m;                    /**< Number of basic variables (= num_constrs) */
-    int n;                    /**< Number of variables */
+    int n;                    /**< Number of variables (original + artificial) */
     int *basic_vars;          /**< Indices of basic variables [m] */
-    int *var_status;          /**< Status of each variable [n] */
+    int *var_status;          /**< Status of each variable [n] (incl. artificials) */
 
     /* Eta factorization */
     int eta_count;            /**< Number of eta vectors */

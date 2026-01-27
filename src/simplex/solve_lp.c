@@ -31,46 +31,187 @@ extern int cxf_simplex_iterate(SolverContext *state, CxfEnv *env);
 extern int cxf_extract_solution(SolverContext *state, CxfModel *model);
 
 /**
- * @brief Initialize basis with original variables (no artificials).
+ * @brief Set up Phase I with artificial variables.
  *
- * Attempts to find a feasible starting basis using simple heuristics.
- * Sets all variables at their lower bounds initially.
+ * Creates initial basis using artificial variables:
+ * - Original vars (0 to n-1): set at lower bounds, nonbasic
+ * - Artificial vars (n to n+m-1): basic, values = slack needed for feasibility
+ * - Phase I objective: minimize sum of artificials
  *
  * @param state Solver context
  * @return CXF_OK on success
  */
-static int init_simple_basis(SolverContext *state) {
+static int setup_phase_one(SolverContext *state) {
     BasisState *basis = state->basis;
+    CxfModel *model = state->model_ref;
+    SparseMatrix *mat = model->matrix;
     int m = state->num_constrs;
     int n = state->num_vars;
 
-    if (m > n) return CXF_ERROR_NOT_SUPPORTED;
-
-    /* Initialize: all variables at lower bound (nonbasic) */
+    /* Initialize: all original variables at lower bound (nonbasic) */
     for (int j = 0; j < n; j++) {
+        double lb = state->work_lb[j];
+        if (lb <= -CXF_INFINITY) lb = 0.0;  /* Free vars start at 0 */
         basis->var_status[j] = -1;  /* At lower bound */
-        state->work_x[j] = state->work_lb[j];
+        state->work_x[j] = lb;
     }
 
-    /* Make first m variables basic (simple crash basis) */
+    /* Set up artificial variables as initial basis */
+    state->num_artificials = m;
     for (int i = 0; i < m; i++) {
-        basis->basic_vars[i] = i;
-        basis->var_status[i] = i;  /* Basic in row i */
-        if (state->model_ref->matrix && state->model_ref->matrix->rhs) {
-            state->work_x[i] = state->model_ref->matrix->rhs[i];
+        int art_idx = n + i;  /* Artificial var for row i */
+
+        /* Artificial is basic in row i */
+        basis->basic_vars[i] = art_idx;
+        basis->var_status[art_idx] = i;  /* Basic in row i */
+
+        /* Compute artificial value = RHS - sum(a_ij * x_j) for original vars */
+        double rhs = mat->rhs ? mat->rhs[i] : 0.0;
+        double row_sum = 0.0;
+
+        /* Sum contributions from original variables at their bounds */
+        for (int j = 0; j < n; j++) {
+            /* Get coefficient a_ij */
+            double aij = 0.0;
+            int64_t start = mat->col_ptr[j];
+            int64_t end = mat->col_ptr[j + 1];
+            for (int64_t k = start; k < end; k++) {
+                if (mat->row_idx[k] == i) {
+                    aij = mat->values[k];
+                    break;
+                }
+            }
+            row_sum += aij * state->work_x[j];
         }
+
+        /* Artificial value = slack needed */
+        double art_val = rhs - row_sum;
+
+        /* Handle constraint sense: for >= constraints, negate */
+        char sense = mat->sense ? mat->sense[i] : '<';
+        if (sense == '>' || sense == 'G') {
+            art_val = -art_val;
+        }
+
+        /* Artificials must be non-negative; if negative, we have a problem */
+        if (art_val < 0) art_val = fabs(art_val);
+
+        state->work_x[art_idx] = art_val;
+
+        /* Set artificial bounds and Phase I objective coefficient */
+        state->work_lb[art_idx] = 0.0;
+        state->work_ub[art_idx] = CXF_INFINITY;
+        state->work_obj[art_idx] = 1.0;  /* Phase I: minimize sum of artificials */
     }
+
+    /* Set original variables' Phase I objective to 0 */
+    for (int j = 0; j < n; j++) {
+        state->work_obj[j] = 0.0;
+    }
+
+    /* Compute initial Phase I objective = sum of artificials */
+    state->obj_value = 0.0;
+    for (int i = 0; i < m; i++) {
+        state->obj_value += state->work_x[n + i];
+    }
+
+    state->phase = 1;
     return CXF_OK;
 }
 
 /**
- * @brief Compute reduced costs for current objective.
+ * @brief Transition from Phase I to Phase II.
+ *
+ * After Phase I finds a feasible basis (sum of artificials = 0):
+ * - Restore original objective coefficients
+ * - Set artificial objective coefficients to 0 (they should stay at zero)
+ * - Recompute objective value with original coefficients
+ *
+ * @param state Solver context
+ * @param model Original model with true objective
+ * @return CXF_OK on success
+ */
+static int transition_to_phase_two(SolverContext *state, CxfModel *model) {
+    int n = state->num_vars;
+    int m = state->num_constrs;
+
+    /* Restore original objective coefficients */
+    for (int j = 0; j < n; j++) {
+        state->work_obj[j] = model->obj_coeffs[j];
+    }
+
+    /* Set artificial objective coefficients to 0 (or large positive for big-M) */
+    for (int i = 0; i < m; i++) {
+        state->work_obj[n + i] = 0.0;
+    }
+
+    /* Recompute objective value with original objective */
+    state->obj_value = 0.0;
+    for (int j = 0; j < n; j++) {
+        state->obj_value += state->work_obj[j] * state->work_x[j];
+    }
+
+    state->phase = 2;
+    return CXF_OK;
+}
+
+/**
+ * @brief Compute reduced costs: dj = cj - pi^T * Aj
+ *
+ * For correct simplex pricing, reduced costs must account for the
+ * dual prices (shadow prices) from the current basis.
+ *
+ * @param state Solver context
  */
 static void compute_reduced_costs(SolverContext *state) {
-    int n = state->num_vars;
+    CxfModel *model = state->model_ref;
+    SparseMatrix *mat = model->matrix;
     BasisState *basis = state->basis;
-    for (int j = 0; j < n; j++) {
-        state->work_dj[j] = (basis->var_status[j] >= 0) ? 0.0 : state->work_obj[j];
+    int n = state->num_vars;
+    int m = state->num_constrs;
+    int total_vars = n + m;
+
+    /* Step 1: Compute dual prices pi = cB * B^-1
+     * For simplicity with identity-like basis (artificials), we approximate:
+     * pi[i] = objective coefficient of basic variable in row i
+     */
+    for (int i = 0; i < m; i++) {
+        int basic_var = basis->basic_vars[i];
+        if (basic_var >= 0 && basic_var < total_vars) {
+            state->work_pi[i] = state->work_obj[basic_var];
+        } else {
+            state->work_pi[i] = 0.0;
+        }
+    }
+
+    /* Step 2: Compute reduced costs for all variables */
+    for (int j = 0; j < total_vars; j++) {
+        if (basis->var_status[j] >= 0) {
+            /* Basic variable: reduced cost = 0 */
+            state->work_dj[j] = 0.0;
+        } else {
+            /* Nonbasic variable: dj = cj - pi^T * Aj */
+            double dj = state->work_obj[j];
+
+            if (j < n && mat != NULL) {
+                /* Original variable: subtract pi^T * column_j */
+                int64_t start = mat->col_ptr[j];
+                int64_t end = mat->col_ptr[j + 1];
+                for (int64_t k = start; k < end; k++) {
+                    int row = mat->row_idx[k];
+                    dj -= state->work_pi[row] * mat->values[k];
+                }
+            } else if (j >= n) {
+                /* Artificial variable j corresponds to row (j - n) */
+                /* Its column is identity: 1 in row (j-n), 0 elsewhere */
+                int row = j - n;
+                if (row >= 0 && row < m) {
+                    dj -= state->work_pi[row] * 1.0;
+                }
+            }
+
+            state->work_dj[j] = dj;
+        }
     }
 }
 
@@ -346,20 +487,67 @@ int cxf_solve_lp(CxfModel *model) {
     rc = cxf_simplex_init(model, &state);
     if (rc != CXF_OK) { model->status = rc; return rc; }
 
-    /* Set up initial basis */
-    rc = init_simple_basis(state);
+    int max_iter = state->max_iterations;
+
+    /*=========================================================================
+     * PHASE I: Find feasible basis using artificial variables
+     *=========================================================================*/
+    rc = setup_phase_one(state);
     if (rc != CXF_OK) {
         model->status = rc;
         cxf_simplex_final(state);
         return rc;
     }
 
-    /* Compute initial reduced costs */
+    /* Compute initial Phase I reduced costs */
     compute_reduced_costs(state);
-    state->phase = 2;
-    int max_iter = state->max_iterations;
 
-    /* Main iteration loop */
+    /* Phase I iteration loop */
+    while (state->iteration < max_iter) {
+        status = cxf_simplex_iterate(state, env);
+
+        if (status == ITERATE_OPTIMAL) {
+            /* Phase I optimal - check if feasible */
+            if (state->obj_value > env->feasibility_tol) {
+                /* Sum of artificials > 0: no feasible solution */
+                model->status = CXF_INFEASIBLE;
+                cxf_simplex_final(state);
+                return CXF_INFEASIBLE;
+            }
+            /* Feasible basis found - proceed to Phase II */
+            break;
+        } else if (status == ITERATE_UNBOUNDED) {
+            /* Phase I unbounded is impossible (artificials have lb=0) - bug */
+            model->status = CXF_ERROR_NOT_SUPPORTED;
+            cxf_simplex_final(state);
+            return CXF_ERROR_NOT_SUPPORTED;
+        } else if (status < 0) {
+            model->status = status;
+            cxf_simplex_final(state);
+            return status;
+        }
+    }
+
+    if (state->iteration >= max_iter) {
+        model->status = CXF_ITERATION_LIMIT;
+        cxf_simplex_final(state);
+        return CXF_ITERATION_LIMIT;
+    }
+
+    /*=========================================================================
+     * PHASE II: Optimize original objective
+     *=========================================================================*/
+    rc = transition_to_phase_two(state, model);
+    if (rc != CXF_OK) {
+        model->status = rc;
+        cxf_simplex_final(state);
+        return rc;
+    }
+
+    /* Recompute reduced costs with original objective */
+    compute_reduced_costs(state);
+
+    /* Phase II iteration loop */
     while (state->iteration < max_iter) {
         status = cxf_simplex_iterate(state, env);
 
