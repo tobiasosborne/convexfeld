@@ -12,12 +12,24 @@
 #include "cxf_types.h"
 
 /**
+ * @brief Callback invocation context constants.
+ *
+ * WHERE codes indicate when the callback is being invoked during optimization.
+ */
+#define CXF_CB_PRE_SOLVE    1  /**< Before optimization begins */
+#define CXF_CB_POLLING      2  /**< During optimization (polling) */
+#define CXF_CB_MIP_SOL      3  /**< MIP solution found */
+#define CXF_CB_POST_SOLVE   4  /**< After optimization completes */
+
+/**
  * @brief Callback function signature.
  * @param model The model being optimized
- * @param cbdata User callback data
+ * @param cbdata Callback data pointer (typically CallbackContext)
+ * @param where Context code indicating invocation point (CXF_CB_*)
+ * @param usrdata User-provided data pointer
  * @return 0 to continue, non-zero to terminate
  */
-typedef int (*CxfCallbackFunc)(CxfModel *model, void *cbdata);
+typedef int (*CxfCallbackFunc)(CxfModel *model, void *cbdata, int where, void *usrdata);
 
 /**
  * @brief Callback context structure.

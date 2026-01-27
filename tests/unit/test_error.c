@@ -31,7 +31,7 @@ int cxf_check_model_flags2(CxfModel *model, int flag);
 int cxf_check_terminate(CxfEnv *env);
 
 /* Pivot Validation (M3.1.7) */
-int cxf_pivot_check(double pivot_elem, double tolerance);
+int cxf_validate_pivot_element(double pivot_elem, double tolerance);
 
 /* Test fixtures */
 static CxfEnv *env = NULL;
@@ -189,31 +189,31 @@ void test_checkenv_invalid_magic(void) {
 }
 
 /*============================================================================
- * cxf_pivot_check Tests
+ * cxf_validate_pivot_element Tests
  *===========================================================================*/
 
 void test_pivot_check_valid(void) {
-    int result = cxf_pivot_check(1.0, 1e-10);
+    int result = cxf_validate_pivot_element(1.0, 1e-10);
     TEST_ASSERT_EQUAL_INT(1, result);  /* Valid pivot */
 }
 
 void test_pivot_check_too_small(void) {
-    int result = cxf_pivot_check(1e-12, 1e-10);
+    int result = cxf_validate_pivot_element(1e-12, 1e-10);
     TEST_ASSERT_EQUAL_INT(0, result);  /* Pivot too small */
 }
 
 void test_pivot_check_zero(void) {
-    int result = cxf_pivot_check(0.0, 1e-10);
+    int result = cxf_validate_pivot_element(0.0, 1e-10);
     TEST_ASSERT_EQUAL_INT(0, result);  /* Zero pivot */
 }
 
 void test_pivot_check_negative(void) {
-    int result = cxf_pivot_check(-1.0, 1e-10);
+    int result = cxf_validate_pivot_element(-1.0, 1e-10);
     TEST_ASSERT_EQUAL_INT(1, result);  /* Negative but large enough */
 }
 
 void test_pivot_check_nan(void) {
-    int result = cxf_pivot_check(NAN, 1e-10);
+    int result = cxf_validate_pivot_element(NAN, 1e-10);
     TEST_ASSERT_EQUAL_INT(0, result);  /* NaN is invalid */
 }
 
@@ -393,7 +393,7 @@ int main(void) {
     RUN_TEST(test_checkenv_null);
     RUN_TEST(test_checkenv_invalid_magic);
 
-    /* cxf_pivot_check tests */
+    /* cxf_validate_pivot_element tests */
     RUN_TEST(test_pivot_check_valid);
     RUN_TEST(test_pivot_check_too_small);
     RUN_TEST(test_pivot_check_zero);

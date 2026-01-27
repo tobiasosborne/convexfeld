@@ -214,4 +214,17 @@ int cxf_simplex_cleanup(SolverContext *state, CxfEnv *env);
  */
 int cxf_quadratic_adjust(SolverContext *state, int varIndex);
 
+/**
+ * @brief Extract solution from solver state to model.
+ *
+ * Copies primal solution (x), dual values (pi), and objective value
+ * from the solver's working arrays to the model's solution arrays.
+ * Allocates solution arrays if they are NULL.
+ *
+ * @param state Solver context with solution (non-NULL)
+ * @param model Model to receive solution (non-NULL)
+ * @return CXF_OK on success, error code otherwise
+ */
+int cxf_extract_solution(SolverContext *state, CxfModel *model);
+
 #endif /* CXF_SOLVER_H */

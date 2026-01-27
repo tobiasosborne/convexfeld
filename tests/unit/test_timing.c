@@ -26,7 +26,7 @@ int cxf_timing_refactor(SolverContext *state, CxfEnv *env);
 
 /* API functions */
 int cxf_loadenv(CxfEnv **envP, const char *logfilename);
-void cxf_freeenv(CxfEnv *env);
+int cxf_freeenv(CxfEnv *env);
 
 /* Test fixtures */
 static TimingState timing;

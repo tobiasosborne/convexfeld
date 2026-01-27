@@ -3,7 +3,7 @@
  * @brief TDD tests for pivot validation functions (M3.1.7)
  *
  * Tests for pivot validation functions:
- * - cxf_pivot_check
+ * - cxf_validate_pivot_element
  * - cxf_special_check
  */
 
@@ -12,7 +12,7 @@
 #include <math.h>
 
 /* Forward declarations for pivot functions */
-int cxf_pivot_check(double pivot_elem, double tolerance);
+int cxf_validate_pivot_element(double pivot_elem, double tolerance);
 int cxf_special_check(double lb, double ub, uint32_t flags, double *work_accum);
 
 void setUp(void) {
@@ -24,53 +24,53 @@ void tearDown(void) {
 }
 
 /*============================================================================
- * cxf_pivot_check Tests
+ * cxf_validate_pivot_element Tests
  *===========================================================================*/
 
 void test_pivot_check_valid_positive(void) {
-    int result = cxf_pivot_check(1.0, 1e-10);
+    int result = cxf_validate_pivot_element(1.0, 1e-10);
     TEST_ASSERT_EQUAL_INT(1, result);
 }
 
 void test_pivot_check_valid_negative(void) {
-    int result = cxf_pivot_check(-1.0, 1e-10);
+    int result = cxf_validate_pivot_element(-1.0, 1e-10);
     TEST_ASSERT_EQUAL_INT(1, result);
 }
 
 void test_pivot_check_valid_small(void) {
-    int result = cxf_pivot_check(1e-8, 1e-10);
+    int result = cxf_validate_pivot_element(1e-8, 1e-10);
     TEST_ASSERT_EQUAL_INT(1, result);
 }
 
 void test_pivot_check_reject_too_small(void) {
-    int result = cxf_pivot_check(1e-12, 1e-10);
+    int result = cxf_validate_pivot_element(1e-12, 1e-10);
     TEST_ASSERT_EQUAL_INT(0, result);
 }
 
 void test_pivot_check_reject_zero(void) {
-    int result = cxf_pivot_check(0.0, 1e-10);
+    int result = cxf_validate_pivot_element(0.0, 1e-10);
     TEST_ASSERT_EQUAL_INT(0, result);
 }
 
 void test_pivot_check_reject_nan(void) {
-    int result = cxf_pivot_check(NAN, 1e-10);
+    int result = cxf_validate_pivot_element(NAN, 1e-10);
     TEST_ASSERT_EQUAL_INT(0, result);
 }
 
 void test_pivot_check_accept_infinity(void) {
     /* Infinity has large magnitude, so it passes */
-    int result = cxf_pivot_check(INFINITY, 1e-10);
+    int result = cxf_validate_pivot_element(INFINITY, 1e-10);
     TEST_ASSERT_EQUAL_INT(1, result);
 }
 
 void test_pivot_check_boundary_exactly_equal(void) {
     /* Exactly at tolerance - accepted (>= tolerance) */
-    int result = cxf_pivot_check(1e-10, 1e-10);
+    int result = cxf_validate_pivot_element(1e-10, 1e-10);
     TEST_ASSERT_EQUAL_INT(1, result);
 }
 
 void test_pivot_check_boundary_just_above(void) {
-    int result = cxf_pivot_check(1.1e-10, 1e-10);
+    int result = cxf_validate_pivot_element(1.1e-10, 1e-10);
     TEST_ASSERT_EQUAL_INT(1, result);
 }
 
@@ -127,7 +127,7 @@ void test_special_check_negative_finite_bound(void) {
 int main(void) {
     UNITY_BEGIN();
 
-    /* cxf_pivot_check tests */
+    /* cxf_validate_pivot_element tests */
     RUN_TEST(test_pivot_check_valid_positive);
     RUN_TEST(test_pivot_check_valid_negative);
     RUN_TEST(test_pivot_check_valid_small);

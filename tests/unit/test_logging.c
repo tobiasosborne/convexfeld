@@ -38,7 +38,7 @@ static void test_log_callback(const char *msg, void *data) {
 
 /* API functions */
 int cxf_loadenv(CxfEnv **envP, const char *logfilename);
-void cxf_freeenv(CxfEnv *env);
+int cxf_freeenv(CxfEnv *env);
 
 /* Test fixtures */
 static CxfEnv *env = NULL;

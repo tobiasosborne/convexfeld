@@ -100,8 +100,9 @@ int cxf_startenv(CxfEnv *env);
 /**
  * @brief Free an environment and all associated resources.
  * @param env Environment to free (may be NULL)
+ * @return CXF_OK on success, CXF_ERROR_INVALID_ARGUMENT if env is NULL
  */
-void cxf_freeenv(CxfEnv *env);
+int cxf_freeenv(CxfEnv *env);
 
 /**
  * @brief Validate environment pointer and state.

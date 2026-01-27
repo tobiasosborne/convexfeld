@@ -7,7 +7,7 @@
  * - cxf_error, cxf_geterrormsg, cxf_errorlog: core.c (M3.1.2)
  * - cxf_check_nan, cxf_check_nan_or_inf: nan_check.c (M3.1.3)
  * - cxf_checkenv: env_check.c (M3.1.4)
- * - cxf_pivot_check, cxf_special_check: pivot_check.c (M3.1.7)
+ * - cxf_validate_pivot_element, cxf_special_check: pivot_check.c (M3.1.7)
  */
 
 #include "convexfeld/cxf_types.h"

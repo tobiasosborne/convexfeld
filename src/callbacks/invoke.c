@@ -71,14 +71,20 @@ int cxf_pre_optimize_callback(CxfModel *model) {
     /* Retrieve user data */
     void *user_data = ctx->user_data;
 
+    /* Set WHERE code to indicate pre-optimization phase */
+    int where = CXF_CB_PRE_SOLVE;
+
+    /* Prepare callback data pointer (CallbackContext itself) */
+    void *cbdata = (void *)ctx;
+
     /* Increment invocation counter */
     ctx->callback_calls += 1.0;
 
     /* Capture start timestamp */
     double start_time = cxf_get_timestamp();
 
-    /* Invoke user callback */
-    int result = callback_func(model, user_data);
+    /* Invoke user callback with 4 parameters: model, cbdata, where, usrdata */
+    int result = callback_func(model, cbdata, where, user_data);
 
     /* Capture end timestamp and update cumulative time */
     double end_time = cxf_get_timestamp();
@@ -147,14 +153,20 @@ int cxf_post_optimize_callback(CxfModel *model) {
     /* Retrieve user data */
     void *user_data = ctx->user_data;
 
+    /* Set WHERE code to indicate post-optimization phase */
+    int where = CXF_CB_POST_SOLVE;
+
+    /* Prepare callback data pointer (CallbackContext itself) */
+    void *cbdata = (void *)ctx;
+
     /* Increment invocation counter */
     ctx->callback_calls += 1.0;
 
     /* Capture start timestamp */
     double start_time = cxf_get_timestamp();
 
-    /* Invoke user callback */
-    int result = callback_func(model, user_data);
+    /* Invoke user callback with 4 parameters: model, cbdata, where, usrdata */
+    int result = callback_func(model, cbdata, where, user_data);
 
     /* Capture end timestamp and update cumulative time */
     double end_time = cxf_get_timestamp();

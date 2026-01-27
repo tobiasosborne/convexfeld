@@ -20,7 +20,7 @@ double cxf_get_infinity(void);
 
 /* API functions */
 int cxf_loadenv(CxfEnv **envP, const char *logfilename);
-void cxf_freeenv(CxfEnv *env);
+int cxf_freeenv(CxfEnv *env);
 
 /* Test fixtures */
 static CxfEnv *env = NULL;

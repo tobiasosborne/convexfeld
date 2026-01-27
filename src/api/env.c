@@ -127,9 +127,9 @@ int cxf_startenv(CxfEnv *env) {
     return CXF_OK;
 }
 
-void cxf_freeenv(CxfEnv *env) {
+int cxf_freeenv(CxfEnv *env) {
     if (env == NULL) {
-        return;
+        return CXF_ERROR_INVALID_ARGUMENT;
     }
 
     /* Free owned callback context if present */
@@ -147,6 +147,7 @@ void cxf_freeenv(CxfEnv *env) {
     env->magic = 0;
 
     cxf_free(env);
+    return CXF_OK;
 }
 
 /* Note: cxf_terminate and cxf_reset_terminate are in src/error/terminate.c */

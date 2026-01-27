@@ -46,6 +46,7 @@
 #include "cxf_basis.h"
 #include "cxf_pricing.h"
 #include "cxf_callback.h"
+#include "cxf_utilities.h"
 
 /*******************************************************************************
  * Version Information

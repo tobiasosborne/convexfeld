@@ -3,7 +3,7 @@
  * @brief Pivot validation functions (M3.1.7)
  *
  * Functions for validating pivot operations:
- * - cxf_pivot_check: validate pivot element magnitude
+ * - cxf_validate_pivot_element: validate pivot element magnitude
  * - cxf_special_check: validate variable for special pivot handling
  *
  * Specs:
@@ -34,7 +34,7 @@
  * @param tolerance Minimum acceptable magnitude
  * @return 1 if valid, 0 if invalid
  */
-int cxf_pivot_check(double pivot_elem, double tolerance) {
+int cxf_validate_pivot_element(double pivot_elem, double tolerance) {
     /* Check for NaN */
     if (isnan(pivot_elem)) {
         return 0;

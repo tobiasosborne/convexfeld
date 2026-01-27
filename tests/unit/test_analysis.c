@@ -23,7 +23,7 @@ void cxf_presolve_stats(CxfModel *model);
 
 /* API functions for setup/teardown */
 int cxf_loadenv(CxfEnv **envP, const char *logfilename);
-void cxf_freeenv(CxfEnv *env);
+int cxf_freeenv(CxfEnv *env);
 int cxf_newmodel(CxfEnv *env, CxfModel **modelP, const char *name);
 void cxf_freemodel(CxfModel *model);
 int cxf_addvar(CxfModel *model, double lb, double ub, double obj,

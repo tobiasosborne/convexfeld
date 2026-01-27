@@ -5,16 +5,26 @@
  * Implements cxf_pivot_primal as specified in:
  * docs/specs/functions/pivot/cxf_pivot_primal.md
  *
- * This is a simplified implementation focusing on core pivot logic:
- * bound checking, value determination, and objective update. Full
- * matrix/eta support and constraint RHS updates are deferred until
- * constraint matrix access is available.
+ * Current implementation includes:
+ * - Bound feasibility checking
+ * - Pivot value determination based on objective direction
+ * - Objective value and coefficient updates
+ * - Variable status updates
+ * - Constraint RHS updates (propagates pivot to all affected constraints)
+ *
+ * Deferred for future implementation:
+ * - Eta vector creation for basis representation
+ * - Piecewise linear objective handling
+ * - Quadratic objective handling
+ * - Pricing state updates
  */
 
 #include "convexfeld/cxf_solver.h"
 #include "convexfeld/cxf_env.h"
 #include "convexfeld/cxf_basis.h"
 #include "convexfeld/cxf_types.h"
+#include "convexfeld/cxf_model.h"
+#include "convexfeld/cxf_matrix.h"
 #include <math.h>
 
 /** @brief Threshold for determining if objective coefficient is significant */
@@ -24,19 +34,21 @@
  * @brief Execute primal simplex pivot operation.
  *
  * Pivots a non-basic variable to a new value based on objective coefficient
- * direction and bound positions. Updates objective value and variable status.
+ * direction and bound positions. Updates objective value, variable status,
+ * and constraint RHS values to maintain feasibility.
  *
- * This is a simplified implementation that:
+ * Current implementation:
  * 1. Checks if bounds are tight enough to admit feasible pivot
  * 2. Determines appropriate pivot value based on objective direction
  * 3. Updates objective value and coefficient
  * 4. Marks variable status (AT_LOWER or AT_UPPER)
+ * 5. Updates constraint RHS values: rhs[i] -= a_ij * pivotValue
  *
- * Full implementation would also:
+ * Deferred for future implementation:
  * - Create eta vector for basis representation (via cxf_pivot_with_eta)
- * - Update constraint RHS values (requires sparse matrix access)
  * - Handle piecewise linear and quadratic objectives
  * - Update neighbor relationships for combinatorial problems
+ * - Update pricing state and steepest edge weights
  *
  * @param env Environment pointer (cast from void*)
  * @param state Solver context pointer (cast from void*)
@@ -162,26 +174,58 @@ int cxf_pivot_primal(void *env, void *state, int var, double tolerance) {
     }
 
     /*
-     * TODO: Full implementation should include:
+     * Step 5: Constraint RHS Update
      *
-     * 1. Constraint RHS updates:
-     *    For each constraint i where a_ij != 0:
-     *      rhs[i] -= a_ij * pivotValue
-     *    (Requires sparse matrix access via model_ref)
+     * After pivoting variable to new value, update RHS of all constraints
+     * that contain this variable. For each row i with coefficient a_ij:
+     *   rhs[i] = rhs[i] - a_ij * pivotValue
      *
-     * 2. Eta vector creation:
+     * This maintains constraint satisfaction after fixing the variable.
+     */
+    if (ctx->model_ref != NULL && ctx->model_ref->matrix != NULL) {
+        SparseMatrix *matrix = ctx->model_ref->matrix;
+
+        /* Check if matrix has data structures allocated */
+        if (matrix->col_ptr != NULL && matrix->row_idx != NULL &&
+            matrix->values != NULL && matrix->rhs != NULL) {
+
+            /* Validate variable index is within matrix dimensions */
+            if (var < matrix->num_cols) {
+                /* Get column range for this variable in CSC format */
+                int64_t col_start = matrix->col_ptr[var];
+                int64_t col_end = matrix->col_ptr[var + 1];
+
+                /* Iterate through all non-zeros in this variable's column */
+                for (int64_t k = col_start; k < col_end; k++) {
+                    int row = matrix->row_idx[k];
+                    double coeff = matrix->values[k];
+
+                    /* Bounds check: ensure row index is valid */
+                    if (row >= 0 && row < matrix->num_rows) {
+                        /* Update RHS: rhs[i] -= a_ij * pivotValue */
+                        matrix->rhs[row] -= coeff * pivotValue;
+                    }
+                }
+            }
+        }
+    }
+
+    /*
+     * TODO: Additional functionality for full implementation:
+     *
+     * 1. Eta vector creation:
      *    Call cxf_pivot_with_eta to update basis representation
      *    (Deferred - cxf_pivot_with_eta handles standard basis exchange)
      *
-     * 3. Piecewise linear objective handling:
+     * 2. Piecewise linear objective handling:
      *    If variable has PWL flag, determine active segment and
      *    update objective slope accordingly
      *
-     * 4. Quadratic objective handling:
+     * 3. Quadratic objective handling:
      *    Update neighbor objective coefficients:
      *      obj[j] += Q[var,j] * pivotValue for all neighbors j
      *
-     * 5. Pricing state update:
+     * 4. Pricing state update:
      *    Invalidate pricing cache and update steepest edge weights
      */
 

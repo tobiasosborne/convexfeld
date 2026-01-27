@@ -18,7 +18,7 @@ int cxf_generate_seed(void);
 
 /* API functions */
 int cxf_loadenv(CxfEnv **envP, const char *logfilename);
-void cxf_freeenv(CxfEnv *env);
+int cxf_freeenv(CxfEnv *env);
 
 static CxfEnv *env = NULL;
 

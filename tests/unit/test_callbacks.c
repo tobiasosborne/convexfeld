@@ -35,7 +35,7 @@ int cxf_post_optimize_callback(CxfModel *model);
 
 /* API functions for setup */
 int cxf_loadenv(CxfEnv **envP, const char *logfilename);
-void cxf_freeenv(CxfEnv *env);
+int cxf_freeenv(CxfEnv *env);
 int cxf_newmodel(CxfEnv *env, CxfModel **modelP, const char *name);
 void cxf_freemodel(CxfModel *model);
 
@@ -45,11 +45,14 @@ void cxf_freemodel(CxfModel *model);
 
 static int callback_invocation_count;
 static int callback_return_value;
+static int last_where_code;
 
-static int test_callback(CxfModel *model, void *cbdata) {
+static int test_callback(CxfModel *model, void *cbdata, int where, void *usrdata) {
     (void)model;
     (void)cbdata;
+    (void)usrdata;
     callback_invocation_count++;
+    last_where_code = where;
     return callback_return_value;
 }
 

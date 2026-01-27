@@ -107,18 +107,18 @@ void test_loadenv_initializes_new_fields(void) {
  ******************************************************************************/
 
 void test_freeenv_null_is_safe(void) {
-    cxf_freeenv(NULL);  /* Should not crash */
-    TEST_PASS();
+    int status = cxf_freeenv(NULL);
+    TEST_ASSERT_EQUAL_INT(CXF_ERROR_INVALID_ARGUMENT, status);
 }
 
 void test_freeenv_clears_magic(void) {
     CxfEnv *env = NULL;
     cxf_loadenv(&env, NULL);
     TEST_ASSERT_EQUAL_UINT32(CXF_ENV_MAGIC, env->magic);
-    cxf_freeenv(env);
+    int status = cxf_freeenv(env);
+    TEST_ASSERT_EQUAL_INT(CXF_OK, status);
     /* Note: verifying magic cleared requires accessing freed memory (UB) */
     /* We verified the env had valid magic before free; implementation clears it */
-    TEST_PASS();
 }
 
 /*******************************************************************************

@@ -27,6 +27,7 @@
 extern int cxf_simplex_init(CxfModel *model, SolverContext **stateP);
 extern void cxf_simplex_final(SolverContext *state);
 extern int cxf_simplex_iterate(SolverContext *state, CxfEnv *env);
+extern int cxf_extract_solution(SolverContext *state, CxfModel *model);
 
 /**
  * @brief Initialize a simple slack basis.
@@ -94,29 +95,6 @@ static void compute_reduced_costs(SolverContext *state) {
     }
 }
 
-/**
- * @brief Extract solution to model.
- *
- * @param state Solver context
- * @param model Model to update
- */
-static void extract_solution(SolverContext *state, CxfModel *model) {
-    int n = state->num_vars;
-    int m = state->num_constrs;
-
-    /* Copy primal solution */
-    if (model->solution != NULL && state->work_x != NULL) {
-        memcpy(model->solution, state->work_x, (size_t)n * sizeof(double));
-    }
-
-    /* Copy dual values */
-    if (model->pi != NULL && state->work_pi != NULL) {
-        memcpy(model->pi, state->work_pi, (size_t)m * sizeof(double));
-    }
-
-    /* Set objective value */
-    model->obj_val = state->obj_value;
-}
 
 /**
  * @brief Solve an LP using the simplex method.
@@ -270,7 +248,7 @@ int cxf_solve_lp(CxfModel *model) {
      * Step 5: Extract solution
      *=========================================================================*/
     if (model->status == CXF_OPTIMAL) {
-        extract_solution(state, model);
+        cxf_extract_solution(state, model);
     }
 
     /*=========================================================================
