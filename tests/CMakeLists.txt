@@ -120,6 +120,10 @@ add_cxf_test(test_threading unit/test_threading.c)
 # M7.1.3: Simplex Tests - Edge Cases
 add_cxf_test(test_simplex_edge unit/test_simplex_edge.c)
 
+# M5.1: Pivot with Eta tests
+add_cxf_test(test_pivot_eta unit/test_pivot_eta.c)
+target_link_libraries(test_pivot_eta PRIVATE m)  # For math functions
+
 ################################################################################
 # Integration Tests
 ################################################################################
