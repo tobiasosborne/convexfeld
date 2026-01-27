@@ -29,6 +29,14 @@ Created `tests/unit/test_pivot_eta.c` with 27 comprehensive tests:
 
 **All 27 tests pass.**
 
+### 3. Implemented Array Validation (convexfeld-2fh)
+
+Created `src/validation/arrays.c` replacing validation_stub.c:
+- `cxf_validate_array`: Validates arrays for NaN (allows infinity)
+- `cxf_validate_vartypes`: Validates variable types, clamps binary bounds to [0,1]
+
+Updated `tests/unit/test_validation.c`: 23 tests (up from 11), all pass.
+
 ### Issues Created
 
 | Issue ID | Title | Priority |

@@ -144,8 +144,8 @@ target_sources(convexfeld PRIVATE
     src/callbacks/context.c
     src/callbacks/init.c
     src/callbacks/callback_stub.c
-    # Validation module (M2.3.1 stubs)
-    src/validation/validation_stub.c
+    # Validation module (M2.3.2)
+    src/validation/arrays.c
     # Threading module (M3.3.1 stubs)
     src/threading/threading_stub.c
 )
