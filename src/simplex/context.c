@@ -190,34 +190,9 @@ int cxf_simplex_get_phase(SolverContext *state) {
 
 /* cxf_simplex_iterate is implemented in iterate.c */
 
-/**
- * @brief Handle phase end transition (stub - to be implemented in M7.1.2).
- *
- * @param state Solver context
- * @param env Environment
- * @return CXF_OK on success, error code otherwise
- */
-int cxf_simplex_phase_end(SolverContext *state, CxfEnv *env) {
-    if (state == NULL || env == NULL) {
-        return CXF_ERROR_NULL_ARGUMENT;
-    }
-    state->phase = 2;
-    return CXF_OK;
-}
+/* cxf_simplex_phase_end is implemented in post.c */
 
-/**
- * @brief Post-iteration processing (stub - to be implemented in M7.1.2).
- *
- * @param state Solver context
- * @param env Environment
- * @return CXF_OK on success, error code otherwise
- */
-int cxf_simplex_post_iterate(SolverContext *state, CxfEnv *env) {
-    if (state == NULL || env == NULL) {
-        return CXF_ERROR_NULL_ARGUMENT;
-    }
-    return CXF_OK;
-}
+/* cxf_simplex_post_iterate is implemented in post.c */
 
 /**
  * @brief Get current objective value (stub - to be implemented).

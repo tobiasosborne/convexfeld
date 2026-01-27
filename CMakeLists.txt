@@ -102,6 +102,9 @@ target_sources(convexfeld PRIVATE
     src/simplex/solve_lp.c
     src/simplex/iterate.c
     src/simplex/step.c
+    src/simplex/phase_steps.c
+    src/simplex/post.c
+    src/simplex/refine.c
     src/simplex/ratio_test.c
     src/simplex/crash.c
     src/simplex/context.c
@@ -154,6 +157,7 @@ target_sources(convexfeld PRIVATE
     src/callbacks/context.c
     src/callbacks/init.c
     src/callbacks/invoke.c
+    src/callbacks/terminate.c
     src/callbacks/callback_stub.c
     # Validation module (M2.3.2)
     src/validation/arrays.c
