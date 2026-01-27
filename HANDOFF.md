@@ -6,55 +6,56 @@
 
 ## Work Completed This Session
 
-### 1. Implemented Three API Modules (M8.1.15, M8.1.16, M8.1.18)
+### Implemented Threading Module (M3.3.2-M3.3.5)
 
-**Attribute API (convexfeld-93i, M8.1.15):**
-- Created `src/api/attrs_api.c` (119 LOC)
-- Created `tests/unit/test_attrs_api.c` (19 tests)
-- Implements `cxf_getintattr()` and `cxf_getdblattr()`
-- Supports: Status, NumVars, NumConstrs, ModelSense, IsMIP (int); ObjVal, Runtime, ObjBound, ObjBoundC, MaxCoeff, MinCoeff (double)
+Extracted threading functions from `threading_stub.c` into dedicated files:
 
-**Parameter API (convexfeld-jyc, M8.1.16):**
-- Created `src/api/params_api.c` (124 LOC)
-- Created `tests/unit/test_params_api.c` (20 tests)
-- Implements `cxf_setintparam()` and `cxf_getintparam()`
-- Supports: OutputFlag (0-1), Verbosity (0-2), RefactorInterval (1-10000), MaxEtaCount (10-1000)
+**Lock Management (convexfeld-d4x, M3.3.2):**
+- Created `src/threading/locks.c` (91 LOC)
+- Implements `cxf_env_acquire_lock()`, `cxf_leave_critical_section()`
+- Implements `cxf_acquire_solve_lock()`, `cxf_release_solve_lock()` (new)
+- Single-threaded stubs with NULL-safe design, ready for future mutex impl
 
-**Info API (convexfeld-yyk, M8.1.18):**
-- Created `src/api/info_api.c` (90 LOC)
-- Created `tests/unit/test_info_api.c` (14 tests)
-- Implements `cxf_version()` and `cxf_setcallbackfunc()` (stub)
-- Note: `cxf_geterrormsg()` already exists in `src/error/core.c`
+**Thread Configuration (convexfeld-6no, M3.3.3):**
+- Created `src/threading/config.c` (74 LOC)
+- Implements `cxf_get_threads()`, `cxf_set_thread_count()`
+- Proper validation (returns CXF_ERROR_INVALID_ARGUMENT for bad inputs)
 
-### 2. Cleaned Up Duplicate Code
-- Removed `cxf_getintattr()` and `cxf_getdblattr()` from `api_stub.c` (moved to attrs_api.c)
-- Removed duplicate `cxf_geterrormsg()` from info_api.c (kept core.c implementation)
+**CPU Detection (convexfeld-lip, M3.3.4):**
+- Created `src/threading/cpu.c` (92 LOC)
+- Implements `cxf_get_physical_cores()` with platform-specific detection
+- Linux: Reads `/sys/devices/system/cpu/present`
+- Windows: Uses `GetLogicalProcessorInformation`
+- Fallback to `cxf_get_logical_processors()` (from logging/system.c)
 
-### 3. Updated Build System
-- Added new source files to CMakeLists.txt
-- Added new test executables to tests/CMakeLists.txt
-- Added function declarations to cxf_env.h and cxf_model.h
+**Seed Generation (convexfeld-py3, M3.3.5):**
+- Created `src/threading/seed.c` (75 LOC)
+- Implements `cxf_generate_seed()` with MurmurHash3-style mixing
+- Combines timestamp, process ID, thread ID for entropy
+- Always returns non-negative values
+
+### Build System Updates
+- Added 4 new source files to CMakeLists.txt
+- Cleaned up `threading_stub.c` (removed extracted functions)
 
 ---
 
 ## Project Status Summary
 
-**Overall: ~59% complete** (estimated +2% from API work)
+**Overall: ~61% complete** (estimated +2% from threading work)
 
 | Metric | Value |
 |--------|-------|
 | Test Pass Rate | 27/30 (90%) |
-| New Tests Added | 53 (across 3 test files) |
-| New Source Files | 3 |
+| New Source Files | 4 |
+| New LOC | ~332 |
 
 ---
 
 ## Test Status
 
 - 27/30 tests pass (90%)
-- **NEW:** test_attrs_api **PASSES** (19 tests)
-- **NEW:** test_params_api **PASSES** (20 tests)
-- **NEW:** test_info_api **PASSES** (14 tests)
+- **test_threading PASSES** (16 tests)
 - tracer_bullet integration test **PASSES**
 - Failures (pre-existing):
   - test_api_optimize: 1 failure (constrained problem needs matrix population)
@@ -67,9 +68,9 @@
 
 1. **Constrained problems not supported yet**: `cxf_addconstr` is a stub
 2. **No Phase I implementation**: Can't handle infeasible starting basis
-3. **Simplified reduced cost update**: Full BTRAN not implemented in iterate
-4. **Basic preprocessing only**: Full preprocessing not yet implemented
-5. **Callback storage stub**: `cxf_setcallbackfunc` accepts but doesn't store callbacks
+3. **Threading is single-threaded stubs**: Actual mutex operations not yet added
+4. **Thread count not stored**: `cxf_set_thread_count` validates but doesn't persist
+5. **Physical core detection is imprecise**: Uses /sys/cpu/present, not topology
 
 ---
 
@@ -80,14 +81,18 @@
 2. **Implement cxf_addconstr** - Populate actual constraint matrix
 3. **Refactor context.c** (307 lines → <200) - Issue convexfeld-1wq
 
-### Medium Priority
-4. Extract duplicate `clear_eta_list` - Issue convexfeld-zzm
-5. Standardize allocation functions - Issue convexfeld-ubl
-
-### Check Available Work
+### Available Work
 ```bash
 bd ready  # See ready issues
 ```
+
+Current ready issues include:
+- M8.1.13: Quadratic API (convexfeld-dnm)
+- M8.1.14: Optimize API (convexfeld-2ya)
+- M8.1.17: I/O API (convexfeld-i0x)
+- M5.2.4: Callback Invocation (convexfeld-18p)
+- M5.2.5: Termination Handling (convexfeld-2vb)
+- M7.1.7: cxf_simplex_crash (convexfeld-6jf)
 
 ---
 
