@@ -186,4 +186,17 @@ int cxf_simplex_perturbation(SolverContext *state, CxfEnv *env);
  */
 int cxf_simplex_unperturb(SolverContext *state, CxfEnv *env);
 
+/**
+ * @brief Post-solve cleanup to restore original problem space.
+ *
+ * Unscales values and restores eliminated variables after preprocessing.
+ * Current implementation is a minimal stub for future expansion when
+ * full preprocessing is implemented.
+ *
+ * @param state Solver context containing solution arrays
+ * @param env Environment
+ * @return CXF_OK on success, error code otherwise
+ */
+int cxf_simplex_cleanup(SolverContext *state, CxfEnv *env);
+
 #endif /* CXF_SOLVER_H */

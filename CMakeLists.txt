@@ -109,6 +109,9 @@ target_sources(convexfeld PRIVATE
     src/simplex/crash.c
     src/simplex/context.c
     src/simplex/setup.c
+    src/simplex/pivot_primal.c
+    src/simplex/perturbation.c
+    src/simplex/cleanup.c
     # Error module (M1.7 stubs + M3.1.2-M3.1.7)
     src/error/core.c
     src/error/nan_check.c
