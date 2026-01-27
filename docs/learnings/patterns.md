@@ -220,3 +220,45 @@ int section_size = num_vars / NUM_SECTIONS;
 int start = section * section_size;
 int end = (section == NUM_SECTIONS - 1) ? num_vars : start + section_size;
 ```
+
+---
+
+## API Patterns
+
+### Dynamic Array Growth Pattern
+For resizable arrays in model structures, use doubling strategy with cxf_realloc:
+
+```c
+extern void *cxf_realloc(void *ptr, size_t size);
+
+static int cxf_model_grow_vars(CxfModel *model, int needed_capacity) {
+    int new_capacity = model->var_capacity;
+    while (new_capacity < needed_capacity) {
+        new_capacity *= 2;  /* Amortized O(1) insertion */
+    }
+
+    /* Reallocate all parallel arrays */
+    double *new_obj = (double *)cxf_realloc(model->obj_coeffs,
+                                             (size_t)new_capacity * sizeof(double));
+    if (new_obj == NULL) {
+        return CXF_ERROR_OUT_OF_MEMORY;
+    }
+    model->obj_coeffs = new_obj;
+    /* ... repeat for other arrays ... */
+
+    model->var_capacity = new_capacity;
+    return CXF_OK;
+}
+```
+
+**Key points:**
+- Double capacity until >= needed_capacity (amortized O(1))
+- Check each realloc for NULL before updating model pointer
+- Update capacity field after successful reallocation
+- Initial capacity: 16 (INITIAL_VAR_CAPACITY)
+- Handles parallel arrays: obj_coeffs, lb, ub, vtype, solution
+
+**Test coverage:**
+- test_addvar_exceeds_initial_capacity - add 20 vars (> 16)
+- test_addvars_batch_exceeds_capacity - add 50 vars at once
+- test_addvar_grows_capacity - verify capacity increased

@@ -154,6 +154,73 @@ void test_addvars_null_arrays_use_defaults(void) {
 }
 
 /*******************************************************************************
+ * Dynamic Capacity Tests - Array Resizing
+ ******************************************************************************/
+
+void test_addvar_exceeds_initial_capacity(void) {
+    CxfModel *model = NULL;
+    cxf_newmodel(env, &model, "test");
+
+    /* Initial capacity is 16, add 20 variables to trigger growth */
+    for (int i = 0; i < 20; i++) {
+        int status = cxf_addvar(model, 0.0, 10.0, 1.0, 'C', NULL);
+        TEST_ASSERT_EQUAL_INT(CXF_OK, status);
+    }
+
+    TEST_ASSERT_EQUAL_INT(20, model->num_vars);
+    TEST_ASSERT_GREATER_OR_EQUAL(20, model->var_capacity);
+
+    /* Verify all variables have correct values */
+    for (int i = 0; i < 20; i++) {
+        TEST_ASSERT_DOUBLE_WITHIN(1e-12, 0.0, model->lb[i]);
+        TEST_ASSERT_DOUBLE_WITHIN(1e-12, 10.0, model->ub[i]);
+        TEST_ASSERT_DOUBLE_WITHIN(1e-12, 1.0, model->obj_coeffs[i]);
+    }
+
+    cxf_freemodel(model);
+}
+
+void test_addvars_batch_exceeds_capacity(void) {
+    CxfModel *model = NULL;
+    cxf_newmodel(env, &model, "test");
+
+    /* Add 50 variables at once (exceeds initial capacity of 16) */
+    int status = cxf_addvars(model, 50, 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+    TEST_ASSERT_EQUAL_INT(CXF_OK, status);
+    TEST_ASSERT_EQUAL_INT(50, model->num_vars);
+    TEST_ASSERT_GREATER_OR_EQUAL(50, model->var_capacity);
+
+    /* Verify defaults are applied correctly */
+    for (int i = 0; i < 50; i++) {
+        TEST_ASSERT_DOUBLE_WITHIN(1e-12, 0.0, model->obj_coeffs[i]);
+        TEST_ASSERT_DOUBLE_WITHIN(1e-12, 0.0, model->lb[i]);
+        TEST_ASSERT_DOUBLE_WITHIN(1e-10, CXF_INFINITY, model->ub[i]);
+    }
+
+    cxf_freemodel(model);
+}
+
+void test_addvar_grows_capacity(void) {
+    CxfModel *model = NULL;
+    cxf_newmodel(env, &model, "test");
+
+    /* Check initial capacity (should be 16) */
+    int initial_capacity = model->var_capacity;
+    TEST_ASSERT_EQUAL_INT(16, initial_capacity);
+
+    /* Add enough variables to trigger at least one growth */
+    for (int i = 0; i < initial_capacity + 1; i++) {
+        cxf_addvar(model, 0.0, 1.0, 1.0, 'C', NULL);
+    }
+
+    /* Verify capacity has grown */
+    TEST_ASSERT_GREATER_THAN(initial_capacity, model->var_capacity);
+    TEST_ASSERT_EQUAL_INT(initial_capacity + 1, model->num_vars);
+
+    cxf_freemodel(model);
+}
+
+/*******************************************************************************
  * cxf_delvars Tests - Variable Deletion
  ******************************************************************************/
 
@@ -253,6 +320,11 @@ int main(void) {
     RUN_TEST(test_addvars_zero_vars_succeeds);
     RUN_TEST(test_addvars_stores_correct_values);
     RUN_TEST(test_addvars_null_arrays_use_defaults);
+
+    /* Dynamic capacity tests */
+    RUN_TEST(test_addvar_exceeds_initial_capacity);
+    RUN_TEST(test_addvars_batch_exceeds_capacity);
+    RUN_TEST(test_addvar_grows_capacity);
 
     /* cxf_delvars tests */
     RUN_TEST(test_delvars_basic);

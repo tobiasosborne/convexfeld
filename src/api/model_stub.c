@@ -1,9 +1,8 @@
 /**
  * @file model_stub.c
- * @brief Stub variable manipulation functions.
+ * @brief Variable manipulation functions with dynamic resizing.
  *
- * Minimal implementation of variable addition and deletion.
- * Full implementation with dynamic resizing comes in M8.1.11.
+ * M8.1.11: Full implementation of variable addition with dynamic array growth.
  *
  * Note: cxf_newmodel and cxf_freemodel are in model.c (M8.1.8).
  */
@@ -11,10 +10,76 @@
 #include "convexfeld/cxf_model.h"
 #include "convexfeld/cxf_env.h"
 
+/* Forward declaration for memory allocation */
+extern void *cxf_realloc(void *ptr, size_t size);
+
 /**
- * @brief Add a single variable to the model (stub).
+ * @brief Grow variable arrays to accommodate more variables.
  *
- * Uses var_capacity for bounds checking.
+ * Doubles capacity until it is >= needed_capacity.
+ * Reallocates all 5 variable arrays: obj_coeffs, lb, ub, vtype, solution.
+ *
+ * @param model Target model
+ * @param needed_capacity Minimum capacity required
+ * @return CXF_OK on success, CXF_ERROR_OUT_OF_MEMORY on allocation failure
+ */
+static int cxf_model_grow_vars(CxfModel *model, int needed_capacity) {
+    int new_capacity;
+    double *new_obj, *new_lb, *new_ub, *new_solution;
+    char *new_vtype;
+
+    /* Calculate new capacity by doubling until large enough */
+    new_capacity = model->var_capacity;
+    while (new_capacity < needed_capacity) {
+        new_capacity *= 2;
+    }
+
+    /* Reallocate all 5 arrays */
+    new_obj = (double *)cxf_realloc(model->obj_coeffs,
+                                     (size_t)new_capacity * sizeof(double));
+    if (new_obj == NULL) {
+        return CXF_ERROR_OUT_OF_MEMORY;
+    }
+    model->obj_coeffs = new_obj;
+
+    new_lb = (double *)cxf_realloc(model->lb,
+                                    (size_t)new_capacity * sizeof(double));
+    if (new_lb == NULL) {
+        return CXF_ERROR_OUT_OF_MEMORY;
+    }
+    model->lb = new_lb;
+
+    new_ub = (double *)cxf_realloc(model->ub,
+                                    (size_t)new_capacity * sizeof(double));
+    if (new_ub == NULL) {
+        return CXF_ERROR_OUT_OF_MEMORY;
+    }
+    model->ub = new_ub;
+
+    new_vtype = (char *)cxf_realloc(model->vtype,
+                                     (size_t)new_capacity * sizeof(char));
+    if (new_vtype == NULL) {
+        return CXF_ERROR_OUT_OF_MEMORY;
+    }
+    model->vtype = new_vtype;
+
+    new_solution = (double *)cxf_realloc(model->solution,
+                                          (size_t)new_capacity * sizeof(double));
+    if (new_solution == NULL) {
+        return CXF_ERROR_OUT_OF_MEMORY;
+    }
+    model->solution = new_solution;
+
+    /* Update capacity */
+    model->var_capacity = new_capacity;
+
+    return CXF_OK;
+}
+
+/**
+ * @brief Add a single variable to the model.
+ *
+ * Grows variable arrays dynamically if capacity is exceeded.
  *
  * @param model Target model
  * @param lb Lower bound
@@ -26,7 +91,7 @@
  */
 int cxf_addvar(CxfModel *model, double lb, double ub, double obj,
                char vtype, const char *name) {
-    int idx;
+    int idx, status;
 
     (void)name;   /* Unused in stub */
 
@@ -34,8 +99,12 @@ int cxf_addvar(CxfModel *model, double lb, double ub, double obj,
         return CXF_ERROR_NULL_ARGUMENT;
     }
 
+    /* Grow capacity if needed */
     if (model->num_vars >= model->var_capacity) {
-        return CXF_ERROR_OUT_OF_MEMORY;  /* Would need realloc */
+        status = cxf_model_grow_vars(model, model->num_vars + 1);
+        if (status != CXF_OK) {
+            return status;
+        }
     }
 
     idx = model->num_vars;
@@ -50,9 +119,9 @@ int cxf_addvar(CxfModel *model, double lb, double ub, double obj,
 }
 
 /**
- * @brief Add multiple variables to the model in batch (stub).
+ * @brief Add multiple variables to the model in batch.
  *
- * Uses var_capacity for bounds checking.
+ * Grows variable arrays dynamically if capacity is exceeded.
  *
  * @param model Target model
  * @param numvars Number of variables to add
@@ -71,6 +140,8 @@ int cxf_addvars(CxfModel *model, int numvars, int numnz,
                 const int *vbeg, const int *vind, const double *vval,
                 const double *obj, const double *lb, const double *ub,
                 const char *vtype, const char **varnames) {
+    int status;
+
     (void)numnz;
     (void)vbeg;
     (void)vind;
@@ -86,8 +157,12 @@ int cxf_addvars(CxfModel *model, int numvars, int numnz,
         return CXF_OK;
     }
 
+    /* Grow capacity if needed */
     if (model->num_vars + numvars > model->var_capacity) {
-        return CXF_ERROR_OUT_OF_MEMORY;
+        status = cxf_model_grow_vars(model, model->num_vars + numvars);
+        if (status != CXF_OK) {
+            return status;
+        }
     }
 
     for (int i = 0; i < numvars; i++) {
