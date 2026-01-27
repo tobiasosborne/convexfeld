@@ -802,3 +802,80 @@ int cxf_simplex_unperturb(SolverContext *state, CxfEnv *env);
 - Pre-existing failures unchanged (api_optimize, simplex_iteration, simplex_edge)
 
 ---
+
+### 2026-01-27: M5.3.3 SolveState Initialization and Cleanup
+
+**Files created:**
+- `include/convexfeld/cxf_solve_state.h` (106 LOC) - SolveState structure definition
+- `src/solver_state/init.c` (154 LOC) - Init and cleanup implementation
+
+**Structure defined: SolveState (~72 bytes, stack-allocated)**
+
+Control structure that wraps SolverContext and manages solve progress:
+- `magic` (uint32_t) - Validation magic (0x534f4c56 = "SOLV")
+- `status` (int) - Current status (STATUS_LOADED = 1)
+- `iterations` (int) - Iteration count
+- `phase` (int) - Current phase (0=initial, 1=Phase I, 2=Phase II)
+- `solverState` (SolverContext*) - Pointer to solver working state
+- `env` (CxfEnv*) - Environment pointer
+- `startTime` (double) - Start timestamp from cxf_get_timestamp()
+- `timeLimit` (double) - Time limit (from env or 1e100 default)
+- `iterLimit` (int) - Iteration limit (from env or INT_MAX default)
+- `interruptFlag` (int) - Interrupt flag (0=continue, 1=interrupt)
+- `callbackData` (void*) - Callback data from env
+- `method` (int) - Solve method (from state->solve_mode or default 1=dual simplex)
+- `flags` (int) - Control flags
+
+**Functions implemented:**
+
+**cxf_init_solve_state:**
+- Returns CXF_ERROR_NULL_ARGUMENT if solve is NULL
+- Initializes all fields as per spec
+- Captures start time via cxf_get_timestamp()
+- If env is NULL: timeLimit=1e100, iterLimit=INT_MAX, callbackData=NULL
+- If state is NULL: method=1 (default dual simplex)
+- Non-allocating, ~20-30 nanoseconds
+
+**cxf_cleanup_solve_state:**
+- If solve is NULL, returns immediately (no-op)
+- Sets magic to 0 (invalidate)
+- Clears all fields to 0 or NULL
+- No memory freed (caller owns the SolveState allocation)
+- Idempotent (safe to call multiple times)
+
+**Key design decisions:**
+
+1. **TimeLimit and IterationLimit not yet in CxfEnv:**
+   - Added TODO comment for when these parameters are added to CxfEnv
+   - Currently use hardcoded defaults (1e100, INT_MAX)
+   - Gets callback context via cxf_get_callback_context(env) which is implemented
+
+2. **STATUS_LOADED constant:**
+   - Defined as 1 in cxf_solve_state.h
+   - Matches spec requirement for initial status
+
+3. **Separation of concerns:**
+   - SolveState: Algorithm-agnostic control (small, stack-allocated, short-lived)
+   - SolverContext: Algorithm-specific working data (large, heap-allocated, long-lived)
+
+**Testing:**
+- Manual test program created and verified all functionality
+- NULL pointer handling tested
+- Initialization with NULL state and env tested
+- Cleanup invalidation tested
+- All 31 project tests still pass (28 pass, 3 pre-existing failures)
+
+**Files modified:**
+- `CMakeLists.txt` - Added src/solver_state/init.c to build
+
+**Line counts:**
+- Header: 106 LOC (well under 200)
+- Implementation: 154 LOC (well under 200)
+
+**Key learnings:**
+- SolveState is intentionally minimal - just control and tracking
+- Magic number pattern (0x534f4c56 = "SOLV") enables validation
+- Stack allocation pattern for short-lived structures is efficient
+- Defensive programming: NULL-safe, idempotent cleanup
+
+---

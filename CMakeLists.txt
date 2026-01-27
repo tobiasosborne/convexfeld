@@ -167,6 +167,10 @@ target_sources(convexfeld PRIVATE
     src/threading/config.c
     src/threading/cpu.c
     src/threading/seed.c
+    # Solver state module (M5.3.3, M5.3.4, M5.3.5)
+    src/solver_state/init.c
+    src/solver_state/helpers.c
+    src/solver_state/extract.c
 )
 
 ################################################################################
