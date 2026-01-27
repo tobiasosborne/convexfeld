@@ -172,4 +172,30 @@ int cxf_set_callback_context(CxfEnv *env, CallbackContext *ctx);
  */
 CallbackContext *cxf_get_callback_context(CxfEnv *env);
 
+/*******************************************************************************
+ * Parameter API
+ ******************************************************************************/
+
+/**
+ * @brief Set an integer parameter value.
+ *
+ * Supported parameters: OutputFlag, Verbosity, RefactorInterval, MaxEtaCount.
+ *
+ * @param env Environment to modify
+ * @param paramname Parameter name (case-sensitive)
+ * @param newvalue New value
+ * @return CXF_OK on success, error code otherwise
+ */
+int cxf_setintparam(CxfEnv *env, const char *paramname, int newvalue);
+
+/**
+ * @brief Get an integer parameter value.
+ *
+ * @param env Environment to query
+ * @param paramname Parameter name (case-sensitive)
+ * @param valueP Output pointer for value
+ * @return CXF_OK on success, error code otherwise
+ */
+int cxf_getintparam(CxfEnv *env, const char *paramname, int *valueP);
+
 #endif /* CXF_ENV_H */

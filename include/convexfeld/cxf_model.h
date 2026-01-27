@@ -190,4 +190,20 @@ int cxf_getintattr(CxfModel *model, const char *attrname, int *valueP);
  */
 int cxf_getdblattr(CxfModel *model, const char *attrname, double *valueP);
 
+/*******************************************************************************
+ * Callback API
+ ******************************************************************************/
+
+/**
+ * @brief Register a callback function (stub).
+ *
+ * @param model Model to attach callback to
+ * @param cb Callback function (NULL to disable)
+ * @param usrdata User data pointer passed to callback
+ * @return CXF_OK on success, error code otherwise
+ */
+int cxf_setcallbackfunc(CxfModel *model,
+                        int (*cb)(CxfModel*, void*, int, void*),
+                        void *usrdata);
+
 #endif /* CXF_MODEL_H */

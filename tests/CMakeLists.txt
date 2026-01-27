@@ -128,6 +128,15 @@ target_link_libraries(test_pivot_eta PRIVATE m)  # For math functions
 add_cxf_test(test_simplex_setup unit/test_simplex_setup.c)
 target_link_libraries(test_simplex_setup PRIVATE m)  # For math functions
 
+# M8.1.15: Attribute API tests
+add_cxf_test(test_attrs_api unit/test_attrs_api.c)
+
+# M8.1.16: Parameter API tests
+add_cxf_test(test_params_api unit/test_params_api.c)
+
+# M8.1.18: Info API tests
+add_cxf_test(test_info_api unit/test_info_api.c)
+
 ################################################################################
 # Integration Tests
 ################################################################################

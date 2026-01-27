@@ -128,11 +128,15 @@ target_sources(convexfeld PRIVATE
     src/analysis/coef_stats.c
     src/analysis/presolve_stats.c
     # API module (M1.1, M1.2, M1.4 stubs + M8.1.4 constr stubs + M8.1.7 env + M8.1.8 model)
+    # M8.1.15 attrs_api + M8.1.16 params_api + M8.1.18 info_api
     src/api/env.c
     src/api/model.c
     src/api/model_stub.c
     src/api/constr_stub.c
     src/api/api_stub.c
+    src/api/attrs_api.c
+    src/api/params_api.c
+    src/api/info_api.c
     # Pricing module (M6.1.2-M6.1.7 + stubs)
     src/pricing/context.c
     src/pricing/init.c
