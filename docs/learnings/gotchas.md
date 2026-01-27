@@ -193,6 +193,93 @@ When you only have `next` pointers but need reverse order, collect pointers into
 
 ---
 
+## Code Review Findings (2026-01-27)
+
+### Critical Bugs Found
+
+**model->matrix Never Allocated**
+```c
+/* BUG in cxf_newmodel() - matrix field declared but never allocated */
+model->matrix = NULL;  /* Will crash when accessed */
+
+/* FIX: Add allocation */
+model->matrix = cxf_sparse_create(0, 0);
+```
+
+**O(n²) Duplicate Detection**
+```c
+/* BUG: O(n²) nested loop for duplicate detection */
+for (int i = 0; i < m; i++) {
+    for (int j = i + 1; j < m; j++) {  /* O(m²)! */
+        if (basic_vars[i] == basic_vars[j]) return ERROR;
+    }
+}
+
+/* FIX: Use seen array for O(n) */
+int *seen = calloc(n, sizeof(int));
+for (int i = 0; i < m; i++) {
+    if (seen[basic_vars[i]]) return ERROR;
+    seen[basic_vars[i]] = 1;
+}
+```
+
+**Thread-Safety Violation in qsort**
+```c
+/* BUG: Global variable for qsort comparison - not thread-safe */
+static const double *g_reduced_costs = NULL;  /* Race condition! */
+
+/* FIX: Use custom sort or qsort_r */
+```
+
+**Stub Returns Wrong Answers**
+```c
+/* BUG: Stub claims OPTIMAL but ignores constraints entirely */
+model->status = CXF_STATUS_OPTIMAL;  /* WRONG - haven't solved anything */
+return CXF_OK;
+
+/* FIX: Return error until implemented */
+return CXF_ERROR_NOT_IMPLEMENTED;
+```
+
+---
+
+### Code Quality Issues
+
+**Comment Bloat (Linus Review)**
+- 40% of comments are noise explaining what malloc/calloc does
+- Delete comments that state the obvious
+- Keep comments that explain WHY, not WHAT
+
+**No-Op Functions "For Future Extensibility"**
+```c
+/* BAD: Don't write functions that do nothing */
+int cxf_finalize_row_data(SparseMatrix *mat) {
+    if (mat == NULL) return CXF_ERROR_NULL_ARGUMENT;
+    /* Currently a no-op */
+    return CXF_OK;
+}
+/* Delete until actually needed */
+```
+
+**Theatrical NULL-ing Before Free**
+```c
+/* POINTLESS: Setting fields to NULL before freeing structure */
+ctx->field1 = NULL;
+ctx->field2 = NULL;
+free(ctx);  /* Memory is gone - NULLing helps nothing */
+```
+
+**Magic Numbers Without Documentation**
+```c
+/* BAD: Where did 16 come from? */
+#define INSERTION_THRESHOLD 16
+
+/* GOOD: Document the source */
+#define INSERTION_THRESHOLD 16  /* Benchmark: insertion beats qsort below this */
+```
+
+---
+
 ## Things That Didn't Work
 
 1. **Writing implementation plan in Rust when spec says C99** - Major failure
@@ -200,3 +287,6 @@ When you only have `next` pointers but need reverse order, collect pointers into
 3. **Not consulting PRD for language requirement** - Root cause of Rust error
 4. **Simple `val > 1e308` check for infinity** - Fails for DBL_MAX
 5. **Starting implementation without creating tracking issues** - Lost work context
+6. **Returning OPTIMAL status from stub** - Wrong answers worse than errors
+7. **Nested loops for duplicate detection** - O(n²) when O(n) is trivial
+8. **Global state for qsort comparisons** - Thread-safety violation
