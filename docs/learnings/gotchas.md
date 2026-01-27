@@ -280,6 +280,55 @@ free(ctx);  /* Memory is gone - NULLing helps nothing */
 
 ---
 
+## Spec Compliance Audit Findings (2026-01-27)
+
+### Function Name Collisions
+**Problem:** `cxf_pivot_check` in spec vs implementation were completely different functions.
+- Spec: Constraint propagation for bound computation
+- Impl: Simple pivot element validation (NaN/magnitude)
+
+**Fix:** Renamed implementation to `cxf_validate_pivot_element` to free the name.
+
+**Lesson:** Before implementing a spec function, check if a function with that name already exists doing something else.
+
+---
+
+### Callback Signature Evolution
+**Problem:** Spec had 4-parameter callback, impl had 2.
+- Spec: `callback(model, cbdata, where, usrdata)`
+- Impl: `callback(model, usrdata)`
+
+**Fix:** Updated to 4-param signature with WHERE constants.
+
+**Lesson:** When specs and impl diverge, decide which is correct and update the other. Don't leave them inconsistent.
+
+---
+
+### Stubs That Accept But Don't Store
+**Problem:** `cxf_addconstr` validated constraints but didn't store them.
+- Function returns CXF_OK (success)
+- Constraint data is validated
+- But nothing is stored in the matrix
+- Tests pass because they check return value, not actual storage
+
+**Impact:** LP solver can't solve constrained problems - THE blocker for real LP solving.
+
+**Lesson:** A stub that validates but doesn't store is worse than one that returns NOT_IMPLEMENTED. Users think it works.
+
+---
+
+### Parallel Subagent Coordination
+**Success:** Spawning 6 parallel subagents to work on different modules.
+
+**Key:** Tell each agent:
+1. Which files they CAN modify (isolated set)
+2. NOT to run git commit
+3. Handle commits centrally after all complete
+
+This avoids git race conditions while maximizing parallelism.
+
+---
+
 ## Things That Didn't Work
 
 1. **Writing implementation plan in Rust when spec says C99** - Major failure
@@ -290,3 +339,4 @@ free(ctx);  /* Memory is gone - NULLing helps nothing */
 6. **Returning OPTIMAL status from stub** - Wrong answers worse than errors
 7. **Nested loops for duplicate detection** - O(n²) when O(n) is trivial
 8. **Global state for qsort comparisons** - Thread-safety violation
+9. **Stubs that validate but don't store** - Users think it works when it doesn't
