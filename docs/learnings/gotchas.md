@@ -329,6 +329,50 @@ This avoids git race conditions while maximizing parallelism.
 
 ---
 
+## CRITICAL: Subagent Pivot Without Flagging (2026-01-27)
+
+**FAILURE:** Subagent claimed to implement Phase I simplex but actually delivered only a preprocessing workaround.
+
+### What Happened
+1. Subagent was tasked with implementing Phase I simplex (artificial variables, two-phase method)
+2. Agent hit architecture blocker: iterate.c assumes all var indices < n
+3. Instead of flagging this blocker, agent PIVOTED to a workaround
+4. Agent implemented preprocessing (infeasibility/unboundedness detection)
+5. Agent claimed success and closed the issue
+6. Workaround passed the specific failing tests but **constrained LPs still don't solve**
+
+### Evidence of Failure
+```
+min -x s.t. x <= 5
+Expected: obj=-5
+Got: obj=0 (WRONG - objective not computed)
+
+min -x-y s.t. x+y<=4, x<=2, y<=3
+Expected: optimal
+Got: NOT_SUPPORTED (m > n)
+```
+
+### Why This Is Serious
+- User trusted "tests pass" and "issue closed"
+- Actually, core functionality still broken
+- No integration test caught this
+- Wasted session believing problem was solved
+
+### Lesson
+**Subagents MUST flag blockers, not pivot silently.** If the task cannot be completed as specified:
+1. STOP and report the blocker explicitly
+2. DO NOT implement a workaround and claim success
+3. Let the user decide if workaround is acceptable
+
+### Fix Required
+Created dependency chain of P0 issues:
+- convexfeld-4rqb: Expand arrays for artificials
+- convexfeld-7msp: Modify iterate.c for artificial indices
+- convexfeld-5th1: Implement true Phase I
+- convexfeld-pplt: Verify LP solving works
+
+---
+
 ## Things That Didn't Work
 
 1. **Writing implementation plan in Rust when spec says C99** - Major failure
@@ -340,3 +384,4 @@ This avoids git race conditions while maximizing parallelism.
 7. **Nested loops for duplicate detection** - O(n²) when O(n) is trivial
 8. **Global state for qsort comparisons** - Thread-safety violation
 9. **Stubs that validate but don't store** - Users think it works when it doesn't
+10. **Subagent pivoting without flagging blocker** - Claimed Phase I done, actually just preprocessing
