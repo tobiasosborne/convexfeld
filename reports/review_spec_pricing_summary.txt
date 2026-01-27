@@ -1,0 +1,74 @@
+PRICING MODULE SPEC COMPLIANCE REVIEW - EXECUTIVE SUMMARY
+=========================================================
+
+Review Date: 2026-01-27
+Module: Pricing (M6)
+
+OVERALL STATUS: PARTIAL COMPLIANCE
+===================================
+
+Functions Reviewed: 8
+- PASS: 2 (cxf_pricing_create, cxf_pricing_free)
+- PARTIAL: 5 (init, candidates, steepest, update, invalidate)
+- FAIL: 1 (cxf_pricing_step2)
+
+CRITICAL FINDINGS
+================
+
+1. API Signature Mismatch (CRITICAL)
+   Affects: init, candidates, steepest, update
+   Problem: Specs expect PricingState*/SolverState* but implementation uses 
+            PricingContext* and raw arrays
+   Impact: Fundamental architecture incompatibility
+   Root Cause: TDD pattern using dependency injection
+
+2. Missing Reduced Cost Update (CRITICAL)
+   Function: cxf_pricing_update
+   Problem: Core RC update algorithm not implemented
+   Impact: Pricing will use stale costs, algorithm will fail
+   Reason: Deferred pending SolverContext integration
+
+3. Missing SE Weight Update (CRITICAL)
+   Function: cxf_pricing_update
+   Problem: Recursive SE weight update not implemented
+   Impact: SE pricing effectiveness reduced
+   Reason: Requires matrix operations not yet available
+
+4. Missing Strategy Logic (CRITICAL)
+   Function: cxf_pricing_step2
+   Problem: Doesn't distinguish between pricing strategies
+   Impact: Inefficient fallback, incorrect behavior
+   Fix: Add switch statement on ctx->strategy
+
+5. Section Management Bug (HIGH)
+   Function: cxf_pricing_candidates
+   Problem: Uses iteration counter instead of explicit section field
+   Impact: Incorrect section cycling in partial pricing
+   Fix: Add currentSection field and increment properly
+
+RECOMMENDATIONS
+===============
+
+Immediate:
+1. Document architecture decision (PricingContext vs PricingState)
+2. Complete cxf_pricing_update with RC and SE weight algorithms
+3. Fix cxf_pricing_step2 strategy-specific logic
+4. Fix section management in candidates function
+
+Long-term:
+1. Decide: Update specs or refactor implementation
+2. Integrate with matrix operations for full updates
+3. Add integration tests with real simplex iterations
+
+ASSESSMENT
+==========
+
+The implementation is functional for TDD purposes but not production-ready.
+It represents a "TDD scaffold" - enough to explore algorithms and pass unit
+tests, but missing core functionality for actual use.
+
+All 31 unit tests pass, but they test the TDD interface, not spec compliance.
+
+The gap should be bridged during M7 (Simplex Engine) integration.
+
+See full report: reports/review_spec_pricing.md (478 lines)
