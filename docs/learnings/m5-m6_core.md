@@ -602,3 +602,137 @@ int cxf_simplex_unperturb(SolverContext *state, CxfEnv *env);
 
 **Files modified:**
 - `tests/CMakeLists.txt` - Added test_simplex_edge
+
+---
+
+## 2026-01-27: Code Review - Basis Module Spec Compliance
+
+**Review completed:** Full spec compliance analysis of basis module
+
+**Report:** `reports/review_spec_basis.md` (766 lines, comprehensive)
+
+**Scope:**
+- 10 functions specified across 8 implementation files
+- ~857 LOC reviewed in detail
+- Every function compared against its specification
+
+**Key Findings:**
+
+**✅ PASSING (5 functions):**
+- `cxf_ftran` - Correct eta application, good error handling
+- `cxf_btran` - Excellent reverse traversal with stack optimization
+- EtaFactors lifecycle (create/free/init/validate/set) - Complete
+- BasisSnapshot operations (create/diff/equal/free) - Complete
+
+**⚠️ PARTIAL (2 functions):**
+- `cxf_basis_validate` - Missing numerical stability and feasibility checks
+- `cxf_basis_warm` - Oversimplified, no repair logic for dimension changes
+
+**❌ CRITICAL GAPS (2 blockers):**
+1. `cxf_pivot_with_eta` - **COMPLETELY MISSING**
+   - Required for basis updates during simplex
+   - Creates eta vectors from pivot column
+   - Without this, simplex cannot iterate
+2. `cxf_basis_refactor` - **STUB ONLY**
+   - Only clears eta list, no LU factorization
+   - Cannot handle non-identity bases
+   - Structural variables in basis will fail
+
+**⚠️ RENAMED FUNCTION:**
+- Spec: `cxf_timing_refactor`
+- Code: `cxf_refactor_check`
+- Functionality matches, name differs
+
+**Structural Issue:**
+- Specs use `SolverState*` throughout
+- Code uses `BasisState*` (most functions) or `SolverContext*` (refactor)
+- This is a spec vs implementation design divergence
+- **Recommendation:** Update specs to match implementation
+
+**Impact Analysis:**
+- Basis module ~70% complete by LOC
+- Only ~50% complete by critical functionality
+- **Cannot support simplex iterations** without pivot_with_eta
+- **Cannot handle real problems** without full refactorization
+
+**Learnings:**
+
+1. **Stub vs Implementation Pattern:**
+   - FTRAN/BTRAN only handle product form (eta vectors), not full LU solve
+   - This is acceptable for current PFI approach
+   - BUT refactorization must eventually create proper factorization
+
+2. **Missing Markowitz LU:**
+   - Spec describes full Markowitz-ordered Gaussian elimination
+   - Implementation punts with TODO comment
+   - This is THE major gap preventing real-world use
+
+3. **Dual Implementation Pattern Found:**
+   - `basis_stub.c` has simple versions of equal/diff
+   - `snapshot.c` has full BasisSnapshot versions
+   - Inconsistent - should consolidate
+
+4. **Good Error Handling Where Complete:**
+   - FTRAN/BTRAN have thorough NULL checks
+   - BTRAN uses clever stack allocation fallback
+   - Bounds checking on indices throughout
+
+5. **Test Gap Identified:**
+   - No `tests/test_basis*.c` files found
+   - Only `tests/unit/test_basis.c` from TDD phase
+   - Need comprehensive integration tests
+
+**Action Items for Next Session:**
+
+**MUST DO (Blockers):**
+1. Implement `cxf_pivot_with_eta` (~100 LOC)
+   - Create eta vector from pivot column
+   - Compute multiplier: 1/pivot_elem
+   - Store off-diagonal entries
+   - Append to eta list
+   - Update basis header
+
+2. Complete `cxf_basis_refactor` (~300 LOC)
+   - Extract basis columns from constraint matrix
+   - Markowitz-ordered Gaussian elimination
+   - Store L, U factors (or eta equivalent)
+   - Detect singular bases
+   - Handle memory allocation
+
+**SHOULD DO (Quality):**
+3. Enhance `cxf_basis_warm`
+   - Add dimension change handling
+   - Implement variable mapping
+   - Add repair logic
+
+4. Enhance `cxf_basis_validate`
+   - Add condition number checks
+   - Add feasibility validation
+   - Return specific error codes
+
+5. Consolidate snapshot functions
+   - Remove stub versions
+   - Keep only full BasisSnapshot API
+
+**Documentation:**
+6. Update specs to use `BasisState*` instead of `SolverState*`
+7. Document the state structure hierarchy
+
+**Gotchas Identified:**
+- FTRAN/BTRAN specs describe two-phase (LU + eta) but code only does eta phase
+  - This is OK for PFI representation
+  - LU solve is "hidden" in the eta vectors created by refactorization
+- Spec error codes don't match implementation error codes in some cases
+- Set comparison (order-independent) not implemented for basis equality
+
+**Success Pattern Observed:**
+- Stack allocation with heap fallback (BTRAN) is excellent for performance
+- Should apply this pattern elsewhere with variable-size arrays
+
+**Review process itself:**
+- Systematic spec-by-spec comparison very effective
+- Found issues that wouldn't be caught by testing alone
+- Specs are high quality - detailed algorithms, edge cases, complexity
+- Code quality good where complete - just incomplete coverage
+
+---
