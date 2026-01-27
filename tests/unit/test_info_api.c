@@ -133,7 +133,7 @@ void test_setcallbackfunc_null_callback_is_valid(void) {
     CxfEnv *env = NULL;
     CxfModel *model = NULL;
     cxf_loadenv(&env, NULL);
-    cxf_newmodel(env, &model, "test");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
 
     /* NULL callback means "disable callback" */
     int status = cxf_setcallbackfunc(model, NULL, NULL);
@@ -147,7 +147,7 @@ void test_setcallbackfunc_valid_callback_returns_ok(void) {
     CxfEnv *env = NULL;
     CxfModel *model = NULL;
     cxf_loadenv(&env, NULL);
-    cxf_newmodel(env, &model, "test");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
 
     /* Stub should accept valid callback */
     int status = cxf_setcallbackfunc(model, dummy_callback, NULL);
@@ -163,7 +163,7 @@ void test_setcallbackfunc_with_userdata(void) {
     int userdata = 42;
 
     cxf_loadenv(&env, NULL);
-    cxf_newmodel(env, &model, "test");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
 
     /* Stub should accept callback with user data */
     int status = cxf_setcallbackfunc(model, dummy_callback, &userdata);

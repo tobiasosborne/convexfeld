@@ -4,7 +4,7 @@
  *
  * M8.1.3: API Tests - Variables
  *
- * Tests: cxf_addvar (extended), cxf_addvars, cxf_delvars
+ * Tests: cxf_addvar(extended), 0, NULL, NULL, int numvars, cxf_addvars, cxf_delvars
  */
 
 #include "unity.h"
@@ -37,9 +37,9 @@ void tearDown(void) {
 
 void test_addvar_binary_variable(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
 
-    int status = cxf_addvar(model, 0.0, 1.0, 1.0, 'B', "binary");
+    int status = cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 1.0, 'B', "binary");
     TEST_ASSERT_EQUAL_INT(CXF_OK, status);
     TEST_ASSERT_EQUAL_INT(1, model->num_vars);
 
@@ -48,9 +48,9 @@ void test_addvar_binary_variable(void) {
 
 void test_addvar_integer_variable(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
 
-    int status = cxf_addvar(model, 0.0, 100.0, 2.0, 'I', "integer");
+    int status = cxf_addvar(model, 0, NULL, NULL, 2.0, 0.0, 100.0, 'I', "integer");
     TEST_ASSERT_EQUAL_INT(CXF_OK, status);
 
     cxf_freemodel(model);
@@ -58,10 +58,10 @@ void test_addvar_integer_variable(void) {
 
 void test_addvar_unbounded_variable(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
 
     /* Unbounded below and above */
-    int status = cxf_addvar(model, -CXF_INFINITY, CXF_INFINITY, 1.0, 'C', "free");
+    int status = cxf_addvar(model, 0, NULL, NULL, 1.0, -CXF_INFINITY, CXF_INFINITY, 'C', "free");
     TEST_ASSERT_EQUAL_INT(CXF_OK, status);
     TEST_ASSERT_DOUBLE_WITHIN(1e-10, -CXF_INFINITY, model->lb[0]);
     TEST_ASSERT_DOUBLE_WITHIN(1e-10, CXF_INFINITY, model->ub[0]);
@@ -71,9 +71,9 @@ void test_addvar_unbounded_variable(void) {
 
 void test_addvar_negative_bounds(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
 
-    int status = cxf_addvar(model, -10.0, -1.0, 1.0, 'C', "negative");
+    int status = cxf_addvar(model, 0, NULL, NULL, 1.0, -10.0, -1.0, 'C', "negative");
     TEST_ASSERT_EQUAL_INT(CXF_OK, status);
     TEST_ASSERT_DOUBLE_WITHIN(1e-12, -10.0, model->lb[0]);
     TEST_ASSERT_DOUBLE_WITHIN(1e-12, -1.0, model->ub[0]);
@@ -87,7 +87,7 @@ void test_addvar_negative_bounds(void) {
 
 void test_addvars_basic_batch(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
 
     double obj[] = {1.0, 2.0, 3.0};
     double lb[] = {0.0, 0.0, 0.0};
@@ -108,7 +108,7 @@ void test_addvars_null_model_returns_error(void) {
 
 void test_addvars_zero_vars_succeeds(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
 
     int status = cxf_addvars(model, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
     TEST_ASSERT_EQUAL_INT(CXF_OK, status);
@@ -119,7 +119,7 @@ void test_addvars_zero_vars_succeeds(void) {
 
 void test_addvars_stores_correct_values(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
 
     double obj[] = {1.5, 2.5};
     double lb[] = {5.0, 10.0};
@@ -139,7 +139,7 @@ void test_addvars_stores_correct_values(void) {
 
 void test_addvars_null_arrays_use_defaults(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
 
     /* NULL obj/lb/ub should use defaults: 0, 0, infinity */
     int status = cxf_addvars(model, 2, 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
@@ -159,11 +159,11 @@ void test_addvars_null_arrays_use_defaults(void) {
 
 void test_addvar_exceeds_initial_capacity(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
 
     /* Initial capacity is 16, add 20 variables to trigger growth */
     for (int i = 0; i < 20; i++) {
-        int status = cxf_addvar(model, 0.0, 10.0, 1.0, 'C', NULL);
+        int status = cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', NULL);
         TEST_ASSERT_EQUAL_INT(CXF_OK, status);
     }
 
@@ -182,7 +182,7 @@ void test_addvar_exceeds_initial_capacity(void) {
 
 void test_addvars_batch_exceeds_capacity(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
 
     /* Add 50 variables at once (exceeds initial capacity of 16) */
     int status = cxf_addvars(model, 50, 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
@@ -202,7 +202,7 @@ void test_addvars_batch_exceeds_capacity(void) {
 
 void test_addvar_grows_capacity(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
 
     /* Check initial capacity (should be 16) */
     int initial_capacity = model->var_capacity;
@@ -210,7 +210,7 @@ void test_addvar_grows_capacity(void) {
 
     /* Add enough variables to trigger at least one growth */
     for (int i = 0; i < initial_capacity + 1; i++) {
-        cxf_addvar(model, 0.0, 1.0, 1.0, 'C', NULL);
+        cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 1.0, 'C', NULL);
     }
 
     /* Verify capacity has grown */
@@ -226,12 +226,12 @@ void test_addvar_grows_capacity(void) {
 
 void test_delvars_basic(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
 
     /* Add 3 variables */
-    cxf_addvar(model, 0.0, 1.0, 1.0, 'C', "x1");
-    cxf_addvar(model, 0.0, 2.0, 2.0, 'C', "x2");
-    cxf_addvar(model, 0.0, 3.0, 3.0, 'C', "x3");
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 1.0, 'C', "x1");
+    cxf_addvar(model, 0, NULL, NULL, 2.0, 0.0, 2.0, 'C', "x2");
+    cxf_addvar(model, 0, NULL, NULL, 3.0, 0.0, 3.0, 'C', "x3");
     TEST_ASSERT_EQUAL_INT(3, model->num_vars);
 
     /* Delete variable 1 */
@@ -250,8 +250,8 @@ void test_delvars_null_model_returns_error(void) {
 
 void test_delvars_zero_count_succeeds(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
-    cxf_addvar(model, 0.0, 1.0, 1.0, 'C', "x");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 1.0, 'C', "x");
 
     int status = cxf_delvars(model, 0, NULL);
     TEST_ASSERT_EQUAL_INT(CXF_OK, status);
@@ -262,8 +262,8 @@ void test_delvars_zero_count_succeeds(void) {
 
 void test_delvars_null_ind_with_nonzero_count_fails(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
-    cxf_addvar(model, 0.0, 1.0, 1.0, 'C', "x");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 1.0, 'C', "x");
 
     int status = cxf_delvars(model, 1, NULL);
     TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT, status);
@@ -273,8 +273,8 @@ void test_delvars_null_ind_with_nonzero_count_fails(void) {
 
 void test_delvars_invalid_index_fails(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
-    cxf_addvar(model, 0.0, 1.0, 1.0, 'C', "x");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 1.0, 'C', "x");
 
     int ind[] = {5};  /* Out of range */
     int status = cxf_delvars(model, 1, ind);
@@ -285,11 +285,11 @@ void test_delvars_invalid_index_fails(void) {
 
 void test_delvars_multiple_vars(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
 
     /* Add 5 variables */
     for (int i = 0; i < 5; i++) {
-        cxf_addvar(model, 0.0, (double)(i + 1), (double)(i + 1), 'C', NULL);
+        cxf_addvar(model, 0, NULL, NULL, (double)(i + 1), 0.0, (double)(i + 1), 'C', NULL);
     }
     TEST_ASSERT_EQUAL_INT(5, model->num_vars);
 

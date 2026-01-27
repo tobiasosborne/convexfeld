@@ -51,12 +51,12 @@ void test_tracer_bullet_1var_lp(void) {
     TEST_ASSERT_NOT_NULL_MESSAGE(env, "env should not be NULL after loadenv");
 
     /* Create model */
-    status = cxf_newmodel(env, &model, "tracer");
+    status = cxf_newmodel(env, &model, "tracer", 0, NULL, NULL, NULL, NULL, NULL);
     TEST_ASSERT_EQUAL_INT_MESSAGE(CXF_OK, status, "cxf_newmodel failed");
     TEST_ASSERT_NOT_NULL_MESSAGE(model, "model should not be NULL after newmodel");
 
     /* Add variable: min x, lb=0, ub=inf, obj=1.0, type='C', name="x" */
-    status = cxf_addvar(model, 0.0, CXF_INFINITY, 1.0, CXF_CONTINUOUS, "x");
+    status = cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, CXF_INFINITY, CXF_CONTINUOUS, "x");
     TEST_ASSERT_EQUAL_INT_MESSAGE(CXF_OK, status, "cxf_addvar failed");
 
     /* Optimize */

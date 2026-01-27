@@ -77,25 +77,37 @@ static int cxf_model_grow_vars(CxfModel *model, int needed_capacity) {
 }
 
 /**
- * @brief Add a single variable to the model.
+ * @brief Add a single variable to the model with constraint coefficients.
  *
  * Grows variable arrays dynamically if capacity is exceeded.
  *
  * @param model Target model
+ * @param numnz Number of non-zero constraint coefficients
+ * @param vind Constraint indices (NULL if numnz=0)
+ * @param vval Coefficient values (NULL if numnz=0)
+ * @param obj Objective coefficient
  * @param lb Lower bound
  * @param ub Upper bound
- * @param obj Objective coefficient
  * @param vtype Variable type ('C', 'B', 'I', 'S', 'N')
- * @param name Variable name (ignored in stub)
+ * @param varname Variable name (ignored in stub)
  * @return CXF_OK on success, error code otherwise
  */
-int cxf_addvar(CxfModel *model, double lb, double ub, double obj,
-               char vtype, const char *name) {
+int cxf_addvar(CxfModel *model, int numnz, int *vind, double *vval,
+               double obj, double lb, double ub, char vtype, const char *varname) {
     int idx, status;
 
-    (void)name;   /* Unused in stub */
+    (void)varname;   /* Unused in stub */
 
     if (model == NULL) {
+        return CXF_ERROR_NULL_ARGUMENT;
+    }
+
+    /* Validate numnz and arrays */
+    if (numnz < 0) {
+        return CXF_ERROR_INVALID_ARGUMENT;
+    }
+
+    if (numnz > 0 && (vind == NULL || vval == NULL)) {
         return CXF_ERROR_NULL_ARGUMENT;
     }
 
@@ -114,6 +126,15 @@ int cxf_addvar(CxfModel *model, double lb, double ub, double obj,
     model->vtype[idx] = vtype;
     model->solution[idx] = 0.0;
     model->num_vars++;
+
+    /* TODO: Store constraint coefficients when matrix storage is ready
+     * For now, we ignore numnz/vind/vval since constraint storage
+     * (cxf_addconstr) is not yet fully implemented.
+     * When ready, this should add column entries to the sparse matrix.
+     */
+    (void)numnz;
+    (void)vind;
+    (void)vval;
 
     return CXF_OK;
 }

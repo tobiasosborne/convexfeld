@@ -56,9 +56,9 @@ void test_addconstr_null_model_fails(void) {
 
 void test_addconstr_basic_le_constraint(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
-    cxf_addvar(model, 0.0, 10.0, 1.0, 'C', "x0");
-    cxf_addvar(model, 0.0, 10.0, 2.0, 'C', "x1");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x0");
+    cxf_addvar(model, 0, NULL, NULL, 2.0, 0.0, 10.0, 'C', "x1");
 
     int cind[] = {0, 1};
     double cval[] = {1.0, 2.0};
@@ -71,8 +71,8 @@ void test_addconstr_basic_le_constraint(void) {
 
 void test_addconstr_equality_constraint(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
-    cxf_addvar(model, 0.0, 10.0, 1.0, 'C', "x0");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x0");
 
     int cind[] = {0};
     double cval[] = {1.0};
@@ -84,8 +84,8 @@ void test_addconstr_equality_constraint(void) {
 
 void test_addconstr_ge_constraint(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
-    cxf_addvar(model, 0.0, 10.0, 1.0, 'C', "x0");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x0");
 
     int cind[] = {0};
     double cval[] = {1.0};
@@ -97,7 +97,7 @@ void test_addconstr_ge_constraint(void) {
 
 void test_addconstr_empty_constraint(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
 
     /* 0 <= 5 is always true */
     int status = cxf_addconstr(model, 0, NULL, NULL, '<', 5.0, "empty");
@@ -109,8 +109,8 @@ void test_addconstr_empty_constraint(void) {
 
 void test_addconstr_negative_rhs(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
-    cxf_addvar(model, -10.0, 10.0, 1.0, 'C', "x0");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
+    cxf_addvar(model, 0, NULL, NULL, 1.0, -10.0, 10.0, 'C', "x0");
 
     int cind[] = {0};
     double cval[] = {1.0};
@@ -122,8 +122,8 @@ void test_addconstr_negative_rhs(void) {
 
 void test_addconstr_validates_sense(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
-    cxf_addvar(model, 0.0, 10.0, 1.0, 'C', "x0");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x0");
 
     int cind[] = {0};
     double cval[] = {1.0};
@@ -135,8 +135,8 @@ void test_addconstr_validates_sense(void) {
 
 void test_addconstr_validates_indices(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
-    cxf_addvar(model, 0.0, 10.0, 1.0, 'C', "x0");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x0");
 
     int cind[] = {5};  /* Out of range */
     double cval[] = {1.0};
@@ -148,8 +148,8 @@ void test_addconstr_validates_indices(void) {
 
 void test_addconstr_validates_finite(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
-    cxf_addvar(model, 0.0, 10.0, 1.0, 'C', "x0");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x0");
 
     int cind[] = {0};
     double cval[] = {1.0 / 0.0};  /* Infinity */
@@ -170,7 +170,7 @@ void test_addconstrs_null_model_fails(void) {
 
 void test_addconstrs_zero_count_succeeds(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
 
     int status = cxf_addconstrs(model, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
     TEST_ASSERT_EQUAL_INT(CXF_OK, status);
@@ -181,9 +181,9 @@ void test_addconstrs_zero_count_succeeds(void) {
 
 void test_addconstrs_basic_batch(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
-    cxf_addvar(model, 0.0, 10.0, 1.0, 'C', "x0");
-    cxf_addvar(model, 0.0, 10.0, 2.0, 'C', "x1");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x0");
+    cxf_addvar(model, 0, NULL, NULL, 2.0, 0.0, 10.0, 'C', "x1");
 
     /* Two constraints: x0 + x1 <= 10, x0 - x1 >= -5 */
     int cbeg[] = {0, 2};
@@ -201,8 +201,8 @@ void test_addconstrs_basic_batch(void) {
 
 void test_addconstrs_null_rhs_uses_zero(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
-    cxf_addvar(model, 0.0, 10.0, 1.0, 'C', "x0");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x0");
 
     int cbeg[] = {0};
     int cind[] = {0};
@@ -221,8 +221,8 @@ void test_addconstrs_null_rhs_uses_zero(void) {
 
 void test_addqconstr_returns_not_supported(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
-    cxf_addvar(model, 0.0, 10.0, 1.0, 'C', "x0");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x0");
 
     /* x0^2 <= 100 */
     int qrow[] = {0};
@@ -242,9 +242,9 @@ void test_addqconstr_returns_not_supported(void) {
 
 void test_addgenconstr_indicator_returns_not_supported(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
-    cxf_addvar(model, 0.0, 1.0, 0.0, 'B', "y");  /* Binary indicator */
-    cxf_addvar(model, 0.0, 10.0, 1.0, 'C', "x");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
+    cxf_addvar(model, 0, NULL, NULL, 0.0, 0.0, 1.0, 'B', "y");  /* Binary indicator */
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x");
 
     /* y = 1 => x <= 5 */
     int ind[] = {1};
@@ -271,7 +271,7 @@ void test_chgcoeffs_null_model_fails(void) {
 
 void test_chgcoeffs_empty_is_ok(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
     int status = cxf_chgcoeffs(model, 0, NULL, NULL, NULL);
     TEST_ASSERT_EQUAL_INT(CXF_OK, status);
     cxf_freemodel(model);
@@ -279,9 +279,9 @@ void test_chgcoeffs_empty_is_ok(void) {
 
 void test_chgcoeffs_basic(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
-    cxf_addvar(model, 0.0, 10.0, 1.0, 'C', "x0");
-    cxf_addvar(model, 0.0, 10.0, 2.0, 'C', "x1");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x0");
+    cxf_addvar(model, 0, NULL, NULL, 2.0, 0.0, 10.0, 'C', "x1");
 
     double cval[] = {1.0, 2.0};
     int vind_add[] = {0, 1};
@@ -299,8 +299,8 @@ void test_chgcoeffs_basic(void) {
 
 void test_chgcoeffs_validates_indices(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
-    cxf_addvar(model, 0.0, 10.0, 1.0, 'C', "x0");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x0");
 
     int cind[] = {0};
     double cval[] = {1.0};

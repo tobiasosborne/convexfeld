@@ -33,8 +33,8 @@ int main(void) {
         CxfModel *model = NULL;
 
         cxf_loadenv(&env, NULL);
-        cxf_newmodel(env, &model, "bench");
-        cxf_addvar(model, 0.0, CXF_INFINITY, 1.0, CXF_CONTINUOUS, "x");
+        cxf_newmodel(env, &model, "bench", 0, NULL, NULL, NULL, NULL, NULL);
+        cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, CXF_INFINITY, CXF_CONTINUOUS, "x");
         cxf_optimize(model);
         cxf_freemodel(model);
         cxf_freeenv(env);

@@ -22,14 +22,14 @@ void setUp(void) {
     TEST_ASSERT_NOT_NULL(env);
 
     /* Create model */
-    ret = cxf_newmodel(env, &model, "test_model");
+    ret = cxf_newmodel(env, &model, "test_model", 0, NULL, NULL, NULL, NULL, NULL);
     TEST_ASSERT_EQUAL(CXF_OK, ret);
     TEST_ASSERT_NOT_NULL(model);
 
     /* Add two variables */
-    ret = cxf_addvar(model, 0.0, 10.0, 1.0, CXF_CONTINUOUS, "x0");
+    ret = cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, CXF_CONTINUOUS, "x0");
     TEST_ASSERT_EQUAL(CXF_OK, ret);
-    ret = cxf_addvar(model, 0.0, 10.0, 2.0, CXF_CONTINUOUS, "x1");
+    ret = cxf_addvar(model, 0, NULL, NULL, 2.0, 0.0, 10.0, CXF_CONTINUOUS, "x1");
     TEST_ASSERT_EQUAL(CXF_OK, ret);
 
     /* Initialize solver context */

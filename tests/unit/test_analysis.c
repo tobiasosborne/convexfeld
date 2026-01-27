@@ -24,10 +24,9 @@ void cxf_presolve_stats(CxfModel *model);
 /* API functions for setup/teardown */
 int cxf_loadenv(CxfEnv **envP, const char *logfilename);
 int cxf_freeenv(CxfEnv *env);
-int cxf_newmodel(CxfEnv *env, CxfModel **modelP, const char *name);
+int cxf_newmodel(CxfEnv *env, CxfModel **modelP, const char *name, int numvars, double *obj, double *lb, double *ub, char *vtype, char **varnames);
 void cxf_freemodel(CxfModel *model);
-int cxf_addvar(CxfModel *model, double lb, double ub, double obj,
-               char vtype, const char *name);
+int cxf_addvar(CxfModel *model, int numnz, int *vind, double *vval, double obj, double lb, double ub, char vtype, const char *varname);
 
 /* Test fixtures */
 static CxfEnv *env = NULL;
@@ -52,7 +51,7 @@ void test_is_mip_null_model(void) {
 
 void test_is_mip_empty_model(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
     TEST_ASSERT_NOT_NULL(model);
 
     int result = cxf_is_mip_model(model);
@@ -63,12 +62,12 @@ void test_is_mip_empty_model(void) {
 
 void test_is_mip_all_continuous(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
     TEST_ASSERT_NOT_NULL(model);
 
-    cxf_addvar(model, 0.0, 10.0, 1.0, 'C', "x0");
-    cxf_addvar(model, 0.0, 10.0, 2.0, 'C', "x1");
-    cxf_addvar(model, 0.0, 10.0, 3.0, 'C', "x2");
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x0");
+    cxf_addvar(model, 0, NULL, NULL, 2.0, 0.0, 10.0, 'C', "x1");
+    cxf_addvar(model, 0, NULL, NULL, 3.0, 0.0, 10.0, 'C', "x2");
 
     int result = cxf_is_mip_model(model);
     TEST_ASSERT_EQUAL_INT(0, result);  /* All continuous, not MIP */
@@ -78,11 +77,11 @@ void test_is_mip_all_continuous(void) {
 
 void test_is_mip_with_binary(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
     TEST_ASSERT_NOT_NULL(model);
 
-    cxf_addvar(model, 0.0, 10.0, 1.0, 'C', "x0");
-    cxf_addvar(model, 0.0, 1.0, 2.0, 'B', "y");  /* Binary variable */
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x0");
+    cxf_addvar(model, 0, NULL, NULL, 2.0, 0.0, 1.0, 'B', "y");  /* Binary variable */
 
     int result = cxf_is_mip_model(model);
     TEST_ASSERT_EQUAL_INT(1, result);  /* Has binary, is MIP */
@@ -92,11 +91,11 @@ void test_is_mip_with_binary(void) {
 
 void test_is_mip_with_integer(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
     TEST_ASSERT_NOT_NULL(model);
 
-    cxf_addvar(model, 0.0, 10.0, 1.0, 'C', "x0");
-    cxf_addvar(model, 0.0, 100.0, 2.0, 'I', "n");  /* Integer variable */
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x0");
+    cxf_addvar(model, 0, NULL, NULL, 2.0, 0.0, 100.0, 'I', "n");  /* Integer variable */
 
     int result = cxf_is_mip_model(model);
     TEST_ASSERT_EQUAL_INT(1, result);  /* Has integer, is MIP */
@@ -106,11 +105,11 @@ void test_is_mip_with_integer(void) {
 
 void test_is_mip_with_semi_continuous(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
     TEST_ASSERT_NOT_NULL(model);
 
-    cxf_addvar(model, 0.0, 10.0, 1.0, 'C', "x0");
-    cxf_addvar(model, 5.0, 100.0, 2.0, 'S', "s");  /* Semi-continuous */
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x0");
+    cxf_addvar(model, 0, NULL, NULL, 2.0, 5.0, 100.0, 'S', "s");  /* Semi-continuous */
 
     int result = cxf_is_mip_model(model);
     TEST_ASSERT_EQUAL_INT(1, result);  /* Has semi-continuous, is MIP */
@@ -120,11 +119,11 @@ void test_is_mip_with_semi_continuous(void) {
 
 void test_is_mip_with_semi_integer(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
     TEST_ASSERT_NOT_NULL(model);
 
-    cxf_addvar(model, 0.0, 10.0, 1.0, 'C', "x0");
-    cxf_addvar(model, 5.0, 100.0, 2.0, 'N', "n");  /* Semi-integer */
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x0");
+    cxf_addvar(model, 0, NULL, NULL, 2.0, 5.0, 100.0, 'N', "n");  /* Semi-integer */
 
     int result = cxf_is_mip_model(model);
     TEST_ASSERT_EQUAL_INT(1, result);  /* Has semi-integer, is MIP */
@@ -143,11 +142,11 @@ void test_is_quadratic_null_model(void) {
 
 void test_is_quadratic_linear_model(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
     TEST_ASSERT_NOT_NULL(model);
 
-    cxf_addvar(model, 0.0, 10.0, 1.0, 'C', "x0");
-    cxf_addvar(model, 0.0, 10.0, 2.0, 'C', "x1");
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x0");
+    cxf_addvar(model, 0, NULL, NULL, 2.0, 0.0, 10.0, 'C', "x1");
 
     int result = cxf_is_quadratic(model);
     TEST_ASSERT_EQUAL_INT(0, result);  /* Pure linear, not QP */
@@ -166,11 +165,11 @@ void test_is_socp_null_model(void) {
 
 void test_is_socp_linear_model(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
     TEST_ASSERT_NOT_NULL(model);
 
-    cxf_addvar(model, 0.0, 10.0, 1.0, 'C', "x0");
-    cxf_addvar(model, 0.0, 10.0, 2.0, 'C', "x1");
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x0");
+    cxf_addvar(model, 0, NULL, NULL, 2.0, 0.0, 10.0, 'C', "x1");
 
     int result = cxf_is_socp(model);
     TEST_ASSERT_EQUAL_INT(0, result);  /* Pure linear, not SOCP */
@@ -190,7 +189,7 @@ void test_presolve_stats_null_model(void) {
 
 void test_presolve_stats_empty_model(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "empty");
+    cxf_newmodel(env, &model, "empty", 0, NULL, NULL, NULL, NULL, NULL);
     TEST_ASSERT_NOT_NULL(model);
 
     /* Should not crash with empty model */
@@ -202,12 +201,12 @@ void test_presolve_stats_empty_model(void) {
 
 void test_presolve_stats_with_vars(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test_lp");
+    cxf_newmodel(env, &model, "test_lp", 0, NULL, NULL, NULL, NULL, NULL);
     TEST_ASSERT_NOT_NULL(model);
 
-    cxf_addvar(model, 0.0, 10.0, 1.0, 'C', "x0");
-    cxf_addvar(model, 0.0, 10.0, 2.0, 'C', "x1");
-    cxf_addvar(model, 0.0, 10.0, 3.0, 'C', "x2");
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x0");
+    cxf_addvar(model, 0, NULL, NULL, 2.0, 0.0, 10.0, 'C', "x1");
+    cxf_addvar(model, 0, NULL, NULL, 3.0, 0.0, 10.0, 'C', "x2");
 
     /* Should log model dimensions */
     cxf_presolve_stats(model);

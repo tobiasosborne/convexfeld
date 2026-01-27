@@ -69,13 +69,21 @@ struct CxfModel {
  ******************************************************************************/
 
 /**
- * @brief Create a new empty model.
+ * @brief Create a new model with optional initial variables.
  * @param env Parent environment
  * @param modelP Output pointer to created model
  * @param name Model name (may be NULL)
+ * @param numvars Number of initial variables (0 for empty model)
+ * @param obj Objective coefficients (NULL for all 0.0)
+ * @param lb Lower bounds (NULL for all 0.0)
+ * @param ub Upper bounds (NULL for all infinity)
+ * @param vtype Variable types (NULL for all continuous)
+ * @param varnames Variable names (NULL for default names)
  * @return CXF_OK on success, error code otherwise
  */
-int cxf_newmodel(CxfEnv *env, CxfModel **modelP, const char *name);
+int cxf_newmodel(CxfEnv *env, CxfModel **modelP, const char *name,
+                 int numvars, double *obj, double *lb, double *ub,
+                 char *vtype, char **varnames);
 
 /**
  * @brief Free a model and all associated resources.
@@ -116,17 +124,20 @@ int cxf_updatemodel(CxfModel *model);
  ******************************************************************************/
 
 /**
- * @brief Add a single variable to the model.
+ * @brief Add a single variable to the model with constraint coefficients.
  * @param model Target model
+ * @param numnz Number of non-zero constraint coefficients
+ * @param vind Constraint indices (NULL if numnz=0)
+ * @param vval Coefficient values (NULL if numnz=0)
+ * @param obj Objective coefficient
  * @param lb Lower bound
  * @param ub Upper bound
- * @param obj Objective coefficient
  * @param vtype Variable type (CXF_CONTINUOUS, etc.)
- * @param name Variable name (may be NULL)
+ * @param varname Variable name (may be NULL)
  * @return CXF_OK on success, error code otherwise
  */
-int cxf_addvar(CxfModel *model, double lb, double ub, double obj,
-               char vtype, const char *name);
+int cxf_addvar(CxfModel *model, int numnz, int *vind, double *vval,
+               double obj, double lb, double ub, char vtype, const char *varname);
 
 /**
  * @brief Add multiple variables to the model.

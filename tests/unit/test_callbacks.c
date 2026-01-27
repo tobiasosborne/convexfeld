@@ -36,7 +36,7 @@ int cxf_post_optimize_callback(CxfModel *model);
 /* API functions for setup */
 int cxf_loadenv(CxfEnv **envP, const char *logfilename);
 int cxf_freeenv(CxfEnv *env);
-int cxf_newmodel(CxfEnv *env, CxfModel **modelP, const char *name);
+int cxf_newmodel(CxfEnv *env, CxfModel **modelP, const char *name, int numvars, double *obj, double *lb, double *ub, char *vtype, char **varnames);
 void cxf_freemodel(CxfModel *model);
 
 /*******************************************************************************
@@ -65,7 +65,7 @@ static CxfModel *model = NULL;
 
 void setUp(void) {
     cxf_loadenv(&env, NULL);
-    cxf_newmodel(env, &model, "test_model");
+    cxf_newmodel(env, &model, "test_model", 0, NULL, NULL, NULL, NULL, NULL);
     callback_invocation_count = 0;
     callback_return_value = 0;
 }

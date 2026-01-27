@@ -228,12 +228,12 @@ void test_check_model_flags1_null_model(void) {
 
 void test_check_model_flags1_pure_continuous(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
     TEST_ASSERT_NOT_NULL(model);
 
     /* Add some continuous variables */
-    cxf_addvar(model, 0.0, 10.0, 1.0, 'C', "x0");
-    cxf_addvar(model, 0.0, 10.0, 2.0, 'C', "x1");
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x0");
+    cxf_addvar(model, 0, NULL, NULL, 2.0, 0.0, 10.0, 'C', "x1");
 
     int result = cxf_check_model_flags1(model);
     TEST_ASSERT_EQUAL_INT(0, result);  /* Pure continuous */
@@ -243,11 +243,11 @@ void test_check_model_flags1_pure_continuous(void) {
 
 void test_check_model_flags1_with_binary(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
     TEST_ASSERT_NOT_NULL(model);
 
     /* Add one binary variable */
-    cxf_addvar(model, 0.0, 1.0, 1.0, 'B', "b0");
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 1.0, 'B', "b0");
 
     int result = cxf_check_model_flags1(model);
     TEST_ASSERT_EQUAL_INT(1, result);  /* Has MIP feature */
@@ -257,11 +257,11 @@ void test_check_model_flags1_with_binary(void) {
 
 void test_check_model_flags1_with_integer(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
     TEST_ASSERT_NOT_NULL(model);
 
     /* Add one integer variable */
-    cxf_addvar(model, 0.0, 10.0, 1.0, 'I', "i0");
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'I', "i0");
 
     int result = cxf_check_model_flags1(model);
     TEST_ASSERT_EQUAL_INT(1, result);  /* Has MIP feature */
@@ -271,7 +271,7 @@ void test_check_model_flags1_with_integer(void) {
 
 void test_check_model_flags1_empty_model(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
     TEST_ASSERT_NOT_NULL(model);
 
     /* Empty model (no variables) */
@@ -292,12 +292,12 @@ void test_check_model_flags2_null_model(void) {
 
 void test_check_model_flags2_pure_linear(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
     TEST_ASSERT_NOT_NULL(model);
 
     /* Add some variables */
-    cxf_addvar(model, 0.0, 10.0, 1.0, 'C', "x0");
-    cxf_addvar(model, 0.0, 10.0, 2.0, 'C', "x1");
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x0");
+    cxf_addvar(model, 0, NULL, NULL, 2.0, 0.0, 10.0, 'C', "x1");
 
     int result = cxf_check_model_flags2(model, 0);
     TEST_ASSERT_EQUAL_INT(0, result);  /* Pure linear */
@@ -307,7 +307,7 @@ void test_check_model_flags2_pure_linear(void) {
 
 void test_check_model_flags2_empty_model(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
     TEST_ASSERT_NOT_NULL(model);
 
     /* Empty model */

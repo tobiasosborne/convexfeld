@@ -39,7 +39,7 @@ void test_optimize_null_model_fails(void) {
 
 void test_optimize_empty_model(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
 
     /* Empty model (no variables) should still succeed */
     int status = cxf_optimize(model);
@@ -50,8 +50,8 @@ void test_optimize_empty_model(void) {
 
 void test_optimize_single_variable(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
-    cxf_addvar(model, 0.0, 10.0, 1.0, 'C', "x");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x");
 
     int status = cxf_optimize(model);
     TEST_ASSERT_EQUAL_INT(CXF_OK, status);
@@ -61,11 +61,11 @@ void test_optimize_single_variable(void) {
 
 void test_optimize_multiple_variables(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
 
-    cxf_addvar(model, 0.0, 10.0, 1.0, 'C', "x1");
-    cxf_addvar(model, 0.0, 20.0, 2.0, 'C', "x2");
-    cxf_addvar(model, 0.0, 30.0, 3.0, 'C', "x3");
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x1");
+    cxf_addvar(model, 0, NULL, NULL, 2.0, 0.0, 20.0, 'C', "x2");
+    cxf_addvar(model, 0, NULL, NULL, 3.0, 0.0, 30.0, 'C', "x3");
 
     int status = cxf_optimize(model);
     TEST_ASSERT_EQUAL_INT(CXF_OK, status);
@@ -75,11 +75,11 @@ void test_optimize_multiple_variables(void) {
 
 void test_optimize_with_constraints(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
 
     /* Add variables */
-    cxf_addvar(model, 0.0, 10.0, 1.0, 'C', "x1");
-    cxf_addvar(model, 0.0, 10.0, 2.0, 'C', "x2");
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x1");
+    cxf_addvar(model, 0, NULL, NULL, 2.0, 0.0, 10.0, 'C', "x2");
 
     /* Add constraint: x1 + x2 <= 15 */
     int cind[] = {0, 1};
@@ -132,8 +132,8 @@ void test_terminate_null_env_safe(void) {
 
 void test_status_after_optimize(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
-    cxf_addvar(model, 0.0, 10.0, 1.0, 'C', "x");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x");
 
     cxf_optimize(model);
 
@@ -147,8 +147,8 @@ void test_status_after_optimize(void) {
 
 void test_objval_available_after_optimize(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
-    cxf_addvar(model, 0.0, 10.0, 1.0, 'C', "x");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x");
 
     cxf_optimize(model);
 

@@ -26,7 +26,7 @@ static double timing[16];
 
 void setUp(void) {
     cxf_loadenv(&env, NULL);
-    cxf_newmodel(env, &model, "edge_test");
+    cxf_newmodel(env, &model, "edge_test", 0, NULL, NULL, NULL, NULL, NULL);
     for (int i = 0; i < 16; i++) timing[i] = 0.0;
 }
 
@@ -41,7 +41,7 @@ void tearDown(void) {
 
 void test_perturbation_null_args(void) {
     TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT, cxf_simplex_perturbation(NULL, env));
-    cxf_addvar(model, 0.0, 10.0, 1.0, 'C', "x");
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x");
     SolverContext *state = NULL;
     cxf_simplex_init(model, &state);
     TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT, cxf_simplex_perturbation(state, NULL));
@@ -49,7 +49,7 @@ void test_perturbation_null_args(void) {
 }
 
 void test_perturbation_basic(void) {
-    cxf_addvar(model, 0.0, 10.0, 1.0, 'C', "x");
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x");
     SolverContext *state = NULL;
     cxf_simplex_init(model, &state);
     cxf_simplex_setup(state, env);
@@ -64,7 +64,7 @@ void test_unperturb_null_args(void) {
 }
 
 void test_unperturb_sequence(void) {
-    cxf_addvar(model, 0.0, 10.0, 1.0, 'C', "x");
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x");
     SolverContext *state = NULL;
     cxf_simplex_init(model, &state);
     cxf_simplex_setup(state, env);
@@ -80,14 +80,14 @@ void test_unperturb_sequence(void) {
 
 void test_solve_unbounded_simple(void) {
     /* min -x with x >= 0, no upper bound -> unbounded */
-    cxf_addvar(model, 0.0, CXF_INFINITY, -1.0, 'C', "x");
+    cxf_addvar(model, 0, NULL, NULL, -1.0, 0.0, CXF_INFINITY, 'C', "x");
     TEST_ASSERT_EQUAL_INT(CXF_UNBOUNDED, cxf_solve_lp(model));
 }
 
 void test_unbounded_with_constraint(void) {
     /* min -(x+y) with x-y <= 1, x,y >= 0 -> unbounded in y direction */
-    cxf_addvar(model, 0.0, CXF_INFINITY, -1.0, 'C', "x");
-    cxf_addvar(model, 0.0, CXF_INFINITY, -1.0, 'C', "y");
+    cxf_addvar(model, 0, NULL, NULL, -1.0, 0.0, CXF_INFINITY, 'C', "x");
+    cxf_addvar(model, 0, NULL, NULL, -1.0, 0.0, CXF_INFINITY, 'C', "y");
     int ind[] = {0, 1};
     double val[] = {1.0, -1.0};
     cxf_addconstr(model, 2, ind, val, '<', 1.0, "c1");
@@ -98,14 +98,14 @@ void test_unbounded_with_constraint(void) {
 
 void test_solve_infeasible_bounds(void) {
     /* lb > ub -> infeasible */
-    cxf_addvar(model, 5.0, 3.0, 1.0, 'C', "x");
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 5.0, 3.0, 'C', "x");
     TEST_ASSERT_EQUAL_INT(CXF_INFEASIBLE, cxf_solve_lp(model));
 }
 
 void test_infeasible_constraints(void) {
     /* x + y <= 1 and x + y >= 3 with x,y >= 0 -> infeasible */
-    cxf_addvar(model, 0.0, CXF_INFINITY, 1.0, 'C', "x");
-    cxf_addvar(model, 0.0, CXF_INFINITY, 1.0, 'C', "y");
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, CXF_INFINITY, 'C', "x");
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, CXF_INFINITY, 'C', "y");
     int ind[] = {0, 1};
     double val[] = {1.0, 1.0};
     cxf_addconstr(model, 2, ind, val, '<', 1.0, "c1");
@@ -116,22 +116,22 @@ void test_infeasible_constraints(void) {
 /* Numerical stability edge cases */
 
 void test_small_coefficients(void) {
-    cxf_addvar(model, 0.0, 10.0, 1e-12, 'C', "x");
+    cxf_addvar(model, 0, NULL, NULL, 1e-12, 0.0, 10.0, 'C', "x");
     SolverContext *state = NULL;
     TEST_ASSERT_EQUAL_INT(CXF_OK, cxf_simplex_init(model, &state));
     cxf_simplex_final(state);
 }
 
 void test_large_coefficient_range(void) {
-    cxf_addvar(model, 0.0, 1e10, 1e-8, 'C', "x");
-    cxf_addvar(model, 0.0, 1e-10, 1e8, 'C', "y");
+    cxf_addvar(model, 0, NULL, NULL, 1e-8, 0.0, 1e10, 'C', "x");
+    cxf_addvar(model, 0, NULL, NULL, 1e8, 0.0, 1e-10, 'C', "y");
     SolverContext *state = NULL;
     TEST_ASSERT_EQUAL_INT(CXF_OK, cxf_simplex_init(model, &state));
     cxf_simplex_final(state);
 }
 
 void test_fixed_variable(void) {
-    cxf_addvar(model, 5.0, 5.0, 1.0, 'C', "x_fixed");
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 5.0, 5.0, 'C', "x_fixed");
     SolverContext *state = NULL;
     TEST_ASSERT_EQUAL_INT(CXF_OK, cxf_simplex_init(model, &state));
     cxf_simplex_final(state);
@@ -144,19 +144,19 @@ void test_solve_empty_model(void) {
 }
 
 void test_solve_trivial(void) {
-    cxf_addvar(model, 0.0, 10.0, 1.0, 'C', "x");
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x");
     TEST_ASSERT_EQUAL_INT(CXF_OPTIMAL, cxf_solve_lp(model));
 }
 
 void test_solve_all_fixed(void) {
-    cxf_addvar(model, 5.0, 5.0, 1.0, 'C', "x");
-    cxf_addvar(model, 3.0, 3.0, 2.0, 'C', "y");
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 5.0, 5.0, 'C', "x");
+    cxf_addvar(model, 0, NULL, NULL, 2.0, 3.0, 3.0, 'C', "y");
     TEST_ASSERT_EQUAL_INT(CXF_OPTIMAL, cxf_solve_lp(model));
 }
 
 void test_solve_free_variable(void) {
     /* Free variable with zero obj coeff -> optimal with obj=0 */
-    cxf_addvar(model, -CXF_INFINITY, CXF_INFINITY, 0.0, 'C', "free");
+    cxf_addvar(model, 0, NULL, NULL, 0.0, -CXF_INFINITY, CXF_INFINITY, 'C', "free");
     TEST_ASSERT_EQUAL_INT(CXF_OPTIMAL, cxf_solve_lp(model));
 }
 

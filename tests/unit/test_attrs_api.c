@@ -16,7 +16,7 @@ static CxfModel *model = NULL;
 
 void setUp(void) {
     cxf_loadenv(&env, NULL);
-    cxf_newmodel(env, &model, "test_model");
+    cxf_newmodel(env, &model, "test_model", 0, NULL, NULL, NULL, NULL, NULL);
 }
 
 void tearDown(void) {
@@ -62,9 +62,9 @@ void test_getintattr_status(void) {
 
 void test_getintattr_numvars(void) {
     /* Add 3 variables */
-    cxf_addvar(model, 0.0, 10.0, 1.0, 'C', "x1");
-    cxf_addvar(model, 0.0, 20.0, 2.0, 'C', "x2");
-    cxf_addvar(model, 0.0, 5.0, 0.5, 'C', "x3");
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x1");
+    cxf_addvar(model, 0, NULL, NULL, 2.0, 0.0, 20.0, 'C', "x2");
+    cxf_addvar(model, 0, NULL, NULL, 0.5, 0.0, 5.0, 'C', "x3");
 
     int value;
     int status = cxf_getintattr(model, "NumVars", &value);

@@ -41,7 +41,7 @@ void test_getintattr_null_model_fails(void) {
 
 void test_getintattr_null_attrname_fails(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
 
     int value;
     int status = cxf_getintattr(model, NULL, &value);
@@ -52,7 +52,7 @@ void test_getintattr_null_attrname_fails(void) {
 
 void test_getintattr_null_value_fails(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
 
     int status = cxf_getintattr(model, "NumVars", NULL);
     TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT, status);
@@ -62,9 +62,9 @@ void test_getintattr_null_value_fails(void) {
 
 void test_getintattr_numvars(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
-    cxf_addvar(model, 0.0, 10.0, 1.0, 'C', "x1");
-    cxf_addvar(model, 0.0, 20.0, 2.0, 'C', "x2");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x1");
+    cxf_addvar(model, 0, NULL, NULL, 2.0, 0.0, 20.0, 'C', "x2");
 
     int value;
     int status = cxf_getintattr(model, "NumVars", &value);
@@ -76,7 +76,7 @@ void test_getintattr_numvars(void) {
 
 void test_getintattr_numconstrs(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
 
     int value;
     int status = cxf_getintattr(model, "NumConstrs", &value);
@@ -88,7 +88,7 @@ void test_getintattr_numconstrs(void) {
 
 void test_getintattr_status(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
 
     int value;
     int status = cxf_getintattr(model, "Status", &value);
@@ -99,7 +99,7 @@ void test_getintattr_status(void) {
 
 void test_getintattr_invalid_attr(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
 
     int value;
     int status = cxf_getintattr(model, "InvalidAttr", &value);
@@ -120,7 +120,7 @@ void test_getdblattr_null_model_fails(void) {
 
 void test_getdblattr_objval(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
 
     double value;
     int status = cxf_getdblattr(model, "ObjVal", &value);
@@ -131,7 +131,7 @@ void test_getdblattr_objval(void) {
 
 void test_getdblattr_invalid_attr(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
 
     double value;
     int status = cxf_getdblattr(model, "InvalidAttr", &value);
@@ -152,7 +152,7 @@ void test_getconstrs_null_model_fails(void) {
 
 void test_getconstrs_null_numnz_fails(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
 
     int status = cxf_getconstrs(model, NULL, NULL, NULL, NULL, 0, 1);
     TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT, status);
@@ -162,7 +162,7 @@ void test_getconstrs_null_numnz_fails(void) {
 
 void test_getconstrs_empty_model(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
 
     int numnz;
     int status = cxf_getconstrs(model, &numnz, NULL, NULL, NULL, 0, 0);
@@ -184,8 +184,8 @@ void test_getcoeff_null_model_fails(void) {
 
 void test_getcoeff_null_valP_fails(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
-    cxf_addvar(model, 0.0, 10.0, 1.0, 'C', "x");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x");
 
     int status = cxf_getcoeff(model, 0, 0, NULL);
     TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT, status);
@@ -195,8 +195,8 @@ void test_getcoeff_null_valP_fails(void) {
 
 void test_getcoeff_no_constraints(void) {
     CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test");
-    cxf_addvar(model, 0.0, 10.0, 1.0, 'C', "x");
+    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x");
 
     double val;
     /* With no constraints, any constraint index is invalid */

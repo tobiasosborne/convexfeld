@@ -71,11 +71,18 @@ static void cxf_model_init_fields(CxfModel *model, CxfEnv *env,
     model->env_flag = 0;
 }
 
-int cxf_newmodel(CxfEnv *env, CxfModel **modelP, const char *name) {
+int cxf_newmodel(CxfEnv *env, CxfModel **modelP, const char *name,
+                 int numvars, double *obj, double *lb, double *ub,
+                 char *vtype, char **varnames) {
     CxfModel *model;
+    int status;
 
     if (env == NULL || modelP == NULL) {
         return CXF_ERROR_NULL_ARGUMENT;
+    }
+
+    if (numvars < 0) {
+        return CXF_ERROR_INVALID_ARGUMENT;
     }
 
     *modelP = NULL;
@@ -87,17 +94,21 @@ int cxf_newmodel(CxfEnv *env, CxfModel **modelP, const char *name) {
 
     cxf_model_init_fields(model, env, name);
 
+    /* Determine initial capacity */
+    int initial_capacity = (numvars > INITIAL_VAR_CAPACITY) ? numvars : INITIAL_VAR_CAPACITY;
+    model->var_capacity = initial_capacity;
+
     /* Allocate initial variable arrays */
     model->obj_coeffs = (double *)cxf_malloc(
-        (size_t)INITIAL_VAR_CAPACITY * sizeof(double));
+        (size_t)initial_capacity * sizeof(double));
     model->lb = (double *)cxf_malloc(
-        (size_t)INITIAL_VAR_CAPACITY * sizeof(double));
+        (size_t)initial_capacity * sizeof(double));
     model->ub = (double *)cxf_malloc(
-        (size_t)INITIAL_VAR_CAPACITY * sizeof(double));
+        (size_t)initial_capacity * sizeof(double));
     model->vtype = (char *)cxf_malloc(
-        (size_t)INITIAL_VAR_CAPACITY * sizeof(char));
+        (size_t)initial_capacity * sizeof(char));
     model->solution = (double *)cxf_malloc(
-        (size_t)INITIAL_VAR_CAPACITY * sizeof(double));
+        (size_t)initial_capacity * sizeof(double));
 
     if (model->obj_coeffs == NULL || model->lb == NULL ||
         model->ub == NULL || model->vtype == NULL || model->solution == NULL) {
@@ -110,6 +121,22 @@ int cxf_newmodel(CxfEnv *env, CxfModel **modelP, const char *name) {
     if (model->matrix == NULL) {
         cxf_freemodel(model);
         return CXF_ERROR_OUT_OF_MEMORY;
+    }
+
+    /* If numvars > 0, add initial variables using cxf_addvars */
+    if (numvars > 0) {
+        /* Forward declare cxf_addvars */
+        extern int cxf_addvars(CxfModel *model, int numvars, int numnz,
+                               const int *vbeg, const int *vind, const double *vval,
+                               const double *obj, const double *lb, const double *ub,
+                               const char *vtype, const char **varnames);
+
+        status = cxf_addvars(model, numvars, 0, NULL, NULL, NULL,
+                             obj, lb, ub, vtype, (const char **)varnames);
+        if (status != CXF_OK) {
+            cxf_freemodel(model);
+            return status;
+        }
     }
 
     *modelP = model;
@@ -173,8 +200,8 @@ CxfModel *cxf_copymodel(CxfModel *model) {
         return NULL;
     }
 
-    /* Create new model with same environment and name */
-    if (cxf_newmodel(model->env, &copy, model->name) != CXF_OK) {
+    /* Create new model with same environment and name (empty initially) */
+    if (cxf_newmodel(model->env, &copy, model->name, 0, NULL, NULL, NULL, NULL, NULL) != CXF_OK) {
         return NULL;
     }
 
@@ -230,14 +257,31 @@ CxfModel *cxf_copymodel(CxfModel *model) {
 }
 
 int cxf_updatemodel(CxfModel *model) {
+    int status;
+
     /* Validate model */
-    if (cxf_checkmodel(model) != CXF_OK) {
-        return CXF_ERROR_INVALID_ARGUMENT;
+    status = cxf_checkmodel(model);
+    if (status != CXF_OK) {
+        return status;
     }
 
-    /* Stub implementation: For now, just validate and return success.
-     * The full implementation will process the pending_buffer to apply
-     * queued modifications. This follows the lazy update pattern.
+    /* Process pending buffer if it exists
+     * For now, this is a minimal implementation that marks the model as updated.
+     * Full implementation would process queued modifications from pending_buffer.
      */
+    if (model->pending_buffer != NULL) {
+        /* TODO: Process pending modifications when buffer implementation is ready
+         * This would include:
+         * - Processing variable/constraint additions
+         * - Processing deletions
+         * - Processing coefficient changes
+         * - Rebuilding CSC matrix structure
+         * - Clearing the pending buffer
+         */
+    }
+
+    /* Mark model as initialized/updated */
+    model->initialized = 1;
+
     return CXF_OK;
 }

@@ -10,8 +10,8 @@
 #include "convexfeld/cxf_model.h"
 #include "convexfeld/cxf_env.h"
 
-/* Forward declaration - implemented in src/simplex/solve_lp_stub.c */
-int cxf_solve_lp(CxfModel *model);
+/* Forward declaration - implemented in src/api/optimize_api.c */
+extern int cxf_optimize_internal(CxfModel *model);
 
 /**
  * @brief Optimize the model.
@@ -28,8 +28,8 @@ int cxf_optimize(CxfModel *model) {
         return CXF_ERROR_NULL_ARGUMENT;
     }
 
-    /* Delegate to simplex solver */
-    return cxf_solve_lp(model);
+    /* Delegate to internal optimization dispatcher */
+    return cxf_optimize_internal(model);
 }
 
 /* cxf_getintattr and cxf_getdblattr moved to attrs_api.c (M8.1.15) */

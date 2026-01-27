@@ -21,7 +21,7 @@ static CxfModel *model = NULL;
 
 void setUp(void) {
     cxf_loadenv(&env, NULL);
-    cxf_newmodel(env, &model, "setup_test");
+    cxf_newmodel(env, &model, "setup_test", 0, NULL, NULL, NULL, NULL, NULL);
 }
 
 void tearDown(void) {
@@ -41,7 +41,7 @@ void test_setup_null_state_fails(void) {
 }
 
 void test_setup_null_env_fails(void) {
-    cxf_addvar(model, 0.0, 10.0, 1.0, 'C', "x");
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x");
     SolverContext *state = NULL;
     cxf_simplex_init(model, &state);
 
@@ -64,9 +64,9 @@ void test_setup_empty_model(void) {
 
 void test_setup_initializes_reduced_costs(void) {
     /* Add variables with different objective coefficients */
-    cxf_addvar(model, 0.0, 10.0, 3.0, 'C', "x1");  /* obj = 3 */
-    cxf_addvar(model, 0.0, 10.0, -2.5, 'C', "x2"); /* obj = -2.5 */
-    cxf_addvar(model, 0.0, 10.0, 0.0, 'C', "x3");  /* obj = 0 */
+    cxf_addvar(model, 0, NULL, NULL, 3.0, 0.0, 10.0, 'C', "x1");  /* obj = 3 */
+    cxf_addvar(model, 0, NULL, NULL, -2.5, 0.0, 10.0, 'C', "x2"); /* obj = -2.5 */
+    cxf_addvar(model, 0, NULL, NULL, 0.0, 0.0, 10.0, 'C', "x3");  /* obj = 0 */
 
     SolverContext *state = NULL;
     cxf_simplex_init(model, &state);
@@ -81,7 +81,7 @@ void test_setup_initializes_reduced_costs(void) {
 }
 
 void test_setup_initializes_dual_values_to_zero(void) {
-    cxf_addvar(model, 0.0, 10.0, 1.0, 'C', "x");
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x");
     /* Note: adding constraints requires full constraint API */
 
     SolverContext *state = NULL;
@@ -95,7 +95,7 @@ void test_setup_initializes_dual_values_to_zero(void) {
 }
 
 void test_setup_resets_iteration_counter(void) {
-    cxf_addvar(model, 0.0, 10.0, 1.0, 'C', "x");
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x");
 
     SolverContext *state = NULL;
     cxf_simplex_init(model, &state);
@@ -114,7 +114,7 @@ void test_setup_resets_iteration_counter(void) {
 
 void test_setup_determines_phase_2_for_feasible_bounds(void) {
     /* Add variable with feasible bounds (lb < ub) */
-    cxf_addvar(model, 0.0, 10.0, 1.0, 'C', "x");
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x");
 
     SolverContext *state = NULL;
     cxf_simplex_init(model, &state);
@@ -128,7 +128,7 @@ void test_setup_determines_phase_2_for_feasible_bounds(void) {
 
 void test_setup_determines_phase_1_for_infeasible_bounds(void) {
     /* Add variable with infeasible bounds (lb > ub) */
-    cxf_addvar(model, 10.0, 5.0, 1.0, 'C', "x");  /* lb=10 > ub=5 */
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 10.0, 5.0, 'C', "x");  /* lb=10 > ub=5 */
 
     SolverContext *state = NULL;
     cxf_simplex_init(model, &state);
@@ -141,7 +141,7 @@ void test_setup_determines_phase_1_for_infeasible_bounds(void) {
 }
 
 void test_setup_initializes_pricing_context(void) {
-    cxf_addvar(model, 0.0, 10.0, 1.0, 'C', "x");
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x");
 
     SolverContext *state = NULL;
     cxf_simplex_init(model, &state);
@@ -158,7 +158,7 @@ void test_setup_initializes_pricing_context(void) {
 }
 
 void test_setup_sets_tolerance_from_env(void) {
-    cxf_addvar(model, 0.0, 10.0, 1.0, 'C', "x");
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x");
 
     SolverContext *state = NULL;
     cxf_simplex_init(model, &state);
@@ -183,7 +183,7 @@ void test_preprocess_null_state_fails(void) {
 }
 
 void test_preprocess_null_env_fails(void) {
-    cxf_addvar(model, 0.0, 10.0, 1.0, 'C', "x");
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x");
     SolverContext *state = NULL;
     cxf_simplex_init(model, &state);
 
@@ -194,7 +194,7 @@ void test_preprocess_null_env_fails(void) {
 }
 
 void test_preprocess_skip_flag(void) {
-    cxf_addvar(model, 0.0, 10.0, 1.0, 'C', "x");
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x");
     SolverContext *state = NULL;
     cxf_simplex_init(model, &state);
 
@@ -216,8 +216,8 @@ void test_preprocess_empty_model(void) {
 }
 
 void test_preprocess_feasible_bounds(void) {
-    cxf_addvar(model, 0.0, 10.0, 1.0, 'C', "x1");
-    cxf_addvar(model, -5.0, 5.0, 2.0, 'C', "x2");
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x1");
+    cxf_addvar(model, 0, NULL, NULL, 2.0, -5.0, 5.0, 'C', "x2");
 
     SolverContext *state = NULL;
     cxf_simplex_init(model, &state);
@@ -230,7 +230,7 @@ void test_preprocess_feasible_bounds(void) {
 
 void test_preprocess_detects_infeasible_bounds(void) {
     /* Add variable with infeasible bounds */
-    cxf_addvar(model, 10.0, 5.0, 1.0, 'C', "x");  /* lb=10 > ub=5 */
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 10.0, 5.0, 'C', "x");  /* lb=10 > ub=5 */
 
     SolverContext *state = NULL;
     cxf_simplex_init(model, &state);
@@ -242,9 +242,9 @@ void test_preprocess_detects_infeasible_bounds(void) {
 }
 
 void test_preprocess_multiple_vars_one_infeasible(void) {
-    cxf_addvar(model, 0.0, 10.0, 1.0, 'C', "x1");  /* feasible */
-    cxf_addvar(model, 20.0, 5.0, 2.0, 'C', "x2");  /* infeasible */
-    cxf_addvar(model, 0.0, 100.0, 0.5, 'C', "x3"); /* feasible */
+    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x1");  /* feasible */
+    cxf_addvar(model, 0, NULL, NULL, 2.0, 20.0, 5.0, 'C', "x2");  /* infeasible */
+    cxf_addvar(model, 0, NULL, NULL, 0.5, 0.0, 100.0, 'C', "x3"); /* feasible */
 
     SolverContext *state = NULL;
     cxf_simplex_init(model, &state);
@@ -260,8 +260,8 @@ void test_preprocess_multiple_vars_one_infeasible(void) {
  ******************************************************************************/
 
 void test_setup_and_preprocess_sequence(void) {
-    cxf_addvar(model, 0.0, 10.0, 3.0, 'C', "x1");
-    cxf_addvar(model, 0.0, 5.0, -1.0, 'C', "x2");
+    cxf_addvar(model, 0, NULL, NULL, 3.0, 0.0, 10.0, 'C', "x1");
+    cxf_addvar(model, 0, NULL, NULL, -1.0, 0.0, 5.0, 'C', "x2");
 
     SolverContext *state = NULL;
     cxf_simplex_init(model, &state);
