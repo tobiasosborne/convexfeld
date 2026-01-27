@@ -53,32 +53,5 @@ void cxf_callback_terminate(CxfModel *model) {
 
 /*============================================================================
  * M5.2.4: Pre/post optimize callbacks
+ * NOTE: Moved to src/callbacks/invoke.c
  *===========================================================================*/
-
-/**
- * @brief Execute pre-optimization callback.
- *
- * @param model Model about to be optimized.
- * @return 0 on success, non-zero to abort optimization.
- */
-int cxf_pre_optimize_callback(CxfModel *model) {
-    if (model == NULL || model->env == NULL) {
-        return 0;  /* No callback, success */
-    }
-    /* Stub: no actual callback invocation yet */
-    return 0;
-}
-
-/**
- * @brief Execute post-optimization callback.
- *
- * @param model Model that was optimized.
- * @return 0 on success.
- */
-int cxf_post_optimize_callback(CxfModel *model) {
-    if (model == NULL || model->env == NULL) {
-        return 0;  /* No callback, success */
-    }
-    /* Stub: no actual callback invocation yet */
-    return 0;
-}

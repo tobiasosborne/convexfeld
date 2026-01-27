@@ -103,6 +103,7 @@ target_sources(convexfeld PRIVATE
     src/simplex/iterate.c
     src/simplex/step.c
     src/simplex/ratio_test.c
+    src/simplex/crash.c
     src/simplex/context.c
     src/simplex/setup.c
     # Error module (M1.7 stubs + M3.1.2-M3.1.7)
@@ -152,6 +153,7 @@ target_sources(convexfeld PRIVATE
     # Callbacks module (M5.2.2+)
     src/callbacks/context.c
     src/callbacks/init.c
+    src/callbacks/invoke.c
     src/callbacks/callback_stub.c
     # Validation module (M2.3.2)
     src/validation/arrays.c
