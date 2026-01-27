@@ -329,3 +329,64 @@ Before major milestones, perform full-scale code review:
    - Function signatures match headers
    - Specs match implementation
 ```
+
+---
+
+## Simplex Patterns
+
+### Unconstrained LP Special Case
+Handle LPs with no constraints directly without iteration:
+
+```c
+if (model->num_constrs == 0) {
+    /* Check infeasibility (lb > ub) first */
+    for (int j = 0; j < n; j++) {
+        if (model->lb[j] > model->ub[j] + tol) return CXF_INFEASIBLE;
+    }
+
+    /* Set each variable to optimal bound */
+    for (int j = 0; j < n; j++) {
+        if (c[j] < 0) {        /* Want max x */
+            if (ub[j] >= INF) return CXF_UNBOUNDED;
+            x[j] = ub[j];
+        } else if (c[j] > 0) { /* Want min x */
+            if (lb[j] <= -INF) return CXF_UNBOUNDED;
+            x[j] = lb[j];
+        } else {               /* c=0, any value works */
+            x[j] = 0.0;        /* Or any feasible value */
+        }
+    }
+}
+```
+
+### Harris Two-Pass Ratio Test
+Improves numerical stability over simple ratio test:
+
+```c
+/* Pass 1: Find minimum ratio with RELAXED tolerance */
+double relaxed_tol = 10.0 * feasibility_tol;
+double min_ratio = INF;
+for (row in basic_rows) {
+    if (|pivot_col[row]| > relaxed_tol) {
+        ratio = compute_ratio(row);
+        min_ratio = min(min_ratio, ratio);
+    }
+}
+
+/* Pass 2: Among near-minimum ratios, pick LARGEST pivot */
+double best_pivot = 0;
+for (row in basic_rows) {
+    if (|pivot_col[row]| > relaxed_tol) {
+        ratio = compute_ratio(row);
+        if (ratio <= min_ratio + tol && |pivot_col[row]| > |best_pivot|) {
+            best_pivot = pivot_col[row];
+            leaving_row = row;
+        }
+    }
+}
+```
+
+### Return Value Convention
+- `cxf_solve_lp`: Returns CXF_OK (0) on success, sets model->status to CXF_OPTIMAL
+- Callers check return for errors, check model->status for optimization outcome
+- Non-zero return indicates error/special status (UNBOUNDED, INFEASIBLE, etc.)

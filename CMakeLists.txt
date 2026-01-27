@@ -88,17 +88,21 @@ target_sources(convexfeld PRIVATE
     src/matrix/vectors.c
     src/matrix/row_major.c
     src/matrix/sort.c
-    # Basis module (M5.1.2-M5.1.8 complete)
+    # Basis module (M5.1.2-M5.1.8 complete + M7 pivot_eta)
     src/basis/basis_state.c
     src/basis/eta_factors.c
     src/basis/ftran.c
     src/basis/btran.c
+    src/basis/pivot_eta.c
     src/basis/refactor.c
     src/basis/snapshot.c
     src/basis/warm.c
     src/basis/basis_stub.c
-    # Simplex module (M1.5 stubs)
-    src/simplex/solve_lp_stub.c
+    # Simplex module (M7.1)
+    src/simplex/solve_lp.c
+    src/simplex/iterate.c
+    src/simplex/step.c
+    src/simplex/ratio_test.c
     src/simplex/context.c
     # Error module (M1.7 stubs + M3.1.2-M3.1.7)
     src/error/core.c

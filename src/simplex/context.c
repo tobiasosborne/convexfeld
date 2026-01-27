@@ -203,20 +203,7 @@ int cxf_simplex_get_phase(SolverContext *state) {
     return state->phase;
 }
 
-/**
- * @brief Perform one simplex iteration (stub - to be implemented in M7.1.2).
- *
- * @param state Solver context
- * @param env Environment
- * @return CXF_OK on success, error code otherwise
- */
-int cxf_simplex_iterate(SolverContext *state, CxfEnv *env) {
-    if (state == NULL || env == NULL) {
-        return CXF_ERROR_NULL_ARGUMENT;
-    }
-    state->iteration++;
-    return CXF_OK;
-}
+/* cxf_simplex_iterate is implemented in iterate.c */
 
 /**
  * @brief Handle phase end transition (stub - to be implemented in M7.1.2).
