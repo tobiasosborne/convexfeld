@@ -140,6 +140,9 @@ add_cxf_test(test_params_api unit/test_params_api.c)
 # M8.1.18: Info API tests
 add_cxf_test(test_info_api unit/test_info_api.c)
 
+# M7.1.17: Quadratic adjustment tests
+add_cxf_test(test_quadratic unit/test_quadratic.c)
+
 ################################################################################
 # Integration Tests
 ################################################################################

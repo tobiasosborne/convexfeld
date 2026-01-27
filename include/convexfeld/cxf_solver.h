@@ -199,4 +199,19 @@ int cxf_simplex_unperturb(SolverContext *state, CxfEnv *env);
  */
 int cxf_simplex_cleanup(SolverContext *state, CxfEnv *env);
 
+/**
+ * @brief Adjust reduced costs for quadratic programming.
+ *
+ * Updates reduced costs to include quadratic term contribution (Qx).
+ * For convex QP with objective c'x + 0.5*x'Qx, the gradient is c + Qx.
+ *
+ * Current implementation is a stub since full QP support (Q matrix)
+ * is not yet implemented.
+ *
+ * @param state Solver context with QP data and solution
+ * @param varIndex Variable index to adjust (-1 for all nonbasic variables)
+ * @return CXF_OK on success, error code otherwise
+ */
+int cxf_quadratic_adjust(SolverContext *state, int varIndex);
+
 #endif /* CXF_SOLVER_H */

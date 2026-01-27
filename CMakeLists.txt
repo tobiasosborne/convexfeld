@@ -112,6 +112,8 @@ target_sources(convexfeld PRIVATE
     src/simplex/pivot_primal.c
     src/simplex/perturbation.c
     src/simplex/cleanup.c
+    src/simplex/quadratic.c
+    src/simplex/pivot_special.c
     # Error module (M1.7 stubs + M3.1.2-M3.1.7)
     src/error/core.c
     src/error/nan_check.c
