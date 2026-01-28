@@ -240,11 +240,50 @@ int cxf_simplex_iterate(SolverContext *state, CxfEnv *env) {
     state->obj_value += rc_entering * stepSize;
 
     /*=========================================================================
-     * Step 7: Update reduced costs (simple version)
+     * Step 7: Update reduced costs
+     * Recompute all reduced costs after pivot for correctness.
+     * For better performance, could use incremental update with BTRAN.
      *=========================================================================*/
-    /* For proper steepest edge, would need BTRAN and full update */
-    /* Simplified: just set entering variable's reduced cost to 0 */
-    state->work_dj[entering] = 0.0;
+    {
+        /* Compute dual prices pi[i] = objective of basic variable in row i */
+        for (int i = 0; i < m; i++) {
+            int basic_var = basis->basic_vars[i];
+            if (basic_var >= 0 && basic_var < total_vars) {
+                state->work_pi[i] = state->work_obj[basic_var];
+            } else {
+                state->work_pi[i] = 0.0;
+            }
+        }
+
+        /* Compute reduced costs for all variables */
+        for (int j = 0; j < total_vars; j++) {
+            if (basis->var_status[j] >= 0) {
+                /* Basic variable: reduced cost = 0 */
+                state->work_dj[j] = 0.0;
+            } else {
+                /* Nonbasic variable: dj = cj - pi^T * Aj */
+                double dj = state->work_obj[j];
+
+                if (j < n && model->matrix != NULL) {
+                    /* Original variable: subtract pi^T * column_j */
+                    int64_t start = model->matrix->col_ptr[j];
+                    int64_t end = model->matrix->col_ptr[j + 1];
+                    for (int64_t k = start; k < end; k++) {
+                        int row = model->matrix->row_idx[k];
+                        dj -= state->work_pi[row] * model->matrix->values[k];
+                    }
+                } else if (j >= n) {
+                    /* Artificial variable j corresponds to row (j - n) */
+                    int row = j - n;
+                    if (row >= 0 && row < m) {
+                        dj -= state->work_pi[row] * 1.0;
+                    }
+                }
+
+                state->work_dj[j] = dj;
+            }
+        }
+    }
 
     /*=========================================================================
      * Step 8: Check refactorization

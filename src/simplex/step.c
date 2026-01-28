@@ -69,12 +69,15 @@ int cxf_simplex_step(SolverContext *state, int entering, int leavingRow,
     /* Get leaving variable from basis header */
     leaving = state->basis->basic_vars[leavingRow];
 
-    /* Update all basic variable values: x_B[i] -= stepSize * pivotCol[i] */
+    /* Update all basic variable values: x_B[i] -= stepSize * pivotCol[i]
+     * This includes both structural variables (0 to n-1) and artificial
+     * variables (n to n+m-1) that may be basic during Phase I. */
+    int total_vars = state->num_vars + state->num_constrs;
     for (i = 0; i < state->num_constrs; i++) {
         basicVar = state->basis->basic_vars[i];
 
-        /* Skip if not a valid structural variable */
-        if (basicVar < 0 || basicVar >= state->num_vars) {
+        /* Skip if not a valid variable index */
+        if (basicVar < 0 || basicVar >= total_vars) {
             continue;
         }
 
