@@ -31,12 +31,18 @@ extern int cxf_simplex_iterate(SolverContext *state, CxfEnv *env);
 extern int cxf_extract_solution(SolverContext *state, CxfModel *model);
 
 /**
- * @brief Set up Phase I with artificial variables.
+ * @brief Set up Phase I with slack/artificial variables.
  *
- * Creates initial basis using artificial variables:
+ * Creates initial basis using slack and artificial variables:
  * - Original vars (0 to n-1): set at lower bounds, nonbasic
- * - Artificial vars (n to n+m-1): basic, values = slack needed for feasibility
- * - Phase I objective: minimize sum of artificials
+ * - For <= constraints: slack variable (can be positive at optimality)
+ * - For >= constraints: surplus + artificial if needed
+ * - For = constraints: artificial variable (must be zero for feasibility)
+ * - Phase I objective: minimize sum of ARTIFICIAL variables only
+ *
+ * Key insight: Slacks for <= constraints have obj coeff = 0 because
+ * they CAN be positive at optimality. Only true artificials (for =
+ * and problematic >= constraints) need obj coeff = 1.
  *
  * @param state Solver context
  * @return CXF_OK on success
@@ -56,22 +62,28 @@ static int setup_phase_one(SolverContext *state) {
         state->work_x[j] = lb;
     }
 
-    /* Set up artificial variables as initial basis */
-    state->num_artificials = m;
+    /* Set up slack/artificial variables as initial basis.
+     * Variable at index (n + i) corresponds to constraint i.
+     *
+     * For <= constraints: this is a SLACK (obj coeff = 0)
+     * For >= constraints: this is a SURPLUS, may need artificial
+     * For = constraints: this is an ARTIFICIAL (obj coeff = 1)
+     */
+    state->num_artificials = 0;  /* Count true artificials */
+
     for (int i = 0; i < m; i++) {
-        int art_idx = n + i;  /* Artificial var for row i */
+        int var_idx = n + i;  /* Slack/artificial var for row i */
 
-        /* Artificial is basic in row i */
-        basis->basic_vars[i] = art_idx;
-        basis->var_status[art_idx] = i;  /* Basic in row i */
+        /* Variable is basic in row i */
+        basis->basic_vars[i] = var_idx;
+        basis->var_status[var_idx] = i;  /* Basic in row i */
 
-        /* Compute artificial value = RHS - sum(a_ij * x_j) for original vars */
+        /* Compute slack value = RHS - sum(a_ij * x_j) for original vars */
         double rhs = mat->rhs ? mat->rhs[i] : 0.0;
         double row_sum = 0.0;
 
         /* Sum contributions from original variables at their bounds */
         for (int j = 0; j < n; j++) {
-            /* Get coefficient a_ij */
             double aij = 0.0;
             int64_t start = mat->col_ptr[j];
             int64_t end = mat->col_ptr[j + 1];
@@ -84,24 +96,50 @@ static int setup_phase_one(SolverContext *state) {
             row_sum += aij * state->work_x[j];
         }
 
-        /* Artificial value = slack needed */
-        double art_val = rhs - row_sum;
-
-        /* Handle constraint sense: for >= constraints, negate */
+        double slack_val = rhs - row_sum;
         char sense = mat->sense ? mat->sense[i] : '<';
-        if (sense == '>' || sense == 'G') {
-            art_val = -art_val;
+
+        /* Set bounds (always non-negative) */
+        state->work_lb[var_idx] = 0.0;
+        state->work_ub[var_idx] = CXF_INFINITY;
+
+        if (sense == '<' || sense == 'L') {
+            /* <= constraint: SLACK variable.
+             * slack = rhs - Ax >= 0 for feasibility.
+             * With x at lower bounds, slack = rhs - row_sum.
+             * Slack CAN be positive at optimality, so obj coeff = 0. */
+            if (slack_val < 0) {
+                /* Negative slack means constraint violated - need artificial */
+                state->work_x[var_idx] = -slack_val;
+                state->work_obj[var_idx] = 1.0;  /* Artificial */
+                state->num_artificials++;
+            } else {
+                state->work_x[var_idx] = slack_val;
+                state->work_obj[var_idx] = 0.0;  /* Slack, not artificial */
+            }
+        } else if (sense == '>' || sense == 'G') {
+            /* >= constraint: SURPLUS variable (negative slack).
+             * surplus = Ax - rhs >= 0 for feasibility.
+             * With x at lower bounds, surplus = row_sum - rhs. */
+            double surplus_val = row_sum - rhs;
+            if (surplus_val < 0) {
+                /* Negative surplus means constraint violated - need artificial */
+                state->work_x[var_idx] = -surplus_val;
+                state->work_obj[var_idx] = 1.0;  /* Artificial */
+                state->num_artificials++;
+            } else {
+                state->work_x[var_idx] = surplus_val;
+                state->work_obj[var_idx] = 0.0;  /* Surplus, not artificial */
+            }
+        } else {
+            /* = constraint: ARTIFICIAL variable.
+             * Must be driven to zero for feasibility. */
+            state->work_x[var_idx] = fabs(slack_val);
+            state->work_obj[var_idx] = 1.0;  /* Always artificial for = */
+            if (fabs(slack_val) > CXF_FEASIBILITY_TOL) {
+                state->num_artificials++;
+            }
         }
-
-        /* Artificials must be non-negative; if negative, we have a problem */
-        if (art_val < 0) art_val = fabs(art_val);
-
-        state->work_x[art_idx] = art_val;
-
-        /* Set artificial bounds and Phase I objective coefficient */
-        state->work_lb[art_idx] = 0.0;
-        state->work_ub[art_idx] = CXF_INFINITY;
-        state->work_obj[art_idx] = 1.0;  /* Phase I: minimize sum of artificials */
     }
 
     /* Set original variables' Phase I objective to 0 */
@@ -109,10 +147,13 @@ static int setup_phase_one(SolverContext *state) {
         state->work_obj[j] = 0.0;
     }
 
-    /* Compute initial Phase I objective = sum of artificials */
+    /* Compute initial Phase I objective = sum of artificial values only */
     state->obj_value = 0.0;
     for (int i = 0; i < m; i++) {
-        state->obj_value += state->work_x[n + i];
+        int var_idx = n + i;
+        if (state->work_obj[var_idx] > 0.5) {  /* Is artificial (obj coeff = 1) */
+            state->obj_value += state->work_x[var_idx];
+        }
     }
 
     state->phase = 1;
@@ -157,6 +198,21 @@ static int transition_to_phase_two(SolverContext *state, CxfModel *model) {
 
 /* External declaration for cxf_btran_vec */
 extern int cxf_btran_vec(BasisState *basis, const double *input, double *result);
+
+/**
+ * @brief Get the coefficient for slack/surplus/artificial variable.
+ *
+ * For standard form conversion:
+ * - <= constraints: add slack with coeff +1
+ * - >= constraints: add surplus with coeff -1
+ * - = constraints: add artificial with coeff +1
+ */
+static double get_auxiliary_coeff(const SparseMatrix *mat, int row) {
+    if (mat == NULL || mat->sense == NULL) return 1.0;
+    char sense = mat->sense[row];
+    if (sense == '>' || sense == 'G') return -1.0;
+    return 1.0;
+}
 
 /**
  * @brief Compute reduced costs: dj = cj - pi^T * Aj
@@ -233,11 +289,12 @@ static void compute_reduced_costs(SolverContext *state) {
                     dj -= state->work_pi[row] * mat->values[k];
                 }
             } else if (j >= n) {
-                /* Artificial variable j corresponds to row (j - n) */
-                /* Its column is identity: 1 in row (j-n), 0 elsewhere */
+                /* Auxiliary variable j corresponds to row (j - n) */
+                /* Coefficient is +1 for <= or =, -1 for >= */
                 int row = j - n;
                 if (row >= 0 && row < m) {
-                    dj -= state->work_pi[row] * 1.0;
+                    double coeff = get_auxiliary_coeff(mat, row);
+                    dj -= state->work_pi[row] * coeff;
                 }
             }
 

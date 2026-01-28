@@ -41,11 +41,30 @@ extern int cxf_simplex_step(SolverContext *state, int entering, int leavingRow,
 extern int cxf_basis_refactor(BasisState *basis);
 
 /**
+ * @brief Get the coefficient for slack/surplus/artificial variable.
+ *
+ * For standard form conversion:
+ * - <= constraints: add slack with coeff +1
+ * - >= constraints: add surplus with coeff -1
+ * - = constraints: add artificial with coeff +1
+ *
+ * @param matrix Sparse matrix (for sense array)
+ * @param row Constraint row index
+ * @return +1.0 for <= or =, -1.0 for >=
+ */
+static double get_auxiliary_coeff(const SparseMatrix *matrix, int row) {
+    if (matrix == NULL || matrix->sense == NULL) return 1.0;
+    char sense = matrix->sense[row];
+    if (sense == '>' || sense == 'G') return -1.0;
+    return 1.0;
+}
+
+/**
  * @brief Extract a column into a dense array.
  *
  * For original variables (col < n): extracts from sparse matrix.
- * For artificial variables (col >= n): generates identity column
- * with +1 in row (col - n).
+ * For auxiliary variables (col >= n): generates identity column
+ * with appropriate sign based on constraint sense.
  *
  * @param matrix Sparse matrix (may be NULL for artificial vars)
  * @param col Column index (0 to n+m-1)
@@ -69,11 +88,10 @@ static void extract_column_ext(const SparseMatrix *matrix, int col, int n, int m
             dense[row] = matrix->values[k];
         }
     } else {
-        /* Artificial variable: identity column */
-        /* Artificial var col corresponds to constraint row (col - n) */
+        /* Auxiliary variable: identity column with sign based on constraint sense */
         int row = col - n;
         if (row >= 0 && row < m) {
-            dense[row] = 1.0;
+            dense[row] = get_auxiliary_coeff(matrix, row);
         }
     }
 }
@@ -308,10 +326,11 @@ int cxf_simplex_iterate(SolverContext *state, CxfEnv *env) {
                         dj -= state->work_pi[row] * model->matrix->values[k];
                     }
                 } else if (j >= n) {
-                    /* Artificial variable j corresponds to row (j - n) */
+                    /* Auxiliary variable j corresponds to row (j - n) */
                     int row = j - n;
                     if (row >= 0 && row < m) {
-                        dj -= state->work_pi[row] * 1.0;
+                        double coeff = get_auxiliary_coeff(model->matrix, row);
+                        dj -= state->work_pi[row] * coeff;
                     }
                 }
 

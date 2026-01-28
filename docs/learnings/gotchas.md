@@ -387,3 +387,4 @@ Created dependency chain of P0 issues:
 10. **Subagent pivoting without flagging blocker** - Claimed Phase I done, actually just preprocessing
 11. **Using pi=cB instead of BTRAN** - Only correct when B=I, wrong after first pivot
 12. **No slack variables for inequalities** - Using artificials for <= constraints doesn't work
+13. **Wrong coefficient sign for >= constraints** - Surplus has coefficient -1, not +1
