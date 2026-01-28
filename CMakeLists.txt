@@ -150,6 +150,10 @@ target_sources(convexfeld PRIVATE
     src/api/optimize_api.c
     src/api/io_api.c
     src/api/info_api.c
+    src/api/mps_parser.c
+    src/api/mps_state.c
+    src/api/mps_parse.c
+    src/api/mps_build.c
     # Pricing module (M6.1.2-M6.1.7 + stubs)
     src/pricing/context.c
     src/pricing/init.c
