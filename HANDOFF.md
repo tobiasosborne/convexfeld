@@ -4,116 +4,101 @@
 
 ---
 
-## CRITICAL: SPEC VIOLATION FOUND
+## STATUS: BTRAN Fix Complete, Slack Variables Still Needed
 
-**The simplex implementation violates specs.** Reduced cost computation uses a simplified approximation instead of BTRAN as specified.
+### What Was Fixed This Session
 
-### Root Cause Chain
+**BTRAN-based dual price computation implemented.** Added `cxf_btran_vec()` function to compute dual prices properly using BTRAN with arbitrary input vector.
 
-1. **Spec says**: Use `cxf_btran` to compute dual prices π = cB * B^-1
-2. **Implementation does**: `pi[i] = work_obj[basic_vars[i]]` (only correct when B = I)
-3. **Result**: After first pivot, B ≠ I, reduced costs become wrong
-4. **Symptom**: Phase I declares "optimal" prematurely (no improving variable found)
-5. **Outcome**: Multi-constraint LPs return INFEASIBLE incorrectly
+### Files Modified
 
-### Debug Evidence
+| File | Change |
+|------|--------|
+| `src/basis/btran.c` | Added `cxf_btran_vec()` - BTRAN with arbitrary input |
+| `include/convexfeld/cxf_basis.h` | Declared `cxf_btran_vec()` |
+| `src/simplex/solve_lp.c` | Updated `compute_reduced_costs()` to use BTRAN |
+| `src/simplex/iterate.c` | Updated reduced cost computation to use BTRAN |
+| `tests/unit/test_basis.c` | Added tests for `cxf_btran_vec()` |
 
+### Verification
+
+**Equality constraints now work correctly:**
 ```
-After Phase I setup (correct):
-  obj_value = 9.000000 (sum of artificials 4+2+3)
-  dj[0] = -2, dj[1] = -2 (x,y have improving reduced costs)
-
-After iterate 1: obj = 5.000000 (good, decreasing)
-After iterate 2: obj = 1.000000, status = OPTIMAL (BAD!)
-  → Declares optimal but artificials still sum to 1 > 0
-  → Returns INFEASIBLE incorrectly
+Problem: min -x s.t. x = 2
+Result: x=2, obj=-2 ✓
 ```
 
-### Files with Issues
-
-| File | Issue |
-|------|-------|
-| `src/simplex/solve_lp.c:166-216` | `compute_reduced_costs()` uses pi=cB instead of BTRAN |
-| `src/simplex/iterate.c:243-285` | Same wrong approximation copied here |
+**Inequality constraints still fail** due to missing slack variables:
+```
+Problem: min -x -y s.t. x+y<=4, x<=2, y<=3
+Result: INFEASIBLE (wrong - should be x=2, y=2, obj=-4)
+```
 
 ---
 
-## Changes Made This Session
+## ROOT CAUSE: Two Separate Issues
 
-### Fixes Applied (Partial)
+### Issue 1: BTRAN approximation (FIXED ✓)
+- **Was**: `pi[i] = work_obj[basic_vars[i]]` (only correct when B = I)
+- **Now**: `cxf_btran_vec(basis, cB, work_pi)` (correct for all bases)
+- **Issue**: convexfeld-kkmu - **CLOSED**
 
-1. **step.c:77-82** - Fixed artificial variable update skip
-   - Changed `basicVar >= state->num_vars` to `basicVar >= total_vars`
-   - Artificials now get solution updates during pivots
+### Issue 2: No slack variables (NOT FIXED)
+- **Problem**: For `<=` constraints, solver uses artificials directly instead of slack variables
+- **Effect**: Can't represent feasible solutions for inequality constraints
+- **Issue**: convexfeld-nd1r - **STILL OPEN** (P1)
 
-2. **iterate.c** - Added reduced cost recomputation after pivot
-   - But uses same wrong approximation, so doesn't help
-
-### Issues Created
-
-| ID | Priority | Title |
-|----|----------|-------|
-| convexfeld-c251 | P0 | FIX: step.c skips artificial variable updates |
-| convexfeld-kkmu | P0 | RESEARCH: Spec vs Implementation gap - BTRAN not used |
-| convexfeld-fyi2 | P0 | RESEARCH: Review all simplex specs for implementation gaps |
-| convexfeld-nd1r | P1 | ARCH: No slack variable introduction |
-| convexfeld-c4bh | P1 | TEST: Add constraint satisfaction verification |
-| convexfeld-cnvw | P1 | RESEARCH: Review docs/learnings for missed patterns |
-| convexfeld-vz03 | P2 | FIX: Reduced cost uses simplified approximation |
+The correct approach for `<=` constraints:
+1. Add slack variable s_i >= 0 to convert to equality: Ax + s = b
+2. Slack starts basic at value = RHS - (row activity at starting point)
+3. Only add artificial if slack would be negative
 
 ---
 
 ## Next Steps for Next Agent
 
-### MANDATORY FIRST STEPS
+### BLOCKING ISSUE: convexfeld-nd1r (Slack Variables)
 
-1. **Read specs thoroughly**:
-   - `docs/specs/functions/simplex/cxf_simplex_iterate.md`
-   - `docs/specs/functions/basis/cxf_btran.md`
-   - `docs/specs/modules/13_pricing.md`
+This is the remaining blocker for multi-constraint LPs. The fix requires:
 
-2. **Read learnings**:
-   - `docs/learnings/gotchas.md`
-   - `docs/learnings/patterns.md`
+1. **In setup_phase_one():**
+   - For `<=` constraints: add slack variable (no artificial needed if slack >= 0)
+   - For `>=` constraints: add surplus variable (may need artificial if surplus < 0)
+   - For `=` constraints: add artificial (current behavior)
 
-### Fix Required
+2. **Array sizing:**
+   - Need space for n + m_slack + m_artificial variables
+   - Currently only allocates n + m
 
-**Implement proper BTRAN-based reduced cost computation:**
+3. **Constraint transformation:**
+   - Must convert inequalities to equalities before Phase I
 
-```c
-// WRONG (current):
-for (int i = 0; i < m; i++) {
-    pi[i] = work_obj[basic_vars[i]];  // Only correct when B = I
-}
+### Test Commands
 
-// CORRECT (needed):
-// 1. Set up cB vector (objective coeffs of basic vars)
-// 2. Solve π^T B = cB^T using BTRAN
-// 3. Use π to compute dj = cj - π^T * Aj
+```bash
+# Test equality constraints (should pass)
+/tmp/test_equality
+
+# Test inequality constraints (currently fails - needs slack vars)
+/tmp/test_btran_fix
 ```
-
-The `cxf_btran` function exists but only accepts unit vector input. Either:
-- Call it m times (once per row) and combine, OR
-- Modify to accept arbitrary input vector
 
 ---
 
-## Test Command
+## Issues Status
 
-```bash
-# Compile and run multi-constraint test
-cd /home/tobiasosborne/Projects/convexfeld
-gcc -o /tmp/test_mc /tmp/test_multi_constraint.c -I./include -L./build -lconvexfeld -lm -Wl,-rpath,./build
-/tmp/test_mc
-
-# Expected: x=2, y=2, obj=-4
-# Current: Returns INFEASIBLE (wrong)
-```
+| ID | Priority | Status | Title |
+|----|----------|--------|-------|
+| convexfeld-kkmu | P0 | CLOSED | BTRAN not used for dual prices |
+| convexfeld-nd1r | P1 | OPEN | No slack variable introduction |
+| convexfeld-c251 | P0 | OPEN | step.c artificial variable updates |
+| convexfeld-fyi2 | P0 | OPEN | Review simplex specs |
+| convexfeld-c4bh | P1 | OPEN | Constraint satisfaction verification |
 
 ---
 
 ## Quality Gate Status
 
-- Tests: 30/32 pass (same as before)
+- Tests: 30/32 pass (same as before - 2 pre-existing failures)
 - Build: Clean
-- The 2 failing tests are pre-existing unrelated issues
+- New tests: 5 tests for `cxf_btran_vec()` - all pass

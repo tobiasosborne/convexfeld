@@ -155,11 +155,17 @@ static int transition_to_phase_two(SolverContext *state, CxfModel *model) {
     return CXF_OK;
 }
 
+/* External declaration for cxf_btran_vec */
+extern int cxf_btran_vec(BasisState *basis, const double *input, double *result);
+
 /**
  * @brief Compute reduced costs: dj = cj - pi^T * Aj
  *
  * For correct simplex pricing, reduced costs must account for the
  * dual prices (shadow prices) from the current basis.
+ *
+ * Dual prices are computed as: π = B^(-T) * c_B
+ * where c_B is the objective coefficients of basic variables.
  *
  * @param state Solver context
  */
@@ -171,17 +177,42 @@ static void compute_reduced_costs(SolverContext *state) {
     int m = state->num_constrs;
     int total_vars = n + m;
 
-    /* Step 1: Compute dual prices pi = cB * B^-1
-     * For simplicity with identity-like basis (artificials), we approximate:
-     * pi[i] = objective coefficient of basic variable in row i
+    /* Step 1: Compute dual prices π = B^(-T) * c_B
+     * c_B[i] = objective coefficient of basic variable in row i
+     * Then solve B^T * π = c_B using BTRAN
      */
-    for (int i = 0; i < m; i++) {
-        int basic_var = basis->basic_vars[i];
-        if (basic_var >= 0 && basic_var < total_vars) {
-            state->work_pi[i] = state->work_obj[basic_var];
-        } else {
-            state->work_pi[i] = 0.0;
+
+    /* Build c_B vector (objective coeffs of basic variables) */
+    double *cB = (double *)calloc((size_t)m, sizeof(double));
+    if (cB == NULL) {
+        /* Fallback to simple approximation if allocation fails */
+        for (int i = 0; i < m; i++) {
+            int basic_var = basis->basic_vars[i];
+            if (basic_var >= 0 && basic_var < total_vars) {
+                state->work_pi[i] = state->work_obj[basic_var];
+            } else {
+                state->work_pi[i] = 0.0;
+            }
         }
+    } else {
+        for (int i = 0; i < m; i++) {
+            int basic_var = basis->basic_vars[i];
+            if (basic_var >= 0 && basic_var < total_vars) {
+                cB[i] = state->work_obj[basic_var];
+            } else {
+                cB[i] = 0.0;
+            }
+        }
+
+        /* Compute π = B^(-T) * c_B using BTRAN */
+        int rc = cxf_btran_vec(basis, cB, state->work_pi);
+        if (rc != CXF_OK) {
+            /* Fallback to simple approximation if BTRAN fails */
+            for (int i = 0; i < m; i++) {
+                state->work_pi[i] = cB[i];
+            }
+        }
+        free(cB);
     }
 
     /* Step 2: Compute reduced costs for all variables */

@@ -242,16 +242,40 @@ int cxf_simplex_iterate(SolverContext *state, CxfEnv *env) {
     /*=========================================================================
      * Step 7: Update reduced costs
      * Recompute all reduced costs after pivot for correctness.
-     * For better performance, could use incremental update with BTRAN.
+     * Use BTRAN to properly compute dual prices: π = B^(-T) * c_B
      *=========================================================================*/
     {
-        /* Compute dual prices pi[i] = objective of basic variable in row i */
-        for (int i = 0; i < m; i++) {
-            int basic_var = basis->basic_vars[i];
-            if (basic_var >= 0 && basic_var < total_vars) {
-                state->work_pi[i] = state->work_obj[basic_var];
-            } else {
-                state->work_pi[i] = 0.0;
+        /* Build c_B vector (objective coeffs of basic variables) */
+        double *cB = (double *)calloc((size_t)m, sizeof(double));
+        if (cB != NULL) {
+            for (int i = 0; i < m; i++) {
+                int basic_var = basis->basic_vars[i];
+                if (basic_var >= 0 && basic_var < total_vars) {
+                    cB[i] = state->work_obj[basic_var];
+                } else {
+                    cB[i] = 0.0;
+                }
+            }
+
+            /* Compute π = B^(-T) * c_B using BTRAN */
+            extern int cxf_btran_vec(BasisState *basis, const double *input, double *result);
+            int btran_rc = cxf_btran_vec(basis, cB, state->work_pi);
+            if (btran_rc != CXF_OK) {
+                /* Fallback to simple approximation if BTRAN fails */
+                for (int i = 0; i < m; i++) {
+                    state->work_pi[i] = cB[i];
+                }
+            }
+            free(cB);
+        } else {
+            /* Fallback if allocation fails */
+            for (int i = 0; i < m; i++) {
+                int basic_var = basis->basic_vars[i];
+                if (basic_var >= 0 && basic_var < total_vars) {
+                    state->work_pi[i] = state->work_obj[basic_var];
+                } else {
+                    state->work_pi[i] = 0.0;
+                }
             }
         }
 

@@ -117,4 +117,21 @@ int cxf_basis_snapshot_equal(const BasisSnapshot *s1, const BasisSnapshot *s2);
  */
 void cxf_basis_snapshot_free(BasisSnapshot *snapshot);
 
+/*******************************************************************************
+ * BTRAN with arbitrary input vector
+ ******************************************************************************/
+
+/**
+ * @brief Backward transformation with arbitrary input vector.
+ *
+ * Computes y = B^(-T) * input. Used for computing dual prices:
+ *   π = B^(-T) * c_B
+ *
+ * @param basis Source basis state with eta factorization.
+ * @param input Input vector (length = basis->m).
+ * @param result Output vector (length = basis->m).
+ * @return CXF_OK on success, error code on failure.
+ */
+int cxf_btran_vec(BasisState *basis, const double *input, double *result);
+
 #endif /* CXF_BASIS_H */
