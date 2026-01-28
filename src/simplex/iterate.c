@@ -100,12 +100,23 @@ int cxf_simplex_iterate(SolverContext *state, CxfEnv *env) {
     BasisState *basis = state->basis;
     CxfModel *model = state->model_ref;
 
-    if (basis == NULL || model == NULL || model->matrix == NULL) {
+    if (model == NULL) {
         return CXF_ERROR_NULL_ARGUMENT;
     }
 
     int m = state->num_constrs;
     int n = state->num_vars;
+
+    /* For unconstrained LP (m=0), immediately optimal at bounds */
+    if (m == 0) {
+        state->iteration++;
+        return ITERATE_OPTIMAL;
+    }
+
+    /* For constrained LPs, need basis and matrix */
+    if (basis == NULL || model->matrix == NULL) {
+        return CXF_ERROR_NULL_ARGUMENT;
+    }
 
     /* Total variables = original + artificials for Phase I */
     int total_vars = n + m;
