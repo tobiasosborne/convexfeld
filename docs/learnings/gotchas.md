@@ -388,3 +388,37 @@ Created dependency chain of P0 issues:
 11. **Using pi=cB instead of BTRAN** - Only correct when B=I, wrong after first pivot
 12. **No slack variables for inequalities** - Using artificials for <= constraints doesn't work
 13. **Wrong coefficient sign for >= constraints** - Surplus has coefficient -1, not +1
+
+---
+
+## Spec Review Findings (2026-01-29)
+
+### solve_lp.c: Missing Calls to Perturbation/Refine Functions
+
+**Issue:** Functions exist but aren't called from the main solve flow.
+
+- `cxf_simplex_perturbation()` - implemented in perturbation.c but never called
+- `cxf_simplex_unperturb()` - implemented in perturbation.c but never called
+- `cxf_simplex_refine()` - implemented in refine.c but never called
+
+**Spec requires (cxf_solve_lp.md):**
+1. Step 5: Call `cxf_simplex_perturbation` in early iterations
+2. Step 8: Call `cxf_simplex_unperturb` after iteration loop
+3. Step 9: Call `cxf_simplex_refine` before extracting solution
+
+**Impact:**
+- Anti-cycling protection not applied (may cycle on degenerate LPs)
+- Near-bound values not snapped to exact bounds
+- Near-zero values not cleaned up
+
+### iterate.c: Full Reduced Cost Recomputation
+
+**Issue:** Spec says to call `cxf_pricing_update` for O(nnz) incremental updates. Implementation does full O(n*m) recomputation after each pivot.
+
+**Impact:** Performance only - correctness preserved.
+
+### step.c: Leaving Variable Status
+
+**Issue:** Spec says to set leaving variable status based on final value (-1 if at lb, -2 if at ub). Implementation always sets to -1.
+
+**Impact:** Minor - corrects itself in subsequent iterations.

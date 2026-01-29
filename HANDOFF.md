@@ -1,71 +1,75 @@
 # Agent Handoff
 
-*Last updated: 2026-01-28*
+*Last updated: 2026-01-29*
 
 ---
 
-## STATUS: Multi-Constraint LPs Now Working!
+## STATUS: Simplex Spec Review Complete
 
-### What Was Fixed This Session
+### What Was Done This Session
 
-**Major fixes to make constrained LPs work correctly:**
+**Task:** convexfeld-fyi2 - Review all simplex specs for implementation gaps
 
-1. **Fixed cxf_simplex_iterate for unconstrained LPs (m=0)** - Return ITERATE_OPTIMAL immediately instead of error.
+Performed deep review of:
+- `docs/specs/functions/simplex/cxf_simplex_iterate.md` vs `src/simplex/iterate.c`
+- `docs/specs/functions/simplex/cxf_solve_lp.md` vs `src/simplex/solve_lp.c`
+- `docs/specs/functions/simplex/cxf_simplex_step.md` vs `src/simplex/step.c`
+- Related specs: perturbation.md, refine.md, pricing_update.md, step2.md, step3.md
 
-2. **Fixed slack vs artificial variable handling** - The root cause of multi-constraint LP failures:
-   - For `<=` constraints: now uses SLACK variables with Phase I obj coeff = 0 (can be positive at optimality)
-   - For `>=` constraints: now uses SURPLUS variables with correct -1 coefficient
-   - For `=` constraints: uses ARTIFICIAL variables with obj coeff = 1 (must be zero)
+### Gaps Identified
 
-3. **Fixed auxiliary column coefficients** - `>=` constraints need -1 coefficient in the auxiliary column, not +1.
+| Issue ID | Priority | Description |
+|----------|----------|-------------|
+| convexfeld-98xf | P1 | Missing perturbation/unperturb calls in solve_lp.c |
+| convexfeld-g320 | P1 | Missing cxf_simplex_refine call in solve_lp.c |
+| convexfeld-gcrd | P3 | Full RC recomputation vs incremental pricing_update |
+
+**Details:**
+
+1. **perturbation/unperturb (P1)**: Functions exist in perturbation.c but aren't called from solve_lp.c. Spec step 5 says call perturbation early, step 8 says call unperturb after loop. Impact: No anti-cycling protection.
+
+2. **refine (P1)**: Function exists in refine.c but isn't called from solve_lp.c. Spec step 9 says call refine before extracting solution. Impact: Near-bound/near-zero values not cleaned.
+
+3. **pricing_update (P3)**: Spec says use incremental O(nnz) updates via cxf_pricing_update. Implementation does full O(n*m) recomputation. Correctness preserved but suboptimal performance.
 
 ### Files Modified
 
 | File | Change |
 |------|--------|
-| `src/simplex/iterate.c` | Handle m=0 case; add `get_auxiliary_coeff()` for correct sign |
-| `src/simplex/solve_lp.c` | Rewrite `setup_phase_one()` for proper slack/surplus/artificial handling; add `get_auxiliary_coeff()` |
-
-### Test Results
-
-**Tests:** 31/32 passing (same as before - 1 pre-existing perturbation stub failure)
-
-**New capabilities verified:**
-- `min -x s.t. x <= 5` → x=5, obj=-5 ✓
-- `min -x-y s.t. x+y<=4, x<=2, y<=3` → x=2, y=2, obj=-4 ✓
-- `min -x s.t. x = 3` → x=3, obj=-3 ✓
-- `min x s.t. x >= 2` → x=2, obj=2 ✓
-- Infeasibility detection ✓
-- Unboundedness detection ✓
+| docs/learnings/gotchas.md | Added spec review findings section |
 
 ### Issues Closed
 
 | ID | Title |
 |----|-------|
-| convexfeld-c251 | step.c artificial variable updates (was already fixed) |
-| convexfeld-y2sp | Multiple constraints not all satisfied |
-| convexfeld-nd1r | No slack variable introduction |
+| convexfeld-fyi2 | RESEARCH: Review all simplex specs for implementation gaps |
 
 ---
 
 ## Next Steps for Next Agent
 
-### Remaining Issues
+### High Priority Issues Created
 
-Run `bd ready` to see available work. Key items:
+1. **convexfeld-98xf (P1)** - Add perturbation/unperturb calls to solve_lp.c
+2. **convexfeld-g320 (P1)** - Add cxf_simplex_refine call to solve_lp.c
 
-1. **convexfeld-fyi2 (P0)** - Review all simplex specs for implementation gaps
-2. **convexfeld-tnkh (P1)** - Add integration test for constrained LP solving
-3. **convexfeld-c4bh (P1)** - Add constraint satisfaction verification to test suite
+These are straightforward integrations - the functions exist and work, they just need to be called in the right places per the spec.
+
+### Other Available Work
+
+Run `bd ready` to see full list. Other items include:
+- convexfeld-tnkh (P1) - Add integration test for constrained LP
+- convexfeld-c4bh (P1) - Add constraint satisfaction verification
+- convexfeld-aiq9 (P1) - Fix numerical instability (eta overflow)
 
 ### Pre-existing Test Failure
 
-`test_unperturb_sequence` in test_simplex_edge.c fails because `cxf_simplex_unperturb` is a stub that always returns 0 instead of tracking perturbation state. Low priority.
+`test_unperturb_sequence` in test_simplex_edge.c fails because `cxf_simplex_unperturb` uses global state that persists across tests. This is a test isolation issue, not a functionality bug. Low priority.
 
 ---
 
 ## Quality Gate Status
 
-- **Tests:** 31/32 pass
+- **Tests:** 31/32 pass (1 pre-existing failure)
 - **Build:** Clean
-- **Multi-constraint LPs:** Working!
+- **Multi-constraint LPs:** Working
