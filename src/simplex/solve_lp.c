@@ -29,6 +29,8 @@ extern int cxf_simplex_init(CxfModel *model, SolverContext **stateP);
 extern void cxf_simplex_final(SolverContext *state);
 extern int cxf_simplex_iterate(SolverContext *state, CxfEnv *env);
 extern int cxf_extract_solution(SolverContext *state, CxfModel *model);
+extern int cxf_simplex_perturbation(SolverContext *state, CxfEnv *env);
+extern int cxf_simplex_unperturb(SolverContext *state, CxfEnv *env);
 
 /**
  * @brief Set up Phase I with slack/artificial variables.
@@ -587,6 +589,9 @@ int cxf_solve_lp(CxfModel *model) {
         return rc;
     }
 
+    /* Apply anti-cycling perturbation (spec step 5) */
+    cxf_simplex_perturbation(state, env);
+
     /* Compute initial Phase I reduced costs */
     compute_reduced_costs(state);
 
@@ -655,6 +660,9 @@ int cxf_solve_lp(CxfModel *model) {
     }
 
     if (state->iteration >= max_iter) model->status = CXF_ITERATION_LIMIT;
+
+    /* Remove perturbation before extracting solution (spec step 8) */
+    cxf_simplex_unperturb(state, env);
 
     if (model->status == CXF_OPTIMAL) cxf_extract_solution(state, model);
 
