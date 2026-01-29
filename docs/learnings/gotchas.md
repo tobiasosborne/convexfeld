@@ -583,3 +583,53 @@ if (basis->diag_coeff != NULL) {
 
 **Lesson:** The order of operations in FTRAN/BTRAN must match the mathematical definition of the product form inverse. The initial diagonal basis is NOT identity for problems with >= or = constraints.
 
+---
+
+## Phase I Numerical Drift (2026-01-29)
+
+### PARTIALLY RESOLVED: Solution Values Drift from Constraint Satisfaction
+
+**Symptoms:** Phase I declares INFEASIBLE even though constraints are actually satisfied. Debug shows artificial values > 0 but Ax = rhs exactly.
+
+**Root Cause:** After many simplex pivots (500+), the incremental solution updates accumulate floating-point error. The stored `work_x` values no longer match `B^(-1) * b`.
+
+**Example (scorpion):**
+- 4 artificials show stored values totaling 0.036
+- But actual constraint gaps are all 0 (constraints satisfied)
+- Phase I objective = 0.036 > tolerance → declares INFEASIBLE
+
+**Partial Fix:** Recompute basic variable values from constraint equations:
+```c
+// For each row i with basic variable b:
+// If original var is basic: x[b] = (rhs - Ax_without_b) / A[i,b]
+// If auxiliary is basic:    aux = (rhs - Ax) / diag_coeff
+```
+
+**Remaining Issue:** This doesn't help when the basis itself is infeasible (e226 case) - the constraints genuinely can't be satisfied with the current basis.
+
+**Lesson:** Simplex implementations need periodic "solution recomputation" to correct numerical drift, especially for problems requiring many iterations. Commercial solvers do this as part of refactorization.
+
+---
+
+## Dual Degeneracy Causing False Infeasibility (2026-01-29)
+
+### UNRESOLVED: Phase I Stuck with Zero Reduced Costs
+
+**Symptoms (e226):** Phase I objective > 0 (constraint violated), but no improving directions found (all reduced costs >= 0 for variables at lower bound).
+
+**Root Cause:** Multiple nonbasic variables have reduced cost exactly 0 due to cancellation:
+```
+x[227]: dj = 0 - π[49]*(-0.290) - π[50]*(-0.030)
+           = 0 - (-1)*(-0.290) - (9.667)*(-0.030)
+           = -0.290 + 0.290 = 0.000  (exactly!)
+```
+
+The variable could help satisfy the violated constraint, but pricing doesn't select it because dj = 0 (not negative).
+
+**Implications:**
+1. Problem IS feasible (Gurobi solves it)
+2. Simplex is at dual degenerate point
+3. Need anti-cycling mechanism: Bland's rule, lexicographic pivoting, or symbolic perturbation
+
+**Lesson:** Phase I can get stuck at dual degenerate points. For robust simplex, need proper degeneracy handling beyond just objective perturbation.
+
