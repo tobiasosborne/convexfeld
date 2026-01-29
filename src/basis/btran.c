@@ -82,21 +82,33 @@ static void apply_lu_btran(const LUFactors *lu, int m, double *result) {
 }
 
 /**
+ * @brief Apply diagonal scaling for BTRAN.
+ *
+ * For basis B = B_0 * E_1 * ... * E_k where B_0 = diag(coeff),
+ * B^(-T) = B_0^(-T) * E_1^(-T) * ... * E_k^(-T)
+ *
+ * This applies B_0^(-T) = diag(1/coeff).
+ * Since diag_coeff is ±1, 1/coeff = coeff.
+ */
+static void apply_diag_btran(const double *diag_coeff, int m, double *result) {
+    for (int i = 0; i < m; i++) {
+        result[i] *= diag_coeff[i];
+    }
+}
+
+/**
  * @brief Backward transformation: solve y^T B = e_row^T.
  *
  * Computes y = B^(-T) * e_row where B is the current basis matrix.
- * The basis inverse is represented as a product of eta matrices:
- *   B^(-1) = E_k^(-1) * ... * E_2^(-1) * E_1^(-1)
+ * The basis is represented as B = B_0 * E_1 * ... * E_k where:
+ *   - B_0 is the initial diagonal basis (diag_coeff)
+ *   - E_i are eta matrices from pivots
  *
- * For BTRAN we need B^(-T) = (E_1^(-1))^T * ... * (E_k^(-1))^T
- * which requires applying eta transformations in REVERSE order
- * (newest to oldest).
+ * So B^(-T) = B_0^(-T) * E_1^(-T) * ... * E_k^(-T)
  *
- * For each eta matrix E with pivot row r, pivot element p, and
- * off-diagonal values eta[j]:
- *   - Compute dot product: temp = sum(eta[j] * result[j]) for j != r
- *   - Update pivot: result[r] = (result[r] - temp) / p
- *   - Other positions unchanged
+ * To compute B^(-T) * y:
+ * 1. Apply E_k^(-T), E_{k-1}^(-T), ..., E_1^(-T) (newest to oldest)
+ * 2. Apply B_0^(-T) last
  *
  * @param basis BasisState containing the eta factorization.
  * @param row Row index for unit vector e_row (0 <= row < basis->m).
@@ -123,89 +135,74 @@ int cxf_btran(BasisState *basis, int row, double *result) {
     memset(result, 0, (size_t)m * sizeof(double));
     result[row] = 1.0;
 
-    /* Step 2: Collect eta pointers for reverse traversal */
+    /* Step 2: Apply eta vectors in reverse order (newest to oldest) */
     int eta_count = basis->eta_count;
-    if (eta_count == 0) {
-        /* Identity basis - result is already e_row */
-        return CXF_OK;
-    }
+    if (eta_count > 0) {
+        /* Use stack allocation for small eta counts, heap for large */
+        EtaFactors *stack_etas[MAX_STACK_ETAS];
+        EtaFactors **etas = stack_etas;
 
-    /* Use stack allocation for small eta counts, heap for large */
-    EtaFactors *stack_etas[MAX_STACK_ETAS];
-    EtaFactors **etas = stack_etas;
-
-    if (eta_count > MAX_STACK_ETAS) {
-        etas = (EtaFactors **)malloc((size_t)eta_count * sizeof(EtaFactors *));
-        if (etas == NULL) {
-            return CXF_ERROR_OUT_OF_MEMORY;
-        }
-    }
-
-    /* Traverse linked list to collect eta pointers */
-    EtaFactors *eta = basis->eta_head;
-    int count = 0;
-    while (eta != NULL && count < eta_count) {
-        etas[count++] = eta;
-        eta = eta->next;
-    }
-
-    /* Step 3: Apply eta vectors in REVERSE order (newest to oldest)
-     * etas[0] = newest (head), etas[count-1] = oldest
-     * So iterate from 0 to count-1 */
-    for (int i = 0; i < count; i++) {
-        eta = etas[i];
-        int pivot_row = eta->pivot_row;
-        double pivot_elem = eta->pivot_elem;
-
-        /* Bounds check pivot row */
-        if (pivot_row < 0 || pivot_row >= m) {
-            if (etas != stack_etas) {
-                free(etas);
-            }
-            return CXF_ERROR_INVALID_ARGUMENT;
-        }
-
-        /* Numerical stability check */
-        if (pivot_elem == 0.0 || !isfinite(pivot_elem)) {
-            if (etas != stack_etas) {
-                free(etas);
-            }
-            return CXF_ERROR_INVALID_ARGUMENT;
-        }
-
-        /* Compute dot product of off-diagonal entries with result:
-         * temp = sum(eta->values[k] * result[eta->indices[k]])
-         */
-        double temp = 0.0;
-        for (int k = 0; k < eta->nnz; k++) {
-            int j = eta->indices[k];
-            if (j >= 0 && j < m && j != pivot_row) {
-                temp += eta->values[k] * result[j];
+        if (eta_count > MAX_STACK_ETAS) {
+            etas = (EtaFactors **)malloc((size_t)eta_count * sizeof(EtaFactors *));
+            if (etas == NULL) {
+                return CXF_ERROR_OUT_OF_MEMORY;
             }
         }
 
-        /* Update pivot position:
-         * result[r] = (result[r] - temp) / pivot_elem
-         */
-        result[pivot_row] = (result[pivot_row] - temp) / pivot_elem;
+        /* Traverse linked list to collect eta pointers */
+        EtaFactors *eta = basis->eta_head;
+        int count = 0;
+        while (eta != NULL && count < eta_count) {
+            etas[count++] = eta;
+            eta = eta->next;
+        }
 
-        /* Note: other positions unchanged in BTRAN */
+        /* Apply eta vectors: etas[0] = newest, iterate 0 to count-1 */
+        for (int i = 0; i < count; i++) {
+            eta = etas[i];
+            int pivot_row = eta->pivot_row;
+            double pivot_elem = eta->pivot_elem;
+
+            /* Bounds check pivot row */
+            if (pivot_row < 0 || pivot_row >= m) {
+                if (etas != stack_etas) {
+                    free(etas);
+                }
+                return CXF_ERROR_INVALID_ARGUMENT;
+            }
+
+            /* Numerical stability check */
+            if (pivot_elem == 0.0 || !isfinite(pivot_elem)) {
+                if (etas != stack_etas) {
+                    free(etas);
+                }
+                return CXF_ERROR_INVALID_ARGUMENT;
+            }
+
+            /* Compute dot product of off-diagonal entries with result */
+            double temp = 0.0;
+            for (int k = 0; k < eta->nnz; k++) {
+                int j = eta->indices[k];
+                if (j >= 0 && j < m && j != pivot_row) {
+                    temp += eta->values[k] * result[j];
+                }
+            }
+
+            /* Update pivot position */
+            result[pivot_row] = (result[pivot_row] - temp) / pivot_elem;
+        }
+
+        /* Cleanup heap allocation if used */
+        if (etas != stack_etas) {
+            free(etas);
+        }
     }
 
-    /* Cleanup heap allocation if used */
-    if (etas != stack_etas) {
-        free(etas);
-    }
-
-    /* Step 4: Apply LU transpose solve if factors are available */
+    /* Step 3: Apply B_0^(-T) - must be done AFTER eta vectors */
     if (basis->lu != NULL && basis->lu->valid) {
         apply_lu_btran(basis->lu, m, result);
     } else if (basis->diag_coeff != NULL) {
-        /* Fall back to diagonal scaling (legacy mode)
-         * D is diagonal with ±1, D = D^(-1) = D^T */
-        for (int i = 0; i < m; i++) {
-            result[i] *= basis->diag_coeff[i];
-        }
+        apply_diag_btran(basis->diag_coeff, m, result);
     }
 
     return CXF_OK;
@@ -240,92 +237,77 @@ int cxf_btran_vec(BasisState *basis, const double *input, double *result) {
         return CXF_OK;
     }
 
-    /* Step 1: Initialize result = input (copy input to result) */
+    /* Step 1: Initialize result = input */
     memcpy(result, input, (size_t)m * sizeof(double));
 
-    /* Step 2: Collect eta pointers for reverse traversal */
+    /* Step 2: Apply eta vectors in reverse order (newest to oldest) */
     int eta_count = basis->eta_count;
-    if (eta_count == 0) {
-        /* Identity basis - result is already input */
-        return CXF_OK;
-    }
+    if (eta_count > 0) {
+        /* Use stack allocation for small eta counts, heap for large */
+        EtaFactors *stack_etas[MAX_STACK_ETAS];
+        EtaFactors **etas = stack_etas;
 
-    /* Use stack allocation for small eta counts, heap for large */
-    EtaFactors *stack_etas[MAX_STACK_ETAS];
-    EtaFactors **etas = stack_etas;
-
-    if (eta_count > MAX_STACK_ETAS) {
-        etas = (EtaFactors **)malloc((size_t)eta_count * sizeof(EtaFactors *));
-        if (etas == NULL) {
-            return CXF_ERROR_OUT_OF_MEMORY;
-        }
-    }
-
-    /* Traverse linked list to collect eta pointers */
-    EtaFactors *eta = basis->eta_head;
-    int count = 0;
-    while (eta != NULL && count < eta_count) {
-        etas[count++] = eta;
-        eta = eta->next;
-    }
-
-    /* Step 3: Apply eta vectors in REVERSE order (newest to oldest)
-     * etas[0] = newest (head), etas[count-1] = oldest
-     * So iterate from 0 to count-1 */
-    for (int i = 0; i < count; i++) {
-        eta = etas[i];
-        int pivot_row = eta->pivot_row;
-        double pivot_elem = eta->pivot_elem;
-
-        /* Bounds check pivot row */
-        if (pivot_row < 0 || pivot_row >= m) {
-            if (etas != stack_etas) {
-                free(etas);
-            }
-            return CXF_ERROR_INVALID_ARGUMENT;
-        }
-
-        /* Numerical stability check */
-        if (pivot_elem == 0.0 || !isfinite(pivot_elem)) {
-            if (etas != stack_etas) {
-                free(etas);
-            }
-            return CXF_ERROR_INVALID_ARGUMENT;
-        }
-
-        /* Compute dot product of off-diagonal entries with result:
-         * temp = sum(eta->values[k] * result[eta->indices[k]])
-         */
-        double temp = 0.0;
-        for (int k = 0; k < eta->nnz; k++) {
-            int j = eta->indices[k];
-            if (j >= 0 && j < m && j != pivot_row) {
-                temp += eta->values[k] * result[j];
+        if (eta_count > MAX_STACK_ETAS) {
+            etas = (EtaFactors **)malloc((size_t)eta_count * sizeof(EtaFactors *));
+            if (etas == NULL) {
+                return CXF_ERROR_OUT_OF_MEMORY;
             }
         }
 
-        /* Update pivot position:
-         * result[r] = (result[r] - temp) / pivot_elem
-         */
-        result[pivot_row] = (result[pivot_row] - temp) / pivot_elem;
+        /* Traverse linked list to collect eta pointers */
+        EtaFactors *eta = basis->eta_head;
+        int count = 0;
+        while (eta != NULL && count < eta_count) {
+            etas[count++] = eta;
+            eta = eta->next;
+        }
 
-        /* Note: other positions unchanged in BTRAN */
+        /* Apply eta vectors: etas[0] = newest, iterate 0 to count-1 */
+        for (int i = 0; i < count; i++) {
+            eta = etas[i];
+            int pivot_row = eta->pivot_row;
+            double pivot_elem = eta->pivot_elem;
+
+            /* Bounds check pivot row */
+            if (pivot_row < 0 || pivot_row >= m) {
+                if (etas != stack_etas) {
+                    free(etas);
+                }
+                return CXF_ERROR_INVALID_ARGUMENT;
+            }
+
+            /* Numerical stability check */
+            if (pivot_elem == 0.0 || !isfinite(pivot_elem)) {
+                if (etas != stack_etas) {
+                    free(etas);
+                }
+                return CXF_ERROR_INVALID_ARGUMENT;
+            }
+
+            /* Compute dot product of off-diagonal entries with result */
+            double temp = 0.0;
+            for (int k = 0; k < eta->nnz; k++) {
+                int j = eta->indices[k];
+                if (j >= 0 && j < m && j != pivot_row) {
+                    temp += eta->values[k] * result[j];
+                }
+            }
+
+            /* Update pivot position */
+            result[pivot_row] = (result[pivot_row] - temp) / pivot_elem;
+        }
+
+        /* Cleanup heap allocation if used */
+        if (etas != stack_etas) {
+            free(etas);
+        }
     }
 
-    /* Cleanup heap allocation if used */
-    if (etas != stack_etas) {
-        free(etas);
-    }
-
-    /* Step 4: Apply LU transpose solve if factors are available */
+    /* Step 3: Apply B_0^(-T) - must be done AFTER eta vectors */
     if (basis->lu != NULL && basis->lu->valid) {
         apply_lu_btran(basis->lu, m, result);
     } else if (basis->diag_coeff != NULL) {
-        /* Fall back to diagonal scaling (legacy mode)
-         * D is diagonal with ±1, D = D^(-1) = D^T */
-        for (int i = 0; i < m; i++) {
-            result[i] *= basis->diag_coeff[i];
-        }
+        apply_diag_btran(basis->diag_coeff, m, result);
     }
 
     return CXF_OK;
