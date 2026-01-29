@@ -12,6 +12,14 @@
 #define MPS_MAX_NAME 16
 #define MPS_MAX_LINE 256
 #define MPS_INITIAL_CAP 64
+#define MPS_HASH_SIZE 2048  /* Hash table size - power of 2 for fast modulo */
+
+/* Hash table entry for O(1) name lookups */
+typedef struct MpsHashEntry {
+    char name[MPS_MAX_NAME];
+    int index;                    /* Index in rows[] or cols[] array */
+    struct MpsHashEntry *next;    /* Chain for collision handling */
+} MpsHashEntry;
 
 /* Row (constraint/objective) entry */
 typedef struct {
@@ -42,6 +50,9 @@ typedef struct MpsState {
     int num_cols;
     int col_cap;
     int obj_row;  /* Index of objective row (-1 if not found) */
+    /* Hash tables for O(1) name lookups */
+    MpsHashEntry *row_hash[MPS_HASH_SIZE];
+    MpsHashEntry *col_hash[MPS_HASH_SIZE];
 } MpsState;
 
 /* State management */

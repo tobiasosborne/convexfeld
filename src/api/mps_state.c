@@ -1,6 +1,6 @@
 /**
  * @file mps_state.c
- * @brief MPS parser state management.
+ * @brief MPS parser state management with hash table lookups.
  */
 
 #include <stdlib.h>
@@ -11,6 +11,66 @@ extern void *cxf_malloc(size_t size);
 extern void *cxf_calloc(size_t count, size_t size);
 extern void *cxf_realloc(void *ptr, size_t size);
 extern void cxf_free(void *ptr);
+
+/**
+ * @brief djb2 hash function for strings.
+ * Simple and fast hash with good distribution.
+ */
+static unsigned int hash_string(const char *str) {
+    unsigned int hash = 5381;
+    int c;
+    while ((c = (unsigned char)*str++)) {
+        hash = ((hash << 5) + hash) + c;  /* hash * 33 + c */
+    }
+    return hash & (MPS_HASH_SIZE - 1);  /* Fast modulo for power-of-2 size */
+}
+
+/**
+ * @brief Free all entries in a hash table.
+ */
+static void hash_table_free(MpsHashEntry **table) {
+    for (int i = 0; i < MPS_HASH_SIZE; i++) {
+        MpsHashEntry *entry = table[i];
+        while (entry) {
+            MpsHashEntry *next = entry->next;
+            cxf_free(entry);
+            entry = next;
+        }
+    }
+}
+
+/**
+ * @brief Look up a name in a hash table.
+ * @return Index if found, -1 if not found.
+ */
+static int hash_table_find(MpsHashEntry **table, const char *name) {
+    unsigned int bucket = hash_string(name);
+    MpsHashEntry *entry = table[bucket];
+    while (entry) {
+        if (strcmp(entry->name, name) == 0) {
+            return entry->index;
+        }
+        entry = entry->next;
+    }
+    return -1;
+}
+
+/**
+ * @brief Add a name to a hash table.
+ * @return 0 on success, -1 on allocation failure.
+ */
+static int hash_table_add(MpsHashEntry **table, const char *name, int index) {
+    unsigned int bucket = hash_string(name);
+    MpsHashEntry *entry = (MpsHashEntry *)cxf_malloc(sizeof(MpsHashEntry));
+    if (!entry) return -1;
+
+    strncpy(entry->name, name, MPS_MAX_NAME - 1);
+    entry->name[MPS_MAX_NAME - 1] = '\0';
+    entry->index = index;
+    entry->next = table[bucket];
+    table[bucket] = entry;
+    return 0;
+}
 
 MpsState *mps_state_create(void) {
     MpsState *s = (MpsState *)cxf_calloc(1, sizeof(MpsState));
@@ -28,6 +88,7 @@ MpsState *mps_state_create(void) {
     s->row_cap = MPS_INITIAL_CAP;
     s->col_cap = MPS_INITIAL_CAP;
     s->obj_row = -1;
+    /* Hash tables are zeroed by calloc */
     return s;
 }
 
@@ -39,21 +100,18 @@ void mps_state_free(MpsState *state) {
     }
     cxf_free(state->rows);
     cxf_free(state->cols);
+    /* Free hash table entries */
+    hash_table_free(state->row_hash);
+    hash_table_free(state->col_hash);
     cxf_free(state);
 }
 
 int mps_find_row(MpsState *s, const char *name) {
-    for (int i = 0; i < s->num_rows; i++) {
-        if (strcmp(s->rows[i].name, name) == 0) return i;
-    }
-    return -1;
+    return hash_table_find(s->row_hash, name);
 }
 
 int mps_find_col(MpsState *s, const char *name) {
-    for (int i = 0; i < s->num_cols; i++) {
-        if (strcmp(s->cols[i].name, name) == 0) return i;
-    }
-    return -1;
+    return hash_table_find(s->col_hash, name);
 }
 
 int mps_add_row(MpsState *s, const char *name, char sense) {
@@ -64,12 +122,20 @@ int mps_add_row(MpsState *s, const char *name, char sense) {
         s->rows = new_rows;
         s->row_cap = new_cap;
     }
-    MpsRow *r = &s->rows[s->num_rows];
+    int idx = s->num_rows;
+    MpsRow *r = &s->rows[idx];
     strncpy(r->name, name, MPS_MAX_NAME - 1);
     r->name[MPS_MAX_NAME - 1] = '\0';
     r->sense = sense;
     r->rhs = 0.0;
-    return s->num_rows++;
+
+    /* Add to hash table */
+    if (hash_table_add(s->row_hash, name, idx) < 0) {
+        return -1;
+    }
+
+    s->num_rows++;
+    return idx;
 }
 
 int mps_add_col(MpsState *s, const char *name) {
@@ -80,13 +146,21 @@ int mps_add_col(MpsState *s, const char *name) {
         s->cols = new_cols;
         s->col_cap = new_cap;
     }
-    MpsCol *c = &s->cols[s->num_cols];
+    int idx = s->num_cols;
+    MpsCol *c = &s->cols[idx];
     memset(c, 0, sizeof(MpsCol));
     strncpy(c->name, name, MPS_MAX_NAME - 1);
     c->name[MPS_MAX_NAME - 1] = '\0';
     c->lb = 0.0;
     c->ub = CXF_INFINITY;
-    return s->num_cols++;
+
+    /* Add to hash table */
+    if (hash_table_add(s->col_hash, name, idx) < 0) {
+        return -1;
+    }
+
+    s->num_cols++;
+    return idx;
 }
 
 int mps_add_coeff(MpsState *s, int col_idx, int row_idx, double val) {
