@@ -4,118 +4,91 @@
 
 ---
 
-## STATUS: Partial Fix for False INFEASIBLE - More Work Needed
+## STATUS: Netlib Bugs Decomposed into Proper Sub-Issues
 
-### What Was Done This Session
+### Previous Session Summary
 
-**Fixed:** Major Phase I bug where auxiliary variable coefficients were computed incorrectly.
+A band-aid fix was attempted using `diag_coeff` to handle ±1 initial basis diagonal. This is a **non-spec workaround** that:
+- Partially fixed some benchmarks (afiro, sc50a, sc50b)
+- Required disabling refactorization (REFACTOR_INTERVAL=10000)
+- Does not address the root cause
 
-**Root Cause Found:**
-1. The auxiliary coefficient for slack/surplus/artificial variables depends on BOTH constraint sense AND initial feasibility
-2. For constraints violated at initial point (x at lower bounds), the coefficient sign was wrong
-3. The product form of inverse (FTRAN/BTRAN) wasn't applying the initial diagonal correctly
+### Root Cause Analysis
 
-**Key Changes:**
+**The core problem:** FTRAN and BTRAN don't implement the spec correctly.
 
-1. **BasisState** (`include/convexfeld/cxf_basis.h`):
-   - Added `double *diag_coeff` field to store initial basis diagonal coefficients
+Per the specs:
+- `cxf_ftran.md`: Should use L, U factors from LU factorization, then apply eta vectors
+- `cxf_btran.md`: Should apply eta vectors in reverse, then use L^T, U^T solve
+- `cxf_basis_refactor.md`: Should compute Markowitz-ordered LU factorization
 
-2. **Basis state management** (`src/basis/basis_state.c`):
-   - Allocate and free `diag_coeff` array
-   - Initialize to identity (+1) by default
-
-3. **FTRAN** (`src/basis/ftran.c`):
-   - Apply `diag_coeff` BEFORE eta transformations
-
-4. **BTRAN** (`src/basis/btran.c`):
-   - Apply `diag_coeff` AFTER eta transformations
-
-5. **Phase I setup** (`src/simplex/solve_lp.c`):
-   - Compute `diag_coeff[i]` based on constraint feasibility at initial point
-   - For violated constraints, coefficient = -1 to make auxiliary positive
-
-6. **Iterate** (`src/simplex/iterate.c`):
-   - Use `basis->diag_coeff` for auxiliary columns in FTRAN
-   - Use `basis->diag_coeff` for reduced cost updates
-
-7. **Refactorization disabled** (`src/simplex/iterate.c`):
-   - `REFACTOR_INTERVAL` set to 10000 (effectively disabled)
-   - Reason: `cxf_basis_refactor` resets eta chain but doesn't have proper LU factorization
-   - After refactor, FTRAN would use wrong diagonal, causing UNBOUNDED errors
+**Current implementation:**
+- FTRAN/BTRAN use ONLY eta vectors (no L, U factors)
+- `cxf_basis_refactor` just clears eta vectors (no actual factorization)
+- Without refactorization: numerical error accumulates
+- With refactorization: FTRAN/BTRAN break completely
 
 ---
 
-## Benchmark Results After Fix
+## CRITICAL: Issue Dependency Chain
 
-**Passing (3 tested):** afiro, sc50a, sc50b
-**Failing with small error:** blend (0.03% objective error - may be tolerance issue)
-**Still INFEASIBLE:** boeing2 and likely others
+**Work must proceed in this order:**
+
+### Phase 1: Infrastructure (P0)
+```
+convexfeld-fg2x: Add L, U factor storage to BasisState struct
+       ↓
+convexfeld-gfwv: Implement proper LU factorization in cxf_basis_refactor
+       ↓
+    ┌──┴──┐
+    ↓     ↓
+convexfeld-wje9: Implement spec-compliant FTRAN with LU solve
+convexfeld-pix8: Implement spec-compliant BTRAN with LU solve
+```
+
+### Phase 2: Cleanup (P1)
+```
+convexfeld-4gfy: Remove diag_coeff hack after LU implementation
+convexfeld-8vat: Re-enable periodic refactorization (REFACTOR_INTERVAL)
+```
+
+### Phase 3: Bug Resolution (P1)
+These should auto-resolve after Phase 1 & 2:
+```
+convexfeld-o2th: BUG: Phase II returns UNBOUNDED incorrectly
+convexfeld-1x14: BUG: Phase I stuck with all positive reduced costs
+convexfeld-p7wr: BUG: Phase II returns objective = 0 (may have independent cause)
+```
 
 ---
 
-## CRITICAL: Next Steps
+## Immediate Next Step
 
-### Priority 1: Complete False INFEASIBLE Fix (convexfeld-zim5)
+**Start with:** `convexfeld-fg2x` - Add L, U factor storage to BasisState struct
 
-The fix is partial. Some benchmarks still report INFEASIBLE. Possible causes:
-
-1. **Objective sense mismatch**: Some Netlib problems may be maximization, but we only minimize
-2. **Remaining coefficient bugs**: Edge cases in the coefficient calculation
-3. **Refactorization limitation**: Without proper LU refactor, long-running solves accumulate error
-
-**Debug approach:**
-1. Check if failing problems are maximization vs minimization
-2. Add objective sense handling to MPS parser
-3. Trace Phase I on a specific failing problem to find remaining bugs
-
-### Priority 2: Implement Proper LU Refactorization (convexfeld-w9to)
-
-The `cxf_basis_refactor` function is a stub. It clears etas but doesn't compute new factorization. This causes:
-- Wrong FTRAN results after refactorization
-- Currently worked around by setting `REFACTOR_INTERVAL=10000`
-- Will cause numerical instability on large problems
-
-### Priority 3: Wrong Objective Values (convexfeld-8rt5)
-
-After fixing INFEASIBLE, some benchmarks solve but with wrong objective. This may be:
-- Objective sense (min vs max)
-- Solution extraction bug
-- Numerical precision issues
+This is the only unblocked P0 issue. Once complete, the LU factorization implementation can begin.
 
 ---
 
-## Technical Details
+## Key Specs to Reference
 
-### Auxiliary Coefficient Logic
+- `docs/specs/functions/basis/cxf_basis_refactor.md` - Markowitz LU algorithm
+- `docs/specs/functions/basis/cxf_ftran.md` - Forward solve with LU + etas
+- `docs/specs/functions/basis/cxf_btran.md` - Backward solve with etas + LU
 
-The coefficient for auxiliary variable in row `i` depends on:
+---
 
-```
-For <= constraint with initial slack = rhs - Ax(lb):
-  - If slack >= 0: coeff = +1 (normal slack)
-  - If slack < 0:  coeff = -1 (artificial, violated)
+## Files with Non-Spec Workarounds (to be fixed)
 
-For >= constraint with initial surplus = Ax(lb) - rhs:
-  - If surplus >= 0: coeff = -1 (normal surplus)
-  - If surplus < 0:  coeff = +1 (artificial, violated)
-
-For = constraint with slack = rhs - Ax(lb):
-  - If slack >= 0: coeff = +1
-  - If slack < 0:  coeff = -1
-```
-
-This ensures the auxiliary variable value is always non-negative.
-
-### FTRAN/BTRAN with Diagonal
-
-With initial basis B_0 = D (diagonal), product form gives:
-```
-B = D * E_1 * E_2 * ... * E_k
-B^(-1) = E_k^(-1) * ... * E_1^(-1) * D
-
-FTRAN(a) = D * (apply etas oldest-to-newest) * a
-BTRAN(c) = (apply etas newest-to-oldest) * D * c
-```
+| File | Workaround | Fix After |
+|------|------------|-----------|
+| `cxf_basis.h` | `diag_coeff` field | convexfeld-4gfy |
+| `basis_state.c` | `diag_coeff` alloc | convexfeld-4gfy |
+| `ftran.c` | Apply `diag_coeff` | convexfeld-wje9 |
+| `btran.c` | Apply `diag_coeff` | convexfeld-pix8 |
+| `refactor.c` | Reset `diag_coeff` | convexfeld-gfwv |
+| `solve_lp.c` | Compute `diag_coeff` | convexfeld-4gfy |
+| `iterate.c` | `REFACTOR_INTERVAL=10000` | convexfeld-8vat |
 
 ---
 
@@ -123,16 +96,12 @@ BTRAN(c) = (apply etas newest-to-oldest) * D * c
 
 - **Tests:** 34/35 pass (97%)
 - **Build:** Clean
-- **Netlib:** Improved from 21% to ~60% (estimate based on tested samples)
+- **Netlib:** ~60% passing (with workarounds)
 
 ---
 
-## Files Modified This Session
+## Closed Issues (Superseded)
 
-- `include/convexfeld/cxf_basis.h` - Added diag_coeff field
-- `src/basis/basis_state.c` - Allocate/free diag_coeff
-- `src/basis/ftran.c` - Apply diagonal before etas
-- `src/basis/btran.c` - Apply diagonal after etas
-- `src/basis/refactor.c` - Reset diag_coeff on refactor (temporary fix)
-- `src/simplex/solve_lp.c` - Compute diag_coeff in Phase I setup
-- `src/simplex/iterate.c` - Use diag_coeff for auxiliary columns and reduced costs
+- `convexfeld-zim5` - Decomposed into sub-issues above
+- `convexfeld-w9to` - Superseded by convexfeld-gfwv
+- `convexfeld-8rt5` - Superseded by convexfeld-p7wr
