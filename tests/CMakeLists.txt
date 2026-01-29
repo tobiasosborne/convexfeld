@@ -159,3 +159,6 @@ target_compile_definitions(test_mps_solve PRIVATE SOURCE_DIR="${CMAKE_SOURCE_DIR
 
 # M1.0: Tracer Bullet Test - proves end-to-end architecture
 add_cxf_test(test_tracer_bullet integration/test_tracer_bullet.c)
+
+# Constrained LP integration test
+add_cxf_test(test_constrained_lp integration/test_constrained_lp.c)
