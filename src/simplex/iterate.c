@@ -17,6 +17,7 @@
 #include "convexfeld/cxf_types.h"
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 #include <math.h>
 
 /* Iteration result codes */
@@ -26,7 +27,10 @@
 #define ITERATE_UNBOUNDED  3
 
 /* Refactorization threshold */
-#define REFACTOR_INTERVAL  100
+/* TODO: Set back to 100 after implementing proper LU refactorization.
+ * Currently disabled because refactorization resets diag_coeff to identity,
+ * which breaks FTRAN when the basis has non-identity diagonal. */
+#define REFACTOR_INTERVAL  10000
 
 /* External function declarations */
 extern int cxf_pricing_candidates(PricingContext *ctx, const double *reduced_costs,
@@ -43,19 +47,29 @@ extern int cxf_basis_refactor(BasisState *basis);
 /**
  * @brief Get the coefficient for slack/surplus/artificial variable.
  *
- * For standard form conversion:
- * - <= constraints: add slack with coeff +1
- * - >= constraints: add surplus with coeff -1
- * - = constraints: add artificial with coeff +1
+ * This function is a fallback when basis->diag_coeff is not available.
+ * The coefficient is computed from RHS sign as a heuristic.
+ * For correct operation, use basis->diag_coeff[row] directly when available.
  *
- * @param matrix Sparse matrix (for sense array)
+ * @param matrix Sparse matrix (for sense and RHS arrays)
  * @param row Constraint row index
- * @return +1.0 for <= or =, -1.0 for >=
+ * @return +1.0 or -1.0
  */
-static double get_auxiliary_coeff(const SparseMatrix *matrix, int row) {
+static double get_auxiliary_coeff_fallback(const SparseMatrix *matrix, int row) {
     if (matrix == NULL || matrix->sense == NULL) return 1.0;
     char sense = matrix->sense[row];
-    if (sense == '>' || sense == 'G') return -1.0;
+    double rhs = (matrix->rhs != NULL) ? matrix->rhs[row] : 0.0;
+
+    if (sense == '>' || sense == 'G') {
+        /* For >= with rhs > 0 (infeasible at x=0), need coeff = +1 */
+        return (rhs > 0) ? 1.0 : -1.0;
+    }
+    if (sense == '<' || sense == 'L') {
+        return (rhs < 0) ? -1.0 : 1.0;
+    }
+    if (sense == '=') {
+        return (rhs < 0) ? -1.0 : 1.0;
+    }
     return 1.0;
 }
 
@@ -64,16 +78,17 @@ static double get_auxiliary_coeff(const SparseMatrix *matrix, int row) {
  *
  * For original variables (col < n): extracts from sparse matrix.
  * For auxiliary variables (col >= n): generates identity column
- * with appropriate sign based on constraint sense.
+ * with coefficient from basis->diag_coeff.
  *
  * @param matrix Sparse matrix (may be NULL for artificial vars)
+ * @param basis Basis state (for diag_coeff of auxiliaries)
  * @param col Column index (0 to n+m-1)
  * @param n Number of original variables
  * @param m Number of constraints (rows)
  * @param dense Output dense array (must be size m)
  */
-static void extract_column_ext(const SparseMatrix *matrix, int col, int n, int m,
-                               double *dense) {
+static void extract_column_ext(const SparseMatrix *matrix, BasisState *basis,
+                               int col, int n, int m, double *dense) {
     /* Clear the dense array */
     memset(dense, 0, (size_t)m * sizeof(double));
 
@@ -88,10 +103,13 @@ static void extract_column_ext(const SparseMatrix *matrix, int col, int n, int m
             dense[row] = matrix->values[k];
         }
     } else {
-        /* Auxiliary variable: identity column with sign based on constraint sense */
+        /* Auxiliary variable: identity column with coefficient from diag_coeff */
         int row = col - n;
         if (row >= 0 && row < m) {
-            dense[row] = get_auxiliary_coeff(matrix, row);
+            double coeff = (basis != NULL && basis->diag_coeff != NULL) ?
+                basis->diag_coeff[row] :
+                get_auxiliary_coeff_fallback(matrix, row);
+            dense[row] = coeff;
         }
     }
 }
@@ -202,7 +220,7 @@ int cxf_simplex_iterate(SolverContext *state, CxfEnv *env) {
      * Step 2: FTRAN - compute pivot column B^(-1) * a_entering
      * For artificial vars (entering >= n), generates identity column
      *=========================================================================*/
-    extract_column_ext(model->matrix, entering, n, m, column);
+    extract_column_ext(model->matrix, basis, entering, n, m, column);
     rc = cxf_ftran(basis, column, pivotCol);
     if (rc != CXF_OK) {
         free(column);
@@ -329,7 +347,10 @@ int cxf_simplex_iterate(SolverContext *state, CxfEnv *env) {
                     /* Auxiliary variable j corresponds to row (j - n) */
                     int row = j - n;
                     if (row >= 0 && row < m) {
-                        double coeff = get_auxiliary_coeff(model->matrix, row);
+                        /* Use diag_coeff from basis if available */
+                        double coeff = (basis->diag_coeff != NULL) ?
+                            basis->diag_coeff[row] :
+                            get_auxiliary_coeff_fallback(model->matrix, row);
                         dj -= state->work_pi[row] * coeff;
                     }
                 }

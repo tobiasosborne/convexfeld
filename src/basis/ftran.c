@@ -53,14 +53,22 @@ int cxf_ftran(BasisState *basis, const double *column, double *result) {
         return CXF_OK;
     }
 
-    /* Step 1: Copy input column to result
-     * This handles the identity basis case (no eta vectors) */
-    memcpy(result, column, (size_t)m * sizeof(double));
+    /* Step 1: Copy input column to result and apply initial diagonal.
+     * The initial basis may be diagonal with ±1 entries (not identity)
+     * when auxiliary variables have coefficient -1 (negative RHS).
+     * We apply D^(-1) = D since D is diagonal with ±1. */
+    if (basis->diag_coeff != NULL) {
+        for (int i = 0; i < m; i++) {
+            result[i] = column[i] * basis->diag_coeff[i];
+        }
+    } else {
+        memcpy(result, column, (size_t)m * sizeof(double));
+    }
 
     /* Step 2: Collect eta pointers for correct traversal order */
     int eta_count = basis->eta_count;
     if (eta_count == 0) {
-        /* Identity basis - result is already column */
+        /* Diagonal basis - result already has D applied */
         return CXF_OK;
     }
 

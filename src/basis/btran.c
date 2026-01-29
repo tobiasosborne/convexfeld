@@ -136,6 +136,15 @@ int cxf_btran(BasisState *basis, int row, double *result) {
         free(etas);
     }
 
+    /* Step 4: Apply initial diagonal D (after etas)
+     * B^(-T) = D * E_1^(-T) * ... * E_k^(-T)
+     * Since D is diagonal with ±1, D = D^(-1) = D^T */
+    if (basis->diag_coeff != NULL) {
+        for (int i = 0; i < m; i++) {
+            result[i] *= basis->diag_coeff[i];
+        }
+    }
+
     return CXF_OK;
 }
 
@@ -243,6 +252,15 @@ int cxf_btran_vec(BasisState *basis, const double *input, double *result) {
     /* Cleanup heap allocation if used */
     if (etas != stack_etas) {
         free(etas);
+    }
+
+    /* Step 4: Apply initial diagonal D (after etas)
+     * B^(-T) = D * E_1^(-T) * ... * E_k^(-T)
+     * Since D is diagonal with ±1, D = D^(-1) = D^T */
+    if (basis->diag_coeff != NULL) {
+        for (int i = 0; i < m; i++) {
+            result[i] *= basis->diag_coeff[i];
+        }
     }
 
     return CXF_OK;

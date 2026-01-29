@@ -66,11 +66,18 @@ int cxf_basis_refactor(BasisState *basis) {
     /* Clear existing eta list */
     clear_eta_list(basis);
 
-    /* For identity basis (all slacks), no eta vectors needed.
-     * The factorization is trivially B = I.
+    /* Reset diag_coeff to identity.
+     * After refactorization, we treat the current basis as the new "initial"
+     * basis. Since we don't have proper LU factorization, we assume the
+     * current basis is identity-like (which is only correct if all basic
+     * vars are auxiliaries with coefficient +1).
      *
-     * For general basis, caller should use cxf_solver_refactor()
-     * which has access to the constraint matrix. */
+     * TODO: Implement proper LU factorization for non-trivial bases. */
+    if (basis->diag_coeff != NULL) {
+        for (int i = 0; i < basis->m; i++) {
+            basis->diag_coeff[i] = 1.0;
+        }
+    }
 
     return CXF_OK;
 }

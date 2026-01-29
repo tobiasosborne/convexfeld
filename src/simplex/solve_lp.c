@@ -16,6 +16,7 @@
 #include "convexfeld/cxf_types.h"
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 #include <math.h>
 
 /* Iteration result codes from iterate.c */
@@ -106,42 +107,67 @@ static int setup_phase_one(SolverContext *state) {
         state->work_lb[var_idx] = 0.0;
         state->work_ub[var_idx] = CXF_INFINITY;
 
+        /* Determine auxiliary coefficient and value based on constraint sense
+         * and initial feasibility. The coefficient must make aux >= 0.
+         *
+         * For Ax + coeff*aux = rhs:
+         *   aux = (rhs - Ax) / coeff = slack_val / coeff
+         * We need aux >= 0, so choose coeff to have same sign as slack_val.
+         *
+         * For <= or =: slack_val = rhs - row_sum
+         *   - If slack_val >= 0: coeff = +1, aux = slack_val (feasible)
+         *   - If slack_val < 0:  coeff = -1, aux = -slack_val (artificial)
+         *
+         * For >=: surplus_val = row_sum - rhs = -slack_val
+         *   - If surplus_val >= 0: coeff = -1, aux = surplus_val (feasible)
+         *   - If surplus_val < 0:  coeff = +1, aux = -surplus_val (artificial)
+         */
+        double diag = 1.0;  /* Default: coeff = +1 */
+
         if (sense == '<' || sense == 'L') {
-            /* <= constraint: SLACK variable.
-             * slack = rhs - Ax >= 0 for feasibility.
-             * With x at lower bounds, slack = rhs - row_sum.
-             * Slack CAN be positive at optimality, so obj coeff = 0. */
-            if (slack_val < 0) {
-                /* Negative slack means constraint violated - need artificial */
-                state->work_x[var_idx] = -slack_val;
-                state->work_obj[var_idx] = 1.0;  /* Artificial */
-                state->num_artificials++;
-            } else {
+            if (slack_val >= 0) {
+                /* Feasible: slack variable with coeff = +1 */
+                diag = 1.0;
                 state->work_x[var_idx] = slack_val;
                 state->work_obj[var_idx] = 0.0;  /* Slack, not artificial */
+            } else {
+                /* Infeasible: artificial with coeff = -1 to make aux positive */
+                diag = -1.0;
+                state->work_x[var_idx] = -slack_val;
+                state->work_obj[var_idx] = 1.0;
+                state->num_artificials++;
             }
         } else if (sense == '>' || sense == 'G') {
-            /* >= constraint: SURPLUS variable (negative slack).
-             * surplus = Ax - rhs >= 0 for feasibility.
-             * With x at lower bounds, surplus = row_sum - rhs. */
-            double surplus_val = row_sum - rhs;
-            if (surplus_val < 0) {
-                /* Negative surplus means constraint violated - need artificial */
-                state->work_x[var_idx] = -surplus_val;
-                state->work_obj[var_idx] = 1.0;  /* Artificial */
-                state->num_artificials++;
-            } else {
+            double surplus_val = row_sum - rhs;  /* = -slack_val */
+            if (surplus_val >= 0) {
+                /* Feasible: surplus variable with coeff = -1 */
+                diag = -1.0;
                 state->work_x[var_idx] = surplus_val;
                 state->work_obj[var_idx] = 0.0;  /* Surplus, not artificial */
+            } else {
+                /* Infeasible: artificial with coeff = +1 to make aux positive */
+                diag = 1.0;
+                state->work_x[var_idx] = -surplus_val;
+                state->work_obj[var_idx] = 1.0;
+                state->num_artificials++;
             }
         } else {
-            /* = constraint: ARTIFICIAL variable.
-             * Must be driven to zero for feasibility. */
-            state->work_x[var_idx] = fabs(slack_val);
+            /* = constraint: always needs artificial if not satisfied */
+            if (slack_val >= 0) {
+                diag = 1.0;
+                state->work_x[var_idx] = slack_val;
+            } else {
+                diag = -1.0;
+                state->work_x[var_idx] = -slack_val;
+            }
             state->work_obj[var_idx] = 1.0;  /* Always artificial for = */
             if (fabs(slack_val) > CXF_FEASIBILITY_TOL) {
                 state->num_artificials++;
             }
+        }
+
+        if (basis->diag_coeff != NULL) {
+            basis->diag_coeff[i] = diag;
         }
     }
 
@@ -205,15 +231,40 @@ extern int cxf_btran_vec(BasisState *basis, const double *input, double *result)
 /**
  * @brief Get the coefficient for slack/surplus/artificial variable.
  *
- * For standard form conversion:
- * - <= constraints: add slack with coeff +1
- * - >= constraints: add surplus with coeff -1
- * - = constraints: add artificial with coeff +1
+ * Standard form conversion uses Ax + coeff*s = b where s >= 0.
+ * The coefficient must ensure s >= 0 at the initial point (x at bounds).
+ *
+ * For <= constraints (Ax <= b):
+ *   - Normal: Ax + s = b, s = b - Ax. At x=lb, s = b - Ax(lb).
+ *   - If RHS >= 0 and Ax(lb) small: s >= 0, use coeff = +1
+ *   - If RHS < 0 (violated at origin): s = rhs < 0, need coeff = -1
+ *     so Ax - s = b gives s = Ax - b = -rhs > 0 ✓
+ *
+ * For >= constraints (Ax >= b):
+ *   - Standard: Ax - s = b (surplus), s = Ax - b
+ *   - Always use coeff = -1
+ *
+ * For = constraints (Ax = b):
+ *   - Need artificial a = |b - Ax(lb)|
+ *   - If RHS >= 0: Ax + a = b, a = b at x=0 ✓
+ *   - If RHS < 0: Ax - a = b, -a = b, a = -b > 0 ✓
  */
 static double get_auxiliary_coeff(const SparseMatrix *mat, int row) {
     if (mat == NULL || mat->sense == NULL) return 1.0;
     char sense = mat->sense[row];
-    if (sense == '>' || sense == 'G') return -1.0;
+    double rhs = (mat->rhs != NULL) ? mat->rhs[row] : 0.0;
+
+    if (sense == '>' || sense == 'G') {
+        return -1.0;
+    }
+    if (sense == '<' || sense == 'L') {
+        /* For <= with negative RHS, the constraint is violated at x=0
+         * and we need coeff = -1 to make the artificial positive */
+        return (rhs < 0) ? -1.0 : 1.0;
+    }
+    if (sense == '=') {
+        return (rhs < 0) ? -1.0 : 1.0;
+    }
     return 1.0;
 }
 
@@ -293,10 +344,12 @@ static void compute_reduced_costs(SolverContext *state) {
                 }
             } else if (j >= n) {
                 /* Auxiliary variable j corresponds to row (j - n) */
-                /* Coefficient is +1 for <= or =, -1 for >= */
+                /* Use diag_coeff from basis if available */
                 int row = j - n;
                 if (row >= 0 && row < m) {
-                    double coeff = get_auxiliary_coeff(mat, row);
+                    double coeff = (basis->diag_coeff != NULL) ?
+                        basis->diag_coeff[row] :
+                        get_auxiliary_coeff(mat, row);
                     dj -= state->work_pi[row] * coeff;
                 }
             }
@@ -595,6 +648,8 @@ int cxf_solve_lp(CxfModel *model) {
 
     /* Compute initial Phase I reduced costs */
     compute_reduced_costs(state);
+
+    /* Initial Phase I objective (sum of artificial values) */
 
     /* Phase I iteration loop */
     while (state->iteration < max_iter) {

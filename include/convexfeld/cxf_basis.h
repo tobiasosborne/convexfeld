@@ -44,6 +44,12 @@ struct BasisState {
     int *basic_vars;          /**< Indices of basic variables [m] */
     int *var_status;          /**< Status of each variable [n] (incl. artificials) */
 
+    /* Initial diagonal coefficients for auxiliary variables.
+     * For row i, diag_coeff[i] = coefficient of auxiliary var (n+i) in row i.
+     * Values are ±1 based on constraint sense and RHS sign.
+     * Applied in FTRAN (before etas) and BTRAN (after etas). */
+    double *diag_coeff;       /**< Initial basis diagonal [m] (±1 values) */
+
     /* Eta factorization */
     int eta_count;            /**< Number of eta vectors */
     int eta_capacity;         /**< Capacity for eta vectors */
