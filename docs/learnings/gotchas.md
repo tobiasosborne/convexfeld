@@ -545,3 +545,41 @@ Created dependency chain of P0 issues:
 - Track whether leaving variables hit lower or upper bound
 - Status -1 means at lower bound, -2 means at upper bound
 - Pricing must respect which bound a nonbasic variable is at
+
+---
+
+## BTRAN Diagonal Scaling Order (2026-01-29)
+
+### RESOLVED: BTRAN returned early without applying diag_coeff
+
+**Symptoms:** Phase I returned INFEASIBLE for feasible problems with >= or = constraints.
+
+**Root Cause:** BTRAN functions had:
+```c
+if (eta_count == 0) {
+    return CXF_OK;  // BUG: Returns before applying diag_coeff!
+}
+```
+
+But the initial basis B_0 = diag(coeff), NOT identity. For >= constraints, coeff can be -1.
+
+**Math:**
+- B = B_0 * E_1 * ... * E_k  (product form)
+- B^(-T) = B_0^(-T) * E_1^(-T) * ... * E_k^(-T)
+- BTRAN must apply E's first (newest to oldest), then B_0^(-T) LAST
+
+**Fix:** Apply diag_coeff at the END of BTRAN, outside the eta_count > 0 block:
+```c
+// Step 2: Apply eta vectors if any
+if (eta_count > 0) {
+    // ... eta application ...
+}
+
+// Step 3: Apply B_0^(-T) - must be done AFTER eta vectors
+if (basis->diag_coeff != NULL) {
+    apply_diag_btran(basis->diag_coeff, m, result);
+}
+```
+
+**Lesson:** The order of operations in FTRAN/BTRAN must match the mathematical definition of the product form inverse. The initial diagonal basis is NOT identity for problems with >= or = constraints.
+
