@@ -494,3 +494,54 @@ Created dependency chain of P0 issues:
 - What values are stored (raw vs reciprocal/scaled)
 - Transformation formulas (must match stored representation)
 - Traversal order (FTRAN: oldest-to-newest, BTRAN: newest-to-oldest)
+
+---
+
+## Fixed Variable Pricing Bug (2026-01-29)
+
+### RESOLVED: Fixed Variables Selected as Entering Candidates
+
+**Symptoms:** kb2 benchmark took 9822 iterations in Phase II, returning obj=0 instead of expected -1749.90. Debug showed same variable (entering=48) being selected repeatedly with stepSize=0.
+
+**Root Cause (FIXED):** Two bugs:
+
+1. **Fixed variables selected for entering:**
+   - Bug: Pricing selected variables with negative reduced cost without checking bounds
+   - Variable 48 (auxiliary for equality constraint) had lb=ub=0 (fixed at zero)
+   - It had negative reduced cost so it looked attractive
+   - But stepSize was forced to 0 since it can't move
+   - This caused infinite cycling with no progress
+   - Fix in iterate.c: Skip variables where `ub <= lb + tolerance` in pricing
+
+   ```c
+   /* Skip FIXED variables (lb == ub) - they can't change */
+   if (ub_j <= lb_j + CXF_FEASIBILITY_TOL) {
+       continue;  /* Fixed variable, can't enter */
+   }
+   ```
+
+2. **Incorrect leaving variable status:**
+   - Bug: pivot_eta.c always set leaving variable status to -1 (at lower bound)
+   - But if variable hit its UPPER bound, status should be -2
+   - Variables at upper bound were being selected as if at lower bound
+   - Pricing tried to increase them (negative RC), but they couldn't increase
+   - Fix in step.c: After pivot, check which bound leaving variable is closer to:
+
+   ```c
+   if (dist_to_ub < dist_to_lb && ub_leave < CXF_INFINITY) {
+       state->basis->var_status[leaving] = -2;  /* At upper bound */
+   }
+   ```
+
+**Verification:**
+- kb2: Now 54 iterations (was 9822), obj=-1749.62 (0.016% error)
+- ship04l: PASS (was 3.5% error)
+- share2b: PASS (was 4.7x error)
+- brandy: PASS (was 8.8% error)
+- beaconfd: PASS (was 1% error)
+
+**Lesson:** For bounded variable simplex:
+- NEVER select fixed variables (lb == ub) as entering candidates
+- Track whether leaving variables hit lower or upper bound
+- Status -1 means at lower bound, -2 means at upper bound
+- Pricing must respect which bound a nonbasic variable is at

@@ -106,12 +106,27 @@ int cxf_simplex_step(SolverContext *state, int entering, int leavingRow,
     result = cxf_pivot_with_eta(state->basis, leavingRow, pivotCol,
                                 entering, leaving);
 
-    /* Note: pivot_with_eta sets leaving variable status to -1 (lower bound)
-     * by default. The spec suggests determining this based on the leaving
-     * variable's final value, but the current implementation in pivot_eta.c
-     * always sets it to -1. This is acceptable for now as the status will be
-     * corrected in subsequent iterations if needed. Future enhancement could
-     * pass bound information to pivot_with_eta or adjust status here. */
+    /* Fix leaving variable status based on which bound it hit.
+     * pivot_with_eta defaults to -1, but we need to check if it should be -2.
+     *
+     * The leaving variable value after pivot is state->work_x[leaving].
+     * Compare to bounds to determine correct status.
+     */
+    if (result == CXF_OK && leaving >= 0 && leaving < (state->num_vars + state->num_constrs)) {
+        double x_leave = state->work_x[leaving];
+        double lb_leave = state->work_lb[leaving];
+        double ub_leave = state->work_ub[leaving];
+
+        /* Check if closer to upper or lower bound */
+        double dist_to_lb = fabs(x_leave - lb_leave);
+        double dist_to_ub = fabs(x_leave - ub_leave);
+
+        if (dist_to_ub < dist_to_lb && ub_leave < CXF_INFINITY) {
+            /* At upper bound */
+            state->basis->var_status[leaving] = -2;
+        }
+        /* else keep -1 (at lower bound) as set by pivot_with_eta */
+    }
 
     return result;
 }

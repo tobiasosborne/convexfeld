@@ -183,6 +183,17 @@ int cxf_simplex_iterate(SolverContext *state, CxfEnv *env) {
             candidates,
             10
         );
+        /* Filter out FIXED variables (pricing doesn't have access to bounds) */
+        int new_count = 0;
+        for (int k = 0; k < num_candidates; k++) {
+            int j = candidates[k];
+            double lb_j = state->work_lb[j];
+            double ub_j = state->work_ub[j];
+            if (ub_j > lb_j + CXF_FEASIBILITY_TOL) {
+                candidates[new_count++] = j;
+            }
+        }
+        num_candidates = new_count;
     } else {
         /* Fallback: scan all variables for most negative reduced cost */
         num_candidates = 0;
@@ -191,6 +202,14 @@ int cxf_simplex_iterate(SolverContext *state, CxfEnv *env) {
             if (basis->var_status[j] >= 0) {
                 continue;  /* Skip basic variables */
             }
+
+            /* Skip FIXED variables (lb == ub) - they can't change */
+            double lb_j = state->work_lb[j];
+            double ub_j = state->work_ub[j];
+            if (ub_j <= lb_j + CXF_FEASIBILITY_TOL) {
+                continue;  /* Fixed variable, can't enter */
+            }
+
             double rc_val = state->work_dj[j];
             /* At lower bound: negative RC improves */
             if (basis->var_status[j] == -1 && rc_val < best_rc) {
