@@ -484,3 +484,74 @@ static int hash_find(HashEntry **table, const char *name) {
 - Before: mps_find_col 27%, strcmp 22%, mps_find_row 6% = 43% total
 - After: hash_table_find 0.31%, strcmp 0.12% = 0.43% total
 - **33% total runtime reduction**
+
+### Batch CSC Construction (Two-Pass)
+Building CSC matrix directly instead of per-row insertion:
+
+```c
+/* BAD: O(nnz²) per-coefficient insertion */
+for (int row = 0; row < num_rows; row++) {
+    cxf_addconstr(model, ...);  // Each call shifts O(nnz) entries
+}
+
+/* GOOD: O(nnz) two-pass approach */
+/* Pass 1: Count entries per column */
+int64_t *col_counts = calloc(num_cols + 1, sizeof(int64_t));
+for each coefficient (row, col, val):
+    col_counts[col]++;
+    total_nnz++;
+
+/* Build col_ptr from counts (cumulative sum) */
+col_ptr[0] = 0;
+for (int col = 0; col < num_cols; col++)
+    col_ptr[col + 1] = col_ptr[col] + col_counts[col];
+
+/* Pass 2: Fill row_idx and values */
+memset(col_counts, 0, ...);  // Reset for insertion tracking
+for each coefficient (row, col, val):
+    int64_t pos = col_ptr[col] + col_counts[col]++;
+    row_idx[pos] = row;
+    values[pos] = val;
+```
+
+**Results on MPS loading:**
+- Before: cxf_addconstr 15.57% (55M instructions shifting arrays)
+- After: mps_build_model 0.10% (direct CSC construction)
+- **15.8% total runtime reduction**
+
+### Preallocate Iteration Work Arrays
+Avoid malloc/free per iteration by preallocating in context:
+
+```c
+/* BAD: Allocation every iteration */
+int cxf_simplex_iterate(SolverContext *state, CxfEnv *env) {
+    double *column = calloc(m, sizeof(double));  // Every iteration!
+    double *cB = calloc(m, sizeof(double));      // Every iteration!
+    ...
+    free(column);
+    free(cB);
+}
+
+/* GOOD: Add to context, allocate once */
+struct SolverContext {
+    ...
+    double *work_column;  // Preallocated [num_constrs]
+    double *work_cB;      // Preallocated [num_constrs]
+};
+
+int cxf_simplex_init(CxfModel *model, SolverContext **stateP) {
+    ctx->work_column = malloc(m * sizeof(double));
+    ctx->work_cB = malloc(m * sizeof(double));
+}
+
+int cxf_simplex_iterate(SolverContext *state, CxfEnv *env) {
+    double *column = state->work_column;  // Reuse preallocated
+    double *cB = state->work_cB;          // Reuse preallocated
+    ...
+    // No free needed - cleaned up in cxf_simplex_final
+}
+```
+
+**Results:**
+- Eliminated ~1500 malloc/free calls per solve
+- **2.4% total runtime reduction**

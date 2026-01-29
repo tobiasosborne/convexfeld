@@ -163,8 +163,8 @@ int cxf_simplex_iterate(SolverContext *state, CxfEnv *env) {
         return CXF_ERROR_OUT_OF_MEMORY;
     }
 
-    /* Need temporary column array for extracting from matrix */
-    double *column = (double *)calloc((size_t)m, sizeof(double));
+    /* Use preallocated column array (reused across iterations) */
+    double *column = state->work_column;
     if (column == NULL) {
         return CXF_ERROR_OUT_OF_MEMORY;
     }
@@ -229,7 +229,6 @@ int cxf_simplex_iterate(SolverContext *state, CxfEnv *env) {
     }
 
     if (num_candidates == 0) {
-        free(column);
         return ITERATE_OPTIMAL;  /* No improving variable found */
     }
 
@@ -243,7 +242,6 @@ int cxf_simplex_iterate(SolverContext *state, CxfEnv *env) {
     extract_column_ext(model->matrix, basis, entering, n, m, column);
     rc = cxf_ftran(basis, column, pivotCol);
     if (rc != CXF_OK) {
-        free(column);
         return rc;
     }
 
@@ -253,11 +251,9 @@ int cxf_simplex_iterate(SolverContext *state, CxfEnv *env) {
     rc = cxf_ratio_test(state, env, entering, pivotCol, m,
                         &leavingRow, &pivotElement);
     if (rc == CXF_UNBOUNDED) {
-        free(column);
         return ITERATE_UNBOUNDED;
     }
     if (rc != CXF_OK) {
-        free(column);
         return rc;
     }
 
@@ -265,7 +261,6 @@ int cxf_simplex_iterate(SolverContext *state, CxfEnv *env) {
      * Step 4: Compute step size
      *=========================================================================*/
     if (fabs(pivotElement) < CXF_PIVOT_TOL) {
-        free(column);
         return CXF_NUMERIC;  /* Pivot too small */
     }
 
@@ -322,7 +317,6 @@ int cxf_simplex_iterate(SolverContext *state, CxfEnv *env) {
      *=========================================================================*/
     rc = cxf_simplex_step(state, entering, leavingRow, pivotCol, stepSize);
     if (rc != CXF_OK) {
-        free(column);
         return rc;
     }
 
@@ -338,37 +332,24 @@ int cxf_simplex_iterate(SolverContext *state, CxfEnv *env) {
      * Use BTRAN to properly compute dual prices: π = B^(-T) * c_B
      *=========================================================================*/
     {
-        /* Build c_B vector (objective coeffs of basic variables) */
-        double *cB = (double *)calloc((size_t)m, sizeof(double));
-        if (cB != NULL) {
-            for (int i = 0; i < m; i++) {
-                int basic_var = basis->basic_vars[i];
-                if (basic_var >= 0 && basic_var < total_vars) {
-                    cB[i] = state->work_obj[basic_var];
-                } else {
-                    cB[i] = 0.0;
-                }
+        /* Build c_B vector using preallocated work array */
+        double *cB = state->work_cB;
+        for (int i = 0; i < m; i++) {
+            int basic_var = basis->basic_vars[i];
+            if (basic_var >= 0 && basic_var < total_vars) {
+                cB[i] = state->work_obj[basic_var];
+            } else {
+                cB[i] = 0.0;
             }
+        }
 
-            /* Compute π = B^(-T) * c_B using BTRAN */
-            extern int cxf_btran_vec(BasisState *basis, const double *input, double *result);
-            int btran_rc = cxf_btran_vec(basis, cB, state->work_pi);
-            if (btran_rc != CXF_OK) {
-                /* Fallback to simple approximation if BTRAN fails */
-                for (int i = 0; i < m; i++) {
-                    state->work_pi[i] = cB[i];
-                }
-            }
-            free(cB);
-        } else {
-            /* Fallback if allocation fails */
+        /* Compute π = B^(-T) * c_B using BTRAN */
+        extern int cxf_btran_vec(BasisState *basis, const double *input, double *result);
+        int btran_rc = cxf_btran_vec(basis, cB, state->work_pi);
+        if (btran_rc != CXF_OK) {
+            /* Fallback to simple approximation if BTRAN fails */
             for (int i = 0; i < m; i++) {
-                int basic_var = basis->basic_vars[i];
-                if (basic_var >= 0 && basic_var < total_vars) {
-                    state->work_pi[i] = state->work_obj[basic_var];
-                } else {
-                    state->work_pi[i] = 0.0;
-                }
+                state->work_pi[i] = cB[i];
             }
         }
 
@@ -414,6 +395,5 @@ int cxf_simplex_iterate(SolverContext *state, CxfEnv *env) {
     }
 
     state->iteration++;
-    free(column);
     return ITERATE_CONTINUE;
 }

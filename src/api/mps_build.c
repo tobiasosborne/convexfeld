@@ -1,12 +1,16 @@
 /**
  * @file mps_build.c
  * @brief Build CxfModel from parsed MPS data.
+ *
+ * Performance optimization: Build CSC matrix directly in O(nnz) instead of
+ * calling cxf_addconstr() per row which is O(nnz^2) due to array shifting.
  */
 
 #include <stdlib.h>
 #include <string.h>
 #include "mps_internal.h"
 #include "convexfeld/cxf_model.h"
+#include "convexfeld/cxf_matrix.h"
 
 extern void *cxf_malloc(size_t size);
 extern void *cxf_calloc(size_t count, size_t size);
@@ -14,37 +18,100 @@ extern void *cxf_realloc(void *ptr, size_t size);
 extern void cxf_free(void *ptr);
 extern int cxf_addvar(CxfModel *model, int numnz, int *vind, double *vval,
                       double obj, double lb, double ub, char vtype, const char *name);
-extern int cxf_addconstr(CxfModel *model, int numnz, const int *cind,
-                         const double *cval, char sense, double rhs, const char *name);
+extern int cxf_sparse_init_csc(SparseMatrix *mat, int num_rows, int num_cols,
+                               int64_t nnz);
 
-/* Build row->column coefficient mapping */
-typedef struct {
-    int *col_idx;
-    double *col_val;
-    int nz;
-    int cap;
-} RowCoeffs;
+/**
+ * @brief Build CSC matrix directly from MPS column data.
+ *
+ * Two-pass O(nnz) algorithm:
+ * 1. Count entries per column to build col_ptr
+ * 2. Fill row_idx and values in column order
+ *
+ * This replaces the O(nnz^2) approach of calling cxf_addconstr() per row.
+ */
+static int build_csc_direct(MpsState *s, CxfModel *model, const int *row_map,
+                            int num_constrs) {
+    SparseMatrix *mat = model->matrix;
+    int num_cols = s->num_cols;
+    int64_t total_nnz = 0;
 
-static int add_row_coeff(RowCoeffs *r, int col, double val) {
-    if (r->nz >= r->cap) {
-        int new_cap = (r->cap == 0) ? 8 : r->cap * 2;
-        int *new_idx = cxf_realloc(r->col_idx, (size_t)new_cap * sizeof(int));
-        double *new_val = cxf_realloc(r->col_val, (size_t)new_cap * sizeof(double));
-        if (!new_idx || !new_val) return -1;
-        r->col_idx = new_idx;
-        r->col_val = new_val;
-        r->cap = new_cap;
+    /* Pass 1: Count entries per column and total nnz */
+    int64_t *col_counts = (int64_t *)cxf_calloc((size_t)(num_cols + 1),
+                                                  sizeof(int64_t));
+    if (!col_counts) return CXF_ERROR_OUT_OF_MEMORY;
+
+    for (int col = 0; col < num_cols; col++) {
+        MpsCol *c = &s->cols[col];
+        for (int k = 0; k < c->ncoeffs; k++) {
+            int mps_row = c->constr_idx[k];
+            int mapped = row_map[mps_row];
+            if (mapped >= 0) {
+                col_counts[col]++;
+                total_nnz++;
+            }
+        }
     }
-    r->col_idx[r->nz] = col;
-    r->col_val[r->nz] = val;
-    r->nz++;
-    return 0;
+
+    /* Initialize CSC arrays */
+    int status = cxf_sparse_init_csc(mat, num_constrs, num_cols, total_nnz);
+    if (status != CXF_OK) {
+        cxf_free(col_counts);
+        return status;
+    }
+
+    /* Build col_ptr from counts (cumulative sum) */
+    mat->col_ptr[0] = 0;
+    for (int col = 0; col < num_cols; col++) {
+        mat->col_ptr[col + 1] = mat->col_ptr[col] + col_counts[col];
+    }
+
+    /* Pass 2: Fill row_idx and values */
+    /* Reset col_counts to track insertion positions */
+    memset(col_counts, 0, (size_t)(num_cols + 1) * sizeof(int64_t));
+
+    for (int col = 0; col < num_cols; col++) {
+        MpsCol *c = &s->cols[col];
+        for (int k = 0; k < c->ncoeffs; k++) {
+            int mps_row = c->constr_idx[k];
+            int mapped = row_map[mps_row];
+            if (mapped >= 0) {
+                int64_t pos = mat->col_ptr[col] + col_counts[col];
+                mat->row_idx[pos] = mapped;
+                mat->values[pos] = c->constr_val[k];
+                col_counts[col]++;
+            }
+        }
+    }
+
+    cxf_free(col_counts);
+
+    /* Allocate and fill rhs and sense arrays */
+    mat->rhs = (double *)cxf_malloc((size_t)num_constrs * sizeof(double));
+    mat->sense = (char *)cxf_malloc((size_t)num_constrs * sizeof(char));
+    if (!mat->rhs || !mat->sense) {
+        cxf_free(mat->rhs);
+        cxf_free(mat->sense);
+        mat->rhs = NULL;
+        mat->sense = NULL;
+        return CXF_ERROR_OUT_OF_MEMORY;
+    }
+
+    int constr_idx = 0;
+    for (int i = 0; i < s->num_rows; i++) {
+        if (s->rows[i].sense == 'N') continue;
+        mat->rhs[constr_idx] = s->rows[i].rhs;
+        mat->sense[constr_idx] = s->rows[i].sense;
+        constr_idx++;
+    }
+
+    model->num_constrs = num_constrs;
+    return CXF_OK;
 }
 
 int mps_build_model(MpsState *s, CxfModel *model) {
     int status;
     int *row_map = NULL;
-    RowCoeffs *row_coeffs = NULL;
     int num_constrs = 0;
 
     /* Count constraints (non-objective rows) */
@@ -52,16 +119,10 @@ int mps_build_model(MpsState *s, CxfModel *model) {
         if (s->rows[i].sense != 'N') num_constrs++;
     }
 
-    /* Create row mapping and coefficient storage */
+    /* Create row mapping */
     row_map = (int *)cxf_malloc((size_t)s->num_rows * sizeof(int));
-    row_coeffs = (RowCoeffs *)cxf_calloc((size_t)num_constrs, sizeof(RowCoeffs));
-    if (!row_map || !row_coeffs) {
-        cxf_free(row_map);
-        cxf_free(row_coeffs);
-        return CXF_ERROR_OUT_OF_MEMORY;
-    }
+    if (!row_map) return CXF_ERROR_OUT_OF_MEMORY;
 
-    /* Build row mapping */
     int constr_idx = 0;
     for (int i = 0; i < s->num_rows; i++) {
         if (s->rows[i].sense == 'N') {
@@ -71,50 +132,19 @@ int mps_build_model(MpsState *s, CxfModel *model) {
         }
     }
 
-    /* Add variables first (without constraint coefficients) */
+    /* Add variables (without constraint coefficients) */
     for (int col = 0; col < s->num_cols; col++) {
         MpsCol *c = &s->cols[col];
         status = cxf_addvar(model, 0, NULL, NULL,
                            c->obj_coeff, c->lb, c->ub, CXF_CONTINUOUS, c->name);
-        if (status != CXF_OK) goto cleanup;
-
-        /* Transpose: for each coefficient in this column, add to row storage */
-        for (int k = 0; k < c->ncoeffs; k++) {
-            int mps_row = c->constr_idx[k];
-            int mapped = row_map[mps_row];
-            if (mapped >= 0) {
-                if (add_row_coeff(&row_coeffs[mapped], col, c->constr_val[k]) < 0) {
-                    status = CXF_ERROR_OUT_OF_MEMORY;
-                    goto cleanup;
-                }
-            }
+        if (status != CXF_OK) {
+            cxf_free(row_map);
+            return status;
         }
     }
 
-    /* Add constraints with transposed coefficients */
-    constr_idx = 0;
-    for (int i = 0; i < s->num_rows; i++) {
-        if (s->rows[i].sense == 'N') continue;
-
-        MpsRow *r = &s->rows[i];
-        RowCoeffs *rc = &row_coeffs[constr_idx];
-
-        status = cxf_addconstr(model, rc->nz, rc->col_idx, rc->col_val,
-                              r->sense, r->rhs, r->name);
-        if (status != CXF_OK) goto cleanup;
-        constr_idx++;
-    }
-
-    status = CXF_OK;
-
-cleanup:
-    if (row_coeffs) {
-        for (int i = 0; i < num_constrs; i++) {
-            cxf_free(row_coeffs[i].col_idx);
-            cxf_free(row_coeffs[i].col_val);
-        }
-        cxf_free(row_coeffs);
-    }
+    /* Build CSC matrix directly - O(nnz) instead of O(nnz^2) */
+    status = build_csc_direct(s, model, row_map, num_constrs);
     cxf_free(row_map);
     return status;
 }

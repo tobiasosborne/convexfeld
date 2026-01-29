@@ -108,6 +108,14 @@ int cxf_simplex_init(CxfModel *model, SolverContext **stateP) {
             cxf_simplex_final(ctx);
             return CXF_ERROR_OUT_OF_MEMORY;
         }
+
+        /* Allocate iteration work arrays (preallocated to avoid malloc per iter) */
+        ctx->work_column = (double *)malloc((size_t)m * sizeof(double));
+        ctx->work_cB = (double *)malloc((size_t)m * sizeof(double));
+        if (ctx->work_column == NULL || ctx->work_cB == NULL) {
+            cxf_simplex_final(ctx);
+            return CXF_ERROR_OUT_OF_MEMORY;
+        }
     }
 
     /* Create basis state with space for artificial variables */
@@ -149,6 +157,8 @@ void cxf_simplex_final(SolverContext *state) {
     free(state->work_pi);
     free(state->work_dj);
     free(state->work_counter);
+    free(state->work_column);
+    free(state->work_cB);
 
     /* Free basis */
     cxf_basis_free(state->basis);

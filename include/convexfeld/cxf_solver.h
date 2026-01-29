@@ -59,6 +59,11 @@ struct SolverContext {
     double baseline_ftran;    /**< Baseline FTRAN time (after refactor) */
     int iteration;            /**< Current iteration number */
     int last_refactor_iter;   /**< Iteration of last refactorization */
+
+    /* Preallocated iteration work arrays (size num_constrs)
+     * Allocated once in init, reused across iterations to avoid malloc/free */
+    double *work_column;      /**< Column extraction buffer [num_constrs] */
+    double *work_cB;          /**< Basic variable costs [num_constrs] */
 };
 
 /*******************************************************************************
