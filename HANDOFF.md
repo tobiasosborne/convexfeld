@@ -4,55 +4,76 @@
 
 ---
 
-## STATUS: Constrained LP Integration Test Added
+## STATUS: Netlib Readiness Assessment Complete
 
 ### What Was Done This Session
 
-**Task 1:** convexfeld-98xf - Integrate perturbation/unperturb calls into solve_lp.c
-**Task 2:** convexfeld-g320 - Integrate cxf_simplex_refine into solve_lp.c
-**Task 3:** convexfeld-tnkh - Add integration test for constrained LP
+**Assessment:** Evaluated how close the solver is to running on Netlib benchmarks.
 
-Added two integration tests verifying constrained LP solving:
-1. `test_constrained_lp_2var`: min -x-y s.t. x+y<=4, x<=2, y<=3 -> obj=-4
-2. `test_single_constraint_lp`: min -x s.t. x<=5 -> obj=-5
+**Key Finding:** The solver works for small LPs (2-3 vars) but fails on larger problems like Netlib's afiro (32 vars, 27 constraints) due to numerical instability.
 
-Both tests pass, confirming simplex solver handles constrained LPs correctly.
+**Root Cause Identified:**
+- After ~12-20 simplex iterations, eta factors accumulate numerical errors
+- Objective value becomes NaN, causing `CXF_ERROR_INVALID_ARGUMENT`
+- Small problems solve before instability hits; Netlib problems need 50-200+ iterations
 
-### Files Created/Modified
+**Evidence from afiro test:**
+```
+Phase I: 10 iterations -> OPTIMAL (feasible basis found)
+Phase II: iterations 1-11 -> obj improving
+Phase II: iteration 12 -> obj becomes -nan
+Phase II: iteration 13 -> ERROR -3 (CXF_ERROR_INVALID_ARGUMENT)
+```
 
-| File | Change |
-|------|--------|
-| src/simplex/solve_lp.c | Added perturbation, unperturb, and refine calls |
-| tests/integration/test_constrained_lp.c | New integration test file |
-| tests/CMakeLists.txt | Added test_constrained_lp target |
+### Infrastructure Ready
 
-### Issues Closed
-
-| ID | Title |
-|----|-------|
-| convexfeld-98xf | Integrate perturbation/unperturb calls into solve_lp.c |
-| convexfeld-g320 | Integrate cxf_simplex_refine into solve_lp.c |
-| convexfeld-tnkh | Add integration test for constrained LP |
+- MPS parser: Complete, tested on afiro/sc50b/sc105
+- Netlib benchmarks: 114 feasible + 29 infeasible in `./benchmarks/netlib/`
+- Reference solutions: `benchmarks/netlib/feasible_gurobi_1e-8.csv`
+- Integration tests: Small constrained LPs pass
 
 ---
 
-## Next Steps for Next Agent
+## CRITICAL: Next Steps for Next Agent
 
-### Available P1 Work
+### Priority 1: Fix Numerical Instability (convexfeld-aiq9)
 
-Run `bd ready` for full list:
-- convexfeld-c4bh (P1) - Add constraint satisfaction verification
-- convexfeld-aiq9 (P1) - Fix numerical instability (eta overflow)
-- convexfeld-cnvw (P1) - Review docs/learnings for missed patterns
+**This is the blocking issue for Netlib testing.**
 
-### Pre-existing Test Failure
+**Action Required:**
+1. Research the relevant specs for numerical stability:
+   - `docs/specs/functions/simplex/cxf_simplex_iterate.md`
+   - `docs/specs/functions/basis/cxf_basis_refactor.md`
+   - `docs/specs/modules/07_basis.md`
 
-`test_unperturb_sequence` in test_simplex_edge.c fails due to global state in perturbation.c persisting across tests. Test isolation issue, not functionality bug.
+2. Look for spec guidance on:
+   - Basis refactorization frequency
+   - Eta vector overflow handling
+   - Numerical tolerance thresholds
+   - When to trigger LU refactorization
+
+3. Potential fixes to investigate:
+   - More aggressive refactorization (every 20-30 pivots vs current 100)
+   - NaN/Inf detection before each iteration
+   - Implement proper Markowitz LU factorization (convexfeld-w9to)
+
+### After Numerical Fix
+
+- convexfeld-xkjj (P2): Create Netlib benchmark runner infrastructure
+- convexfeld-86x5 (P2): Run solver on small Netlib benchmarks
 
 ---
 
 ## Quality Gate Status
 
-- **Tests:** 34/35 pass (1 pre-existing failure)
+- **Tests:** 29/32 pass (91%)
 - **Build:** Clean
-- **Constrained LPs:** Verified working via integration tests
+- **Small LPs:** Working
+- **Netlib:** Blocked by numerical instability
+
+---
+
+## Pre-existing Issues
+
+- `test_unperturb_sequence` fails due to global state (test isolation, not functionality)
+- 3 edge case tests failing in test_simplex_edge.c

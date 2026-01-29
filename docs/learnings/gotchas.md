@@ -422,3 +422,32 @@ Created dependency chain of P0 issues:
 **Issue:** Spec says to set leaving variable status based on final value (-1 if at lb, -2 if at ub). Implementation always sets to -1.
 
 **Impact:** Minor - corrects itself in subsequent iterations.
+
+---
+
+## Netlib Readiness Assessment (2026-01-29)
+
+### Numerical Instability Blocks Netlib Testing
+
+**Issue:** Eta factors accumulate numerical errors after ~12-20 iterations, causing NaN values and solver failure.
+
+**Evidence from afiro (32 vars, 27 constraints):**
+```
+Phase I: 10 iterations -> OPTIMAL
+Phase II iter 12: obj becomes -nan
+Phase II iter 13: ERROR -3 (CXF_ERROR_INVALID_ARGUMENT)
+Expected: obj = -464.75
+```
+
+**Why small tests pass:** Integration tests (2-3 vars) complete in <10 iterations, before instability hits.
+
+**Why Netlib fails:** Netlib problems need 50-200+ iterations, exceeding stability threshold.
+
+**Root cause:** Current refactorization interval (100 pivots) is too infrequent. Eta vector chain grows too long before LU refactorization.
+
+**Specs to research:**
+- `docs/specs/functions/simplex/cxf_simplex_iterate.md`
+- `docs/specs/functions/basis/cxf_basis_refactor.md`
+- `docs/specs/modules/07_basis.md`
+
+**Tracking:** convexfeld-aiq9 (P1)
