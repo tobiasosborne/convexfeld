@@ -12,6 +12,39 @@
 #include "cxf_types.h"
 
 /**
+ * @brief LU factorization storage for basis matrix.
+ *
+ * Stores the LU factors of the basis matrix B = P * L * U * Q where:
+ * - P, Q are row/column permutation matrices
+ * - L is lower triangular with unit diagonal (diagonal implicit)
+ * - U is upper triangular with explicit diagonal
+ *
+ * Both L and U are stored in column-wise sparse format (CSC).
+ */
+typedef struct LUFactors {
+    /* L factor (unit diagonal implicit) */
+    int64_t *L_col_ptr;   /**< Column pointers for L [m+1] */
+    int *L_row_idx;       /**< Row indices for L [L_nnz] */
+    double *L_values;     /**< Values for L [L_nnz] (unit diag implicit) */
+    int64_t L_nnz;        /**< Number of nonzeros in L (excluding diagonal) */
+
+    /* U factor (explicit diagonal) */
+    int64_t *U_col_ptr;   /**< Column pointers for U [m+1] */
+    int *U_row_idx;       /**< Row indices for U [U_nnz] */
+    double *U_values;     /**< Values for U [U_nnz] */
+    double *U_diag;       /**< Diagonal elements of U [m] */
+    int64_t U_nnz;        /**< Number of nonzeros in U (excluding diagonal) */
+
+    /* Permutation arrays */
+    int *perm_row;        /**< Row permutation P [m]: perm_row[k] = original row */
+    int *perm_col;        /**< Column permutation Q [m]: perm_col[k] = original col */
+
+    /* Dimensions */
+    int m;                /**< Number of rows/columns in factorization */
+    int valid;            /**< 1 if factorization is valid, 0 otherwise */
+} LUFactors;
+
+/**
  * @brief Eta factors for basis updates.
  *
  * Represents a single elementary transformation matrix.
@@ -50,6 +83,9 @@ struct BasisState {
      * Applied in FTRAN (before etas) and BTRAN (after etas). */
     double *diag_coeff;       /**< Initial basis diagonal [m] (±1 values) */
 
+    /* LU factorization (computed by cxf_basis_refactor) */
+    LUFactors *lu;            /**< LU factors, NULL if using eta-only mode */
+
     /* Eta factorization */
     int eta_count;            /**< Number of eta vectors */
     int eta_capacity;         /**< Capacity for eta vectors */
@@ -82,6 +118,53 @@ typedef struct BasisSnapshot {
     void *U;                  /**< U factor copy */
     int *pivotPerm;           /**< Pivot permutation array */
 } BasisSnapshot;
+
+/*******************************************************************************
+ * LUFactors lifecycle functions
+ ******************************************************************************/
+
+/**
+ * @brief Create an LUFactors structure with preallocated storage.
+ *
+ * Allocates storage for LU factorization of an m x m basis matrix.
+ * The nnz_estimate parameters hint at expected fill-in; storage will
+ * be reallocated if needed during factorization.
+ *
+ * @param m Number of rows/columns in the basis.
+ * @param L_nnz_estimate Estimated nonzeros in L (excluding diagonal).
+ * @param U_nnz_estimate Estimated nonzeros in U (excluding diagonal).
+ * @return Pointer to new LUFactors, or NULL on allocation failure.
+ */
+LUFactors *cxf_lu_create(int m, int64_t L_nnz_estimate, int64_t U_nnz_estimate);
+
+/**
+ * @brief Free an LUFactors structure and all associated memory.
+ *
+ * @param lu LUFactors to free (may be NULL).
+ */
+void cxf_lu_free(LUFactors *lu);
+
+/**
+ * @brief Clear LU factorization, marking it invalid.
+ *
+ * Resets the factorization without deallocating storage.
+ * Storage is reused on next factorization.
+ *
+ * @param lu LUFactors to clear.
+ */
+void cxf_lu_clear(LUFactors *lu);
+
+/**
+ * @brief Compute LU factorization of current basis matrix.
+ *
+ * Uses Markowitz-ordered Gaussian elimination with threshold pivoting.
+ * Stores result in lu structure.
+ *
+ * @param lu LUFactors structure to store results.
+ * @param ctx SolverContext with basis and matrix access.
+ * @return 0 on success, 3 for singular matrix, 1001 for OOM.
+ */
+int cxf_lu_factorize(LUFactors *lu, SolverContext *ctx);
 
 /*******************************************************************************
  * BasisSnapshot functions (M5.1.7)

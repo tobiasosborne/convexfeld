@@ -21,6 +21,67 @@
 #define MAX_STACK_ETAS 64
 
 /**
+ * @brief Apply LU transpose solve for BTRAN.
+ *
+ * Solves B^T * y = e using LU factors.
+ * For B = P^T * L * U * Q:
+ *   B^T = Q^T * U^T * L^T * P
+ * So solve by: permute, U^T solve, L^T solve, permute back.
+ *
+ * @param lu LUFactors structure.
+ * @param m Dimension.
+ * @param result Vector (modified in place).
+ */
+static void apply_lu_btran(const LUFactors *lu, int m, double *result) {
+    double *temp = (double *)malloc((size_t)m * sizeof(double));
+    if (temp == NULL) return;
+
+    /* Step 1: Apply column permutation Q: temp = Q * result
+     * Q: temp[k] = result[perm_col[k]] */
+    for (int k = 0; k < m; k++) {
+        temp[k] = result[lu->perm_col[k]];
+    }
+
+    /* Step 2: Solve U^T * z = temp (forward substitution)
+     * U^T is lower triangular (U is upper triangular)
+     * For each row k, divide by diagonal then subtract from later rows */
+    for (int k = 0; k < m; k++) {
+        if (fabs(lu->U_diag[k]) > 1e-15) {
+            temp[k] /= lu->U_diag[k];
+        }
+        /* U^T[j,k] = U[k,j] for j > k
+         * U_col_ptr[k] to U_col_ptr[k+1] gives entries in U column k above diagonal
+         * These become entries in U^T row k to the right */
+        for (int64_t p = lu->U_col_ptr[k]; p < lu->U_col_ptr[k + 1]; p++) {
+            int j = lu->U_row_idx[p];  /* j > k (step index in upper triangle) */
+            temp[j] -= lu->U_values[p] * temp[k];
+        }
+    }
+
+    /* Step 3: Solve L^T * w = temp (backward substitution)
+     * L^T is upper triangular with unit diagonal (L is lower with unit diag)
+     * For each column k from m-1 to 0, subtract from result[k] */
+    for (int k = m - 1; k >= 0; k--) {
+        /* L^T[k,j] = L[j,k] for j > k
+         * L_col_ptr[k] gives entries in L column k below diagonal */
+        for (int64_t p = lu->L_col_ptr[k]; p < lu->L_col_ptr[k + 1]; p++) {
+            int j = lu->L_row_idx[p];  /* j > k (row index in lower triangle) */
+            temp[k] -= lu->L_values[p] * temp[j];
+        }
+        /* Unit diagonal, no division needed */
+    }
+
+    /* Step 4: Apply row permutation P^T: result = P^T * temp
+     * P: perm_row[k] = original row at position k
+     * P^T: result[perm_row[k]] = temp[k] */
+    for (int k = 0; k < m; k++) {
+        result[lu->perm_row[k]] = temp[k];
+    }
+
+    free(temp);
+}
+
+/**
  * @brief Backward transformation: solve y^T B = e_row^T.
  *
  * Computes y = B^(-T) * e_row where B is the current basis matrix.
@@ -136,10 +197,12 @@ int cxf_btran(BasisState *basis, int row, double *result) {
         free(etas);
     }
 
-    /* Step 4: Apply initial diagonal D (after etas)
-     * B^(-T) = D * E_1^(-T) * ... * E_k^(-T)
-     * Since D is diagonal with ±1, D = D^(-1) = D^T */
-    if (basis->diag_coeff != NULL) {
+    /* Step 4: Apply LU transpose solve if factors are available */
+    if (basis->lu != NULL && basis->lu->valid) {
+        apply_lu_btran(basis->lu, m, result);
+    } else if (basis->diag_coeff != NULL) {
+        /* Fall back to diagonal scaling (legacy mode)
+         * D is diagonal with ±1, D = D^(-1) = D^T */
         for (int i = 0; i < m; i++) {
             result[i] *= basis->diag_coeff[i];
         }
@@ -254,10 +317,12 @@ int cxf_btran_vec(BasisState *basis, const double *input, double *result) {
         free(etas);
     }
 
-    /* Step 4: Apply initial diagonal D (after etas)
-     * B^(-T) = D * E_1^(-T) * ... * E_k^(-T)
-     * Since D is diagonal with ±1, D = D^(-1) = D^T */
-    if (basis->diag_coeff != NULL) {
+    /* Step 4: Apply LU transpose solve if factors are available */
+    if (basis->lu != NULL && basis->lu->valid) {
+        apply_lu_btran(basis->lu, m, result);
+    } else if (basis->diag_coeff != NULL) {
+        /* Fall back to diagonal scaling (legacy mode)
+         * D is diagonal with ±1, D = D^(-1) = D^T */
         for (int i = 0; i < m; i++) {
             result[i] *= basis->diag_coeff[i];
         }

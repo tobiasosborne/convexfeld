@@ -85,12 +85,9 @@ int cxf_basis_refactor(BasisState *basis) {
 /**
  * @brief Full refactorization with access to solver context.
  *
- * Computes a fresh factorization of the basis matrix using
- * Gaussian elimination. The result is stored as eta vectors
- * for compatibility with FTRAN/BTRAN operations.
- *
- * For identity basis (all slacks): No eta vectors (B = I).
- * For structural columns: Computes elimination factors.
+ * Computes a fresh LU factorization of the basis matrix using
+ * Markowitz-ordered Gaussian elimination. The result is stored
+ * in the LUFactors structure for use by FTRAN/BTRAN.
  *
  * @param ctx SolverContext containing basis and model.
  * @param env Environment with tolerances.
@@ -104,7 +101,7 @@ int cxf_solver_refactor(SolverContext *ctx, CxfEnv *env) {
     BasisState *basis = ctx->basis;
     int m = basis->m;
 
-    /* Clear existing factorization */
+    /* Clear existing eta list */
     clear_eta_list(basis);
 
     /* Reset refactorization counters */
@@ -119,49 +116,58 @@ int cxf_solver_refactor(SolverContext *ctx, CxfEnv *env) {
         return REFACTOR_OK;
     }
 
-    /* Get pivot tolerance from environment */
-    double pivot_tol = MIN_PIVOT_TOL;
-    if (env != NULL) {
-        pivot_tol = env->feasibility_tol;
-        if (pivot_tol < MIN_PIVOT_TOL) {
-            pivot_tol = MIN_PIVOT_TOL;
+    (void)env;  /* Currently unused, will be used for tolerances */
+
+    /* Allocate LU factors if not present */
+    if (basis->lu == NULL) {
+        /* Estimate nnz: typically ~2*m for sparse LP bases */
+        int64_t nnz_est = (int64_t)m * 2;
+        basis->lu = cxf_lu_create(m, nnz_est, nnz_est);
+        if (basis->lu == NULL) {
+            return REFACTOR_OUT_OF_MEMORY;
         }
+    } else {
+        /* Clear existing factorization */
+        cxf_lu_clear(basis->lu);
     }
 
-    /* Check for identity basis (all slacks)
-     * In this case, B = I and no eta vectors needed.
-     *
-     * For structural variables in basis, we would need the
-     * constraint matrix to compute proper factorization.
-     * This requires model_ref access. */
-
-    int all_slacks = 1;
+    /* Check for identity basis (all slacks at row positions).
+     * For pure slack basis, LU is trivial (L=I, U=diag). */
+    int all_diagonal_slacks = 1;
     for (int i = 0; i < m; i++) {
         int var = basis->basic_vars[i];
-        /* Slack variables have index >= num_vars */
-        if (var < ctx->num_vars) {
-            all_slacks = 0;
+        /* Check if var is slack for row i */
+        if (var != ctx->num_vars + i) {
+            all_diagonal_slacks = 0;
             break;
         }
     }
 
-    if (all_slacks) {
-        /* Identity basis - no eta vectors needed */
+    if (all_diagonal_slacks) {
+        /* Identity-like basis - L=I, U=diag(diag_coeff) */
+        LUFactors *lu = basis->lu;
+        for (int i = 0; i < m; i++) {
+            lu->perm_row[i] = i;
+            lu->perm_col[i] = i;
+            lu->U_diag[i] = basis->diag_coeff[i];
+            lu->L_col_ptr[i] = 0;
+            lu->U_col_ptr[i] = 0;
+        }
+        lu->L_col_ptr[m] = 0;
+        lu->U_col_ptr[m] = 0;
+        lu->L_nnz = 0;
+        lu->U_nnz = 0;
+        lu->valid = 1;
         return REFACTOR_OK;
     }
 
-    /* For non-identity basis, a full implementation would:
-     * 1. Extract basis columns from constraint matrix
-     * 2. Perform Gaussian elimination with pivoting
-     * 3. Store elimination factors as eta vectors
-     *
-     * This requires access to CxfModel and its matrix.
-     * For now, return OK to allow continued execution.
-     *
-     * TODO: Implement full Markowitz-ordered LU factorization
-     * when matrix access is available. */
-
-    (void)pivot_tol;  /* Suppress unused warning for now */
+    /* Perform Markowitz LU factorization */
+    int status = cxf_lu_factorize(basis->lu, ctx);
+    if (status != 0) {
+        /* Factorization failed - clear LU and fall back to eta-only */
+        cxf_lu_clear(basis->lu);
+        return status;
+    }
 
     return REFACTOR_OK;
 }

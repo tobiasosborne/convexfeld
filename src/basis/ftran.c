@@ -19,23 +19,72 @@
 #define MAX_STACK_ETAS 64
 
 /**
- * @brief Forward transformation: solve Bx = b using eta representation.
+ * @brief Apply LU forward/backward substitution.
+ *
+ * Solves B * x = b where B = P^T * L * U * Q (with permutations).
+ * Steps: temp = P * b, L * w = temp, U * y = w, x = Q^T * y
+ *
+ * @param lu LUFactors structure with factorization.
+ * @param m Dimension.
+ * @param result Vector (modified in place).
+ */
+static void apply_lu_solve(const LUFactors *lu, int m, double *result) {
+    /* Step 1: Permute input by row permutation: temp = P * result
+     * perm_row[k] = original row that becomes position k */
+    double *temp = (double *)malloc((size_t)m * sizeof(double));
+    if (temp == NULL) return;  /* Fall back to eta-only on alloc failure */
+
+    for (int k = 0; k < m; k++) {
+        temp[k] = result[lu->perm_row[k]];
+    }
+
+    /* Step 2: Forward substitution L * w = temp
+     * L is unit lower triangular, stored column-wise.
+     * For each column k, update rows below k. */
+    for (int k = 0; k < m; k++) {
+        if (fabs(temp[k]) < 1e-15) continue;  /* Skip zeros */
+        for (int64_t p = lu->L_col_ptr[k]; p < lu->L_col_ptr[k + 1]; p++) {
+            int j = lu->L_row_idx[p];  /* Row index > k (below diagonal) */
+            temp[j] -= lu->L_values[p] * temp[k];
+        }
+    }
+
+    /* Step 3: Backward substitution U * y = temp
+     * U is upper triangular with explicit diagonal. */
+    for (int k = m - 1; k >= 0; k--) {
+        /* Subtract off-diagonal contributions */
+        for (int64_t p = lu->U_col_ptr[k]; p < lu->U_col_ptr[k + 1]; p++) {
+            int j = lu->U_row_idx[p];  /* Step index > k (right of diagonal) */
+            temp[k] -= lu->U_values[p] * temp[j];
+        }
+        /* Divide by diagonal */
+        if (fabs(lu->U_diag[k]) > 1e-15) {
+            temp[k] /= lu->U_diag[k];
+        }
+    }
+
+    /* Step 4: Permute output by column permutation: result = Q^T * temp
+     * perm_col[k] = original col that becomes position k
+     * Q^T: result[perm_col[k]] = temp[k] */
+    for (int k = 0; k < m; k++) {
+        result[lu->perm_col[k]] = temp[k];
+    }
+
+    free(temp);
+}
+
+/**
+ * @brief Forward transformation: solve Bx = b using LU + eta representation.
  *
  * Computes x = B^(-1) * column where B is the current basis matrix.
- * The basis inverse is represented as a product of eta matrices:
- *   B^(-1) = E_k^(-1) * ... * E_2^(-1) * E_1^(-1)
+ * Uses LU factorization when available, followed by eta vector application.
  *
  * Algorithm:
- * 1. Copy input column to result (identity basis case)
- * 2. Collect eta pointers for correct traversal order
- * 3. Apply each eta transformation in chronological order (oldest to newest)
+ * 1. Copy input column to result
+ * 2. If LU factors valid: apply LU solve (forward + backward substitution)
+ * 3. Apply eta vectors in chronological order (oldest to newest)
  *
- * For each eta matrix E with pivot row r, pivot element p, and column values col[j]:
- *   - Compute factor = result[r] / p
- *   - Update pivot: result[r] = factor
- *   - Update off-diagonal: result[j] -= col[j] * factor
- *
- * @param basis BasisState containing the eta factorization.
+ * @param basis BasisState containing the factorization.
  * @param column Input column vector to transform (length = basis->m).
  * @param result Output array for transformed vector (length = basis->m).
  * @return CXF_OK on success, error code on failure.
@@ -53,22 +102,22 @@ int cxf_ftran(BasisState *basis, const double *column, double *result) {
         return CXF_OK;
     }
 
-    /* Step 1: Copy input column to result and apply initial diagonal.
-     * The initial basis may be diagonal with ±1 entries (not identity)
-     * when auxiliary variables have coefficient -1 (negative RHS).
-     * We apply D^(-1) = D since D is diagonal with ±1. */
-    if (basis->diag_coeff != NULL) {
+    /* Step 1: Copy input column to result */
+    memcpy(result, column, (size_t)m * sizeof(double));
+
+    /* Step 2: Apply LU solve if factors are available */
+    if (basis->lu != NULL && basis->lu->valid) {
+        apply_lu_solve(basis->lu, m, result);
+    } else if (basis->diag_coeff != NULL) {
+        /* Fall back to diagonal scaling (legacy mode) */
         for (int i = 0; i < m; i++) {
-            result[i] = column[i] * basis->diag_coeff[i];
+            result[i] *= basis->diag_coeff[i];
         }
-    } else {
-        memcpy(result, column, (size_t)m * sizeof(double));
     }
 
-    /* Step 2: Collect eta pointers for correct traversal order */
+    /* Step 3: Apply eta vectors in chronological order (oldest to newest) */
     int eta_count = basis->eta_count;
     if (eta_count == 0) {
-        /* Diagonal basis - result already has D applied */
         return CXF_OK;
     }
 
@@ -92,7 +141,7 @@ int cxf_ftran(BasisState *basis, const double *column, double *result) {
         eta = eta->next;
     }
 
-    /* Step 3: Apply eta vectors in chronological order (oldest to newest)
+    /* Apply eta vectors in chronological order (oldest to newest)
      * etas[0] = newest (head), etas[count-1] = oldest
      * So iterate from count-1 down to 0 */
     for (int i = count - 1; i >= 0; i--) {
@@ -120,8 +169,6 @@ int cxf_ftran(BasisState *basis, const double *column, double *result) {
          *   factor = result[r] / pivot_elem
          *   result[r] = factor
          *   result[j] = result[j] - col[j] * factor  for j != r
-         *
-         * Where eta->values stores col[j] (the pivot column values)
          */
         double factor = result[pivot_row] / pivot_elem;
         result[pivot_row] = factor;

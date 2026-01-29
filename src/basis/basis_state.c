@@ -44,6 +44,7 @@ BasisState *cxf_basis_create(int m, int n) {
     basis->eta_count = 0;
     basis->eta_capacity = 0;
     basis->eta_head = NULL;
+    basis->lu = NULL;  /* LU factors allocated on first refactorization */
     basis->pivots_since_refactor = 0;
     basis->refactor_freq = DEFAULT_REFACTOR_FREQ;
     basis->iteration = 0;
@@ -103,6 +104,9 @@ void cxf_basis_free(BasisState *basis) {
         free(eta);
         eta = next;
     }
+
+    /* Free LU factorization */
+    cxf_lu_free(basis->lu);
 
     /* Free arrays */
     free(basis->basic_vars);

@@ -53,6 +53,9 @@ target_link_libraries(test_matrix PRIVATE m)  # For math functions
 add_cxf_test(test_basis unit/test_basis.c)
 target_link_libraries(test_basis PRIVATE m)  # For math functions
 
+# LU Factors lifecycle tests
+add_cxf_test(test_lu_factors unit/test_lu_factors.c)
+
 # M6.1.1: Pricing operations tests
 add_cxf_test(test_pricing unit/test_pricing.c)
 target_link_libraries(test_pricing PRIVATE m)  # For math functions
