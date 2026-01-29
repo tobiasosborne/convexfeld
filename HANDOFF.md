@@ -4,48 +4,46 @@
 
 ---
 
-## STATUS: Perturbation Integration Complete
+## STATUS: Spec Compliance Complete (Perturbation + Refine)
 
 ### What Was Done This Session
 
-**Task:** convexfeld-98xf - Integrate perturbation/unperturb calls into solve_lp.c
-
-Added anti-cycling protection to the simplex solver per spec:
+**Task 1:** convexfeld-98xf - Integrate perturbation/unperturb calls into solve_lp.c
 - Added `cxf_simplex_perturbation` call after Phase I setup (spec step 5)
 - Added `cxf_simplex_unperturb` call before solution extraction (spec step 8)
+
+**Task 2:** convexfeld-g320 - Integrate cxf_simplex_refine into solve_lp.c
+- Added `cxf_simplex_refine` call after unperturb (spec step 9)
+- Cleans near-bound/near-zero values before extracting solution
 
 ### Files Modified
 
 | File | Change |
 |------|--------|
-| src/simplex/solve_lp.c | Added extern decls and calls to perturbation/unperturb |
+| src/simplex/solve_lp.c | Added perturbation, unperturb, and refine calls |
 
 ### Issues Closed
 
 | ID | Title |
 |----|-------|
 | convexfeld-98xf | Integrate perturbation/unperturb calls into solve_lp.c |
+| convexfeld-g320 | Integrate cxf_simplex_refine into solve_lp.c |
 
 ---
 
 ## Next Steps for Next Agent
 
-### Remaining High Priority Spec Gaps
+### Available P1 Work
 
-1. **convexfeld-g320 (P1)** - Add cxf_simplex_refine call to solve_lp.c
-   - Function exists in refine.c, just needs to be called
-   - Spec step 9: call before extracting solution
-
-### Other Available Work
-
-Run `bd ready` to see full list:
+Run `bd ready` for full list:
 - convexfeld-tnkh (P1) - Add integration test for constrained LP
 - convexfeld-c4bh (P1) - Add constraint satisfaction verification
 - convexfeld-aiq9 (P1) - Fix numerical instability (eta overflow)
+- convexfeld-cnvw (P1) - Review docs/learnings for missed patterns
 
 ### Pre-existing Test Failure
 
-`test_unperturb_sequence` in test_simplex_edge.c fails because `cxf_simplex_unperturb` uses global state that persists across tests. This is a test isolation issue, not a functionality bug. Low priority.
+`test_unperturb_sequence` in test_simplex_edge.c fails due to global state in perturbation.c persisting across tests. Test isolation issue, not functionality bug. Low priority.
 
 ---
 
