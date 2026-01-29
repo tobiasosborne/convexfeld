@@ -204,15 +204,32 @@ static int setup_phase_one(SolverContext *state) {
 static int transition_to_phase_two(SolverContext *state, CxfModel *model) {
     int n = state->num_vars;
     int m = state->num_constrs;
+    SparseMatrix *mat = model->matrix;
 
     /* Restore original objective coefficients */
     for (int j = 0; j < n; j++) {
         state->work_obj[j] = model->obj_coeffs[j];
     }
 
-    /* Set artificial objective coefficients to 0 (or large positive for big-M) */
+    /* Set auxiliary objective coefficients to 0 for slacks/surpluses.
+     * For equality constraints, the auxiliary is an ARTIFICIAL variable
+     * that MUST stay at zero for feasibility. Fix these at 0 by setting
+     * both bounds to 0, preventing them from re-entering the basis.
+     */
     for (int i = 0; i < m; i++) {
-        state->work_obj[n + i] = 0.0;
+        int var_idx = n + i;
+        state->work_obj[var_idx] = 0.0;
+
+        /* Check constraint sense */
+        char sense = (mat != NULL && mat->sense != NULL) ? mat->sense[i] : '<';
+        if (sense == '=' || sense == 'E') {
+            /* Equality constraint: auxiliary is an artificial variable.
+             * Fix at zero by setting ub = 0 (lb is already 0).
+             * This prevents it from re-entering the basis in Phase II.
+             */
+            state->work_ub[var_idx] = 0.0;
+        }
+        /* For <= and >= constraints, slacks/surpluses can be positive */
     }
 
     /* Recompute objective value with original objective */

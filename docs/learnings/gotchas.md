@@ -425,6 +425,40 @@ Created dependency chain of P0 issues:
 
 ---
 
+## Bounded Variable Simplex Bug (2026-01-29)
+
+### RESOLVED: Artificial Variables Re-entering Basis in Phase II
+
+**Symptoms:** Phase II returned obj=0 for problems with positive reference objectives (ship04l, kb2, etc.).
+
+**Root Causes:**
+
+1. **Artificial variables had attractive reduced costs:**
+   - In Phase II, artificial variables had obj coeff = 0
+   - Reduced cost: dj = 0 - π[row] * coeff
+   - Large dual prices made dj very negative → artificials looked attractive
+   - When they entered with positive values → solution became infeasible
+
+2. **Step size didn't consider entering variable bounds:**
+   - Standard simplex computes step from leaving variable bounds only
+   - For bounded variables, must also limit by entering variable's bound
+
+**Fixes:**
+1. In `transition_to_phase_two()`: Set ub=0 for auxiliaries of = constraints, fixing them at zero
+2. In `iterate.c`: Add step size limiting by entering variable's bound:
+   ```c
+   double max_step_entering = ub_entering - x_entering;
+   if (max_step_entering < stepSize) {
+       stepSize = max_step_entering;
+   }
+   ```
+
+**Lesson:** Standard simplex assumes unbounded variables. For bounded variable simplex:
+- Fixed variables (lb=ub) should have stepSize=0 (degenerate pivot)
+- Artificials must be FIXED at zero in Phase II, not just have obj coeff = 0
+
+---
+
 ## Eta Factor Bug Fix (2026-01-29)
 
 ### RESOLVED: Numerical Instability in FTRAN/BTRAN

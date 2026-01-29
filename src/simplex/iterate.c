@@ -216,6 +216,7 @@ int cxf_simplex_iterate(SolverContext *state, CxfEnv *env) {
 
     entering = candidates[0];  /* Take best candidate */
 
+
     /*=========================================================================
      * Step 2: FTRAN - compute pivot column B^(-1) * a_entering
      * For artificial vars (entering >= n), generates identity column
@@ -265,6 +266,32 @@ int cxf_simplex_iterate(SolverContext *state, CxfEnv *env) {
     } else {
         /* Basic var increases toward upper bound */
         stepSize = (x_leaving - ub_leaving) / pivotElement;
+    }
+
+    if (stepSize < 0) {
+        stepSize = 0;  /* Degenerate pivot */
+    }
+
+    /* Also limit step size by ENTERING variable's upper bound.
+     * If entering var is at lower bound and has finite upper bound,
+     * we can't step more than (ub - lb).
+     * This is crucial for fixed variables (ub = lb = 0) where step must be 0.
+     */
+    double x_entering = state->work_x[entering];
+    double lb_entering = state->work_lb[entering];
+    double ub_entering = state->work_ub[entering];
+    if (basis->var_status[entering] == -1) {
+        /* At lower bound, moving up toward upper bound */
+        double max_step_entering = ub_entering - x_entering;
+        if (max_step_entering < stepSize) {
+            stepSize = max_step_entering;
+        }
+    } else if (basis->var_status[entering] == -2) {
+        /* At upper bound, moving down toward lower bound */
+        double max_step_entering = x_entering - lb_entering;
+        if (max_step_entering < stepSize) {
+            stepSize = max_step_entering;
+        }
     }
 
     if (stepSize < 0) {
