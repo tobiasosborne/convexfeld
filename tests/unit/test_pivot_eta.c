@@ -199,8 +199,8 @@ void test_pivot_eta_sets_eta_multiplier(void) {
     double pivotCol[] = {2.0, 0.5, 0.25};
     cxf_pivot_with_eta(test_basis, 0, pivotCol, 0, 3);
 
-    /* eta_multiplier = 1 / pivot = 1 / 2.0 = 0.5 */
-    TEST_ASSERT_DOUBLE_WITHIN(1e-12, 0.5, test_basis->eta_head->pivot_elem);
+    /* pivot_elem = pivot value (raw) = 2.0 */
+    TEST_ASSERT_DOUBLE_WITHIN(1e-12, 2.0, test_basis->eta_head->pivot_elem);
 }
 
 /*******************************************************************************
@@ -228,15 +228,15 @@ void test_pivot_eta_computes_eta_values(void) {
     double pivotCol[] = {2.0, 0.6, 0.4};
     cxf_pivot_with_eta(test_basis, 0, pivotCol, 0, 3);
 
-    /* eta_multiplier = 1/2.0 = 0.5
-     * eta[1] = -0.6 * 0.5 = -0.3
-     * eta[2] = -0.4 * 0.5 = -0.2 */
+    /* Values are stored raw (unscaled, positive):
+     * eta[1] = 0.6 (raw column value)
+     * eta[2] = 0.4 (raw column value) */
     EtaFactors *eta = test_basis->eta_head;
     TEST_ASSERT_EQUAL_INT(2, eta->nnz);
     TEST_ASSERT_EQUAL_INT(1, eta->indices[0]);
     TEST_ASSERT_EQUAL_INT(2, eta->indices[1]);
-    TEST_ASSERT_DOUBLE_WITHIN(1e-12, -0.3, eta->values[0]);
-    TEST_ASSERT_DOUBLE_WITHIN(1e-12, -0.2, eta->values[1]);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-12, 0.6, eta->values[0]);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-12, 0.4, eta->values[1]);
 }
 
 void test_pivot_eta_identity_column_has_zero_nnz(void) {

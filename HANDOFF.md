@@ -4,52 +4,68 @@
 
 ---
 
-## STATUS: Eta Factor Bug Fixed - Netlib Benchmarks Now Solve
+## STATUS: Netlib Benchmark Runner Complete - Solver Bugs Blocking Full Suite
 
 ### What Was Done This Session
 
-**Fixed:** Critical numerical instability in the simplex solver (convexfeld-aiq9)
+**Created:** Netlib benchmark runner infrastructure (convexfeld-xkjj)
 
-**Root Cause:** Four bugs in the eta factor representation:
-1. `pivot_eta.c` stored `1/pivot` instead of `pivot` as pivot_elem
-2. `pivot_eta.c` stored negative scaled values instead of raw column values
-3. `ftran.c` traversed newest-to-oldest instead of oldest-to-newest
-4. `btran.c` traversed oldest-to-newest instead of newest-to-oldest
+**Files Created:**
+- `benchmarks/bench_netlib.c` - Benchmark runner that:
+  - Parses reference solutions from `feasible_gurobi_1e-8.csv`
+  - Runs solver on MPS files
+  - Compares results within 0.01% tolerance
+  - Reports pass/fail with timing
 
-**Files Changed:**
-- `src/basis/pivot_eta.c` - Store pivot directly, store raw column values
-- `src/basis/ftran.c` - Collect etas into array, iterate oldest-to-newest
-- `src/basis/btran.c` - Iterate newest-to-oldest, add isfinite check
+**Benchmark Results (19 small problems tested):**
+- **PASS (4):** afiro, sc50a, sc50b, sc105
+- **FAIL (15):** Most due to solver bugs
 
-**Verification:**
-- All 34/35 unit tests pass (1 pre-existing test isolation issue)
-- Netlib afiro: obj = -464.753143 (expected -464.75) ✓
-- Netlib sc50b: obj = -70.000000 (expected -70.00) ✓
-- Netlib sc105: obj = -52.202061 (expected -52.2020612) ✓
+**Failure Categories:**
+1. False INFEASIBLE (10): adlittle, boeing2, israel, bandm, e226, lotfi, beaconfd, scorpion, brandy, capri
+2. Wrong objective (3): blend (269% error), share2b (614% error), stocfor1 (32% error)
+3. UNBOUNDED (1): kb2
+4. ITER_LIMIT (1): recipe
 
 ---
 
 ## CRITICAL: Next Steps for Next Agent
 
-### Priority 1: Create Netlib Benchmark Runner (convexfeld-xkjj)
+### Priority 1: Fix False INFEASIBLE Detection (convexfeld-zim5)
 
-Now that the solver is numerically stable, implement infrastructure to run and verify Netlib benchmarks:
-- Parse reference solutions from `benchmarks/netlib/feasible_gurobi_1e-8.csv`
-- Run solver on each benchmark
-- Compare results within tolerance
-- Report pass/fail status
+Most benchmarks fail because the solver reports INFEASIBLE when problems are actually feasible.
 
-### Priority 2: Run Full Netlib Suite (convexfeld-86x5)
+**Debug approach:**
+1. Disable presolve `check_obvious_infeasibility()` temporarily
+2. Add debug logging to Phase I to trace artificial variable values
+3. Verify constraint sense handling for >= constraints
 
-After benchmark runner is ready:
-- Run on all 114 feasible Netlib problems
-- Document which problems pass/fail
-- Identify any remaining issues
+### Priority 2: Fix Wrong Objective Values (convexfeld-8rt5)
+
+Some benchmarks converge but with incorrect objectives.
+
+**Affected:** blend, share2b, stocfor1
 
 ### Other Open Items
 
-- `test_unperturb_sequence` - Pre-existing test isolation issue (global state)
-- Full Markowitz LU refactorization (convexfeld-w9to) - Currently refactor only clears etas
+- `convexfeld-7ddt` - Run medium Netlib benchmarks (blocked by solver bugs)
+- `convexfeld-w9to` - Full Markowitz LU refactorization
+- `test_unperturb_sequence` - Test isolation issue
+
+---
+
+## Using the Benchmark Runner
+
+```bash
+# Run all benchmarks
+./build/benchmarks/bench_netlib
+
+# Run specific benchmark
+./build/benchmarks/bench_netlib --filter afiro
+
+# Run with custom paths
+./build/benchmarks/bench_netlib --dir path/to/mps --csv path/to/ref.csv
+```
 
 ---
 
@@ -57,27 +73,27 @@ After benchmark runner is ready:
 
 - **Tests:** 34/35 pass (97%)
 - **Build:** Clean
-- **Small LPs:** Working
-- **Netlib:** afiro, sc50b, sc105 verified working
+- **Netlib Pass Rate:** 4/19 (21%) - blocked by solver bugs
 
 ---
 
 ## Technical Details
 
-### Product Form of Inverse (PFI) Representation
+### Benchmark Runner Design
 
-After a pivot, the basis change is represented as:
-- `B_new = B_old * E` where E is an elementary matrix
-- `B_new^(-1) = E^(-1) * B_old^(-1)`
+The runner (`benchmarks/bench_netlib.c`):
+1. Loads 114 reference solutions from CSV
+2. Iterates over MPS files in directory
+3. For each file: parse MPS, solve, compare objective
+4. Reports pass/fail with relative error and timing
 
-**Correct eta storage:**
-- `pivot_elem = pivot` (the actual pivot value from pivotCol[pivotRow])
-- `values[k] = pivotCol[k]` (raw column values, not scaled)
+### Failure Analysis
 
-**FTRAN (computing B^(-1) * a):**
-- Apply E_1^(-1) first, then E_2^(-1), ..., finally E_k^(-1)
-- Traverse etas from oldest to newest
+Most failures show INFEASIBLE status on feasible problems. Hypothesis:
+- `check_obvious_infeasibility()` presolve check may be too aggressive
+- Phase I may not be correctly handling >= constraints
+- Constraint coefficient signs may be incorrect
 
-**BTRAN (computing B^(-T) * a):**
-- Apply (E_k^(-1))^T first, then (E_{k-1}^(-1))^T, ..., finally (E_1^(-1))^T
-- Traverse etas from newest to oldest
+The few problems that converge with wrong objectives suggest:
+- Objective extraction issue
+- MPS parsing issue with objective row

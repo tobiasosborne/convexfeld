@@ -21,3 +21,6 @@ endfunction()
 
 # M1.8: Tracer Bullet Benchmark
 add_cxf_benchmark(bench_tracer bench_tracer.c)
+
+# Netlib LP Benchmark Suite
+add_cxf_benchmark(bench_netlib bench_netlib.c)
