@@ -390,3 +390,58 @@ for (row in basic_rows) {
 - `cxf_solve_lp`: Returns CXF_OK (0) on success, sets model->status to CXF_OPTIMAL
 - Callers check return for errors, check model->status for optimization outcome
 - Non-zero return indicates error/special status (UNBOUNDED, INFEASIBLE, etc.)
+
+---
+
+## Performance Patterns
+
+### Row-Major Access for CSC Matrix
+The matrix is stored in CSC (column-major), but row access is O(nnz). Build CSR format once for O(nnz_row) row access:
+
+```c
+/* Build row-major format if not present (one-time O(nnz) cost) */
+if (mat->row_ptr == NULL) {
+    if (cxf_prepare_row_data(mat) == CXF_OK) {
+        cxf_build_row_major(mat);
+    }
+}
+
+/* Fast row access using CSR */
+if (mat->row_ptr != NULL) {
+    int64_t start = mat->row_ptr[row];
+    int64_t end = mat->row_ptr[row + 1];
+    for (int64_t k = start; k < end; k++) {
+        int col = mat->col_idx[k];
+        double val = mat->row_values[k];
+        /* Process coefficient */
+    }
+}
+```
+
+### Limit O(n²) Preprocessing
+For algorithms that compare all pairs (e.g., parallel constraint detection), limit to small problem sizes:
+
+```c
+#define MAX_PARALLEL_CHECK_ROWS 100
+
+/* Only do O(m²) check for small problems */
+if (m <= MAX_PARALLEL_CHECK_ROWS) {
+    for (int i = 0; i < m; i++) {
+        for (int j = i + 1; j < m; j++) {
+            /* O(m²) comparison */
+        }
+    }
+}
+```
+
+### Profiling with Callgrind
+```bash
+# Build with debug symbols
+cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_C_FLAGS="-O2 -g -fno-omit-frame-pointer"
+
+# Profile
+valgrind --tool=callgrind --callgrind-out-file=callgrind.out ./bench_netlib --filter name
+
+# Analyze
+callgrind_annotate --auto=yes callgrind.out | head -60
+```

@@ -412,9 +412,27 @@ static int solve_unconstrained(CxfModel *model) {
 
 /**
  * @brief Get row coefficients as dense array.
+ *
+ * Uses CSR (row-major) format if available for O(nnz_row) access.
+ * Falls back to CSC scan which is O(n * avg_col_height).
  */
 static void get_row_coeffs(SparseMatrix *mat, int row, int n, double *coeffs) {
     memset(coeffs, 0, (size_t)n * sizeof(double));
+
+    /* Fast path: use row-major (CSR) format if available */
+    if (mat->row_ptr != NULL && mat->col_idx != NULL && mat->row_values != NULL) {
+        int64_t start = mat->row_ptr[row];
+        int64_t end = mat->row_ptr[row + 1];
+        for (int64_t k = start; k < end; k++) {
+            int col = mat->col_idx[k];
+            if (col >= 0 && col < n) {
+                coeffs[col] = mat->row_values[k];
+            }
+        }
+        return;
+    }
+
+    /* Slow fallback: scan all columns (CSC format) */
     for (int j = 0; j < n; j++) {
         int64_t start = mat->col_ptr[j];
         int64_t end = mat->col_ptr[j + 1];
@@ -441,12 +459,19 @@ static int rows_parallel(double *r1, double *r2, int n, double *scale) {
     return found;
 }
 
+/* Max constraints for O(m²) parallel check - skip for large problems */
+#define MAX_PARALLEL_CHECK_ROWS 100
+
+/* External declarations for row-major format */
+extern int cxf_prepare_row_data(SparseMatrix *mat);
+extern int cxf_build_row_major(SparseMatrix *mat);
+
 /**
  * @brief Check if problem is obviously infeasible via simple analysis.
  *
  * Two checks:
- * 1. Single constraint infeasibility (bound propagation)
- * 2. Parallel constraint contradiction (e.g., x+y<=1 and x+y>=3)
+ * 1. Single constraint infeasibility (bound propagation) - O(m*nnz)
+ * 2. Parallel constraint contradiction - O(m²*n), ONLY for small problems
  */
 static int check_obvious_infeasibility(CxfModel *model) {
     SparseMatrix *mat = model->matrix;
@@ -454,6 +479,13 @@ static int check_obvious_infeasibility(CxfModel *model) {
 
     int m = mat->num_rows;
     int n = mat->num_cols;
+
+    /* Build row-major format if not present (one-time O(nnz) cost) */
+    if (mat->row_ptr == NULL) {
+        if (cxf_prepare_row_data(mat) == CXF_OK) {
+            cxf_build_row_major(mat);
+        }
+    }
 
     double *row1 = (double *)malloc((size_t)n * sizeof(double));
     double *row2 = (double *)malloc((size_t)n * sizeof(double));
@@ -490,40 +522,42 @@ static int check_obvious_infeasibility(CxfModel *model) {
         }
     }
 
-    /* Check 2: Parallel constraint contradiction */
-    for (int i = 0; i < m; i++) {
-        get_row_coeffs(mat, i, n, row1);
-        double rhs1 = mat->rhs ? mat->rhs[i] : 0.0;
-        char sense1 = mat->sense ? mat->sense[i] : '<';
+    /* Check 2: Parallel constraint contradiction - SKIP for large problems */
+    if (m <= MAX_PARALLEL_CHECK_ROWS) {
+        for (int i = 0; i < m; i++) {
+            get_row_coeffs(mat, i, n, row1);
+            double rhs1 = mat->rhs ? mat->rhs[i] : 0.0;
+            char sense1 = mat->sense ? mat->sense[i] : '<';
 
-        for (int j = i + 1; j < m; j++) {
-            get_row_coeffs(mat, j, n, row2);
-            double scale = 0.0;
-            if (!rows_parallel(row1, row2, n, &scale)) continue;
+            for (int j = i + 1; j < m; j++) {
+                get_row_coeffs(mat, j, n, row2);
+                double scale = 0.0;
+                if (!rows_parallel(row1, row2, n, &scale)) continue;
 
-            double rhs2 = mat->rhs ? mat->rhs[j] : 0.0;
-            char sense2 = mat->sense ? mat->sense[j] : '<';
+                double rhs2 = mat->rhs ? mat->rhs[j] : 0.0;
+                char sense2 = mat->sense ? mat->sense[j] : '<';
 
-            /* Scale row2 to match row1: row2 * scale = row1 */
-            double scaled_rhs2 = rhs2 * scale;
-            char scaled_sense2 = sense2;
-            if (scale < 0) {
-                if (sense2 == '<') scaled_sense2 = '>';
-                else if (sense2 == '>') scaled_sense2 = '<';
-            }
+                /* Scale row2 to match row1: row2 * scale = row1 */
+                double scaled_rhs2 = rhs2 * scale;
+                char scaled_sense2 = sense2;
+                if (scale < 0) {
+                    if (sense2 == '<') scaled_sense2 = '>';
+                    else if (sense2 == '>') scaled_sense2 = '<';
+                }
 
-            /* Now check: row1 sense1 rhs1 and row1 scaled_sense2 scaled_rhs2 */
-            double lower = -CXF_INFINITY, upper = CXF_INFINITY;
-            if (sense1 == '<' || sense1 == 'L') upper = fmin(upper, rhs1);
-            else if (sense1 == '>' || sense1 == 'G') lower = fmax(lower, rhs1);
-            else { lower = rhs1; upper = rhs1; }
+                /* Now check: row1 sense1 rhs1 and row1 scaled_sense2 scaled_rhs2 */
+                double lower = -CXF_INFINITY, upper = CXF_INFINITY;
+                if (sense1 == '<' || sense1 == 'L') upper = fmin(upper, rhs1);
+                else if (sense1 == '>' || sense1 == 'G') lower = fmax(lower, rhs1);
+                else { lower = rhs1; upper = rhs1; }
 
-            if (scaled_sense2 == '<' || scaled_sense2 == 'L') upper = fmin(upper, scaled_rhs2);
-            else if (scaled_sense2 == '>' || scaled_sense2 == 'G') lower = fmax(lower, scaled_rhs2);
-            else { lower = fmax(lower, scaled_rhs2); upper = fmin(upper, scaled_rhs2); }
+                if (scaled_sense2 == '<' || scaled_sense2 == 'L') upper = fmin(upper, scaled_rhs2);
+                else if (scaled_sense2 == '>' || scaled_sense2 == 'G') lower = fmax(lower, scaled_rhs2);
+                else { lower = fmax(lower, scaled_rhs2); upper = fmin(upper, scaled_rhs2); }
 
-            if (lower > upper + CXF_FEASIBILITY_TOL) {
-                free(row1); free(row2); return 1;
+                if (lower > upper + CXF_FEASIBILITY_TOL) {
+                    free(row1); free(row2); return 1;
+                }
             }
         }
     }
