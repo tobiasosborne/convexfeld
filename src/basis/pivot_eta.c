@@ -58,8 +58,7 @@ int cxf_pivot_with_eta(BasisState *basis, int pivotRow, const double *pivotCol,
         return -1;  /* Pivot too small - caller should refactorize */
     }
 
-    /* Step 2: Compute eta multiplier */
-    double eta_multiplier = 1.0 / pivot;
+    /* Step 2: Store pivot directly (not reciprocal) for correct FTRAN/BTRAN */
 
     /* Step 3: Count nonzeros in pivot column (excluding pivot row)
      * Drop values below CXF_ZERO_TOL to maintain sparsity */
@@ -79,7 +78,7 @@ int cxf_pivot_with_eta(BasisState *basis, int pivotRow, const double *pivotCol,
     eta->type = 2;              /* Type 2 = pivot update */
     eta->pivot_row = pivotRow;
     eta->pivot_var = enteringVar;
-    eta->pivot_elem = eta_multiplier;
+    eta->pivot_elem = pivot;    /* Store actual pivot, not reciprocal */
     eta->obj_coeff = 0.0;       /* Not used for pivot updates */
     eta->status = 0;            /* Not used for pivot updates */
     eta->nnz = nnz;
@@ -98,12 +97,12 @@ int cxf_pivot_with_eta(BasisState *basis, int pivotRow, const double *pivotCol,
         }
 
         /* Step 5: Store eta entries in sparse format
-         * eta[i] = -pivotCol[i] * eta_multiplier for i != pivotRow */
+         * Store raw column values; FTRAN/BTRAN apply correct formulas */
         int k = 0;
         for (int i = 0; i < m; i++) {
             if (i != pivotRow && fabs(pivotCol[i]) > CXF_ZERO_TOL) {
                 eta->indices[k] = i;
-                eta->values[k] = -pivotCol[i] * eta_multiplier;
+                eta->values[k] = pivotCol[i];  /* Store column value directly */
                 k++;
             }
         }

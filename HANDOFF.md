@@ -4,76 +4,80 @@
 
 ---
 
-## STATUS: Netlib Readiness Assessment Complete
+## STATUS: Eta Factor Bug Fixed - Netlib Benchmarks Now Solve
 
 ### What Was Done This Session
 
-**Assessment:** Evaluated how close the solver is to running on Netlib benchmarks.
+**Fixed:** Critical numerical instability in the simplex solver (convexfeld-aiq9)
 
-**Key Finding:** The solver works for small LPs (2-3 vars) but fails on larger problems like Netlib's afiro (32 vars, 27 constraints) due to numerical instability.
+**Root Cause:** Four bugs in the eta factor representation:
+1. `pivot_eta.c` stored `1/pivot` instead of `pivot` as pivot_elem
+2. `pivot_eta.c` stored negative scaled values instead of raw column values
+3. `ftran.c` traversed newest-to-oldest instead of oldest-to-newest
+4. `btran.c` traversed oldest-to-newest instead of newest-to-oldest
 
-**Root Cause Identified:**
-- After ~12-20 simplex iterations, eta factors accumulate numerical errors
-- Objective value becomes NaN, causing `CXF_ERROR_INVALID_ARGUMENT`
-- Small problems solve before instability hits; Netlib problems need 50-200+ iterations
+**Files Changed:**
+- `src/basis/pivot_eta.c` - Store pivot directly, store raw column values
+- `src/basis/ftran.c` - Collect etas into array, iterate oldest-to-newest
+- `src/basis/btran.c` - Iterate newest-to-oldest, add isfinite check
 
-**Evidence from afiro test:**
-```
-Phase I: 10 iterations -> OPTIMAL (feasible basis found)
-Phase II: iterations 1-11 -> obj improving
-Phase II: iteration 12 -> obj becomes -nan
-Phase II: iteration 13 -> ERROR -3 (CXF_ERROR_INVALID_ARGUMENT)
-```
-
-### Infrastructure Ready
-
-- MPS parser: Complete, tested on afiro/sc50b/sc105
-- Netlib benchmarks: 114 feasible + 29 infeasible in `./benchmarks/netlib/`
-- Reference solutions: `benchmarks/netlib/feasible_gurobi_1e-8.csv`
-- Integration tests: Small constrained LPs pass
+**Verification:**
+- All 34/35 unit tests pass (1 pre-existing test isolation issue)
+- Netlib afiro: obj = -464.753143 (expected -464.75) ✓
+- Netlib sc50b: obj = -70.000000 (expected -70.00) ✓
+- Netlib sc105: obj = -52.202061 (expected -52.2020612) ✓
 
 ---
 
 ## CRITICAL: Next Steps for Next Agent
 
-### Priority 1: Fix Numerical Instability (convexfeld-aiq9)
+### Priority 1: Create Netlib Benchmark Runner (convexfeld-xkjj)
 
-**This is the blocking issue for Netlib testing.**
+Now that the solver is numerically stable, implement infrastructure to run and verify Netlib benchmarks:
+- Parse reference solutions from `benchmarks/netlib/feasible_gurobi_1e-8.csv`
+- Run solver on each benchmark
+- Compare results within tolerance
+- Report pass/fail status
 
-**Action Required:**
-1. Research the relevant specs for numerical stability:
-   - `docs/specs/functions/simplex/cxf_simplex_iterate.md`
-   - `docs/specs/functions/basis/cxf_basis_refactor.md`
-   - `docs/specs/modules/07_basis.md`
+### Priority 2: Run Full Netlib Suite (convexfeld-86x5)
 
-2. Look for spec guidance on:
-   - Basis refactorization frequency
-   - Eta vector overflow handling
-   - Numerical tolerance thresholds
-   - When to trigger LU refactorization
+After benchmark runner is ready:
+- Run on all 114 feasible Netlib problems
+- Document which problems pass/fail
+- Identify any remaining issues
 
-3. Potential fixes to investigate:
-   - More aggressive refactorization (every 20-30 pivots vs current 100)
-   - NaN/Inf detection before each iteration
-   - Implement proper Markowitz LU factorization (convexfeld-w9to)
+### Other Open Items
 
-### After Numerical Fix
-
-- convexfeld-xkjj (P2): Create Netlib benchmark runner infrastructure
-- convexfeld-86x5 (P2): Run solver on small Netlib benchmarks
+- `test_unperturb_sequence` - Pre-existing test isolation issue (global state)
+- Full Markowitz LU refactorization (convexfeld-w9to) - Currently refactor only clears etas
 
 ---
 
 ## Quality Gate Status
 
-- **Tests:** 29/32 pass (91%)
+- **Tests:** 34/35 pass (97%)
 - **Build:** Clean
 - **Small LPs:** Working
-- **Netlib:** Blocked by numerical instability
+- **Netlib:** afiro, sc50b, sc105 verified working
 
 ---
 
-## Pre-existing Issues
+## Technical Details
 
-- `test_unperturb_sequence` fails due to global state (test isolation, not functionality)
-- 3 edge case tests failing in test_simplex_edge.c
+### Product Form of Inverse (PFI) Representation
+
+After a pivot, the basis change is represented as:
+- `B_new = B_old * E` where E is an elementary matrix
+- `B_new^(-1) = E^(-1) * B_old^(-1)`
+
+**Correct eta storage:**
+- `pivot_elem = pivot` (the actual pivot value from pivotCol[pivotRow])
+- `values[k] = pivotCol[k]` (raw column values, not scaled)
+
+**FTRAN (computing B^(-1) * a):**
+- Apply E_1^(-1) first, then E_2^(-1), ..., finally E_k^(-1)
+- Traverse etas from oldest to newest
+
+**BTRAN (computing B^(-T) * a):**
+- Apply (E_k^(-1))^T first, then (E_{k-1}^(-1))^T, ..., finally (E_1^(-1))^T
+- Traverse etas from newest to oldest

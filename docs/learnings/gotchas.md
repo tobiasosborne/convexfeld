@@ -425,29 +425,38 @@ Created dependency chain of P0 issues:
 
 ---
 
-## Netlib Readiness Assessment (2026-01-29)
+## Eta Factor Bug Fix (2026-01-29)
 
-### Numerical Instability Blocks Netlib Testing
+### RESOLVED: Numerical Instability in FTRAN/BTRAN
 
-**Issue:** Eta factors accumulate numerical errors after ~12-20 iterations, causing NaN values and solver failure.
+**Symptoms:** Eta factors accumulated numerical errors after ~12-20 iterations, causing NaN values and solver failure on Netlib benchmarks.
 
-**Evidence from afiro (32 vars, 27 constraints):**
-```
-Phase I: 10 iterations -> OPTIMAL
-Phase II iter 12: obj becomes -nan
-Phase II iter 13: ERROR -3 (CXF_ERROR_INVALID_ARGUMENT)
-Expected: obj = -464.75
-```
+**Root Cause (FIXED):** Multiple bugs in pivot_eta.c and btran.c:
 
-**Why small tests pass:** Integration tests (2-3 vars) complete in <10 iterations, before instability hits.
+1. **pivot_elem stored reciprocal instead of actual pivot:**
+   - Bug: `eta->pivot_elem = 1.0 / pivot;`
+   - Fix: `eta->pivot_elem = pivot;`
+   - Impact: FTRAN divided by reciprocal = multiplied by pivot, causing exponential growth
 
-**Why Netlib fails:** Netlib problems need 50-200+ iterations, exceeding stability threshold.
+2. **eta->values stored negative scaled values instead of raw column values:**
+   - Bug: `eta->values[k] = -pivotCol[i] * eta_multiplier;`
+   - Fix: `eta->values[k] = pivotCol[i];`
+   - Impact: Wrong sign in off-diagonal updates
 
-**Root cause:** Current refactorization interval (100 pivots) is too infrequent. Eta vector chain grows too long before LU refactorization.
+3. **FTRAN traversed newest-to-oldest instead of oldest-to-newest:**
+   - Fix: Collect etas into array, iterate count-1 to 0
+   - Impact: Transformations applied in wrong order
 
-**Specs to research:**
-- `docs/specs/functions/simplex/cxf_simplex_iterate.md`
-- `docs/specs/functions/basis/cxf_basis_refactor.md`
-- `docs/specs/modules/07_basis.md`
+4. **BTRAN traversed oldest-to-newest instead of newest-to-oldest:**
+   - Fix: Iterate 0 to count-1 (not count-1 to 0)
+   - Impact: Transpose transformations applied in wrong order
 
-**Tracking:** convexfeld-aiq9 (P1)
+**Verification:** All three Netlib benchmarks now solve correctly:
+- afiro (32 vars, 27 constrs): obj = -464.753143 ✓
+- sc50b (48 vars, 50 constrs): obj = -70.000000 ✓
+- sc105 (103 vars, 105 constrs): obj = -52.202061 ✓
+
+**Lesson:** Product Form of Inverse requires careful attention to:
+- What values are stored (raw vs reciprocal/scaled)
+- Transformation formulas (must match stored representation)
+- Traversal order (FTRAN: oldest-to-newest, BTRAN: newest-to-oldest)

@@ -15,6 +15,7 @@
 #include "convexfeld/cxf_types.h"
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 /** Maximum stack-allocated eta pointers before heap allocation */
 #define MAX_STACK_ETAS 64
@@ -87,8 +88,10 @@ int cxf_btran(BasisState *basis, int row, double *result) {
         eta = eta->next;
     }
 
-    /* Step 3: Apply eta vectors in REVERSE order (newest to oldest) */
-    for (int i = count - 1; i >= 0; i--) {
+    /* Step 3: Apply eta vectors in REVERSE order (newest to oldest)
+     * etas[0] = newest (head), etas[count-1] = oldest
+     * So iterate from 0 to count-1 */
+    for (int i = 0; i < count; i++) {
         eta = etas[i];
         int pivot_row = eta->pivot_row;
         double pivot_elem = eta->pivot_elem;
@@ -101,8 +104,8 @@ int cxf_btran(BasisState *basis, int row, double *result) {
             return CXF_ERROR_INVALID_ARGUMENT;
         }
 
-        /* Division by zero check */
-        if (pivot_elem == 0.0) {
+        /* Numerical stability check */
+        if (pivot_elem == 0.0 || !isfinite(pivot_elem)) {
             if (etas != stack_etas) {
                 free(etas);
             }
@@ -194,8 +197,10 @@ int cxf_btran_vec(BasisState *basis, const double *input, double *result) {
         eta = eta->next;
     }
 
-    /* Step 3: Apply eta vectors in REVERSE order (newest to oldest) */
-    for (int i = count - 1; i >= 0; i--) {
+    /* Step 3: Apply eta vectors in REVERSE order (newest to oldest)
+     * etas[0] = newest (head), etas[count-1] = oldest
+     * So iterate from 0 to count-1 */
+    for (int i = 0; i < count; i++) {
         eta = etas[i];
         int pivot_row = eta->pivot_row;
         double pivot_elem = eta->pivot_elem;
@@ -208,8 +213,8 @@ int cxf_btran_vec(BasisState *basis, const double *input, double *result) {
             return CXF_ERROR_INVALID_ARGUMENT;
         }
 
-        /* Division by zero check */
-        if (pivot_elem == 0.0) {
+        /* Numerical stability check */
+        if (pivot_elem == 0.0 || !isfinite(pivot_elem)) {
             if (etas != stack_etas) {
                 free(etas);
             }
