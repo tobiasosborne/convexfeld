@@ -678,3 +678,29 @@ for (int64_t p = 0; p < L_nnz; p++)
 
 **IEEE 754 gotcha:** `-0.0 < 0` is FALSE in C. Step computed as `0.0 / -1.0 = -0.0` was NOT caught by `if (stepSize < 0)`. Use `stepSize <= 0` or explicit check.
 
+---
+
+## Capri Cycling Is NOT Step=0 (2026-02-05)
+
+### CORRECTED: Previous analysis was wrong
+
+**Previous belief:** Cycling was step=0 degenerate pivots.
+**Reality:** Debug shows step=3.04e-10 — non-zero but below meaningful progress.
+
+The 1e-12 degeneracy threshold was too low. Steps of 3e-10 from floating-point
+artifacts look non-degenerate but make no real progress. **Threshold should be 1e-8.**
+
+After raising threshold and activating Bland's earlier, the degenerate cycle breaks.
+BUT Bland's rule then causes **oscillating non-degenerate pivots** (2-variable
+zig-zag with steps 1.78 and 10.0) that run 10000+ iterations without convergence.
+Bland's is theoretically guaranteed finite but practically too slow for bounded vars.
+
+### Perturbation Stubs Override Real Implementation
+
+**CRITICAL:** `context.c` has no-op stubs for `cxf_simplex_perturbation()` and
+`cxf_simplex_unperturb()`. These override the real `perturbation.c` during linking.
+Perturbation has NEVER been applied. Removing stubs requires fixing perturbation.c
+(wrong direction, wrong scale, missing auxiliary vars, no basic var recomputation).
+
+**Lesson:** Check for duplicate function definitions before assuming a function works.
+

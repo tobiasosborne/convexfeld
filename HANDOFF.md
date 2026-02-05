@@ -4,78 +4,104 @@
 
 ---
 
-## STATUS: Bland's Rule Infrastructure Added — Cycling Root Cause Identified
+## STATUS: Cycling Root Cause DEEPER Than Expected — Key Findings
 
 ### Session Summary
 
-Added Bland's rule anti-cycling infrastructure (entering + leaving rules). Diagnosed
-the root cause of cycling on capri/grow7/seba but the fix is incomplete — the cycling
-is a **degenerate 2-cycle** that Bland's rule alone doesn't resolve.
+Implemented candidate-skipping loop in iterate.c and investigated cycling on capri.
+**Cycling is NOT a step=0 degeneracy problem** — debug output revealed the real issue.
 
-#### Changes Made
+#### Changes Made (iterate.c only)
 
 | File | Changes |
 |------|---------|
-| `include/convexfeld/cxf_solver.h` | Added `use_bland` and `degenerate_count` fields to SolverContext |
-| `src/simplex/iterate.c` | Bland's entering rule (first attractive var by index, collects up to 10 candidates); cycling detection via degenerate pivot counter |
-| `src/simplex/ratio_test.c` | Bland's leaving rule (smallest variable index among tied ratios when `use_bland` active) |
-| `src/simplex/solve_lp.c` | Activates Bland's rule after 3*m iterations per phase; resets anti-cycling state at Phase II transition |
+| `src/simplex/iterate.c` | Candidate loop: Steps 2-4 (FTRAN, ratio test, step) now loop over Bland candidates, skipping degenerate ones. Degenerate threshold raised to 1e-8. Forced-step for stuck cycles. |
 
-#### Root Cause Analysis: Capri Cycling
+No regressions: 35/36 tests pass (same pre-existing `test_simplex_edge` failure).
 
-Debug showed a **degenerate 2-cycle** in Phase I:
-- Iter N: entering=154 (at ub, rc=82.3), leaving=161 at row 240, step=0
-- Iter N+1: entering=161 (at ub, rc=82.3), leaving=154 at row 240, step=0
-- Variables 154/161 swap in/out of basis row 240 forever with zero progress
+#### Key Discovery: Capri Cycling Debug Analysis
 
-This is NOT a standard Bland's rule failure. The issue is:
-1. Both variables are at **upper bound** with **identical positive reduced costs**
-2. Step is always 0 (fully degenerate — leaving var already at bound)
-3. Each degenerate pivot does nothing to the solution but alternates the basis
+Previous session described the cycle as step=0 degenerate pivots. **This was wrong.**
+Debug output with the current code shows:
 
-#### What Didn't Work
-- Bland's entering rule alone (still cycles because 2 vars alternate)
-- Bland's leaving rule (correctly picks smallest index but both vars are in same row)
-- Degenerate step detection with threshold (step was literally -0.0, not just small)
+```
+Phase 1: Pre-Bland cycling (iter 801-813)
+  Vars 247/240 alternate, step=3.04e-10 (NOT zero — above 1e-12 threshold!)
+  Bland's mode NOT active, degenerate counter stays at 0
+
+Phase 2: Bland's activates at iter 814 (solve_lp.c 3*m rule)
+  Steps become large (1.78, 10.0), cycle breaks
+
+Phase 3: Bland's zig-zagging (iter 814+)
+  Vars 306/314 alternate with steps 1.78 and 10.0
+  Non-degenerate but oscillating — Bland's rule causes poor pivot selection
+  Solver runs 10000+ iterations with no convergence
+```
+
+#### Root Causes Identified
+
+1. **Near-zero step threshold too low**: Previous 1e-12 threshold missed steps
+   of 3e-10 that are effectively degenerate. Fixed: raised to 1e-8.
+
+2. **Bland's rule is too slow**: Once activated, Bland's causes massive zig-zagging
+   on bounded-variable problems. The smallest-index rule makes terrible pivot
+   choices. Solver runs 10000+ iterations without converging.
+
+3. **Perturbation is a no-op**: `context.c` has stub implementations of
+   `cxf_simplex_perturbation()` and `cxf_simplex_unperturb()` that do nothing.
+   The real implementations in `perturbation.c` are NEVER called because the
+   linker picks the context.c stubs. **Removing the stubs causes regressions**
+   because the perturbation.c implementation has bugs:
+   - Wrong direction: shrinks bounds (lb+=eps, ub-=eps) instead of expanding
+   - Only perturbs original vars, not auxiliaries
+   - Scale too small (1e-12) or too large (causes test failures)
 
 ### Remaining Bugs
 
-#### P0: Degenerate Cycling (3 problems — capri, grow7, seba)
-Root cause identified. Needs one of:
-1. **Bound flip**: When entering var at upper bound would cause step=0, flip it to lower bound WITHOUT basis change — avoids the degenerate pivot entirely
-2. **Skip degenerate candidates**: In Bland's mode, if ratio test gives step=0, try next candidate from the collected list (infrastructure for this is partially in place — iterate.c collects up to 10 candidates)
-3. **Stronger perturbation**: Perturb RHS (not just bounds) to break exact degeneracy
+#### P0: Cycling (3 problems — capri, grow7, seba)
+The real fix needs ONE of:
+1. **Fix perturbation properly**: Remove context.c stubs, fix perturbation.c to
+   expand bounds (lb-=eps, ub+=eps), use correct scale (~1e-8), perturb auxiliaries
+   too, AND recompute basic variable values from perturbed RHS after perturbing.
+   The key insight: basic vars must be INTERIOR to perturbed bounds.
+2. **Temporary Bland's**: Activate Bland for ~200 iterations to escape degenerate
+   cycle, then DEACTIVATE and return to normal pricing. Bland's is guaranteed
+   finite but practically too slow.
+3. **Lexicographic pivoting**: Proper anti-cycling for bounded variables.
 
-Option 2 is the simplest next step — the candidate list is already collected.
-
-#### P0: Phase I false INFEASIBLE (8 problems)
-- share1b, stair, degen2, boeing1, boeing2, bnl1, e226, scorpion
-- Some may also be cycling in Phase I
+#### P0: Phase I false INFEASIBLE (8+ problems)
+- brandy, kb2, bandm, share1b, stair, degen2, boeing1/2, bnl1, e226, scorpion
 
 #### P2: Small numerical errors (5 problems)
-- kb2 (0.016%), adlittle (0.12%), recipe (2.4%), scagr7 (1.8%), israel (9.4%)
+- adlittle (0.12%), blend (0.005%), recipe, scagr7, israel
 
 ---
 
 ## Next Steps
 
-### Priority 1: Fix Degenerate Cycling
-The candidate infrastructure is in place. Next agent should:
-1. In iterate.c, after computing stepSize, if `use_bland && stepSize < 1e-12`, loop to try `candidates[1]`, `candidates[2]`, etc. instead of always using `candidates[0]`
-2. If ALL candidates give step=0, accept the degenerate pivot with candidates[0] (can't avoid it)
-3. This requires moving Steps 2-4 (FTRAN, ratio test, step computation) into a loop over candidates
+### Priority 1: Fix Perturbation (recommended approach for cycling)
+1. Remove the no-op stubs from `context.c` (lines 267-293)
+2. Fix `perturbation.c`:
+   - Expand bounds: `lb -= eps`, `ub += eps`
+   - Extend to auxiliaries (j < n+m, not just j < n)
+   - Scale: ~1e-8 (feas_tol * 1e-2)
+   - After perturbing bounds, recompute initial basic variable values from
+     perturbed system (x_B = B^(-1) * b) so they are interior to new bounds
+3. Fix `unperturb`: after restoring bounds, recompute objective from original
+   costs to eliminate perturbation-induced objective shift
+4. Test: capri/grow7/seba should solve; all 11 previously-passing tests must still pass
 
-### Priority 2: Phase I False INFEASIBLE
-- 8 problems return INFEASIBLE but are feasible
-- After cycling fix, re-test — some may be cycling in Phase I
+### Priority 2: Temporary Bland's mode
+Instead of keeping Bland's on forever, deactivate after 200 iterations and
+trigger refactorization. This avoids the zig-zagging problem.
 
-### Priority 3: Numerical Refinement
-- kb2, adlittle very close — tighter pivot tolerance or iterative refinement
+### Priority 3: Phase I false INFEASIBLE
+Many problems fail in Phase I. Some may be cycling, others genuinely stuck.
 
 ---
 
 ## Quality Gate Status
 
 - **Tests:** 35/36 pass (pre-existing `test_simplex_edge` failure)
-- **Build:** Clean
-- **Netlib:** 11 pass, 13 fail, 3 timeout (unchanged — cycling fix incomplete)
+- **Build:** Clean (no warnings)
+- **Netlib:** 11 pass, 13 fail, 3 timeout (unchanged — cycling fix needs perturbation)

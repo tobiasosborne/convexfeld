@@ -121,8 +121,8 @@ static void extract_column_ext(const SparseMatrix *matrix, BasisState *basis,
  */
 int cxf_simplex_iterate(SolverContext *state, CxfEnv *env) {
     int rc;
-    int entering, leavingRow;
-    double pivotElement, stepSize;
+    int entering = -1, leavingRow = -1;
+    double pivotElement = 0.0, stepSize = 0.0;
     int candidates[10];
     int num_candidates;
 
@@ -246,94 +246,124 @@ int cxf_simplex_iterate(SolverContext *state, CxfEnv *env) {
         return ITERATE_OPTIMAL;  /* No improving variable found */
     }
 
-    entering = candidates[0];  /* Take best candidate */
-
-
-
     /*=========================================================================
-     * Step 2: FTRAN - compute pivot column B^(-1) * a_entering
-     * For artificial vars (entering >= n), generates identity column
+     * Steps 2-4: FTRAN, ratio test, step size — looped over candidates.
+     * In Bland's mode, skip candidates that produce degenerate (step=0)
+     * pivots to break cycling. Fall back to first candidate if all degenerate.
      *=========================================================================*/
-    extract_column_ext(model->matrix, basis, entering, n, m, column);
-    rc = cxf_ftran(basis, column, pivotCol);
-    if (rc != CXF_OK) {
-        return rc;
+    int chosen_idx = 0;
+    int last_candidate = num_candidates;  /* try all in Bland's mode */
+
+    for (int ci = 0; ci < last_candidate; ci++) {
+        entering = candidates[ci];
+
+        /* Step 2: FTRAN - compute pivot column B^(-1) * a_entering */
+        extract_column_ext(model->matrix, basis, entering, n, m, column);
+        rc = cxf_ftran(basis, column, pivotCol);
+        if (rc != CXF_OK) {
+            return rc;
+        }
+
+        /* Step 3: Ratio test - select leaving variable */
+        rc = cxf_ratio_test(state, env, entering, pivotCol, m,
+                            &leavingRow, &pivotElement);
+        if (rc == CXF_UNBOUNDED) {
+            /* Try next candidate — this one has no leaving var */
+            if (state->use_bland && ci + 1 < last_candidate) continue;
+            return ITERATE_UNBOUNDED;
+        }
+        if (rc != CXF_OK) {
+            return rc;
+        }
+
+        /* Step 4: Compute step size */
+        if (fabs(pivotElement) < CXF_PIVOT_TOL) {
+            if (state->use_bland && ci + 1 < last_candidate) continue;
+            return CXF_NUMERIC;
+        }
+
+        int leaving = basis->basic_vars[leavingRow];
+        double x_leaving = state->work_x[leaving];
+        double lb_leaving = state->work_lb[leaving];
+        double ub_leaving = state->work_ub[leaving];
+
+        if (pivotElement > 0) {
+            stepSize = (x_leaving - lb_leaving) / pivotElement;
+        } else {
+            stepSize = (x_leaving - ub_leaving) / pivotElement;
+        }
+
+        if (stepSize < 0) stepSize = 0;
+
+        /* Limit by entering variable's bound range */
+        double x_entering = state->work_x[entering];
+        double lb_entering = state->work_lb[entering];
+        double ub_entering = state->work_ub[entering];
+        if (basis->var_status[entering] == -1) {
+            double max_step = ub_entering - x_entering;
+            if (max_step < stepSize) stepSize = max_step;
+        } else if (basis->var_status[entering] == -2) {
+            double max_step = x_entering - lb_entering;
+            if (max_step < stepSize) stepSize = max_step;
+        }
+
+        if (stepSize < 0) stepSize = 0;
+
+        /* In Bland's mode, skip degenerate pivots if alternatives exist */
+        if (state->use_bland && stepSize < 1e-8 && ci + 1 < last_candidate) {
+            chosen_idx = ci;
+            continue;  /* try next candidate */
+        }
+
+        chosen_idx = ci;
+        break;  /* use this candidate */
     }
 
-    /*=========================================================================
-     * Step 3: Ratio test - select leaving variable
-     *=========================================================================*/
-    rc = cxf_ratio_test(state, env, entering, pivotCol, m,
+    /* If loop exhausted all candidates (all degenerate), use the first one.
+     * Re-run FTRAN/ratio test for candidate[0] since pivotCol is stale. */
+    if (chosen_idx > 0 && stepSize < 1e-8 && state->use_bland) {
+        entering = candidates[0];
+        extract_column_ext(model->matrix, basis, entering, n, m, column);
+        cxf_ftran(basis, column, pivotCol);
+        cxf_ratio_test(state, env, entering, pivotCol, m,
                         &leavingRow, &pivotElement);
-    if (rc == CXF_UNBOUNDED) {
-        return ITERATE_UNBOUNDED;
-    }
-    if (rc != CXF_OK) {
-        return rc;
-    }
-
-    /*=========================================================================
-     * Step 4: Compute step size
-     *=========================================================================*/
-    if (fabs(pivotElement) < CXF_PIVOT_TOL) {
-        return CXF_NUMERIC;  /* Pivot too small */
-    }
-
-    /* Step size based on ratio test.
-     * When entering var increases by stepSize, basic var changes by -stepSize * pivotElement.
-     * - pivotElement > 0: basic var decreases toward lb
-     * - pivotElement < 0: basic var increases toward ub
-     */
-    int leaving = basis->basic_vars[leavingRow];
-    double x_leaving = state->work_x[leaving];
-    double lb_leaving = state->work_lb[leaving];
-    double ub_leaving = state->work_ub[leaving];
-
-    if (pivotElement > 0) {
-        /* Basic var decreases toward lower bound */
-        stepSize = (x_leaving - lb_leaving) / pivotElement;
-    } else {
-        /* Basic var increases toward upper bound */
-        stepSize = (x_leaving - ub_leaving) / pivotElement;
-    }
-
-    if (stepSize < 0) {
-        stepSize = 0;  /* Degenerate pivot */
-    }
-
-    /* Also limit step size by ENTERING variable's upper bound.
-     * If entering var is at lower bound and has finite upper bound,
-     * we can't step more than (ub - lb).
-     * This is crucial for fixed variables (ub = lb = 0) where step must be 0.
-     */
-    double x_entering = state->work_x[entering];
-    double lb_entering = state->work_lb[entering];
-    double ub_entering = state->work_ub[entering];
-    if (basis->var_status[entering] == -1) {
-        /* At lower bound, moving up toward upper bound */
-        double max_step_entering = ub_entering - x_entering;
-        if (max_step_entering < stepSize) {
-            stepSize = max_step_entering;
+        int leaving = basis->basic_vars[leavingRow];
+        double x_leaving = state->work_x[leaving];
+        double lb_leaving = state->work_lb[leaving];
+        double ub_leaving = state->work_ub[leaving];
+        if (pivotElement > 0) {
+            stepSize = (x_leaving - lb_leaving) / pivotElement;
+        } else {
+            stepSize = (x_leaving - ub_leaving) / pivotElement;
         }
-    } else if (basis->var_status[entering] == -2) {
-        /* At upper bound, moving down toward lower bound */
-        double max_step_entering = x_entering - lb_entering;
-        if (max_step_entering < stepSize) {
-            stepSize = max_step_entering;
+        if (stepSize < 0) stepSize = 0;
+        double x_entering = state->work_x[entering];
+        double lb_entering = state->work_lb[entering];
+        double ub_entering = state->work_ub[entering];
+        if (basis->var_status[entering] == -1) {
+            double max_step = ub_entering - x_entering;
+            if (max_step < stepSize) stepSize = max_step;
+        } else if (basis->var_status[entering] == -2) {
+            double max_step = x_entering - lb_entering;
+            if (max_step < stepSize) stepSize = max_step;
         }
+        if (stepSize < 0) stepSize = 0;
     }
 
-    if (stepSize < 0) {
-        stepSize = 0;  /* Degenerate pivot */
-    }
-
-    /* Cycling detection: track consecutive degenerate pivots.
-     * Activate Bland's rule aggressively to prevent cycling. */
-    if (stepSize < 1e-12) {
+    /* Cycling detection: track consecutive near-degenerate pivots.
+     * Threshold 1e-8 catches steps that are non-zero from FP artifacts
+     * (e.g. 3e-10) but effectively degenerate. */
+    if (stepSize < 1e-8) {
         state->degenerate_count++;
-        /* Bland's after sustained degeneracy — scales with problem size */
-        if (!state->use_bland && state->degenerate_count > m + 50) {
+        if (!state->use_bland && state->degenerate_count > 50) {
             state->use_bland = 1;
+        }
+        /* Force a non-zero step to break exact degeneracy cycles.
+         * This virtual perturbation ensures forward progress. Scale grows
+         * with degenerate count to eventually escape any cycle. */
+        if (state->use_bland && fabs(pivotElement) > CXF_PIVOT_TOL) {
+            double scale = 1.0 + (state->degenerate_count / 100.0);
+            stepSize = scale * CXF_FEASIBILITY_TOL / fabs(pivotElement);
         }
     } else {
         state->degenerate_count = 0;
