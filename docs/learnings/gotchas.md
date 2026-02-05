@@ -656,3 +656,25 @@ for (int64_t p = 0; p < L_nnz; p++)
 
 **Lesson:** In PA=LU with row/column permutations, every index must be in a consistent coordinate space. L, U, and the solve routines must all agree on whether indices are "original" or "permuted step positions". The permutation step in FTRAN (`temp[k] = result[perm_row[k]]`) transforms to step space — all subsequent L/U operations must use step-space indices.
 
+---
+
+## Bland's Rule Insufficient for Bounded Variable Simplex Cycling (2026-02-05)
+
+### UNRESOLVED: Degenerate 2-Cycle with Bounded Variables
+
+**Symptoms:** capri, grow7, seba timeout. Debug shows 2-variable cycle: vars 154/161 swap in/out of basis row 240 every iteration with step=0 and identical reduced costs (82.3).
+
+**Root Cause:** Both variables are at upper bound with the same positive reduced cost. Bland's entering rule picks 154 (smaller index) when it's nonbasic, then 161 when 154 is basic. Bland's leaving rule picks the same row. Step=0 means no solution progress — pure basis cycling.
+
+**Why Bland's Rule Doesn't Help Here:**
+- Standard Bland's rule guarantees finite termination for non-degenerate pivots
+- With bounded variables and step=0 degenerate pivots, the basis changes but the solution doesn't — the "visited bases" argument breaks down
+- The 2-cycle is: B1 → (degenerate pivot) → B2 → (degenerate pivot) → B1
+
+**Lesson:** For bounded variable simplex, Bland's rule (entering + leaving) is necessary but not sufficient. Need one of:
+1. **Skip degenerate candidates**: Try next Bland candidate when step=0
+2. **Bound flips**: When entering var would cause step=0, flip it at its bound without basis change
+3. **RHS perturbation**: Perturb b (not just variable bounds) to make all basic variables strictly interior
+
+**IEEE 754 gotcha:** `-0.0 < 0` is FALSE in C. Step computed as `0.0 / -1.0 = -0.0` was NOT caught by `if (stepSize < 0)`. Use `stepSize <= 0` or explicit check.
+

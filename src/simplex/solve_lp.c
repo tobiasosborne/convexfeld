@@ -255,6 +255,11 @@ static int transition_to_phase_two(SolverContext *state, CxfModel *model) {
     }
 
     state->phase = 2;
+
+    /* Reset anti-cycling state for Phase II */
+    state->use_bland = 0;
+    state->degenerate_count = 0;
+
     return CXF_OK;
 }
 
@@ -719,10 +724,16 @@ int cxf_solve_lp(CxfModel *model) {
     /* Initial Phase I objective (sum of artificial values) */
 
     /* Phase I iteration loop */
+    int phase1_start_iter = state->iteration;
 #ifdef DEBUG_PHASE1
     int debug_iter = 0;
 #endif
     while (state->iteration < max_iter) {
+        /* Enable Bland's rule after 3*m iterations to prevent cycling */
+        int phase_iters = state->iteration - phase1_start_iter;
+        if (!state->use_bland && phase_iters > 3 * state->num_constrs) {
+            state->use_bland = 1;
+        }
         status = cxf_simplex_iterate(state, env);
 
 #ifdef DEBUG_PHASE1
@@ -1212,7 +1223,13 @@ int cxf_solve_lp(CxfModel *model) {
     compute_reduced_costs(state);
 
     /* Phase II iteration loop */
+    int phase2_start_iter = state->iteration;
     while (state->iteration < max_iter) {
+        /* Enable Bland's rule after 3*m iterations to prevent cycling */
+        int phase_iters = state->iteration - phase2_start_iter;
+        if (!state->use_bland && phase_iters > 3 * state->num_constrs) {
+            state->use_bland = 1;
+        }
         status = cxf_simplex_iterate(state, env);
 
         if (status == ITERATE_OPTIMAL) {

@@ -170,7 +170,24 @@ int cxf_simplex_iterate(SolverContext *state, CxfEnv *env) {
      * Step 1: Pricing - select entering variable
      * Scan all variables including artificials (indices n to n+m-1)
      *=========================================================================*/
-    if (state->pricing != NULL) {
+    if (state->use_bland) {
+        /* Bland's rule: collect attractive variables in index order.
+         * Gather multiple so we can skip degenerate pivots. */
+        num_candidates = 0;
+        for (int j = 0; j < total_vars && num_candidates < 10; j++) {
+            if (basis->var_status[j] >= 0) continue;
+            double lb_j = state->work_lb[j];
+            double ub_j = state->work_ub[j];
+            if (ub_j <= lb_j + CXF_FEASIBILITY_TOL) continue;
+
+            double rc_val = state->work_dj[j];
+            if (basis->var_status[j] == -1 && rc_val < -env->optimality_tol) {
+                candidates[num_candidates++] = j;
+            } else if (basis->var_status[j] == -2 && rc_val > env->optimality_tol) {
+                candidates[num_candidates++] = j;
+            }
+        }
+    } else if (state->pricing != NULL) {
         num_candidates = cxf_pricing_candidates(
             state->pricing,
             state->work_dj,       /* reduced costs */
@@ -230,6 +247,7 @@ int cxf_simplex_iterate(SolverContext *state, CxfEnv *env) {
     }
 
     entering = candidates[0];  /* Take best candidate */
+
 
 
     /*=========================================================================
@@ -307,6 +325,18 @@ int cxf_simplex_iterate(SolverContext *state, CxfEnv *env) {
 
     if (stepSize < 0) {
         stepSize = 0;  /* Degenerate pivot */
+    }
+
+    /* Cycling detection: track consecutive degenerate pivots.
+     * Activate Bland's rule aggressively to prevent cycling. */
+    if (stepSize < 1e-12) {
+        state->degenerate_count++;
+        /* Bland's after sustained degeneracy — scales with problem size */
+        if (!state->use_bland && state->degenerate_count > m + 50) {
+            state->use_bland = 1;
+        }
+    } else {
+        state->degenerate_count = 0;
     }
 
     /*=========================================================================

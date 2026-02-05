@@ -64,6 +64,10 @@ struct SolverContext {
      * Allocated once in init, reused across iterations to avoid malloc/free */
     double *work_column;      /**< Column extraction buffer [num_constrs] */
     double *work_cB;          /**< Basic variable costs [num_constrs] */
+
+    /* Anti-cycling */
+    int use_bland;            /**< If nonzero, use Bland's rule for pricing */
+    int degenerate_count;     /**< Consecutive degenerate pivots (stepSize=0) */
 };
 
 /*******************************************************************************

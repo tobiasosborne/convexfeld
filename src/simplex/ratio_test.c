@@ -123,12 +123,14 @@ int cxf_ratio_test(SolverContext *state, CxfEnv *env, int enteringVar,
     }
 
     /*
-     * Second pass: Select largest pivot magnitude among near-minimum ratios.
-     * This improves numerical stability by avoiding tiny pivot elements.
+     * Second pass: Among near-minimum ratios, select by:
+     * - Bland's rule: smallest variable index (anti-cycling guarantee)
+     * - Normal: largest pivot magnitude (numerical stability)
      */
     threshold = minRatio + feasTol;
     maxPivot = fabs(pivotColumn[minRow]);
     finalRow = minRow;
+    int bland_best_var = state->basis->basic_vars[minRow];
 
     for (i = 0; i < state->num_constrs; i++) {
         d_i = pivotColumn[i];
@@ -171,9 +173,17 @@ int cxf_ratio_test(SolverContext *state, CxfEnv *env, int enteringVar,
 
         /* If ratio is within threshold, consider this pivot */
         if (ratio <= threshold) {
-            if (fabs(d_i) > maxPivot) {
-                maxPivot = fabs(d_i);
-                finalRow = i;
+            if (state->use_bland) {
+                /* Bland's leaving rule: smallest variable index breaks ties */
+                if (basicVar < bland_best_var) {
+                    bland_best_var = basicVar;
+                    finalRow = i;
+                }
+            } else {
+                if (fabs(d_i) > maxPivot) {
+                    maxPivot = fabs(d_i);
+                    finalRow = i;
+                }
             }
         }
     }
