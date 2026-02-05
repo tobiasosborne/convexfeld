@@ -948,3 +948,27 @@ Control structure that wraps SolverContext and manages solve progress:
 - Defensive programming: NULL-safe, idempotent cleanup
 
 ---
+
+## 2026-02-05: LU Refactorization Re-enabled
+
+**PARTIAL SUCCESS: Refactorization reduces timeouts but reveals LU accuracy issues.**
+
+### What Changed
+- `iterate.c`: `REFACTOR_INTERVAL` 10000→100, `cxf_basis_refactor(basis)` → `cxf_solver_refactor(state, env)`
+- This switches from the naive refactor (clears etas, resets diag_coeff to identity — WRONG) to proper Markowitz LU factorization
+
+### What Worked
+- 5 previously-cycling problems now terminate (timeouts 14→9)
+- Existing passing problems (afiro, sc50b, sc105, blend) still pass
+
+### What Didn't Work
+- Problems that newly terminate often return wrong answers
+- kb2: obj=0 (should be -1749), share2b: 4.73x error, lotfi: 9.1x error
+- Suggests LU factorize or LU solve path has a bug, likely in permutation handling
+
+### Lesson
+- The LU infrastructure (factorize, FTRAN path, BTRAN path) needs a verification harness
+- After refactorization, compute B * (B^{-1} * e_i) for a few columns and check = e_i
+- Permutation bugs are subtle — the factorize stores perm_row/perm_col and the solve applies them in a specific order that must be exactly consistent
+
+---

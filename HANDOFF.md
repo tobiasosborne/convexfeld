@@ -1,127 +1,90 @@
 # Agent Handoff
 
-*Last updated: 2026-01-29*
+*Last updated: 2026-02-05*
 
 ---
 
-## STATUS: Phase I Numerical Drift Fixes In Progress
+## STATUS: LU Refactorization Enabled — Accuracy Issues Remain
 
 ### Session Summary
 
-Investigated the P0 bug where Phase I returns INFEASIBLE for feasible problems. Found and partially fixed numerical drift issues in solution values.
+Re-enabled periodic LU refactorization in the simplex iteration loop. This was the top recommendation from the previous session's analysis. Perturbation and solution refinement were already wired into solve_lp.c.
 
-#### Key Finding: Numerical Drift in Basic Variable Values
-
-**Root Cause Identified:**
-- After many simplex pivots, `work_x` values drift from actual constraint satisfaction
-- Example: scorpion has 4 artificial variables with stored values > 0, but all constraints are actually satisfied (gap = 0)
-- The simplex updates `work_x` incrementally, accumulating floating-point errors
-- Phase I declares INFEASIBLE based on stored artificial values, not actual constraint satisfaction
-
-**Partial Fix Implemented:**
-1. Recompute true infeasibility from actual `Ax` vs `rhs` values
-2. Iteratively correct basic variable values from constraint equations
-3. Use relaxed tolerance (0.01) for Phase I completion
-
-**Results:**
-- scorpion: Now passes Phase I but Phase II returns wrong objective (10.5 vs 1878)
-- Other failing cases (capri, degen2, bnl1, seba, e226): Still INFEASIBLE
-- e226: Has true constraint violation (not just numerical drift) due to dual degeneracy
-
-#### Files Modified
+#### Changes Made
 
 | File | Changes |
 |------|---------|
-| `src/simplex/solve_lp.c` | Added true infeasibility computation, basic var correction loop, relaxed Phase I tolerance |
-| `src/simplex/iterate.c` | Removed debug output (was added then removed) |
+| `src/simplex/iterate.c` | Changed `REFACTOR_INTERVAL` from 10000 to 100; switched from `cxf_basis_refactor(basis)` to `cxf_solver_refactor(state, env)` for proper LU factorization |
+
+#### Benchmark Results (27 problems tested)
+
+**Before (REFACTOR_INTERVAL=10000, eta-only):**
+- PASS: 4 (afiro, sc50b, sc105, blend)
+- FAIL: 9 (wrong obj or wrong status)
+- TIMEOUT (>10s): 14
+
+**After (REFACTOR_INTERVAL=100, LU refactorization):**
+- PASS: 4 (afiro, sc50b, sc105, blend)
+- FAIL: 14 (wrong obj or wrong status)
+- TIMEOUT (>15s): 9
+
+**Net effect:** 5 fewer timeouts (problems now terminate), but some return wrong answers — suggests LU factorization or LU-based FTRAN/BTRAN has accuracy bugs.
+
+#### Key Findings
+
+1. **Perturbation + refinement already wired in** (lines 714, 1236, 1239 of solve_lp.c) — not the missing piece
+2. **LU refactorization infrastructure is complete:** lu_factorize.c (Markowitz), lu_factors.c (lifecycle), ftran.c/btran.c (LU paths)
+3. **LU path has correctness issues:** Problems that previously timed out (cycling) now terminate but with wrong answers (kb2: obj=0, share2b: 4.73x error, lotfi: 9.1x error)
+4. **FTRAN/BTRAN architecture is correct:** LU replaces diag_coeff when valid; etas layer on top
+
+### Root Cause Hypothesis for LU Accuracy Issues
+
+The LU factorization in `lu_factorize.c` uses dense Markowitz elimination. Possible bugs:
+- The L factor row indices store original row indices, but the FTRAN/BTRAN LU apply code may expect step indices (or vice versa)
+- Permutation handling (P, Q) in the solve/btran may be inconsistent with how they're stored
+- U off-diagonal entries use `U_row_idx[p] = j_step` (step index) — need to verify FTRAN/BTRAN interpret this consistently
 
 ### Remaining Bugs
 
-#### P0: Phase I Issues (Multiple Root Causes)
+#### P0: Phase I INFEASIBLE for feasible problems
+- 6 problems: scorpion, e226, boeing1, boeing2, israel, bnl1, seba
+- Root causes: numerical drift (partially fixed), dual degeneracy (unfixed)
 
-**Issue 1: Numerical Drift (Partially Fixed)**
-- Fix: Recompute basic var values from constraints
-- Status: Working for scorpion, not for all cases
+#### P1: LU Refactorization Accuracy
+- After LU refactor, solution values go wrong
+- Need to debug LU factorize + FTRAN/BTRAN LU path consistency
+- Consider adding a verification step: after refactor, check that B * B^{-1} * e_i = e_i for a few columns
 
-**Issue 2: Dual Degeneracy (e226)**
-- Variables at lower bound have reduced cost exactly 0
-- No improving direction found despite constraint violation
-- Needs: Lexicographic pivoting or objective perturbation for anti-cycling
+#### P1: False UNBOUNDED
+- 2 problems: bore3d, adlittle (adlittle newly UNBOUNDED after refactor change)
+- Issue `convexfeld-o2th`
 
-**Issue 3: Phase II Returns Wrong Objective (scorpion)**
-- Phase I completes with small residual infeasibility (0.002)
-- Phase II starts but returns wildly wrong objective (10.5 vs 1878)
-- Needs: Investigation of Phase II transition or solution extraction
-
-#### P1: Other Issues
-- kb2: Small numerical error (0.016%)
-- share1b: Still INFEASIBLE (needs investigation)
-
----
-
-## Debug Output Added
-
-The code has `#ifdef DEBUG_PHASE1` blocks for tracing:
-- Phase I setup (artificial variable values)
-- Each iteration (obj, reduced cost stats)
-- Infeasibility check (constraint violations)
-- Basic variable correction
-
-Enable with: `cmake -DCMAKE_C_FLAGS="-DDEBUG_PHASE1"`
+#### P1: Cycling/Timeouts
+- 9 problems still timeout at 15s: brandy, share1b, capri, bandm, recipe, scagr7, grow7, stair, degen2
 
 ---
 
 ## Next Steps
 
-### Priority 1: Fix Phase II for scorpion
-1. Enable DEBUG output for Phase II
-2. Trace transition_to_phase_two()
-3. Check if objective coefficients are restored correctly
-4. Verify reduced costs in Phase II
+### Priority 1: Debug LU FTRAN/BTRAN Path
+1. Add verification: after `cxf_solver_refactor`, test B * B^{-1} * e_i = e_i for a few columns
+2. If verification fails, the bug is in lu_factorize.c or the LU solve routines
+3. Focus on permutation handling — most likely source of errors
+4. Test with a small problem (afiro) that currently passes, to verify LU path works on simple cases
 
-### Priority 2: Investigate e226 Dual Degeneracy
-1. Add lexicographic pivoting or objective perturbation
-2. Or implement Bland's rule for anti-cycling
-3. Test on e226 specifically
+### Priority 2: Anti-cycling (Bland's Rule)
+- Perturbation is applied but may not be sufficient
+- Bland's rule (smallest index among improving) is simple and guaranteed to terminate
+- Would fix remaining timeouts
 
-### Priority 3: Run Full Benchmark Suite
-1. After fixing above, run full netlib suite
-2. Compare pass/fail counts with pre-session baseline (24 pass)
-3. Document improvement
-
----
-
-## Code Changes Detail
-
-### solve_lp.c Changes (Phase I)
-
-```c
-// After ITERATE_OPTIMAL in Phase I:
-// 1. Compute true infeasibility from Ax values
-// 2. Iteratively correct basic variable values
-// 3. Use relaxed tolerance for Phase I completion
-double phase1_tol = fmax(env->feasibility_tol, 0.01);
-if (true_infeasibility <= phase1_tol) {
-    break;  // Proceed to Phase II
-}
-```
-
-### Correction Algorithm
-
-```
-For each row i:
-  If basic_var is original:
-    x[basic] = (rhs - Ax_without_basic) / A[i,basic]
-  Else (auxiliary is basic):
-    aux = (rhs - Ax) / diag_coeff
-```
-
-Iterate until true_infeasibility converges or 10 iterations.
+### Priority 3: Phase I False INFEASIBLE
+- After LU accuracy fixed, re-test Phase I problems
+- Dual degeneracy (e226) needs lexicographic pivoting
 
 ---
 
 ## Quality Gate Status
 
-- **Tests:** Not re-run (should be 35/36)
+- **Tests:** 35/36 pass (pre-existing `test_unperturb_sequence` failure)
 - **Build:** Clean
-- **Netlib:** scorpion passes Phase I (new), others still failing
+- **Netlib:** 4 pass, 14 fail, 9 timeout (was 4/9/14)

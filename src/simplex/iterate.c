@@ -26,11 +26,8 @@
 #define ITERATE_INFEASIBLE 2
 #define ITERATE_UNBOUNDED  3
 
-/* Refactorization threshold */
-/* TODO: Set back to 100 after implementing proper LU refactorization.
- * Currently disabled because refactorization resets diag_coeff to identity,
- * which breaks FTRAN when the basis has non-identity diagonal. */
-#define REFACTOR_INTERVAL  10000
+/* Refactorization threshold - triggers LU refactorization every N pivots */
+#define REFACTOR_INTERVAL  100
 
 /* External function declarations */
 extern int cxf_pricing_candidates(PricingContext *ctx, const double *reduced_costs,
@@ -42,7 +39,7 @@ extern int cxf_ratio_test(SolverContext *state, CxfEnv *env, int enteringVar,
                           int *leavingRow_out, double *pivotElement_out);
 extern int cxf_simplex_step(SolverContext *state, int entering, int leavingRow,
                             const double *pivotCol, double stepSize);
-extern int cxf_basis_refactor(BasisState *basis);
+extern int cxf_solver_refactor(SolverContext *ctx, CxfEnv *env);
 
 /**
  * @brief Get the coefficient for slack/surplus/artificial variable.
@@ -391,7 +388,7 @@ int cxf_simplex_iterate(SolverContext *state, CxfEnv *env) {
      * Step 8: Check refactorization
      *=========================================================================*/
     if (basis->pivots_since_refactor >= REFACTOR_INTERVAL) {
-        cxf_basis_refactor(basis);
+        cxf_solver_refactor(state, env);
     }
 
     state->iteration++;
