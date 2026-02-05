@@ -253,6 +253,24 @@ int cxf_lu_factorize(LUFactors *lu, SolverContext *ctx) {
     }
     lu->U_col_ptr[m] = lu->U_nnz;
 
+    /* Reallocate U arrays if actual nnz exceeds initial estimate */
+    if (lu->U_nnz > 0) {
+        int *new_ridx = (int *)realloc(lu->U_row_idx,
+                                       (size_t)lu->U_nnz * sizeof(int));
+        double *new_vals = (double *)realloc(lu->U_values,
+                                             (size_t)lu->U_nnz * sizeof(double));
+        if (new_ridx == NULL || new_vals == NULL) {
+            if (new_ridx) lu->U_row_idx = new_ridx;
+            if (new_vals) lu->U_values = new_vals;
+            free(B); free(row_count); free(col_count);
+            free(row_elim); free(col_elim);
+            free(L_i); free(L_j); free(L_v);
+            return 1001;
+        }
+        lu->U_row_idx = new_ridx;
+        lu->U_values = new_vals;
+    }
+
     /* Fill U values */
     if (lu->U_nnz > 0) {
         int64_t idx = 0;
@@ -272,6 +290,25 @@ int cxf_lu_factorize(LUFactors *lu, SolverContext *ctx) {
 
     /* Build L in column-wise format */
     lu->L_nnz = (int64_t)L_count;
+
+    /* Reallocate L arrays if actual nnz exceeds initial estimate */
+    if (L_count > 0) {
+        int *new_ridx = (int *)realloc(lu->L_row_idx,
+                                       (size_t)L_count * sizeof(int));
+        double *new_vals = (double *)realloc(lu->L_values,
+                                             (size_t)L_count * sizeof(double));
+        if (new_ridx == NULL || new_vals == NULL) {
+            if (new_ridx) lu->L_row_idx = new_ridx;
+            if (new_vals) lu->L_values = new_vals;
+            free(B); free(row_count); free(col_count);
+            free(row_elim); free(col_elim);
+            free(L_i); free(L_j); free(L_v);
+            return 1001;
+        }
+        lu->L_row_idx = new_ridx;
+        lu->L_values = new_vals;
+    }
+
     memset(lu->L_col_ptr, 0, (size_t)(m + 1) * sizeof(int64_t));
 
     /* Count entries per column */
@@ -302,6 +339,26 @@ int cxf_lu_factorize(LUFactors *lu, SolverContext *ctx) {
     }
 
     free(work_ptr);
+
+    /* Convert L_row_idx from original row indices to step positions.
+     * After permutation P, temp[] is indexed by step position, so L entries
+     * must also use step positions for correct forward/backward substitution. */
+    {
+        int *inv_perm = (int *)malloc((size_t)m * sizeof(int));
+        if (inv_perm == NULL) {
+            free(B); free(row_count); free(col_count);
+            free(row_elim); free(col_elim);
+            free(L_i); free(L_j); free(L_v);
+            return 1001;
+        }
+        for (int k = 0; k < m; k++) {
+            inv_perm[lu->perm_row[k]] = k;
+        }
+        for (int64_t p = 0; p < lu->L_nnz; p++) {
+            lu->L_row_idx[p] = inv_perm[lu->L_row_idx[p]];
+        }
+        free(inv_perm);
+    }
     free(B);
     free(row_count); free(col_count);
     free(row_elim); free(col_elim);

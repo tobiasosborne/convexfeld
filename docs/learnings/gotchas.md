@@ -633,3 +633,26 @@ The variable could help satisfy the violated constraint, but pricing doesn't sel
 
 **Lesson:** Phase I can get stuck at dual degenerate points. For robust simplex, need proper degeneracy handling beyond just objective perturbation.
 
+---
+
+## LU Factorization L_row_idx Permutation Bug (2026-02-05)
+
+### RESOLVED: L factor row indices in wrong coordinate space
+
+**Symptoms:** After LU refactorization, FTRAN/BTRAN produced wrong answers. Problems that previously cycled now terminated but with wildly wrong objectives (lotfi 9.1x error, share2b 4.73x error).
+
+**Root Cause:** In `lu_factorize.c`, L entries stored original row indices (`L_i[L_count] = i`), but FTRAN/BTRAN forward substitution operates in permuted step space (after `temp[k] = result[perm_row[k]]`). Using original row indices to index into step-position-indexed temp[] produced garbage.
+
+**Fix:** After building L in CSC format, convert all L_row_idx entries from original rows to step positions using inverse permutation:
+```c
+int *inv_perm = malloc(m * sizeof(int));
+for (int k = 0; k < m; k++)
+    inv_perm[perm_row[k]] = k;
+for (int64_t p = 0; p < L_nnz; p++)
+    L_row_idx[p] = inv_perm[L_row_idx[p]];
+```
+
+**Also fixed:** Buffer overflow — L_row_idx/U_row_idx allocated with estimate `m*2`, but dense Markowitz can produce up to `m*(m-1)/2` entries. Added realloc to actual size before filling.
+
+**Lesson:** In PA=LU with row/column permutations, every index must be in a consistent coordinate space. L, U, and the solve routines must all agree on whether indices are "original" or "permuted step positions". The permutation step in FTRAN (`temp[k] = result[perm_row[k]]`) transforms to step space — all subsequent L/U operations must use step-space indices.
+
