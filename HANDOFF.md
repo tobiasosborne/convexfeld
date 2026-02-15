@@ -1,102 +1,159 @@
 # Agent Handoff
 
-*Last updated: 2026-02-05*
+*Last updated: 2026-02-15*
 
 ---
 
-## STATUS: Cycling Root Cause DEEPER Than Expected — Key Findings
+## STATUS: V2 Spec Gap Analysis Complete — Major Rework Needed
 
 ### Session Summary
 
-Implemented candidate-skipping loop in iterate.c and investigated cycling on capri.
-**Cycling is NOT a step=0 degeneracy problem** — debug output revealed the real issue.
+Compared ConvexFeld's entire codebase against the corrected v2 cleanroom specification from GRB-decomp. The v1 spec ConvexFeld was built against was ~36% hallucinated. This analysis identifies every divergence.
 
-#### Changes Made (iterate.c only)
-
-| File | Changes |
-|------|---------|
-| `src/simplex/iterate.c` | Candidate loop: Steps 2-4 (FTRAN, ratio test, step) now loop over Bland candidates, skipping degenerate ones. Degenerate threshold raised to 1e-8. Forced-step for stuck cycles. |
-
-No regressions: 35/36 tests pass (same pre-existing `test_simplex_edge` failure).
-
-#### Key Discovery: Capri Cycling Debug Analysis
-
-Previous session described the cycle as step=0 degenerate pivots. **This was wrong.**
-Debug output with the current code shows:
-
-```
-Phase 1: Pre-Bland cycling (iter 801-813)
-  Vars 247/240 alternate, step=3.04e-10 (NOT zero — above 1e-12 threshold!)
-  Bland's mode NOT active, degenerate counter stays at 0
-
-Phase 2: Bland's activates at iter 814 (solve_lp.c 3*m rule)
-  Steps become large (1.78, 10.0), cycle breaks
-
-Phase 3: Bland's zig-zagging (iter 814+)
-  Vars 306/314 alternate with steps 1.78 and 10.0
-  Non-degenerate but oscillating — Bland's rule causes poor pivot selection
-  Solver runs 10000+ iterations with no convergence
-```
-
-#### Root Causes Identified
-
-1. **Near-zero step threshold too low**: Previous 1e-12 threshold missed steps
-   of 3e-10 that are effectively degenerate. Fixed: raised to 1e-8.
-
-2. **Bland's rule is too slow**: Once activated, Bland's causes massive zig-zagging
-   on bounded-variable problems. The smallest-index rule makes terrible pivot
-   choices. Solver runs 10000+ iterations without converging.
-
-3. **Perturbation is a no-op**: `context.c` has stub implementations of
-   `cxf_simplex_perturbation()` and `cxf_simplex_unperturb()` that do nothing.
-   The real implementations in `perturbation.c` are NEVER called because the
-   linker picks the context.c stubs. **Removing the stubs causes regressions**
-   because the perturbation.c implementation has bugs:
-   - Wrong direction: shrinks bounds (lb+=eps, ub-=eps) instead of expanding
-   - Only perturbs original vars, not auxiliaries
-   - Scale too small (1e-12) or too large (causes test failures)
-
-### Remaining Bugs
-
-#### P0: Cycling (3 problems — capri, grow7, seba)
-The real fix needs ONE of:
-1. **Fix perturbation properly**: Remove context.c stubs, fix perturbation.c to
-   expand bounds (lb-=eps, ub+=eps), use correct scale (~1e-8), perturb auxiliaries
-   too, AND recompute basic variable values from perturbed RHS after perturbing.
-   The key insight: basic vars must be INTERIOR to perturbed bounds.
-2. **Temporary Bland's**: Activate Bland for ~200 iterations to escape degenerate
-   cycle, then DEACTIVATE and return to normal pricing. Bland's is guaranteed
-   finite but practically too slow.
-3. **Lexicographic pivoting**: Proper anti-cycling for bounded variables.
-
-#### P0: Phase I false INFEASIBLE (8+ problems)
-- brandy, kb2, bandm, share1b, stair, degen2, boeing1/2, bnl1, e226, scorpion
-
-#### P2: Small numerical errors (5 problems)
-- adlittle (0.12%), blend (0.005%), recipe, scagr7, israel
+**Overall alignment: ~40-50%.** Foundation (matrix, eta vectors, basic simplex loop, memory) is sound. Two subsystems are fundamentally wrong, and several critical features are missing entirely.
 
 ---
 
-## Next Steps
+## RED — Complete Rewrite Required
 
-### Priority 1: Fix Perturbation (recommended approach for cycling)
-1. Remove the no-op stubs from `context.c` (lines 267-293)
-2. Fix `perturbation.c`:
-   - Expand bounds: `lb -= eps`, `ub += eps`
-   - Extend to auxiliaries (j < n+m, not just j < n)
-   - Scale: ~1e-8 (feas_tol * 1e-2)
-   - After perturbing bounds, recompute initial basic variable values from
-     perturbed system (x_B = B^(-1) * b) so they are interior to new bounds
-3. Fix `unperturb`: after restoring bounds, recompute objective from original
-   costs to eliminate perturbation-induced objective shift
-4. Test: capri/grow7/seba should solve; all 11 previously-passing tests must still pass
+### 1. Pricing System (all files in `src/pricing/`)
 
-### Priority 2: Temporary Bland's mode
-Instead of keeping Bland's on forever, deactivate after 200 iterations and
-trigger refactorization. This avoids the zig-zagging problem.
+V1 hallucinated a simple sectional partial pricing scheme. V2 reveals a **13-function producer-consumer architecture**:
+- Dual queue systems (constraint + variable queues)
+- Committed/pending split within each queue
+- Per-element flag arrays for O(1) duplicate prevention
+- Neighbor-based expansion through constraint matrix (not fixed partitions)
+- Adaptive strategy selection with 3 threshold checks
+- DSE weight updates with +1 term from ||alpha_q - e_r||^2
+- Devex weights with reference framework tracking
 
-### Priority 3: Phase I false INFEASIBLE
-Many problems fail in Phase I. Some may be cycling, others genuinely stuck.
+ConvexFeld has **none of this**. Its pricing is Dantzig sectional scanning, and SE/Devex weight updates are **stubs that set weights to 1.0**. PricingContext struct is 20% aligned — needs full replacement.
+
+### 2. Bound Propagation (entirely missing — ~1,500 LOC new subsystem)
+
+V2's `step2`/`step3` are **bidirectional bound propagation** (variable-side / constraint-side), an FBBT system integrated with simplex. ConvexFeld's `phase_steps.c` implements them as primal/dual pivot extensions — **completely wrong purpose**.
+
+### 3. Perturbation (`perturbation.c`)
+
+Direction is **reversed**: shrinks bounds (`lb += eps, ub -= eps`) when v2 says expand (`lb -= eps, ub += eps`). Also only perturbs original vars, not auxiliaries. Scale wrong. Known bug — stubs in context.c shadow the broken code.
+
+---
+
+## YELLOW — Significant Rework Needed
+
+### 4. Data Structures
+
+| Struct | Alignment | Key Gap |
+|--------|-----------|---------|
+| Model | 60% | Missing dual matrix (primary/working), attribute table |
+| SparseMatrix | 85% | **Missing scaling system** (critical for numerics) |
+| SolverState | 65% | Missing duplicated matrix, steepest edge arrays |
+| BasisState | 90% | Missing memory pool, cycling detection snapshot |
+| PricingContext | 20% | Fundamentally wrong (see above) |
+| EtaVector | 60% | Missing VARIABLE_FIX and WARM_START variants |
+
+### 5. Ratio Test — Missing BFRT
+
+Has Harris two-pass (correct) but **no Bound-Flipping Ratio Test**. BFRT gives 20-50% iteration reduction on bounded-variable problems. V2 spec P2.4 has full algorithm.
+
+### 6. Phase I→II Transition
+
+Missing 3 of 6 state transformations: reduced cost recomputation via BTRAN, constraint cleanup, tolerance adjustment.
+
+### 7. Matrix Scaling (entirely missing — ~500 LOC new subsystem)
+
+V2's P3.15 specifies row/column equilibration (Curtis & Reid 1972). Critical for ill-conditioned problems. ConvexFeld has **zero scaling infrastructure**.
+
+### 8. Method Selection
+
+`solve_lp.c` has simplified heuristic vs v2's scoring system with quantitative thresholds.
+
+---
+
+## GREEN — Mostly Correct
+
+### 9. Basis Operations (~70% correct)
+
+- `pivot_eta.c`: Exact match to v2
+- `eta_factors.c`, `lu_factors.c`, `basis_state.c`: Correct
+- `snapshot.c`: Better than v2 (captures full basis, not just counters)
+- `ftran.c` / `btran.c`: Correct algorithms, wrong abstraction (v2 uses PFI inline, not standalone APIs). Keep as internal helpers.
+- `lu_factorize.c`: Over-engineered (v2 says use external LU) but functional
+- `refactor.c`: Works, naming is confusing (`cxf_basis_refactor` is really just clearing etas)
+- `basis_stub.c`: Can be deleted (all functions implemented elsewhere)
+
+### 10. Support Modules
+
+- **Memory** (`src/memory/`): 90% correct
+- **Callbacks** (`src/callbacks/`): 75% correct (missing thread-safe mutex)
+- **Error handling** (`src/error/`): 60% correct (missing buffer locking)
+- **Matrix core** (`src/matrix/`): 85% correct for LP
+- **Crossover, barrier, MIP**: Intentionally absent (LP-only scope — fine)
+
+### 11. Simplex Core
+
+- `iterate.c`: Right general structure, needs BFRT and stall detection
+- `crash.c`: Minor gaps only
+- `cleanup.c`: Minor gaps only
+- `step.c`: Needs BFRT integration
+
+---
+
+## Root Cause of Current Bugs (explained by v2 spec)
+
+| Bug Category | Root Cause per V2 |
+|-------------|-------------------|
+| **Cycling** (capri, grow7, seba) | Perturbation direction reversed + no-op stubs. V2: expand bounds. |
+| **Phase I false INFEASIBLE** (8+ problems) | Incomplete Phase I→II transition + missing bound propagation (FBBT pre-tightens bounds) |
+| **Numerical errors** (5 problems) | No matrix scaling. V2 specifies row/column equilibration. |
+
+---
+
+## Estimated Rework
+
+| Area | LOC | Type |
+|------|-----|------|
+| Pricing system | ~2,000 | Full rewrite |
+| Bound propagation | ~1,500 | New subsystem |
+| Matrix scaling | ~500 | New subsystem |
+| BFRT ratio test | ~400 | Add to existing |
+| Perturbation fix | ~300 | Rewrite |
+| DSE/Devex weights | ~300 | Implement stubs |
+| Phase transitions | ~200 | Modify existing |
+| PricingState struct | ~200 | Replace existing |
+| **Total** | **~5,400** | |
+
+~10,000 LOC of existing code is correct and needs no changes.
+
+---
+
+## Recommended Priority Order
+
+### P0: Fix perturbation (unblocks 3 cycling problems)
+1. Remove no-op stubs from `context.c`
+2. Fix `perturbation.c`: expand bounds (`lb -= eps`, `ub += eps`), extend to auxiliaries, scale ~1e-8
+3. Recompute basic variable values after perturbing
+
+### P1: Add matrix scaling (unblocks 5 numerical-error problems)
+- Row/column equilibration per Curtis & Reid 1972
+- Apply D_r * A * D_c, scale bounds and RHS
+- Unscale solution after solve
+
+### P2: Add BFRT to ratio test (20-50% iteration reduction)
+- Extend Harris two-pass with bound-flipping per v2 P2.4
+
+### P3: Fix Phase I→II transition (unblocks 8+ false-INFEASIBLE problems)
+- Add reduced cost recomputation via BTRAN
+- Constraint cleanup, tolerance adjustment
+
+### P4: Rewrite pricing system (performance, not correctness)
+- Implement dual queue producer-consumer architecture
+- DSE weight updates with correct +1 term
+- Devex with reference framework
+
+### P5: Add bound propagation (new subsystem)
+- Variable-side and constraint-side propagation
+- Integrate with simplex iteration
 
 ---
 
@@ -104,4 +161,18 @@ Many problems fail in Phase I. Some may be cycling, others genuinely stuck.
 
 - **Tests:** 35/36 pass (pre-existing `test_simplex_edge` failure)
 - **Build:** Clean (no warnings)
-- **Netlib:** 11 pass, 13 fail, 3 timeout (unchanged — cycling fix needs perturbation)
+- **Netlib:** 11 pass, 13 fail, 3 timeout (unchanged)
+
+---
+
+## Reference
+
+Full v2 spec: `/home/tobiasosborne/Projects/GRB-decomp/cleanroom/v2/output/SPECIFICATION.md` (24,070 lines)
+Key sections for each rework area:
+- Pricing: P2.3, P3.17, P3.18
+- Bound propagation: P2.8, `step2`/`step3` in P3.21
+- Perturbation: P2.6
+- Ratio test: P2.4
+- Scaling: P3.15
+- Phase transitions: P3.21 (6 state transformations)
+- DSE/Devex formulas: P2.1 Step 6
