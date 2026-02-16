@@ -4,20 +4,22 @@
 
 ---
 
-## STATUS: P1 Struct Renames COMPLETE — Next: P2 Decompose solve_lp
+## STATUS: P2 Decompose solve_lp COMPLETE — 5 downstream issues unblocked
 
 ### Session Summary
 
-1. **P1 struct renames (convexfeld-dv0k) — CLOSED**
-   - Renamed 4 core structures across entire codebase:
-     - `SolverContext` → `SolverState` (199 occurrences, 36 files)
-     - `PricingContext` → `PricingState` (56 occurrences, 15 files)
-     - `EtaFactors` → `EtaVector` (57 occurrences, 12 files)
-     - `SparseMatrix` → `MatrixData` (70 occurrences, 20 files)
-   - Zero old names remain (verified via grep)
-   - Clean build, 36/36 tests pass
+1. **P2 decompose solve_lp (convexfeld-23p6) — CLOSED**
+   - Decomposed `src/simplex/solve_lp.c` from 1262 lines to 92-line orchestrator
+   - Extracted 4 new files:
+     - `src/simplex/presolve.c` (215 lines) — infeasibility/unboundedness detection, unconstrained solver
+     - `src/simplex/phase_one.c` (163 lines) — Phase I setup, Phase I→II transition
+     - `src/simplex/reduced_costs.c` (88 lines) — dual prices + reduced cost computation
+     - `src/simplex/phase_loop.c` (210 lines) — Phase I/II iteration loops, correction helpers
+   - Trimmed ~200 lines of verbose `#ifdef DEBUG_PHASE1` row-by-row dumps to ~10 lines of summary output
+   - Clean build, 36/36 tests pass, zero old struct names
 
 2. **Previous sessions (all CLOSED):**
+   - P1 struct renames (convexfeld-dv0k)
    - P1 function renames (convexfeld-b7ow)
    - P0 variable status encoding (convexfeld-clow)
    - P0 tolerance fix (convexfeld-nso9)
@@ -27,19 +29,9 @@ VAR_AT_LOWER=-1, AT_LOWER=-1 etc. in `src/pricing/phase.c`, `candidates.c`, `ste
 
 ---
 
-## NEXT STEP: P2 Decompose solve_lp (convexfeld-23p6)
+## NEXT STEP: Check `bd ready` for unblocked downstream work
 
-Run `bd show convexfeld-23p6` for details. This was blocked by the struct renames and is now unblocked. It blocks 5 downstream issues.
-
-### Critical Path
-
-```
-P0 tolerances (convexfeld-nso9) ← DONE ✓
-  → P0 var status (convexfeld-clow) ← DONE ✓
-    → P1 function renames (convexfeld-b7ow) ← DONE ✓
-      → P1 4 struct renames (convexfeld-dv0k) ← DONE ✓
-        → P2 decompose solve_lp (convexfeld-23p6) ← NEXT (unblocks 5)
-```
+The decompose issue unblocked 5 downstream issues. Run `bd ready` to see what's available.
 
 ---
 
