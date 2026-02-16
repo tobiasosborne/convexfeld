@@ -23,8 +23,8 @@
 #define REFACTOR_OUT_OF_MEMORY  1001
 #define REFACTOR_SINGULAR       3
 
-/* Minimum pivot tolerance */
-#define MIN_PIVOT_TOL  1e-10
+/* Minimum pivot tolerance (Harris pivot threshold from spec) */
+#define MIN_PIVOT_TOL  CXF_PIVOT_TOL  /* 1e-9 */
 
 /**
  * @brief Clear all eta vectors from a BasisState.

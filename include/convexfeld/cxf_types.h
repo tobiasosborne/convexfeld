@@ -118,11 +118,29 @@ typedef enum {
 /** @brief Default dual optimality tolerance */
 #define CXF_OPTIMALITY_TOL  1e-6
 
-/** @brief Pivot element tolerance (reject pivots below this) */
-#define CXF_PIVOT_TOL       1e-10
+/** @brief Harris pivot tolerance — minimum |element| for ratio test candidacy */
+#define CXF_PIVOT_TOL       1e-9
 
-/** @brief Zero tolerance for numerical comparisons */
+/** @brief Zero tolerance for numerical comparisons (significant bound change) */
 #define CXF_ZERO_TOL        1e-12
+
+/** @brief Absolute floor on pivot magnitude during LU factorization */
+#define CXF_MIN_PIVOT       1e-13
+
+/** @brief Markowitz pivot tolerance (1/128) for sparse LU */
+#define CXF_MARKOWITZ_TOL   0.0078125
+
+/** @brief Bound gap below which a variable is treated as fixed */
+#define CXF_BOUND_EQUALITY_TOL  1e-10
+
+/** @brief Minimum perturbation magnitude (perturbation floor) */
+#define CXF_PERTURB_FLOOR   1e-10
+
+/** @brief Maximum perturbation magnitude (perturbation ceiling) */
+#define CXF_PERTURB_CEILING 1e-6
+
+/** @brief Effectively infinite bound threshold for heuristic decisions */
+#define CXF_LARGE_BOUND_MARKER  1e20
 
 /** @brief Maximum length of names (variables, constraints, model) */
 #define CXF_MAX_NAME_LEN    255

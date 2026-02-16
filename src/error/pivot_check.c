@@ -19,9 +19,9 @@
 #define VARFLAG_HAS_QUADRATIC  0x08
 #define VARFLAG_RESERVED_MASK  0xFFFFFFB0
 
-/* Threshold values */
-#define NEG_INFINITY_THRESHOLD (-1e99)
-#define POS_INFINITY_THRESHOLD (1e99)
+/* Threshold values — aligned with CXF_INFINITY (1e100) */
+#define NEG_INFINITY_THRESHOLD (-CXF_INFINITY)
+#define POS_INFINITY_THRESHOLD (CXF_INFINITY)
 
 /**
  * @brief Check if a pivot element is numerically acceptable.

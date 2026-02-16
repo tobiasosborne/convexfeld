@@ -56,6 +56,8 @@ void test_perturbation_basic(void) {
     TEST_ASSERT_EQUAL_INT(CXF_OK, cxf_simplex_perturbation(state, env));
     /* Idempotent - calling again should also return OK */
     TEST_ASSERT_EQUAL_INT(CXF_OK, cxf_simplex_perturbation(state, env));
+    /* Clean up static perturbation state so subsequent tests start fresh */
+    cxf_simplex_unperturb(state, env);
     cxf_simplex_final(state);
 }
 

@@ -13,11 +13,11 @@
 #include <math.h>
 #include <string.h>
 
-/* Base perturbation scale relative to feasibility tolerance */
-#define PERTURB_BASE_SCALE 1e-6
+/* Base perturbation scale (perturbation floor from spec) */
+#define PERTURB_BASE_SCALE CXF_PERTURB_FLOOR    /* 1e-10 */
 
-/* Maximum perturbation scale (relative to feasibility tolerance) */
-#define PERTURB_MAX_SCALE 1e-3
+/* Maximum perturbation scale (perturbation ceiling from spec) */
+#define PERTURB_MAX_SCALE  CXF_PERTURB_CEILING  /* 1e-6 */
 
 /* Minimum objective coefficient magnitude for scaling */
 #define MIN_OBJ_COEFF 1e-8
@@ -95,9 +95,10 @@ int cxf_simplex_perturbation(SolverContext *state, CxfEnv *env) {
         infinity = CXF_INFINITY;
     }
 
-    /* Calculate base perturbation scale */
-    double base_scale = feas_tol * PERTURB_BASE_SCALE;
-    double max_scale = feas_tol * PERTURB_MAX_SCALE;
+    /* Perturbation floor/ceiling are absolute magnitudes per spec */
+    double base_scale = PERTURB_BASE_SCALE;
+    double max_scale = PERTURB_MAX_SCALE;
+    (void)feas_tol;  /* Used for infinity default above */
 
     double *lb = state->work_lb;
     double *ub = state->work_ub;

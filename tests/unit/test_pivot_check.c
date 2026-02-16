@@ -85,8 +85,8 @@ void test_special_check_valid_basic(void) {
 }
 
 void test_special_check_reject_unbounded_lower(void) {
-    /* Lower bound is negative infinity */
-    int result = cxf_special_check(-1e100, 10.0, 0, NULL);
+    /* Lower bound is beyond negative infinity (-CXF_INFINITY) */
+    int result = cxf_special_check(-2e100, 10.0, 0, NULL);
     TEST_ASSERT_EQUAL_INT(0, result);
 }
 

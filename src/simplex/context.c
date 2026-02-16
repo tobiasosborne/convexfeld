@@ -264,30 +264,4 @@ int cxf_simplex_get_iteration_limit(SolverContext *state) {
     return state->max_iterations;
 }
 
-/**
- * @brief Apply perturbation for degeneracy handling (stub - to be implemented in M7.1.3).
- *
- * @param state Solver context
- * @param env Environment
- * @return CXF_OK on success, error code otherwise
- */
-int cxf_simplex_perturbation(SolverContext *state, CxfEnv *env) {
-    if (state == NULL || env == NULL) {
-        return CXF_ERROR_NULL_ARGUMENT;
-    }
-    return CXF_OK;
-}
-
-/**
- * @brief Remove perturbation (stub - to be implemented in M7.1.3).
- *
- * @param state Solver context
- * @param env Environment
- * @return CXF_OK on success, error code otherwise
- */
-int cxf_simplex_unperturb(SolverContext *state, CxfEnv *env) {
-    if (state == NULL || env == NULL) {
-        return CXF_ERROR_NULL_ARGUMENT;
-    }
-    return CXF_OK;
-}
+/* cxf_simplex_perturbation and cxf_simplex_unperturb are in perturbation.c */

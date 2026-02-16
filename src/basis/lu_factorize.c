@@ -18,8 +18,8 @@
 #include <math.h>
 
 /* Threshold for pivot acceptance: |pivot| >= threshold * max_in_col */
-#define MARKOWITZ_THRESHOLD 0.1
-#define MIN_PIVOT 1e-12
+#define MARKOWITZ_THRESHOLD CXF_MARKOWITZ_TOL   /* 1/128 ≈ 7.8e-3 */
+#define MIN_PIVOT           CXF_MIN_PIVOT       /* 1e-13 */
 
 /**
  * @brief Compute LU factorization of basis matrix.
