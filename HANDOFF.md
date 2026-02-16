@@ -4,36 +4,49 @@
 
 ---
 
-## STATUS: M-Z Function Audit Phase 1 Complete
+## STATUS: Error/Parameter/Callback Audit Complete
 
 ### Session Summary
 
-Completed Phase 1 of M-Z function signature audit: discovered 31 implemented functions and 44 missing functions. Phase 2 (detailed signature comparison) pending.
+Completed comprehensive audit of error propagation, parameter system, and callback protocol against v2 integration specs. Found major architectural misalignment requiring 10-12 days of rework.
 
 #### What was done:
 
-**Function Audit - Phase 1: Discovery (COMPLETE)**
-- Audited all 75 M-Z functions from v2 specs against codebase
-- Found 31 functions implemented (41%)
-- Identified 44 missing functions (59%)
-- Created detailed audit report: `docs/audit/18_function_signatures_MZ.md`
+**Integration Audit: Error/Param/Callback (COMPLETE)**
+- Audited error propagation system (P3.09) against specs/integration/error_propagation.md
+- Audited parameter system (P3.04) against specs/integration/parameter_system.md
+- Audited callback protocol (P3.13) against specs/integration/callback_protocol.md
+- Read 11 implementation files (~1,200 LOC)
+- Read 3 spec files (~1,400 lines)
+- Created detailed audit report: `docs/audit/15_error_param_callback.md` (861 lines)
 
-**Key findings:**
-- Several complete subsystems missing:
-  - Concurrent/barrier solving (P3.26): 0/3 implemented
-  - Solution processing (P3.29): 0/5 implemented
-  - Pricing support (P3.18): 0/8 implemented
-  - Model lifecycle (P3.31): 0/3 implemented
-- Phase 2 (signature validation for 31 found functions) still needed
+**Key findings (24 critical violations):**
+- **Error system:** Missing 4 core functions (cxf_error_env, cxf_error_model, cxf_env_set_status, cxf_set_error_message)
+- **Error system:** Missing errorCode field on Environment (cannot propagate codes)
+- **Error system:** Error buffer lock mechanism non-functional
+- **Error system:** No predefined error message table
+- **Parameter system:** Hardcoded fields instead of table-driven
+- **Parameter system:** Missing setters for double/string parameters
+- **Parameter system:** No backup/restore mechanism for optimization
+- **Callback system:** Missing mutex (not thread-safe)
+- **Callback system:** Missing 4 WHERE codes (SIMPLEX, BARRIER, PRESOLVE, MESSAGE)
+- **Callback system:** Lifecycle hooks confused with user callbacks
+
+**Positive findings:**
+- Tolerance helper functions correctly implemented
+- Basic callback structure has correct fields
+- Termination signaling basics work
+- NULL safety patterns used consistently
 
 ---
 
 ## Next Steps
 
-### Immediate (audit-related)
-1. **Complete M-Z audit Phase 2** — Validate signatures for all 31 found functions against specs (4-6 hours work)
-2. **Audit A-L functions** — Complete coverage of all 158 functions (not yet started)
-3. **Investigate missing functions** — Determine if 44 missing M-Z functions are unimplemented, renamed, or intentionally omitted
+### Immediate (critical fixes needed)
+1. **Fix error propagation system** — Add errorCode field, implement 4 core functions, create message table (2-3 days)
+2. **Fix parameter system** — Implement table structure, add missing setters, implement save/restore (3-4 days)
+3. **Fix callback system** — Add mutex, implement missing WHERE codes, separate lifecycle hooks (2-3 days)
+4. **Write tests for fixes** — ~30 new tests covering error cascades, param restore, callback thread safety (2 days)
 
 ### Implementation priorities (from v2 spec gap analysis, 2026-02-15)
 - **P0:** Fix perturbation (stubs override real impl in context.c)
@@ -61,3 +74,4 @@ Completed Phase 1 of M-Z function signature audit: discovered 31 implemented fun
 | FUNCTION_MAP | `docs/specs-v2/FUNCTION_MAP.md` |
 | PLAN | `docs/specs-v2/PLAN.md` |
 | Audit report (M-Z) | `docs/audit/18_function_signatures_MZ.md` |
+| Audit report (Error/Param/CB) | `docs/audit/15_error_param_callback.md` (861 lines) |
