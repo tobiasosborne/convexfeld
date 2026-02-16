@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The Model structure is the central data container for a single optimization problem instance within an LP solver. It encapsulates all problem data (variables, constraints, objective, matrix coefficients), solver configuration, solution state, and the attribute system that exposes model properties to the public API. Every public API call that operates on a problem accepts a reference to a Model, and the structure serves as the root from which all problem-specific data is reachable. A Model is always associated with exactly one Environment, from which it inherits global configuration and licensing state.
+The Model structure is the central data container for a single optimization problem instance within an LP solver. It encapsulates all problem data (variables, constraints, objective, matrix coefficients), solver configuration, solution state, and the attribute system that exposes model properties to the public API. Every public API call that operates on a problem accepts a reference to a Model, and the structure serves as the root from which all problem-specific data is reachable. A Model is always associated with exactly one Environment, from which it inherits global configuration.
 
 ## Fields
 
@@ -34,7 +34,7 @@ Fields are grouped by logical purpose rather than memory layout.
 
 | Field | Type | Purpose | Valid Values | Invariants |
 |-------|------|---------|--------------|------------|
-| environment | pointer-to-Environment | Reference to the Environment that owns or is associated with this model. Provides access to licensing, logging, parameter defaults, and thread management. | Non-null pointer to a valid Environment | Must always point to a valid, live Environment; the Environment must outlive the Model |
+| environment | pointer-to-Environment | Reference to the Environment that owns or is associated with this model. Provides access to logging, parameter defaults, and thread management. | Non-null pointer to a valid Environment | Must always point to a valid, live Environment; the Environment must outlive the Model |
 | environment_owned | int | Indicates whether this model owns its Environment (i.e., has a private child Environment that must be freed when the model is freed) versus borrowing a shared Environment | 0 (borrowed/shared) or 1 (owned/child) | If 1, the model's destructor must free the child Environment |
 
 ### Concurrent Optimization
@@ -51,12 +51,6 @@ Fields are grouped by logical purpose rather than memory layout.
 | callback_count | int | Number of user-registered callback functions. When nonzero, the solver invokes callbacks at various checkpoints during optimization. | 0 or positive integer | Incremented on callback registration, decremented on removal |
 | primary_model | pointer-to-Model | Reference to the "root" model for callback configuration. In typical usage, this points to the model itself; in cloned or concurrent scenarios, it may point to the original model from which callbacks were inherited. | Non-null pointer to a valid Model | Initialized to self at allocation; may be updated for cloned models |
 | self_reference | pointer-to-Model | Set to point to the model itself during optimization, providing a stable reference that callback functions can use to access the model. Cleared after optimization completes. | Null (not optimizing) or pointer to self | Non-null only during an active optimization call |
-
-### Compute Server
-
-| Field | Type | Purpose | Valid Values | Invariants |
-|-------|------|---------|--------------|------------|
-| compute_server_mode | int | Indicates whether optimization should be dispatched to a remote remote solver rather than executed locally | 0 (local) or nonzero (remote remote solver) | When nonzero, optimization is routed through the remote solver subsystem |
 
 ### Matrix Data
 
@@ -120,7 +114,7 @@ Fields are grouped by logical purpose rather than memory layout.
 The Model exposes its properties through a table-driven attribute system that supports three types of attributes:
 
 - **Integer attributes** (e.g., optimization status, variable/constraint counts, model type flags)
-- **Double attributes** (e.g., objective value, objective bound, runtime, MIP gap)
+- **Double attributes** (e.g., objective value, objective bound, runtime)
 - **String attributes** (e.g., model name, variable names, constraint names)
 
 Each attribute can be either **scalar** (one value per model, such as the optimization status) or **array** (one value per element, such as solution values per variable).
@@ -155,7 +149,7 @@ When a scalar attribute value is requested through the public API, the system us
 
 1. **Direct value pointer** (fastest path): If the attribute entry has a non-null direct value pointer, the value is read directly from the pointed-to location. This is used for frequently accessed attributes whose values are stored at fixed locations in the model or matrix data (e.g., variable count, constraint count).
 
-2. **Scalar getter function**: If the direct value pointer is null but a scalar getter function is registered, it is invoked to compute and return the value. This is used for derived or computed attributes (e.g., IsMIP, which must inspect variable types).
+2. **Scalar getter function**: If the direct value pointer is null but a scalar getter function is registered, it is invoked to compute and return the value. This is used for derived or computed attributes (e.g., IsQP, which must inspect the objective structure).
 
 3. **Array getter fallback**: If both the direct value pointer and scalar getter are null, but an array getter is registered, it is invoked with parameters indicating a full-model scope. This is a rare fallback for attributes that are primarily element-level but can also report a model-level aggregate.
 
@@ -208,7 +202,7 @@ Attribute lookup is performed by name: the system searches the entry array for a
 1. The Model is validated by checking the validity sentinel.
 2. modification_blocked is set to a nonzero value; status_code and optimize_in_progress are cleared/set.
 3. self_reference is set to point to the Model.
-4. The optimizer is invoked (dispatching to LP, MIP, barrier, or concurrent solvers as appropriate).
+4. The optimizer is invoked (dispatching to LP, barrier, or concurrent solvers as appropriate).
 5. On completion, modification_blocked and self_reference are cleared.
 6. Solution data is populated if the solve was successful.
 

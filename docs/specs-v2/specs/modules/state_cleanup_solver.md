@@ -105,7 +105,7 @@ cxf_free_solver_state performs a two-level deallocation of the model's attribute
 
 ### cxf_free_basis_state
 
-**Purpose:** Free the array of concurrent solver environments associated with the model, handling reference counting, deferred cleanup for environments that are still in use by other owners, and termination of active remote remote solver jobs.
+**Purpose:** Free the array of concurrent solver environments associated with the model, handling reference counting, deferred cleanup for environments that are still in use by other owners, and termination of active remote solver jobs.
 
 **Signature:**
 - Input: model : pointer-to-Model - The model whose concurrent environment array should be freed
@@ -119,7 +119,7 @@ cxf_free_solver_state performs a two-level deallocation of the model's attribute
 - Every environment in the concurrent environments array has been processed:
   - Its root environment's reference count has been decremented (under lock).
   - If the reference count reached zero, the environment has been fully freed via the internal environment destruction function.
-  - If the reference count remained positive (environment still in use by another owner), the environment is handled with deferred cleanup: a warning is logged, any active remote remote solver job is terminated, and the array slot is cleared.
+  - If the reference count remained positive (environment still in use by another owner), the environment is handled with deferred cleanup: a warning is logged, any active remote solver job is terminated, and the array slot is cleared.
 - The concurrent environments array itself has been freed.
 - The model's concurrent environments pointer has been set to null.
 - The model's concurrent environment count has been set to zero.
@@ -128,7 +128,7 @@ cxf_free_solver_state performs a two-level deallocation of the model's attribute
 - Decrements reference counts on root environments (under critical section lock for thread safety).
 - May fully destroy environments whose reference counts reach zero.
 - May log warning messages about deferred environment cleanup.
-- May terminate active remote remote solver jobs by:
+- May terminate active remote solver jobs by:
   - Setting a termination flag in the async operation state.
   - Polling the remote job status with a bounded retry loop.
   - Sending a termination message to the remote solver.
@@ -139,7 +139,7 @@ cxf_free_solver_state performs a two-level deallocation of the model's attribute
 - None. This function does not return an error code. Empty arrays and null pointers are handled gracefully. Remote job termination failures are logged but do not cause the function to fail.
 
 **Behavioral Description:**
-cxf_free_basis_state manages the lifecycle of concurrent solver environments created during concurrent optimization (where multiple solver algorithms run in parallel with different parameter settings). For each environment in the array, it locates the root environment (which may be a shared parent) and decrements its reference count under a critical section lock to ensure thread safety. If the reference count reaches zero, the environment is destroyed immediately. If the count remains positive (another owner still needs the environment), the function performs a deferred cleanup: it logs a diagnostic warning, checks for active remote remote solver jobs associated with the environment, and if found, attempts graceful termination with a bounded polling loop before forcefully killing the job and freeing the connection. After processing all environments, the array itself is freed and the model's tracking fields are cleared.
+cxf_free_basis_state manages the lifecycle of concurrent solver environments created during concurrent optimization (where multiple solver algorithms run in parallel with different parameter settings). For each environment in the array, it locates the root environment (which may be a shared parent) and decrements its reference count under a critical section lock to ensure thread safety. If the reference count reaches zero, the environment is destroyed immediately. If the count remains positive (another owner still needs the environment), the function performs a deferred cleanup: it logs a diagnostic warning, checks for active remote solver jobs associated with the environment, and if found, attempts graceful termination with a bounded polling loop before forcefully killing the job and freeing the connection. After processing all environments, the array itself is freed and the model's tracking fields are cleared.
 
 **Reference Counting Protocol:**
 1. Enter critical section on the root environment's mutex

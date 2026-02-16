@@ -12,7 +12,7 @@ This structure serves as the bridge between the solver's internal state and the 
 
 | Field | Type | Purpose | Valid Values | Invariants |
 |-------|------|---------|--------------|------------|
-| solveMode | int | Records which optimization algorithm produced the solution (e.g., simplex, barrier, MIP) and controls how result attributes are wired | Standard solve mode codes | Set by the solver dispatch logic; read during attribute wiring |
+| solveMode | int | Records which optimization algorithm produced the solution (e.g., simplex, barrier) and controls how result attributes are wired | Standard solve mode codes | Set by the solver dispatch logic; read during attribute wiring |
 
 ### Primal and Dual Solution Arrays
 
@@ -28,18 +28,8 @@ This structure serves as the bridge between the solver's internal state and the 
 | Field | Type | Purpose | Valid Values | Invariants |
 |-------|------|---------|--------------|------------|
 | objectiveValue | double | Best objective function value found during optimization; wired to the "ObjVal" attribute | Any finite double when a feasible solution exists; uninitialized otherwise | Updated by the solver upon finding improving solutions |
-| objectiveBound | double | Best proven bound on the optimal objective value; wired to the "ObjBound" attribute | Any finite double | For LP: equals objectiveValue at optimality; for MIP: may differ from objectiveValue |
-| objectiveBoundContinuous | double | Objective bound from the continuous relaxation; wired to the "ObjBoundC" attribute | Any finite double | Set during MIP solving from the root relaxation |
+| objectiveBound | double | Best proven bound on the optimal objective value; wired to the "ObjBound" attribute | Any finite double | Equals objectiveValue at optimality for LP |
 | poolObjectiveBound | double | Objective bound applicable to the solution pool; wired to the "PoolObjBound" attribute | Any finite double | Relevant only when the solution pool is populated |
-| mipGap | double | Relative gap between the best objective value and the best bound; wired to the "MIPGap" attribute | Non-negative double; zero at optimality | Computed as abs(objectiveValue - objectiveBound) / abs(objectiveValue), following standard MIP gap conventions |
-
-### Search Tree Counters
-
-| Field | Type | Purpose | Valid Values | Invariants |
-|-------|------|---------|--------------|------------|
-| nodeCount | double | Total number of branch-and-bound nodes explored; wired to the "NodeCount" attribute | Non-negative | Monotonically non-decreasing during a MIP solve; zero for pure LP |
-| openNodeCount | double | Number of unexplored nodes remaining in the search tree; wired to the "OpenNodeCount" attribute | Non-negative | Zero when the MIP solve is complete |
-| timeOpen | double | Time at which the current node was opened, for progress reporting | Non-negative | Updated during MIP search |
 
 ### Iteration Counters
 
@@ -114,7 +104,7 @@ This structure serves as the bridge between the solver's internal state and the 
 
 - **Referenced by** the attribute table. After optimization, the attribute wiring step stores pointers into WorkArrays fields within the model's attribute table entries. These pointers become invalid when WorkArrays is freed, so attribute cache invalidation must precede WorkArrays deallocation.
 
-- **Populated by** the solver (SolverState, barrier state, or MIP state). The solver writes solution data into WorkArrays during and after optimization.
+- **Populated by** the solver (SolverState or barrier state). The solver writes solution data into WorkArrays during and after optimization.
 
 - **Read by** the presolve uncrushing step. After solving a presolved model, the uncrush operation reads primal values from WorkArrays to map them back to the original variable space.
 
@@ -137,7 +127,6 @@ This structure serves as the bridge between the solver's internal state and the 
 
 - **During simplex iterations**: the cycle detection fields, threshold values, and auxiliary indices are updated as the solver progresses. Scale factors may be adjusted. Iteration counters are incremented.
 - **On finding a feasible solution**: primalValues and dualValues arrays are allocated (if not already) and populated. The objectiveValue is set. The solutionCount is incremented.
-- **During MIP search**: nodeCount, openNodeCount, and timeOpen are updated. Pool solutions are appended by allocating new entries in poolVariableValues and updating poolSolutionCount. objectiveBound and mipGap are updated as the search progresses.
 - **On solve completion**: the attribute wiring function connects attribute table entries to WorkArrays fields. The solveMode is finalized.
 
 ### Destruction

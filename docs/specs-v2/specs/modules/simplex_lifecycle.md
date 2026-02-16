@@ -20,7 +20,7 @@ The Simplex Lifecycle module contains the three functions that bracket the entir
 
 **Preconditions:**
 - The model must have a valid constraint matrix with consistent dimensions (number of variables, constraints, and nonzeros)
-- The model's environment must be active (licensed and initialized)
+- The model's environment must be active and initialized
 - If `initMode` is non-zero, the model must have valid variable type information for semi-continuous and semi-integer variable detection
 - If `altModel` is non-null, it must contain valid warm-start data
 
@@ -155,7 +155,7 @@ The rationale follows standard practice for revised simplex implementations: the
 - Constraint activity verification detects a violated constraint -> applies partial fixings and returns success (not an error, but fewer variables are fixed)
 
 **Behavioral Description:**
-This function performs post-solve solution cleanup by fixing variables at their bounds when dual feasibility conditions guarantee that the fixing does not change the optimal objective value. Fixing reduces the effective problem dimension and improves numerical stability for subsequent operations such as barrier crossover, MIP branching, or sensitivity analysis. The approach is based on the standard complementary slackness conditions of linear programming (Dantzig, 1963).
+This function performs post-solve solution cleanup by fixing variables at their bounds when dual feasibility conditions guarantee that the fixing does not change the optimal objective value. Fixing reduces the effective problem dimension and improves numerical stability for subsequent operations such as barrier crossover or sensitivity analysis. The approach is based on the standard complementary slackness conditions of linear programming (Dantzig, 1963).
 
 **Phase 1: Target value determination.** The function scans all variables with non-negative status (active, unfixed variables). For each variable, it evaluates the dual value (reduced cost) to determine the appropriate fixing target:
 
@@ -408,4 +408,4 @@ All functions operate within a single-threaded simplex solve. Thread safety for 
 - Dantzig, G.B. (1963). *Linear Programming and Extensions*. Princeton University Press.
 - Kahan, W. (1965). "Further remarks on reducing truncation errors." *Communications of the ACM*, 8(1):40.
 - Maros, I. (2003). *Computational Techniques of the Simplex Method*. Springer. International Series in Operations Research and Management Science, Vol. 61.
-- Savelsbergh, M.W.P. (1994). "Preprocessing and Probing Techniques for Mixed Integer Programming Problems." *ORSA Journal on Computing*, 6(4):445-454.
+- Savelsbergh, M.W.P. (1994). "Preprocessing and Probing Techniques for Linear Programming Problems." *ORSA Journal on Computing*, 6(4):445-454.

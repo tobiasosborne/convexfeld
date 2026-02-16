@@ -18,13 +18,12 @@ This module provides the functions that prepare model-level state at the beginni
 **Preconditions:**
 - The model must be a valid, initialized Model with a non-null environment reference.
 - The model must have passed validation checks (modification not blocked, etc.).
-- The environment must be active and licensed.
+- The environment must be active.
 
 **Postconditions:**
 - The environment's termination flag is cleared (set to zero), allowing the solver to run without a premature stop signal.
 - The model's solve-duration, work-rate, and total-work fields are cleared to zero.
 - If a model manager (callback state container) is present in the environment, its timestamp is set to the current time and its counter is reset to zero.
-- If the model contains integer variables (is a MIP) and has an active solver state with callback timing structures, those timing structures are initialized and reset.
 - The environment's objective offset tolerance is saved (for later restoration) and then adjusted by a small perturbation proportional to the current tolerance magnitude and the number of constraints in the model. This perturbation prevents tolerance drift across repeated solves.
 - If memory counting is disabled in the master environment but a memory limit parameter is set, a warning message is logged indicating the limit cannot be enforced.
 - Thread-local memory tracking is initialized for the current thread.
@@ -33,7 +32,6 @@ This module provides the functions that prepare model-level state at the beginni
 - Writes to the environment's termination flag, objective offset tolerance, and saved tolerance fields.
 - Writes to the model's timing/statistics fields.
 - Writes to the model manager's timestamp and counter fields (if present).
-- Initializes and resets MIP callback timing structures (if applicable).
 - May log a warning message to the environment's log output.
 - Initializes thread-local memory pool tracking.
 
@@ -41,14 +39,12 @@ This module provides the functions that prepare model-level state at the beginni
 - None. This function does not return an error code. It operates defensively, checking for null pointers before accessing optional structures.
 
 **Behavioral Description:**
-cxf_init_solve_state is called once at the top of each optimization invocation to establish a clean starting state. It clears the user-accessible termination flag so that the solver does not immediately stop. It zeros the model's solve-performance counters (duration, work rate, total work). It records the solve start time in the model manager for progress reporting. For MIP models with active callback infrastructure, it initializes the callback timing subsystem. It applies a small perturbation to the objective offset tolerance -- a standard numerical hygiene technique that prevents repeated solves from accumulating numerical bias. The perturbation direction depends on whether the model has constraints (positive adjustment) or not (negative adjustment), and a dampening multiplier prevents the tolerance from drifting too far from its original value. Finally, it checks whether the memory limit parameter can actually be enforced and warns the user if not.
+cxf_init_solve_state is called once at the top of each optimization invocation to establish a clean starting state. It clears the user-accessible termination flag so that the solver does not immediately stop. It zeros the model's solve-performance counters (duration, work rate, total work). It records the solve start time in the model manager for progress reporting. It applies a small perturbation to the objective offset tolerance -- a standard numerical hygiene technique that prevents repeated solves from accumulating numerical bias. The perturbation direction depends on whether the model has constraints (positive adjustment) or not (negative adjustment), and a dampening multiplier prevents the tolerance from drifting too far from its original value. Finally, it checks whether the memory limit parameter can actually be enforced and warns the user if not.
 
 **Thread Safety:** unsafe -- Must be called from a single thread before the solve begins. The function modifies environment-level state that is not protected by locks.
 
 **Dependencies:**
 - cxf_get_timestamp (timing module) -- retrieves the current timestamp
-- cxf_is_mip_model (model type checking module) -- determines if the model has integer variables
-- cxf_init_callback_timing, cxf_reset_callback_timing (callback module) -- initialize MIP callback timing
 - cxf_log (error/logging module) -- logs warning messages
 - cxf_get_memory_pool_id, cxf_init_thread_memory (memory module) -- thread-local memory setup
 

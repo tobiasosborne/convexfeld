@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The Optimization Preparation module contains the three functions that handle pre-optimization setup, remote remote solver delegation, and asynchronous result delivery. These functions support the Solve Entry & Dispatch module (P3.24) by providing infrastructure that operates at the boundary between the local solver and external execution contexts.
+The Optimization Preparation module contains the three functions that handle pre-optimization setup, remote solver delegation, and asynchronous result delivery. These functions support the Solve Entry & Dispatch module (P3.24) by providing infrastructure that operates at the boundary between the local solver and external execution contexts.
 
 
 Together, these functions form the "edges" of the optimization lifecycle: preparing the execution context before the solve begins, delegating work to remote infrastructure when configured, and delivering results back through the remote solver communication layer when the solve completes.
@@ -19,7 +19,7 @@ Together, these functions form the "edges" of the optimization lifecycle: prepar
 
 **Preconditions:**
 - The model must be valid and have a non-null Environment reference
-- The model's Environment must be in an active state
+- The model's Environment must be in an active, initialized state
 
 **Postconditions:**
 - If the solve lock was acquired successfully and the Environment is not in silent mode: the interrupt signal handler has been installed, the model's interrupt-enabled flag is set, the previous signal handler has been saved on the model for later restoration, and the model reference has been stored in a module-level location accessible to the signal handler
@@ -59,7 +59,7 @@ This function prepares the signal-based interrupt mechanism that allows the user
 ---
 
 
-**Purpose:** Delegate an optimization request to a remote remote solver, handling both standard and callback-aware execution modes through the server's remote procedure call interface.
+**Purpose:** Delegate an optimization request to a remote solver, handling both standard and callback-aware execution modes through the server's remote procedure call interface.
 
 **Signature:**
 - Input: `model` : pointer-to-Model - The model to optimize remotely
@@ -70,7 +70,7 @@ This function prepares the signal-based interrupt mechanism that allows the user
 - The model's Environment must have an active remote solver connection
 
 **Postconditions:**
-- An optimization request has been sent to the remote remote solver through the Environment's server connection
+- An optimization request has been sent to the remote solver through the Environment's server connection
 - If the model has registered callbacks, a callback-aware job submission request was sent before the optimization request, enabling the server to relay callback events back to the client
 - The function does not wait for the optimization to complete; the result is received asynchronously through the remote solver communication layer
 
@@ -86,7 +86,7 @@ This function prepares the signal-based interrupt mechanism that allows the user
 - Server communication failure during optimization request -> handled by the remote solver communication layer
 
 **Behavioral Description:**
-This function implements the client-side logic for delegating an optimization to a remote remote solver. Commercial optimization solvers commonly support a client-server architecture where the client constructs the optimization problem locally, serializes it, and sends it to a remote server for execution. This allows computational resources to be shared across multiple users or applications.
+This function implements the client-side logic for delegating an optimization to a remote solver. Commercial optimization solvers commonly support a client-server architecture where the client constructs the optimization problem locally, serializes it, and sends it to a remote server for execution. This allows computational resources to be shared across multiple users or applications.
 
 The function operates in two modes, determined by whether the model has user-registered callbacks:
 
@@ -203,29 +203,6 @@ This lifecycle ensures that the solver intercepts the interrupt signal only duri
 ### Silent Mode and Embedded Usage
 
 The silent mode check in cxf_prepare_optimization supports embedded usage scenarios. When a solver library is embedded in a larger application (e.g., a web server, a GUI application, or an automated pipeline), the application may already have its own signal handlers or may need signals for other purposes. Silent mode prevents the solver from interfering with the host application's signal management.
-
-### Compute Server Communication Model
-
-
-```
-Client Side                         Server Side
------------                         -----------
-  (sends optimization request)       |
-                                     v
-                                  [run solver]
-                                     |
-                                     v
-                                  cxf_wait_async
-                                    (sends results)
-[receive results]  <--------------
-```
-
-
-This client-server delegation pattern is well-established in commercial optimization software, enabling scenarios such as:
-
-- **Shared compute resources:** Multiple users or applications submit optimization requests to a central server pool.
-- **Cloud computing:** Optimization problems are sent to cloud instances with more computational resources.
-- **Distributed solving:** Large problems are delegated to dedicated high-performance servers.
 
 ### Callback-Aware Remote Execution
 

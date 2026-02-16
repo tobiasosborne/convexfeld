@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This module provides the foundational memory allocation, reallocation, and deallocation functions used throughout the solver. All memory operations are routed through these primitives to enable memory usage tracking against a configurable memory limit, support for custom allocator callbacks (for ISV/embedded deployments), and thread-safe usage accounting via thread-local batching. The module also provides the top-level Model allocation function that creates and initializes a Model structure.
+This module provides the foundational memory allocation, reallocation, and deallocation functions used throughout the solver. All memory operations are routed through these primitives to enable memory usage tracking against a configurable memory limit, support for custom allocator callbacks (for embedded deployments), and thread-safe usage accounting via thread-local batching. The module also provides the top-level Model allocation function that creates and initializes a Model structure.
 
 ## Functions
 
@@ -105,7 +105,7 @@ cxf_realloc resizes an existing memory allocation while maintaining memory track
 - The environment's model tracking has been updated to reflect the removal
 
 **Side Effects:**
-- Frees all memory associated with the Model and its owned sub-structures, including: remote solver state, callback state, nested context structures (recursively), timing state, MIP hint arrays, basis and start arrays, matrix scaling data, internal solver state, solution state, vector pairs, hash tables, basis factorization data, solution information structures, SOS constraint data, general constraint data, IIS state, LP state, warm-start data, barrier state, solution pool, and various auxiliary arrays
+- Frees all memory associated with the Model and its owned sub-structures, including: remote solver state, callback state, nested context structures (recursively), timing state, hint arrays, basis and start arrays, matrix scaling data, internal solver state, solution state, vector pairs, hash tables, basis factorization data, solution information structures, SOS constraint data, general constraint data, IIS state, LP state, warm-start data, barrier state, solution pool, and various auxiliary arrays
 - Invalidates the attribute cache before freeing solution data
 - Waits for any active asynchronous thread to complete before freeing
 - Updates the environment's active model tracking
@@ -116,7 +116,7 @@ cxf_realloc resizes an existing memory allocation while maintaining memory track
 - Null dereferenced pointer -> safe no-op (returns immediately)
 
 **Behavioral Description:**
-cxf_vector_free performs comprehensive, ordered deallocation of a Model structure and all of its transitively owned resources. The function first extracts the environment pointer from the structure for use in subsequent deallocation calls. It then proceeds through a well-defined sequence of cleanup phases: freeing remote solver and callback state if active, recursively freeing up to seven nested context structures (representing presolve models and sub-problems), freeing simple pointer fields and timing state, iterating over and freeing MIP hint arrays, freeing basis-related arrays, freeing auxiliary structures (matrix scaling, internal solver state, solution state, vector pairs, hash tables, basis factorization), freeing solution information structures with attribute cache invalidation, freeing constraint-related data (SOS, general constraints), freeing IIS and LP state, freeing warm-start data with its own nested sub-structures, freeing remaining fields and waiting for async threads, and finally clearing the validity sentinel, updating the environment's model tracking, and freeing the main structure itself.
+cxf_vector_free performs comprehensive, ordered deallocation of a Model structure and all of its transitively owned resources. The function first extracts the environment pointer from the structure for use in subsequent deallocation calls. It then proceeds through a well-defined sequence of cleanup phases: freeing remote solver and callback state if active, recursively freeing up to seven nested context structures (representing presolve models and sub-problems), freeing simple pointer fields and timing state, iterating over and freeing hint arrays, freeing basis-related arrays, freeing auxiliary structures (matrix scaling, internal solver state, solution state, vector pairs, hash tables, basis factorization), freeing solution information structures with attribute cache invalidation, freeing constraint-related data (SOS, general constraints), freeing IIS and LP state, freeing warm-start data with its own nested sub-structures, freeing remaining fields and waiting for async threads, and finally clearing the validity sentinel, updating the environment's model tracking, and freeing the main structure itself.
 
 **Thread Safety:** unsafe - The function must not be called concurrently on the same structure. It must not be called while an optimization is in progress on the structure.
 
@@ -136,7 +136,7 @@ cxf_vector_free performs comprehensive, ordered deallocation of a Model structur
 
 **Preconditions:**
 - environment must be a valid, activated Environment
-- environment must have a valid license (activation state is ACTIVE)
+- environment must be activated (activation state is ACTIVE)
 
 **Postconditions:**
 - On success, the returned Model has:
@@ -183,7 +183,7 @@ This architecture follows standard practices for memory-managed runtime systems,
 
 ### Custom Allocator Support
 
-The custom allocator callback mechanism allows ISV (Independent Software Vendor) deployments to redirect all solver memory allocations through application-provided allocators. When custom allocators are active, a small header is prepended to each allocation to store the allocation size, since custom allocators may not support the platform-specific query for allocation size. The returned pointer is offset past this header, making the header invisible to the caller.
+The custom allocator callback mechanism allows embedded deployments to redirect all solver memory allocations through application-provided allocators. When custom allocators are active, a small header is prepended to each allocation to store the allocation size, since custom allocators may not support the platform-specific query for allocation size. The returned pointer is offset past this header, making the header invisible to the caller.
 
 ### Model Deallocation Ordering
 

@@ -10,10 +10,10 @@
 
 | Metric | Count |
 |--------|-------|
-| Unique functions | 158 |
-| Layer 3 modules | 35 |
-| Multi-part functions | 10 |
-| Original audit functions | 149 |
+| Unique functions | 149 |
+| Layer 3 modules | 33 |
+| Multi-part functions | 8 |
+| Original audit functions | 140 |
 | Functions discovered during Phase 3 | 9 |
 
 ### Corrections from Plan Section 6
@@ -22,7 +22,6 @@
 |--------|--------|
 | Added `cxf_check_nan_or_inf` | Assigned to P3.07 (Input Validation). Was in analyzed dir but missing from plan. |
 | Removed phantom `LeaveCriticalSection` | Plan listed it separately in P3.12, but no analyzed file exists. The audit's `LeaveCriticalSection` was analyzed as `LeaveCriticalSection_thunk`. |
-| Deduplicated `cxf_setup_mip_params` | Was in both P3.03 and P3.27. Assigned to P3.27 (Solve MIP) only. |
 
 ---
 
@@ -93,11 +92,10 @@
 
 ---
 
-### P3.06 - Model Type Checking (6 functions)
+### P3.06 - Model Type Checking (5 functions)
 
 | Function | Multi-part | Notes |
 |----------|-----------|-------|
-| cxf_is_mip_model | | integer model detection |
 | cxf_is_quadratic | | Quadratic model detection |
 | cxf_is_socp | | SOCP model detection |
 | cxf_is_socp_internal | | Internal SOCP classification |
@@ -364,41 +362,15 @@
 
 ---
 
-### P3.26 - Solve Barrier & Concurrent (4 functions)
+### P3.26 - Solve Barrier & Concurrent (3 functions)
 
 | Function | Multi-part | Notes |
 |----------|-----------|-------|
 | cxf_solve_barrier | | Interior-point method entry |
 | cxf_solve_concurrent | 6 parts | Concurrent optimization pipeline |
 | cxf_solve_concurrent_distributed | | Distributed concurrent solve |
-| cxf_solve_concurrent_mip | | Concurrent MIP solve |
 
 **Spec file:** `specs/modules/solve_barrier_concurrent.md`
-
----
-
-### P3.27 - Solve MIP (4 functions)
-
-| Function | Multi-part | Notes |
-|----------|-----------|-------|
-| cxf_solve_mip | | MIP solve entry |
-| cxf_presolve_mip | | MIP presolve |
-| cxf_setup_mip_params | | MIP parameter configuration |
-| cxf_process_mip_solution | 6 parts | MIP solution processing pipeline |
-
-**Spec file:** `specs/modules/solve_mip.md`
-
----
-
-### P3.28 - Multi-Objective & Scenario (3 functions)
-
-| Function | Multi-part | Notes |
-|----------|-----------|-------|
-| cxf_solve_multiobj | | Multi-objective optimization |
-| cxf_solve_multiscenario | | Multi-scenario optimization (Phase 3 discovery) |
-| cxf_setup_scenario | 5 parts | Scenario setup pipeline |
-
-**Spec file:** `specs/modules/solve_multiobj.md`
 
 ---
 
@@ -508,8 +480,6 @@ These 10 functions were too complex for single-file analysis and were decomposed
 | cxf_env_finalize | 8 | P3.30 | Environment finalization (licensing pipeline) |
 | cxf_finalize_row_data | 6 | P3.15 | Matrix row data finalization |
 | cxf_model_apply_modifications | 4 | P3.31 | Lazy modification application |
-| cxf_process_mip_solution | 6 | P3.27 | MIP solution processing |
-| cxf_setup_scenario | 5 | P3.28 | Scenario setup |
 | cxf_simplex_init | 4 | P3.22 | Simplex initialization |
 | cxf_solve_concurrent | 6 | P3.26 | Concurrent optimization |
 | cxf_solve_lp | 6 | P3.25 | LP solve pipeline |
@@ -587,7 +557,6 @@ These 10 functions were too complex for single-file analysis and were decomposed
 | cxf_init_callback_struct | P3.13 | Callbacks |
 | cxf_init_solve_state | P3.03 | State Initialization |
 | cxf_init_thread_local | P3.12 | Thread Init & Thunks |
-| cxf_is_mip_model | P3.06 | Model Type Checking |
 | cxf_is_quadratic | P3.06 | Model Type Checking |
 | cxf_is_socp | P3.06 | Model Type Checking |
 | cxf_is_socp_internal | P3.06 | Model Type Checking |
@@ -608,7 +577,6 @@ These 10 functions were too complex for single-file analysis and were decomposed
 | cxf_pre_optimize_callback | P3.13 | Callbacks |
 | cxf_prepare_optimization | P3.32 | Optimization Preparation |
 | cxf_prepare_row_data | P3.14 | Matrix Core |
-| cxf_presolve_mip | P3.27 | Solve MIP |
 | cxf_presolve_stats | P3.33 | Statistics & Diagnostics |
 | cxf_pricing_candidates | P3.17 | Pricing Core |
 | cxf_pricing_cascade_update | P3.18 | Pricing Support |
@@ -624,7 +592,6 @@ These 10 functions were too complex for single-file analysis and were decomposed
 | cxf_pricing_update_constr | P3.17 | Pricing Core |
 | cxf_pricing_update_var | P3.17 | Pricing Core |
 | cxf_process_lp_solution | P3.29 | Solution Processing |
-| cxf_process_mip_solution | P3.27 | Solve MIP |
 | cxf_propagate_bounds | P3.34 | Cleanup Utilities |
 | cxf_realloc | P3.01 | Memory Primitives |
 | cxf_register_log_callback | P3.10 | Logging |
@@ -634,9 +601,7 @@ These 10 functions were too complex for single-file analysis and were decomposed
 | cxf_set_error_message | P3.09 | Error Handling |
 | cxf_set_thread_count | P3.11 | Threading & Sync |
 | cxf_setup_basis | P3.03 | State Initialization |
-| cxf_setup_mip_params | P3.27 | Solve MIP |
 | cxf_setup_resources | P3.02 | Allocation Helpers |
-| cxf_setup_scenario | P3.28 | Multi-Objective & Scenario |
 | cxf_setup_work_arrays | P3.03 | State Initialization |
 | cxf_simplex_cleanup | P3.22 | Simplex Lifecycle |
 | cxf_simplex_crash | P3.21 | Simplex Phases |
@@ -655,13 +620,9 @@ These 10 functions were too complex for single-file analysis and were decomposed
 | cxf_solve_barrier | P3.26 | Solve Barrier & Concurrent |
 | cxf_solve_concurrent | P3.26 | Solve Barrier & Concurrent |
 | cxf_solve_concurrent_distributed | P3.26 | Solve Barrier & Concurrent |
-| cxf_solve_concurrent_mip | P3.26 | Solve Barrier & Concurrent |
 | cxf_solve_dispatch | P3.24 | Solve Entry & Dispatch |
 | cxf_solve_entry | P3.24 | Solve Entry & Dispatch |
 | cxf_solve_lp | P3.25 | Solve LP Core |
-| cxf_solve_mip | P3.27 | Solve MIP |
-| cxf_solve_multiobj | P3.28 | Multi-Objective & Scenario |
-| cxf_solve_multiscenario | P3.28 | Multi-Objective & Scenario |
 | cxf_solve_no_callbacks | P3.24 | Solve Entry & Dispatch |
 | cxf_solve_with_callbacks | P3.24 | Solve Entry & Dispatch |
 | cxf_solver_dispatch | P3.25 | Solve LP Core |
@@ -684,10 +645,10 @@ These 10 functions were too complex for single-file analysis and were decomposed
 | Size | Modules | IDs |
 |------|---------|-----|
 | 1-2 functions | 4 | P3.12, P3.15, P3.23, P3.25 |
-| 3 functions | 6 | P3.02, P3.03, P3.10, P3.22, P3.28, P3.32 |
-| 4 functions | 8 | P3.01, P3.08, P3.09, P3.14, P3.26, P3.27, P3.31, P3.34 |
-| 5 functions | 7 | P3.05, P3.16, P3.17, P3.19, P3.20, P3.30, P3.35 |
-| 6 functions | 6 | P3.04, P3.06, P3.13, P3.21, P3.24, P3.29 |
+| 3 functions | 6 | P3.02, P3.03, P3.10, P3.22, P3.26, P3.32 |
+| 4 functions | 6 | P3.01, P3.08, P3.09, P3.14, P3.31, P3.34 |
+| 5 functions | 8 | P3.05, P3.06, P3.16, P3.17, P3.19, P3.20, P3.30, P3.35 |
+| 6 functions | 5 | P3.04, P3.13, P3.21, P3.24, P3.29 |
 | 7 functions | 2 | P3.11, P3.33 |
 | 8 functions | 2 | P3.07, P3.18 |
 

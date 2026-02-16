@@ -38,35 +38,14 @@ These tolerances control when the solver declares that an optimal solution has b
 | Name | Typical Value | Role | Where Used |
 |------|---------------|------|------------|
 | Optimality tolerance | 1e-6 | Reduced cost threshold for declaring optimality. A non-basic variable is considered optimal if its reduced cost does not violate the sign condition by more than this tolerance. When no non-basic variable violates optimality by more than epsilon_opt, the current basis is declared optimal. | Pricing, optimality check, simplex termination |
-| MIP relative gap | 1e-4 | For mixed-integer programs: the solver terminates when the gap between the best integer solution and the best bound is within this fraction of the incumbent objective value. | solver termination |
-| MIP absolute gap | 1e-10 | For mixed-integer programs: the solver terminates when the absolute difference between the best integer solution and the best bound is within this threshold. | solver termination |
 
 ### Published Default
 
-The ConvexFeld Optimizer Reference Manual documents the default OptimalityTol as 1e-6 (range [1e-9, 1e-2]), MIPGap as 1e-4, and MIPGapAbs as 1e-10. These are standard values; see also CPLEX and HiGHS documentation for similar defaults.
+The ConvexFeld Optimizer Reference Manual documents the default OptimalityTol as 1e-6 (range [1e-9, 1e-2]). This is a standard value; see also CPLEX and HiGHS documentation for similar defaults.
 
 ---
 
-## 3. Integrality Tolerances
-
-These tolerances govern when integer variables are considered to have integral values.
-
-| Name | Typical Value | Role | Where Used |
-|------|---------------|------|------------|
-| Integer feasibility tolerance | 1e-5 | A variable x is considered integer if the distance to the nearest integer is at most epsilon_int: \|x - round(x)\| <= epsilon_int. This applies to all integer, binary, and semi-integer variables. | Branch-and-bound node processing, solution checking, heuristics |
-
-### Published Default
-
-The ConvexFeld Optimizer Reference Manual documents the default IntFeasTol as 1e-5 (range [1e-9, 1e-1]). This value is consistent with standard solver practice (Achterberg, 2007).
-
-### Design Notes
-
-- Setting IntFeasTol too small (e.g., 1e-9) can cause the solver to reject solutions that are essentially integral but have small floating-point rounding errors.
-- Setting IntFeasTol too large (e.g., 1e-1) can accept solutions with visibly non-integer values.
-
----
-
-## 4. Pivot Tolerances
+## 3. Pivot Tolerances
 
 These tolerances control the selection of pivot elements during simplex iterations to maintain numerical stability.
 
@@ -94,7 +73,7 @@ This phased approach is consistent with the recommendations of Maros (2003, Sect
 
 ---
 
-## 5. Barrier (Interior Point) Tolerances
+## 4. Barrier (Interior Point) Tolerances
 
 These tolerances control convergence of the barrier (interior point) algorithm.
 
@@ -114,7 +93,7 @@ The ConvexFeld Optimizer Reference Manual documents BarConvTol as 1e-8 and BarQC
 
 ---
 
-## 6. Numerical Constants
+## 5. Numerical Constants
 
 These constants define fundamental numerical thresholds and representations used throughout the solver.
 
@@ -138,7 +117,7 @@ The use of 1e100 as a solver infinity value is standard in commercial LP solvers
 
 ---
 
-## 7. Anti-Cycling and Perturbation Constants
+## 6. Anti-Cycling and Perturbation Constants
 
 These constants control the bound perturbation mechanism that prevents cycling in degenerate linear programs.
 
@@ -172,7 +151,7 @@ The perturbation approach is based on the EXPAND procedure (Gill, Murray, Saunde
 
 ---
 
-## 8. Scaling Constants
+## 7. Scaling Constants
 
 These constants control the matrix scaling (equilibration) applied to the constraint matrix before optimization.
 
@@ -200,7 +179,7 @@ Ruiz equilibration is described in Ruiz (2001), "A scaling algorithm to equilibr
 
 ---
 
-## 9. Bound Tolerance
+## 8. Bound Tolerance
 
 This tolerance governs when two bounds are considered equal (i.e., when a variable is treated as fixed).
 
@@ -214,7 +193,7 @@ This tolerance corresponds to the "degenerate bound gap" threshold described by 
 
 ---
 
-## 10. Reduced Cost Threshold
+## 9. Reduced Cost Threshold
 
 | Name | Typical Value | Role | Where Used |
 |------|---------------|------|------------|
@@ -222,11 +201,11 @@ This tolerance corresponds to the "degenerate bound gap" threshold described by 
 
 ### Design Notes
 
-The pricing threshold may differ from the optimality tolerance. During aggressive pricing phases (near optimality), the pricing threshold is tightened to avoid selecting candidates that would produce negligible objective improvement. During early iterations, a looser threshold accelerates convergence. See the adaptive pivot tolerance table in Section 4.
+The pricing threshold may differ from the optimality tolerance. During aggressive pricing phases (near optimality), the pricing threshold is tightened to avoid selecting candidates that would produce negligible objective improvement. During early iterations, a looser threshold accelerates convergence. See the adaptive pivot tolerance table in Section 3.
 
 ---
 
-## 11. Quadratic Constants
+## 10. Quadratic Constants
 
 | Name | Typical Value | Role | Where Used |
 |------|---------------|------|------------|
@@ -238,7 +217,7 @@ The 0.5 factor is part of the standard QP formulation and is not a tunable param
 
 ---
 
-## 12. Large Value Markers
+## 11. Large Value Markers
 
 | Name | Typical Value | Role | Where Used |
 |------|---------------|------|------------|
@@ -254,12 +233,9 @@ The following table summarizes the key tolerances with their standard default va
 |-----------|---------|-------|------------------|
 | Primal feasibility tolerance | 1e-6 | [1e-9, 1e-2] | ConvexFeld Reference Manual; Maros (2003) |
 | Dual feasibility / optimality tolerance | 1e-6 | [1e-9, 1e-2] | ConvexFeld Reference Manual; Maros (2003) |
-| Integer feasibility tolerance | 1e-5 | [1e-9, 1e-1] | ConvexFeld Reference Manual; Achterberg (2007) |
 | Barrier convergence tolerance | 1e-8 | (0, 1] | ConvexFeld Reference Manual |
 | Barrier QCP convergence tolerance | 1e-6 | (0, 1] | ConvexFeld Reference Manual |
 | Markowitz pivot tolerance | ~7.8e-3 | [1e-4, 0.999] | ConvexFeld Reference Manual |
-| MIP relative gap | 1e-4 | [0, infinity) | ConvexFeld Reference Manual |
-| MIP absolute gap | 1e-10 | [0, infinity) | ConvexFeld Reference Manual |
 | Solver infinity | 1e100 | -- | ConvexFeld Reference Manual |
 | Bound equality threshold | ~1e-10 | -- | Maros (2003) |
 | Harris pivot threshold | ~1e-9 | -- | Harris (1973); Maros (2003) |
@@ -270,7 +246,6 @@ The following table summarizes the key tolerances with their standard default va
 
 ## References
 
-- Achterberg, T. (2007). *Constraint Integer Programming.* PhD thesis, Technische Universitat Berlin.
 - Curtis, A.R. and Reid, J.K. (1972). "On the automatic scaling of matrices for Gaussian elimination." *IMA Journal of Applied Mathematics*, 10(1):118--124.
 - Dantzig, G.B. (1963). *Linear Programming and Extensions.* Princeton University Press.
 - Forrest, J.J.H. and Goldfarb, D. (1992). "Steepest-edge simplex algorithms for linear programming." *Mathematical Programming*, 57(1):341--374.

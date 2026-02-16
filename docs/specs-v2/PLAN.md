@@ -174,14 +174,14 @@ then writes behavioral contracts.
 |---------|-------|-----------|-------------|
 | P3.01 | Memory Primitives | cxf_calloc, cxf_realloc, cxf_vector_free, cxf_model_alloc | `specs/modules/memory_primitives.md` |
 | P3.02 | Allocation Helpers | cxf_alloc_eta, cxf_alloc_work_arrays, cxf_setup_resources | `specs/modules/allocation_helpers.md` |
-| P3.03 | State Initialization | cxf_init_solve_state, cxf_setup_basis, cxf_setup_work_arrays, cxf_setup_mip_params | `specs/modules/state_initialization.md` |
+| P3.03 | State Initialization | cxf_init_solve_state, cxf_setup_basis, cxf_setup_work_arrays | `specs/modules/state_initialization.md` |
 | P3.05 | State Cleanup - Buffers | cxf_free_callback_state, cxf_free_solution_pool, cxf_clear_solution, cxf_clear_pending_buffer, cxf_reset_pending_buffer | `specs/modules/state_cleanup_buffers.md` |
 
 #### 3.06-3.08: Validation
 
 | Task ID | Title | Functions | Output File |
 |---------|-------|-----------|-------------|
-| P3.06 | Model Type Checking | cxf_is_mip_model, cxf_is_quadratic, cxf_is_socp, cxf_is_socp_internal, cxf_check_model_flags1, cxf_check_model_flags2 | `specs/modules/model_type_checking.md` |
+| P3.06 | Model Type Checking | cxf_is_quadratic, cxf_is_socp, cxf_is_socp_internal, cxf_check_model_flags1, cxf_check_model_flags2 | `specs/modules/model_type_checking.md` |
 | P3.08 | Data Validation | cxf_validate_array, cxf_validate_vartypes, cxf_validate_solution, cxf_special_check | `specs/modules/data_validation.md` |
 
 #### 3.09-3.10: Error & Logging
@@ -245,9 +245,7 @@ then writes behavioral contracts.
 |---------|-------|-----------|-------------|
 | P3.24 | Solve Entry & Dispatch | cxf_optimize, cxf_optimize_internal, cxf_solve_entry, cxf_solve_dispatch, cxf_solve_no_callbacks, cxf_solve_with_callbacks | `specs/modules/solve_entry.md` |
 | P3.25 | Solve LP Core | cxf_solve_lp (6 parts), cxf_solver_dispatch (6 parts) | `specs/modules/solve_lp_core.md` |
-| P3.26 | Solve Barrier & Concurrent | cxf_solve_barrier, cxf_solve_concurrent (6 parts), cxf_solve_concurrent_distributed, cxf_solve_concurrent_mip | `specs/modules/solve_barrier_concurrent.md` |
-| P3.27 | Solve MIP | cxf_solve_mip, cxf_presolve_mip, cxf_setup_mip_params, cxf_process_mip_solution (6 parts) | `specs/modules/solve_mip.md` |
-| P3.28 | Multi-Objective & Scenario | cxf_solve_multiobj, cxf_solve_multiscenario, cxf_setup_scenario (5 parts) | `specs/modules/solve_multiobj.md` |
+| P3.26 | Solve Barrier & Concurrent | cxf_solve_barrier, cxf_solve_concurrent (6 parts), cxf_solve_concurrent_distributed | `specs/modules/solve_barrier_concurrent.md` |
 
 #### 3.29-3.31: Solution & Lifecycle
 
@@ -314,7 +312,7 @@ then writes behavioral contracts.
 | Task ID | Title | Output File | Key Inputs |
 |---------|-------|-------------|------------|
 | P5.1 | Error & Status Codes | `specs/reference/error_status_codes.md` | `docs/learnings/functions/cxf_error_logging_analysis.md`, all error-handling analyzed files |
-| P5.2 | Parameters & Defaults | `specs/reference/parameters_defaults.md` | cxf_env_finalize, cxf_setup_mip_params, parameter-reading functions |
+| P5.2 | Parameters & Defaults | `specs/reference/parameters_defaults.md` | cxf_env_finalize, parameter-reading functions |
 | P5.3 | Tolerances & Constants | `specs/reference/tolerances_constants.md` | Simplex, pricing, pivot analyzed files for tolerance usage |
 
 **Per-task instructions for Phase 5:**
@@ -497,8 +495,8 @@ cxf_calloc, cxf_realloc, cxf_vector_free, cxf_model_alloc
 **P3.02 - Allocation Helpers (3)**
 cxf_alloc_eta, cxf_alloc_work_arrays, cxf_setup_resources
 
-**P3.03 - State Initialization (4)**
-cxf_init_solve_state, cxf_setup_basis, cxf_setup_work_arrays, cxf_setup_mip_params
+**P3.03 - State Initialization (3)**
+cxf_init_solve_state, cxf_setup_basis, cxf_setup_work_arrays
 
 **P3.04 - State Cleanup Solver (6)**
 cxf_cleanup_solve_state, cxf_free_solver_state, cxf_free_basis_state,
@@ -507,8 +505,8 @@ cxf_cleanup_solve_state, cxf_free_solver_state, cxf_free_basis_state,
 cxf_free_callback_state, cxf_free_solution_pool, cxf_clear_solution,
 cxf_clear_pending_buffer, cxf_reset_pending_buffer
 
-**P3.06 - Model Type Checking (6)**
-cxf_is_mip_model, cxf_is_quadratic, cxf_is_socp, cxf_is_socp_internal,
+**P3.06 - Model Type Checking (5)**
+cxf_is_quadratic, cxf_is_socp, cxf_is_socp_internal,
 cxf_check_model_flags1, cxf_check_model_flags2
 
 **P3.07 - Input Validation (7)**
@@ -576,16 +574,9 @@ cxf_solve_no_callbacks, cxf_solve_with_callbacks
 **P3.25 - Solve LP Core (2 multi-part)**
 cxf_solve_lp (6 parts), cxf_solver_dispatch (6 parts)
 
-**P3.26 - Solve Barrier & Concurrent (4, includes multi-part)**
+**P3.26 - Solve Barrier & Concurrent (3, includes multi-part)**
 cxf_solve_barrier, cxf_solve_concurrent (6 parts),
-cxf_solve_concurrent_distributed, cxf_solve_concurrent_mip
-
-**P3.27 - Solve MIP (4, includes multi-part)**
-cxf_solve_mip, cxf_presolve_mip, cxf_setup_mip_params,
-cxf_process_mip_solution (6 parts)
-
-**P3.28 - Multi-Objective & Scenario (3, includes multi-part)**
-cxf_solve_multiobj, cxf_solve_multiscenario, cxf_setup_scenario (5 parts)
+cxf_solve_concurrent_distributed
 
 **P3.29 - Solution Processing (6)**
 cxf_process_lp_solution, cxf_uncrush_solution, cxf_wire_result_attributes,
@@ -614,9 +605,9 @@ cxf_has_history, cxf_fix_variable
 
 ### Function Count Verification
 
-Phase 3 total: 4+3+4+6+5+6+7+4+4+3+7+3+6+4+1+5+5+8+5+5+6+4+2+6+2+4+4+3+6+5+4+3+7+4+5 = **163 function slots**
+Phase 3 total: 4+3+3+6+5+5+7+4+4+3+7+3+6+4+1+5+5+8+5+5+6+4+2+6+2+3+6+5+4+3+7+4+5 = **152 function slots**
 
-Note: Some multi-part functions count as 1 slot. The 163 includes all single-file functions
+Note: Some multi-part functions count as 1 slot. The 152 includes all single-file functions
 plus all multi-part functions as single entries.
 
 ---

@@ -63,7 +63,7 @@ If the matrix has zero constraints, the function proceeds directly to finalizati
 
 **Fast-path: Constraint Sense Normalization:**
 
-If certain conditions are met (no penalty terms, no previously computed row-ready state, constraint type flags are available, no quadratic constraints, and no integrality information), the function performs a lightweight normalization pass instead of full scaling. For each inequality constraint (identified by the constraint type flag), it negates the constraint coefficients, swaps and negates the row bounds, and negates the right-hand side value. This normalization converts greater-than-or-equal constraints to less-than-or-equal form, which is the internal normal form expected by the simplex solver (see MatrixData Layer 1 specification, Invariant 6). The negation uses an IEEE 754 sign-bit flip, which is exact and handles infinity and NaN correctly.
+If certain conditions are met (no penalty terms, no previously computed row-ready state, constraint type flags are available, no quadratic constraints), the function performs a lightweight normalization pass instead of full scaling. For each inequality constraint (identified by the constraint type flag), it negates the constraint coefficients, swaps and negates the row bounds, and negates the right-hand side value. This normalization converts greater-than-or-equal constraints to less-than-or-equal form, which is the internal normal form expected by the simplex solver (see MatrixData Layer 1 specification, Invariant 6). The negation uses an IEEE 754 sign-bit flip, which is exact and handles infinity and NaN correctly.
 
 If piecewise-linear constraints exist, the constraint type flags are cleared instead, deferring normalization.
 
@@ -78,7 +78,7 @@ If the MatrixData has previously saved scaling factors (from a prior solve on th
 A single contiguous block of memory is allocated to hold both row scaling factors (one per constraint) and column scaling factors (one per variable). The minimum allocation is two entries. If allocation fails, the function returns the out-of-memory error code.
 
 Row scaling factors are initialized based on constraint classification:
-- Constraints in the first partition (up to an index determined by integrality information) are initialized to +1.0
+- Constraints in the first partition are initialized to +1.0
 - Remaining constraints are initialized to -1.0 (the negative sign serves as a processing marker that is resolved to a positive magnitude during the scaling computation)
 
 Column scaling factors are all initialized to +1.0.

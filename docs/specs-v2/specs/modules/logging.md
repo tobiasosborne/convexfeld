@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The Logging module provides the solver's output infrastructure, supporting multiple simultaneous output destinations for solver progress messages, diagnostic information, and error reports. It implements a dual output model where log messages can be directed to any combination of standard output, a log file, a user-provided callback function, a session-level callback, and a remote remote solver channel. The module also provides the mechanism for users to register custom callback functions that receive all log output programmatically, enabling GUI integration, custom log filtering, and remote monitoring. The module handles reentrancy protection to prevent infinite recursion when callbacks themselves trigger logging, and processes output line-by-line to support destination-specific formatting requirements.
+The Logging module provides the solver's output infrastructure, supporting multiple simultaneous output destinations for solver progress messages, diagnostic information, and error reports. It implements a dual output model where log messages can be directed to any combination of standard output, a log file, a user-provided callback function, a session-level callback, and a remote solver channel. The module also provides the mechanism for users to register custom callback functions that receive all log output programmatically, enabling GUI integration, custom log filtering, and remote monitoring. The module handles reentrancy protection to prevent infinite recursion when callbacks themselves trigger logging, and processes output line-by-line to support destination-specific formatting requirements.
 
 ## Output Destination Model
 
@@ -14,7 +14,7 @@ The solver supports five simultaneous log output destinations, each independentl
 | Log file | Output verbosity is enabled and a log file handle is open | Persistent file-based logging |
 | Session callback | A session reference is registered (active even when verbosity is disabled) | Session-level notification system for framework integration |
 | User callback function | A user callback function pointer is registered | Programmatic log capture for GUI, filtering, or custom routing |
-| Remote server | The environment is connected to a remote solver with remote logging enabled | Log forwarding to a remote remote solver using a line-based message protocol |
+| Remote server | The environment is connected to a remote solver with remote logging enabled | Log forwarding to a remote solver using a line-based message protocol |
 
 ### Verbosity Control
 
@@ -63,7 +63,7 @@ Messages that span multiple lines are split at newline characters and each line 
 - Null error buffer pointer (on the environment) -> silent return, no action
 
 **Behavioral Description:**
-This function maps standard solver error codes to predefined human-readable message strings and writes them to the environment's error buffer. It first validates the model structure. Then it extracts the environment and error buffer pointer. If the error code is zero, the buffer is cleared. For nonzero codes, it applies the first-error preservation rule: the out-of-memory error always overwrites (as memory exhaustion is typically the root cause of cascading failures), while all other errors write only to an empty buffer. The error code-to-message mapping covers approximately 30 standard error codes spanning memory errors, argument validation errors, attribute and parameter errors, license errors, I/O errors, numerical errors, model state errors, quadratic programming errors, network and server errors, and miscellaneous operational errors. One code in the standard range (10015) is reserved and has no mapping. Unrecognized codes receive a fallback message that includes the numeric value.
+This function maps standard solver error codes to predefined human-readable message strings and writes them to the environment's error buffer. It first validates the model structure. Then it extracts the environment and error buffer pointer. If the error code is zero, the buffer is cleared. For nonzero codes, it applies the first-error preservation rule: the out-of-memory error always overwrites (as memory exhaustion is typically the root cause of cascading failures), while all other errors write only to an empty buffer. The error code-to-message mapping covers approximately 30 standard error codes spanning memory errors, argument validation errors, attribute and parameter errors, I/O errors, numerical errors, model state errors, quadratic programming errors, network and server errors, and miscellaneous operational errors. One code in the standard range (10015) is reserved and has no mapping. Unrecognized codes receive a fallback message that includes the numeric value.
 
 Note: Despite its name suggesting "error log," this function writes to the error message buffer (the same buffer used by the Error Handling module's cxf_set_error_message), not to the log output system. The naming reflects that it "logs" an error state on the environment for later retrieval, rather than producing log file output.
 
@@ -97,7 +97,7 @@ Note: Despite its name suggesting "error log," this function writes to the error
 - Writes to the log file (if the file destination is active)
 - Invokes the session callback (if a session reference is registered)
 - Invokes the user callback function (if registered)
-- Sends data to the remote remote solver (if the remote destination is active)
+- Sends data to the remote solver (if the remote destination is active)
 - Modifies the environment's internal log buffer and log state fields
 - Sets and clears the environment's reentrancy guard flag
 
@@ -124,7 +124,7 @@ The function performs the following behavioral steps:
    - **Log file destination:** The line is written to the log file handle and the file is flushed.
    - **Session callback destination:** The line is copied to a callback communication buffer (with bounded length) and the session callback is invoked with a message event type.
    - **User callback destination:** The line is copied to a temporary buffer and passed to the registered user callback function along with the user's data pointer.
-   - **Remote server destination:** The line is formatted with a protocol prefix tag and sent to the remote remote solver connection.
+   - **Remote server destination:** The line is formatted with a protocol prefix tag and sent to the remote solver connection.
 
 7. **Partial line retention:** After processing all complete lines, any remaining partial line (content after the last newline) is shifted to the beginning of the internal log buffer for inclusion in the next cxf_log call.
 

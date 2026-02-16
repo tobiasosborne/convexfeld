@@ -6,7 +6,7 @@ The Threading & Synchronization module provides the solver's thread resource man
 
 1. **Locale Safety:** Before optimization begins, the solver must ensure that numeric formatting uses the standard "C" locale (period as decimal separator) regardless of the user's system locale. This is critical because LP file formats, coefficient parsing, solution output, and log messages all depend on consistent decimal point formatting. The module provides an acquire/release pair that saves the calling thread's locale, switches to the "C" locale using per-thread locale isolation, and restores the original locale when optimization completes.
 
-2. **Thread Resource Queries:** The module provides functions to query detected hardware parallelism (logical processors and physical cores), compute the effective thread count for parallel operations by reconciling multiple constraints (hardware availability, user configuration, and license limits), and validate thread count choices by warning when oversubscription is requested.
+2. **Thread Resource Queries:** The module provides functions to query detected hardware parallelism (logical processors and physical cores), compute the effective thread count for parallel operations by reconciling multiple constraints (hardware availability and user configuration), and validate thread count choices by warning when oversubscription is requested.
 
 3. **Error Buffer Preparation:** The module includes a function that prepares the environment's error buffer for a new API operation by clearing stale error state, unless the buffer is currently locked for nested error handling.
 
@@ -192,7 +192,7 @@ The value is detected at environment creation time using platform-specific syste
 **Behavioral Description:**
 This function returns a conservative estimate of physical CPU cores by taking the minimum of two detected values: the logical processor count and the physical core count. Under normal circumstances, the physical core count is always less than or equal to the logical processor count (since simultaneous multithreading adds logical processors beyond the physical count). However, hardware detection APIs can occasionally return inconsistent values if detection fails or returns partial results. By taking the minimum, the function ensures that the returned value never overestimates the available physical parallelism.
 
-For CPU-bound workloads such as LP and MIP solving, physical core count is often a better guide for thread allocation than logical processor count, because simultaneous multithreading provides diminishing returns for compute-intensive tasks.
+For CPU-bound workloads such as LP solving, physical core count is often a better guide for thread allocation than logical processor count, because simultaneous multithreading provides diminishing returns for compute-intensive tasks.
 
 **Thread Safety:** Safe. Reads immutable values set during initialization.
 
@@ -203,7 +203,7 @@ For CPU-bound workloads such as LP and MIP solving, physical core count is often
 
 ### cxf_get_threads
 
-**Purpose:** Compute the effective thread count for parallel operations by reconciling the model-level override, automatic hardware detection with capping, the user's Threads parameter, and the license thread limit.
+**Purpose:** Compute the effective thread count for parallel operations by reconciling the model-level override, automatic hardware detection with capping, and the user's Threads parameter.
 
 **Signature:**
 - Input: `environment` : pointer-to-Environment - The environment containing thread configuration and hardware info
@@ -230,11 +230,9 @@ This function determines the actual number of threads the solver should use for 
 
 3. **User parameter application:** The function reads the user-configured Threads parameter from the environment's parameter system. If this value is less than the auto-detected count, the user's value is used. (A Threads parameter value of zero means "automatic," meaning the auto-detected value is used without further reduction.)
 
-4. **License limit enforcement:** Finally, the function checks the license thread limit stored in the environment. If this limit is less than the current computed count, the license limit takes precedence. This ensures the solver never exceeds the parallelism allowed by the license.
-
 The function always returns the most restrictive of all applicable limits.
 
-**Thread Safety:** Safe. Reads configuration values that are stable during optimization (the Threads parameter and license limit are not modified during a solve). The model-level thread override is set before optimization begins.
+**Thread Safety:** Safe. Reads configuration values that are stable during optimization (the Threads parameter is not modified during a solve). The model-level thread override is set before optimization begins.
 
 **Dependencies:**
 - Parameter system lookup (reads the Threads parameter by name from the environment's parameter table)
@@ -320,9 +318,8 @@ The thread count determination (cxf_get_threads) follows a principled hierarchy 
 1. **Model-level override** (highest priority if set): Direct specification, bypasses all auto-detection
 2. **Hardware detection with cap**: Logical processors, reduced by physical cores on large systems, capped at an efficiency threshold
 3. **User Threads parameter**: User's explicit configuration acts as an upper bound
-4. **License limit** (always enforced): Legal constraint that cannot be overridden
 
-This "most restrictive wins" design ensures the solver never exceeds any applicable limit, whether hardware, user preference, or license.
+This "most restrictive wins" design ensures the solver never exceeds any applicable limit, whether hardware or user preference.
 
 ### Relationship to Other Modules
 

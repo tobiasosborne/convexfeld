@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The Input Validation module provides a set of guard functions that verify the correctness and safety of inputs before they are consumed by the solver's core algorithms. These functions protect against null pointers, use-after-free errors, IEEE 754 special floating-point values (NaN, infinity), invalid string labels, licensing precondition violations, multi-objective misconfiguration, and infeasible solution states. They are called at API entry points and internal dispatch boundaries to enforce preconditions and produce meaningful error diagnostics. Most functions in this module are pure or read-only -- they inspect state without modifying it.
+The Input Validation module provides a set of guard functions that verify the correctness and safety of inputs before they are consumed by the solver's core algorithms. These functions protect against null pointers, use-after-free errors, IEEE 754 special floating-point values (NaN, infinity), invalid string labels, multi-objective misconfiguration, and infeasible solution states. They are called at API entry points and internal dispatch boundaries to enforce preconditions and produce meaningful error diagnostics. Most functions in this module are pure or read-only -- they inspect state without modifying it.
 
 ## Functions
 
@@ -148,42 +148,14 @@ This function is identical in behavior to cxf_check_is_finite. Both names refer 
 **Error Conditions:**
 - Primary label attribute check fails -> propagated error code from the attribute subsystem
 - Secondary label attribute check fails -> propagated error code
-- Tertiary label attribute check fails -> propagated error code, except that a DATA_NOT_LICENSED error on the third (optional) attribute is suppressed and treated as success
+- Tertiary label attribute check fails -> propagated error code, except that a DATA_NOT_AVAILABLE error on the third (optional) attribute is suppressed and treated as success
 
 **Behavioral Description:**
-The function checks up to three label-related attribute categories on the model, specified by appending different suffixes to the provided base name. It constructs each attribute identifier by formatting the base name with a suffix into a buffer, then invokes the internal attribute checker for that identifier. The checks are sequential with early exit: if the first check fails, the second is not attempted. The third check is conditional on the model having an active attribute table and is lenient -- a licensing restriction on the third attribute is tolerated. Before performing any checks, the function saves and temporarily clears the model's modification-blocked flag to allow attribute reads; this flag is unconditionally restored before returning, regardless of success or failure.
+The function checks up to three label-related attribute categories on the model, specified by appending different suffixes to the provided base name. It constructs each attribute identifier by formatting the base name with a suffix into a buffer, then invokes the internal attribute checker for that identifier. The checks are sequential with early exit: if the first check fails, the second is not attempted. The third check is conditional on the model having an active attribute table and is lenient -- a data-not-available error on the third attribute is tolerated. Before performing any checks, the function saves and temporarily clears the model's modification-blocked flag to allow attribute reads; this flag is unconditionally restored before returning, regardless of success or failure.
 
 **Thread Safety:** unsafe (modifies model modification-blocked flag temporarily; not safe for concurrent access to the same model)
 
 **Dependencies:** String formatting utility (cxf_snprintf), internal attribute file checker.
-
----
-
-
-**Purpose:** Check whether single-use license restrictions are satisfied.
-
-**Signature:**
-- Input: (none)
-- Output: int - Zero indicating no restriction applies
-
-**Preconditions:**
-- None.
-
-**Postconditions:**
-- Always returns zero (success).
-
-**Side Effects:**
-- None.
-
-**Error Conditions:**
-- None. This function never returns an error.
-
-**Behavioral Description:**
-This is a stub function that unconditionally returns success. It is present in the function table as a placeholder for single-use license enforcement, but the current implementation does not enforce any restriction. The function may exist to maintain a consistent validation call pattern at API entry points, or the enforcement may be handled by a different subsystem. An implementor should provide this as a no-op that returns success.
-
-**Thread Safety:** safe (no state access)
-
-**Dependencies:** None.
 
 ---
 

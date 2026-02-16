@@ -2,13 +2,13 @@
 
 ## Purpose
 
-This module provides functions for releasing and resetting model-level state that accumulates during optimization and through the lazy update pattern. It handles three distinct cleanup responsibilities: (1) disconnecting from remote remote solvers and releasing callback state, (2) releasing concurrent environment pools with reference counting, (3) clearing all solution-related data from a model, (4) performing a deep free of the pending modifications buffer, and (5) performing a soft reset of the pending modifications buffer for reuse. These functions are called during model destruction, solution clearing, and update processing.
+This module provides functions for releasing and resetting model-level state that accumulates during optimization and through the lazy update pattern. It handles three distinct cleanup responsibilities: (1) disconnecting from remote solvers and releasing callback state, (2) releasing concurrent environment pools with reference counting, (3) clearing all solution-related data from a model, (4) performing a deep free of the pending modifications buffer, and (5) performing a soft reset of the pending modifications buffer for reuse. These functions are called during model destruction, solution clearing, and update processing.
 
 ## Functions
 
 ### cxf_free_callback_state
 
-**Purpose:** Cleanly disconnects a model from a remote remote solver and releases the associated callback registration state.
+**Purpose:** Cleanly disconnects a model from a remote solver and releases the associated callback registration state.
 
 **Signature:**
 - Input: model : pointer-to-Model - The model whose remote callback state should be freed
@@ -27,7 +27,7 @@ This module provides functions for releasing and resetting model-level state tha
 - Any server-side error messages have been propagated to the Environment's error state
 
 **Side Effects:**
-- Sends a termination request to the remote remote solver if optimization is active
+- Sends a termination request to the remote solver if optimization is active
 - Blocks (with bounded polling) until the remote operation completes or the polling limit is reached
 - Sends a disconnect protocol message to the remote server
 - May send a result-fetch protocol message if the disconnect did not complete cleanly
@@ -41,7 +41,7 @@ This module provides functions for releasing and resetting model-level state tha
 - If the disconnect returns an unexpected error, the function attempts to wait for any outstanding optimization and fetch results before returning
 
 **Behavioral Description:**
-This function manages the complex cleanup required when a model with registered callbacks is being freed while connected to a remote remote solver. It first checks whether a remote optimization is still active for this model. If so, it requests termination and polls until the model becomes inactive (with a bounded maximum number of polling iterations to prevent infinite loops). Once the model is inactive, it acquires the remote solver lock, frees any existing connection handle, sends a disconnect message using the remote solver protocol, and releases the lock. The callback registration count on the model is then cleared. If the disconnect completes successfully or times out, the function returns. If the server reports an error, the error is propagated to the Environment. For other error conditions, the function waits for any outstanding remote optimization, then sends a result-fetch request and processes the response, propagating any error information to the Environment.
+This function manages the complex cleanup required when a model with registered callbacks is being freed while connected to a remote solver. It first checks whether a remote optimization is still active for this model. If so, it requests termination and polls until the model becomes inactive (with a bounded maximum number of polling iterations to prevent infinite loops). Once the model is inactive, it acquires the remote solver lock, frees any existing connection handle, sends a disconnect message using the remote solver protocol, and releases the lock. The callback registration count on the model is then cleared. If the disconnect completes successfully or times out, the function returns. If the server reports an error, the error is propagated to the Environment. For other error conditions, the function waits for any outstanding remote optimization, then sends a result-fetch request and processes the response, propagating any error information to the Environment.
 
 **Thread Safety:** Conditional. Acquires the remote solver lock for protocol operations. The bounded polling loop for termination does not hold a lock.
 
@@ -68,7 +68,7 @@ This function manages the complex cleanup required when a model with registered 
 **Side Effects:**
 - For each environment in the pool: decrements the reference count on the environment's root environment under the root environment's mutex
 - If an environment's reference count reaches zero, recursively frees the environment and (if the root environment also reaches zero) the root environment
-- If an environment's reference count is still positive after decrement, performs deferred cleanup: logs a warning, and if a remote remote solver job is active, attempts to terminate it (with bounded polling), sends a kill message, and frees the remote solver connection
+- If an environment's reference count is still positive after decrement, performs deferred cleanup: logs a warning, and if a remote solver job is active, attempts to terminate it (with bounded polling), sends a kill message, and frees the remote solver connection
 - Frees the pool array using the model's primary environment as the memory context
 - Clears the pool pointer and count on the model
 
@@ -76,7 +76,7 @@ This function manages the complex cleanup required when a model with registered 
 - None (void return). Deferred-free conditions are handled gracefully via logging and remote job termination.
 
 **Behavioral Description:**
-This function iterates through the model's concurrent environment pool -- an array of Environment references created for parallel optimization (e.g., concurrent MIP solving with different parameter settings). For each environment, it decrements the root environment's reference count under the root environment's mutex. If the reference count reaches zero, the environment is fully freed via the internal environment destructor. If the reference count is still positive (meaning other code still references this environment), the function performs deferred cleanup: it logs a warning, checks for an active remote remote solver job associated with the environment, and if found, requests termination with bounded polling and ultimately kills the remote job. After processing all environments, the pool array itself is freed and the model's pool pointer and count are cleared.
+This function iterates through the model's concurrent environment pool -- an array of Environment references created for parallel optimization (e.g., concurrent solving with different parameter settings). For each environment, it decrements the root environment's reference count under the root environment's mutex. If the reference count reaches zero, the environment is fully freed via the internal environment destructor. If the reference count is still positive (meaning other code still references this environment), the function performs deferred cleanup: it logs a warning, checks for an active remote solver job associated with the environment, and if found, requests termination with bounded polling and ultimately kills the remote job. After processing all environments, the pool array itself is freed and the model's pool pointer and count are cleared.
 
 **Thread Safety:** Conditional. Reference count decrements are performed under the root environment's mutex. Remote job termination uses bounded polling without holding a lock.
 
@@ -90,7 +90,7 @@ This function iterates through the model's concurrent environment pool -- an arr
 
 **Signature:**
 - Input: model : pointer-to-Model - The model to clear
-- Input: clearHints : int - If nonzero, also clear MIP start hints, warm-start data, and user-supplied basis information
+- Input: clearHints : int - If nonzero, also clear start hints, warm-start data, and user-supplied basis information
 - Output: int - Zero on success, nonzero error code on failure
 
 **Preconditions:**
@@ -104,7 +104,7 @@ This function iterates through the model's concurrent environment pool -- an arr
 - Basis state has been freed
 - Matrix version and solution status flags have been cleared
 - The model's attribute cache has been invalidated
-- If clearHints was nonzero: MIP start hint arrays, branch priorities, user-supplied basis arrays (variable basis, constraint basis, quadratic constraint basis, SOS basis, PWL basis), start values, partition data, lazy constraint flags, variable hint values, and variable hint priorities have all been freed and their pointers nulled
+- If clearHints was nonzero: start hint arrays, branch priorities, user-supplied basis arrays (variable basis, constraint basis, quadratic constraint basis, SOS basis, PWL basis), start values, partition data, lazy constraint flags, variable hint values, and variable hint priorities have all been freed and their pointers nulled
 - The model's initialized flag is set to 1
 - The environment's thread pool has been freed
 - Asynchronous optimization threads have been joined

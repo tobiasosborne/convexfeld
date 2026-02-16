@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This module provides higher-level allocation functions that build on the memory primitives to allocate and initialize domain-specific solver structures. It includes the arena allocator for eta vectors used in the Product Form of the Inverse, the allocation and initialization of the WorkArrays (solution data container), and the pre-optimization resource validation function that checks licensing and model size limits. These functions bridge the gap between raw memory allocation and the solver's runtime data structures.
+This module provides higher-level allocation functions that build on the memory primitives to allocate and initialize domain-specific solver structures. It includes the arena allocator for eta vectors used in the Product Form of the Inverse and the allocation and initialization of the WorkArrays (solution data container). These functions bridge the gap between raw memory allocation and the solver's runtime data structures.
 
 ## Functions
 
@@ -91,50 +91,6 @@ cxf_alloc_work_arrays prepares the model's solution data container for a new opt
 
 ---
 
-### cxf_setup_resources
-
-**Purpose:** Validate the license and check model size against license limits before optimization can proceed.
-
-**Signature:**
-- Input: model : pointer-to-Model - The model to validate
-- Output: int - Error code: zero on success, or a license/resource error code on failure
-
-**Preconditions:**
-- model must be a valid, initialized Model with a valid environment
-- The model's environment must reference a root environment with license data
-
-**Postconditions:**
-- On success (return zero), the license is valid and the model's dimensions (variable count, constraint count, nonzero count, and quadratic term count, including any pending uncommitted modifications) are within the license limits
-- On failure, an appropriate error code is returned and an error message may have been logged on the environment
-
-**Side Effects:**
-- For cloud-based or web license service deployment types: may perform network communication to validate or refresh a license token, protected by a critical section on the root environment
-- May update cached license tokens on the root environment when a fresh token is obtained
-- Logs error messages on the environment when initialization validation fails
-
-**Error Conditions:**
-- Environment relationship invalid (model's initialized environment does not match root environment) -> returns LICENSE_SIZE_EXCEEDED error
-- License suspended -> returns LICENSE_SIZE_EXCEEDED error
-- Cloud/WLS token validation failure (all fallback attempts exhausted) -> returns LICENSE_SIZE_EXCEEDED error
-- Batch mode active on environment -> returns CANNOT_OPTIMIZE_BATCH error (batch-mode models cannot be optimized locally)
-- Model variable count exceeds license limit -> returns LICENSE_LIMIT error
-- Model constraint count (sum of all constraint types plus pending) exceeds license limit -> returns LICENSE_LIMIT error
-- Model nonzero count exceeds license limit -> returns LICENSE_LIMIT error
-- Model quadratic term count exceeds license limit -> returns LICENSE_LIMIT error
-
-**Behavioral Description:**
-cxf_setup_resources performs a multi-tier validation before allowing optimization to proceed. First, it validates the environment chain by confirming that the model's license reference matches the root environment's license reference; if not, or if a basic environment validation fails, it returns an error immediately. If the model has no matrix data (empty model), it returns success since there is nothing to validate. It then checks whether the license has been externally suspended.
-
-For cloud-based and web license service (WLS) deployment types, the function enters a critical section and performs a cascading token validation strategy: it first tries a cached token, then an alternate cached token, then attempts a token refresh from the configuration server, and finally makes a full license service API call. Each successful validation updates the token cache for future calls. This multi-tier caching minimizes network latency during repeated optimization calls.
-
-After license-type-specific validation, the function checks whether the environment is in batch mode (which prohibits local optimization). Finally, it validates the model's dimensions against the license limits. The total constraint count is computed as the sum of all constraint types (linear, quadratic, SOS, general, piecewise-linear, and others), including any pending uncommitted modifications from the lazy update buffer.
-
-**Thread Safety:** conditional - Token validation for cloud and WLS licenses is protected by a critical section on the root environment, serializing concurrent token operations. Model size checks are read-only and safe for concurrent access to different models sharing the same environment.
-
-**Dependencies:** initialization validation functions (for basic environment validations and token validation), system identification functions (for machine/user identification in cloud licensing), error logging (for reporting license failures).
-
----
-
 ## Module-Level Design Rationale
 
 ### Arena Allocation for Eta Vectors
@@ -161,17 +117,6 @@ The WorkArrays allocation function follows a "create-or-reinitialize" pattern co
 - Template copying supports multi-scenario optimization where results from one solve are used to initialize the next.
 
 The adaptive threshold pattern (initialized to -1.0 meaning "compute on first use") is a standard technique for dynamic tolerance adjustment in LP solvers, as discussed in Maros (2003), *Computational Techniques of the Simplex Method*, Chapter 8.
-
-### License Validation Strategy
-
-The initialization validation function implements a defense-in-depth approach:
-
-1. **Environment chain validation** catches corrupted or detached model-environment relationships.
-2. **License suspension check** supports external administrative control.
-3. **Token caching with cascading fallback** minimizes network latency while ensuring validity.
-4. **Comprehensive size checking** covers all constraint types and pending modifications to prevent license circumvention via lazy updates.
-
-The critical section protecting token operations ensures that concurrent optimizations do not corrupt shared token state, while the model size checks are inherently read-only and safe for concurrent access.
 
 ## References
 

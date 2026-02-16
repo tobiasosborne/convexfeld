@@ -2,7 +2,7 @@
 
 ## Overview
 
-This specification describes how errors propagate through the LP solver system, from initial detection deep within internal algorithms through cascading error handling layers to the point where a user retrieves a meaningful error message via the public API. Error propagation is a cross-cutting concern that touches nearly every module in the solver: the error handling primitives (P3.09), the logging subsystem (P3.10), the input and data validation modules (P3.07, P3.08), the solve entry chain (P3.24), the solver dispatch and LP core (P3.25), the barrier and concurrent solvers (P3.26), the solver (P3.27), and the environment and model lifecycle modules (P3.30, P3.31).
+This specification describes how errors propagate through the LP solver system, from initial detection deep within internal algorithms through cascading error handling layers to the point where a user retrieves a meaningful error message via the public API. Error propagation is a cross-cutting concern that touches nearly every module in the solver: the error handling primitives (P3.09), the logging subsystem (P3.10), the input and data validation modules (P3.07, P3.08), the solve entry chain (P3.24), the solver dispatch and LP core (P3.25), the barrier and concurrent solvers (P3.26), and the environment and model lifecycle modules (P3.30, P3.31).
 
 The solver's error propagation design follows three governing principles:
 
@@ -32,9 +32,8 @@ The solver's error propagation design follows three governing principles:
 | **Logging** | P3.10 | Contains cxf_errorlog, which sets predefined error messages; also provides log output for error diagnostics |
 | **Solve LP Core** | P3.25 | Generates solver errors (numeric, out-of-memory) and propagates them through the solve chain |
 | **Solve Barrier & Concurrent** | P3.26 | Generates Q-not-PSD errors and propagates solver errors |
-| **Solve MIP** | P3.27 | Generates MIP-specific errors and propagates solver errors |
 | **Model Lifecycle** | P3.31 | Generates modification errors (a model-update error message) during lazy update flush |
-| **Environment Lifecycle** | P3.30 | Generates initialization and licensing errors during environment finalization |
+| **Environment Lifecycle** | P3.30 | Generates initialization errors during environment finalization |
 
 ## Flow Description
 
@@ -531,19 +530,19 @@ cxf_env_finalize
     +-- Stage 2: Hardware check
     |       |
     |       +-- CPU does not support required SIMD instructions
-    |       +-- cxf_env_set_status(env, NO_LICENSE)
-    |       |     (predefined message: "No valid ConvexFeld license found")
-    |       +-- cxf_error_env(env, NO_LICENSE, overwrite=1,
+    |       +-- cxf_env_set_status(env, NOT_SUPPORTED)
+    |       |     (predefined message: "Hardware not supported")
+    |       +-- cxf_error_env(env, NOT_SUPPORTED, overwrite=1,
     |       |     "This processor does not support...")
-    |       |     (overwrite=1 succeeds, replaces generic license message)
+    |       |     (overwrite=1 succeeds, replaces generic message)
     |       +-- jumps to Stage 8 (cleanup)
     |
     +-- Stage 8: Error Cleanup
     +-- Restores environment from snapshot (atomic rollback)
     +-- Environment remains in INACTIVE state
-    +-- Returns NO_LICENSE
+    +-- Returns NOT_SUPPORTED
 
-User receives NO_LICENSE return code
+User receives NOT_SUPPORTED return code
 User calls cxf_geterrormsg(env) -> "This processor does not support..."
 ```
 

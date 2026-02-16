@@ -2,9 +2,9 @@
 
 ## Published Reference
 
-- **Primary:** Savelsbergh, M.W.P. (1994). "Preprocessing and probing techniques for mixed integer programming problems." *ORSA Journal on Computing*, 6(4):445-454. Sections 2.1-2.2 describe the bound-tightening procedure for individual constraints based on activity analysis.
+- **Primary:** Savelsbergh, M.W.P. (1994). "Preprocessing and probing techniques for linear programming problems." *ORSA Journal on Computing*, 6(4):445-454. Sections 2.1-2.2 describe the bound-tightening procedure for individual constraints based on activity analysis.
 - **Foundational:** Brearley, A.L., Mitra, G., and Williams, H.P. (1975). "Analysis of mathematical programming problems prior to applying the simplex algorithm." *Mathematical Programming*, 8(1):54-83. Introduces the concept of deriving variable bounds from constraint structure.
-- **Presolve reductions:** Achterberg, T., Bixby, R.E., Gu, Z., Rothberg, E., and Weninger, D. (2020). "Presolve reductions in mixed integer programming." *INFORMS Journal on Computing*, 32(2):473-506. Comprehensive treatment of bound tightening and other presolve techniques in modern LP solvers, including their application during solving.
+- **Presolve reductions:** Achterberg, T., Bixby, R.E., Gu, Z., Rothberg, E., and Weninger, D. (2020). "Presolve reductions in linear programming." *INFORMS Journal on Computing*, 32(2):473-506. Comprehensive treatment of bound tightening and other presolve techniques in modern LP solvers, including their application during solving.
 - **Convergence theory:** Belotti, P., Cafieri, S., Lee, J., and Liberti, L. (2010). "Feasibility-based bounds tightening via fixed points." In *Combinatorial Optimization and Applications (COCOA 2010)*, Lecture Notes in Computer Science, vol. 6508, pp. 65-76, Springer. Characterizes the fixed-point behavior of FBBT on linear constraints and shows that convergence to the limit may not be finite.
 - **Bound flipping ratio test:** Forrest, J.J.H. and Goldfarb, D. (1992). "Steepest-edge simplex algorithms for linear programming." *Mathematical Programming*, 57(1):341-374. The bound-flipping technique that motivates per-iteration bound propagation during simplex.
 - **Dual simplex bound propagation:** Koberstein, A. (2005). *The dual simplex method, techniques for a fast and stable implementation.* PhD Thesis, University of Paderborn. Discusses integration of bound tightening within the dual simplex iteration loop.
@@ -121,7 +121,7 @@ The **lower activity** L_act_i (also called minimum activity) is defined symmetr
 | 3 | BOTH | Both bounds tightened; variable is effectively fixed (bits 0 + 1) |
 | 4 | INFEASIBLE | Implied value contradicts existing bounds beyond tolerance |
 
-When the candidate variable is an integer or piecewise-linear variable, an additional flag (value 8) is added to the violation code to signal downstream processing that integrality considerations apply.
+When the candidate variable is a piecewise-linear variable, an additional flag (value 8) is added to the violation code to signal downstream processing that piecewise-linear considerations apply.
 
 ### Overview
 
@@ -590,7 +590,7 @@ The total per-iteration cost is proportional to the number of pricing candidates
 
 10. **Quadratic programs:** Constraint-side propagation (Section 2) is skipped entirely. Variable-side propagation (Section 1) still operates. This is because the quadratic objective introduces nonlinear dependencies that invalidate the linear activity-bound inference used by constraint-side propagation.
 
-11. **Integer and piecewise-linear variables:** These receive an additional flag in the violation classification stored in the eta record. This flag does not affect the propagation logic itself but enables downstream MIP or piecewise-linear processing to identify bound changes on variables requiring special integrality or breakpoint handling.
+11. **Integer and piecewise-linear variables:** These receive an additional flag in the violation classification stored in the eta record. This flag does not affect the propagation logic itself but enables downstream piecewise-linear processing to identify bound changes on variables requiring special breakpoint handling.
 
 ---
 

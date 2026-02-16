@@ -52,7 +52,7 @@ This function is called during first-time callback registration (either log call
 
 ### cxf_callback_terminate
 
-**Purpose:** Signal the solver to terminate from within a callback context, handling both local and remote remote solver solves.
+**Purpose:** Signal the solver to terminate from within a callback context, handling both local and remote solver solves.
 
 **Signature:**
 - Input: `model` : pointer-to-Model - The model whose optimization should be terminated
@@ -75,7 +75,7 @@ This function is called during first-time callback registration (either log call
 - Null asynchronous state (local path) -> silently skips flag setting (no error returned)
 
 **Behavioral Description:**
-The function determines whether the current solve is executing locally or on a remote remote solver by attempting a non-blocking lock acquisition on the remote solver synchronization primitive:
+The function determines whether the current solve is executing locally or on a remote solver by attempting a non-blocking lock acquisition on the remote solver synchronization primitive:
 
 1. **Remote path (remote solver):** If the non-blocking lock test succeeds, the solve is operating through a remote solver. The function acquires the full remote solver lock, constructs and sends a termination request message using the remote solver's message protocol, and releases the lock. The remote server processes the termination request and halts the solve.
 
@@ -116,7 +116,7 @@ The non-blocking lock test serves as a discriminator between local and remote op
 **Behavioral Description:**
 This function is an internal optimization lifecycle hook, NOT a user callback. Despite its name suggesting callback behavior, it is called by the optimization infrastructure at the very beginning of an optimization operation, before the solver loop starts.
 
-The function validates the model using the standard structural validation check (sentinel-based). If validation passes, it sets the error buffer lock flag on the model's environment. This lock causes subsequent error-reporting functions to preserve the existing error message text while still updating the error code. The primary purpose is to ensure that if an error was set before optimization (such as a parameter validation error or license warning), that message is not overwritten by cascading errors that may occur during the solve process.
+The function validates the model using the standard structural validation check (sentinel-based). If validation passes, it sets the error buffer lock flag on the model's environment. This lock causes subsequent error-reporting functions to preserve the existing error message text while still updating the error code. The primary purpose is to ensure that if an error was set before optimization (such as a parameter validation error), that message is not overwritten by cascading errors that may occur during the solve process.
 
 This function is always paired with cxf_post_optimize_callback, which clears the lock after optimization completes.
 
@@ -193,7 +193,7 @@ The function is idempotent: clearing an already-cleared lock flag has no ill eff
 
 **Error Conditions:**
 - Not in a callback context (no active optimization) -> returns callback error code
-- License error from remote server -> returns license error code; reports error message from server
+- Server-side error from remote server -> returns the appropriate error code; reports error message from server
 - Memory allocation failure on remote server -> returns out-of-memory error code
 - Remote communication failure -> waits for optimization to complete, retrieves and reports error details from the server, returns the original error code
 
@@ -210,7 +210,7 @@ The function retrieves constraint matrix data from the solver during an active o
 
 5. **Data copy:** If the request succeeds and the function is not in count-only mode, the response data is copied from the server's response buffers to the user-provided output arrays. The copy handles three data components separately: start indices (as integer arrays), variable indices (as integer arrays), and coefficient values (as floating-point arrays).
 
-6. **Error recovery:** If the remote request fails (for reasons other than out-of-memory or license errors), the function enters an error recovery path: it waits for the remote optimization to complete (polling with sleep intervals), then makes a secondary request to retrieve detailed error information from the server, and reports the error through the environment's error reporting system.
+6. **Error recovery:** If the remote request fails (for reasons other than out-of-memory or server-side errors), the function enters an error recovery path: it waits for the remote optimization to complete (polling with sleep intervals), then makes a secondary request to retrieve detailed error information from the server, and reports the error through the environment's error reporting system.
 
 7. **Lock release:** The remote solver communication lock is released.
 
@@ -329,13 +329,6 @@ The CallbackState structure (specified in the CallbackState data model) is lazil
 - **cxf_callback_terminate** uses the termination mechanism (via the environment's async state, not the CallbackState) to signal solver termination
 
 The log callback function pointer and its user data reside in the Environment, not in the CallbackState. The CallbackState provides shared synchronization and timing infrastructure for all callback types.
-
-### Compute Server Considerations
-
-Two functions in this module (cxf_callback_terminate, cxf_getconstrs_callback) have dual code paths for local and remote (remote solver) operation:
-
-- **cxf_callback_terminate** uses a non-blocking lock test to discriminate between modes: if the remote solver lock can be acquired, the solve is remote and a termination message is sent; otherwise, a local termination flag is set.
-- **cxf_getconstrs_callback** is primarily oriented toward remote solver deployments, using RPC protocol messages to request constraint data from the remote server. For local solves, the function's context validation would typically prevent invocation outside the expected callback context.
 
 ### Thread Safety Summary
 

@@ -479,7 +479,7 @@ During simplex iterations, implied bounds can be derived from constraint activit
 
 where MinActivity and MaxActivity are the minimum and maximum possible values of the left-hand side excluding x_k's contribution. When these implied bounds are tighter than the current bounds, the working bounds are updated. This is a form of preprocessing that can be applied during simplex iterations, not just as a pre-solve step.
 
-See Savelsbergh (1994) and Achterberg (2007) for the theory of bound propagation in LP and MIP solvers.
+See Savelsbergh (1994) for the theory of bound propagation in LP solvers.
 
 ---
 

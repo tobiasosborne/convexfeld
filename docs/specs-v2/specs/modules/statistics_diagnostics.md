@@ -8,7 +8,7 @@ The Statistics & Diagnostics module provides functions that compute, report, and
 
 2. **Numerical conditioning analysis**: The module computes the ranges (minimum and maximum absolute values) of coefficients across the constraint matrix, objective function, variable bounds, right-hand sides, and specialized constraint types. Wide coefficient ranges indicate potential numerical difficulties, and the module issues warnings when ranges exceed well-known thresholds from the optimization literature. These statistics are also exposed as queryable model attributes for programmatic access.
 
-3. **Solution validation**: After optimization, the module evaluates a candidate solution against all constraint types, computing violation metrics (maximum and sum of violations) for linear constraints, quadratic constraints, variable bounds, integrality requirements, SOS constraints, general constraints, and nonlinear constraints. These violation reports help users assess solution quality and diagnose infeasibility.
+3. **Solution validation**: After optimization, the module evaluates a candidate solution against all constraint types, computing violation metrics (maximum and sum of violations) for linear constraints, quadratic constraints, variable bounds, SOS constraints, general constraints, and nonlinear constraints. These violation reports help users assess solution quality and diagnose infeasibility.
 
 4. **Model identity and timing**: The module provides a model fingerprinting function that computes a hash digest of the entire problem formulation for cache invalidation and change detection, and a timestamp/session-identifier function for logging and correlation purposes.
 
@@ -316,22 +316,20 @@ The function evaluates solution quality through the following phases:
 
 7. **Bound violations**: For each variable, computes the violation of lower and upper bounds. Semi-continuous and semi-integer variables receive special treatment: if the absolute value of the variable is smaller than the lower bound violation, the absolute value is used instead (reflecting the semi-continuous domain where the variable must be either zero or within bounds). The function tracks maximum and sum of bound violations, the worst-violating variable index, and the maximum absolute value of non-continuous variables (for large-integer warnings).
 
-8. **Integrality violations**: For each integer, binary, or semi-integer variable, computes the distance to the nearest integer value: violation = |x - round(x)|, where round(x) = floor(x + 0.5). Continuous and semi-continuous variables are skipped. The function tracks maximum and sum of integrality violations and the worst-violating variable index.
-
-9. **SOS constraint violations**: For each SOS constraint:
+8. **SOS constraint violations**: For each SOS constraint:
    - SOS1 (at most one nonzero): The violation is the second-largest absolute value in the set. If only one variable is nonzero, the violation is zero.
    - SOS2 (at most two adjacent nonzeros): The violation is the largest absolute value of a set member that is not adjacent to the member with the largest absolute value. Adjacency is determined by position in the ordered set.
 
-10. **General and nonlinear constraint violations**: Delegates to specialized helper functions that evaluate general constraints (indicator, PWL, etc.) and nonlinear constraints against the solution. Results are merged into the overall constraint violation tracking.
+9. **General and nonlinear constraint violations**: Delegates to specialized helper functions that evaluate general constraints (indicator, PWL, etc.) and nonlinear constraints against the solution. Results are merged into the overall constraint violation tracking.
 
-11. **Reporting**: Depending on the verbosity setting:
-    - *Compact mode (verbosity zero)*: A single summary line is logged showing maximum violations for constraints, bounds, and integrality, with optional SOS, general constraint, and nonlinear constraint components appended when those constraint types are present. For models with quadratic constraints, the quadratic violation is shown separately.
-    - *Verbose mode (verbosity nonzero)*: Individual warnings are logged for each violation category that exceeds the corresponding solver tolerance (feasibility tolerance for constraints and bounds, integrality tolerance for integer variables). Additional diagnostic hints are provided:
+10. **Reporting**: Depending on the verbosity setting:
+    - *Compact mode (verbosity zero)*: A single summary line is logged showing maximum violations for constraints and bounds, with optional SOS, general constraint, and nonlinear constraint components appended when those constraint types are present. For models with quadratic constraints, the quadratic violation is shown separately.
+    - *Verbose mode (verbosity nonzero)*: Individual warnings are logged for each violation category that exceeds the corresponding solver tolerance (feasibility tolerance for constraints and bounds). Additional diagnostic hints are provided:
       - Large integer values exceeding a warning limit trigger an advisory.
       - PWL-related general constraint violations trigger specific advice about adjusting PWL approximation parameters or enabling presolve.
       - When violations significantly exceed tolerances (by a factor of ten or more), the function queries model coefficient attributes to suggest possible numerical causes (large matrix coefficients, large coefficient range, large variable bounds, large RHS values, or possible infeasibility).
 
-12. **Output population**: If the output structure is non-null, it is populated with: overall maximum violation (the maximum across constraint, bound, and integrality violations), maximum bound violation, maximum constraint violation, maximum integrality violation, sums of bound/constraint/integrality violations, and the indices of the worst-violating elements in each category.
+11. **Output population**: If the output structure is non-null, it is populated with: overall maximum violation (the maximum across constraint and bound violations), maximum bound violation, maximum constraint violation, sums of bound/constraint violations, and the indices of the worst-violating elements in each category.
 
 **Thread Safety:** Unsafe. Requires exclusive access to the model. Temporarily modifies and restores a model validation field.
 
@@ -391,7 +389,7 @@ The function computes a hash of the model using a polynomial rolling hash algori
    - **Piecewise-linear constraints**: Delegated to a PWL hashing helper.
    - **General constraint data**: Delegated to a general constraint data hashing helper.
    - **Function constraint data**: Sparse array data for each function constraint.
-   - **Optional model-level arrays**: Each optional array uses a distinct marker value to prevent collisions between absent and empty data. The optional arrays include: variable basis status, MIP start hints, branching priorities, start values (with validity flags), partition data, lazy constraint flags, variable hint values, variable hint priorities, constraint basis status, quadratic constraint basis status, SOS basis status, and PWL basis status.
+   - **Optional model-level arrays**: Each optional array uses a distinct marker value to prevent collisions between absent and empty data. The optional arrays include: variable basis status, start hints, branching priorities, start values (with validity flags), partition data, lazy constraint flags, variable hint values, variable hint priorities, constraint basis status, quadratic constraint basis status, SOS basis status, and PWL basis status.
    - **Warm start data**: Solution values (scoped by warm start type: full, variables-only, or constraints-only), basis status, and dual values for basic variables.
 
 3. **Determinism guarantees**: The same model data always produces the same fingerprint. The sign normalization for greater-than-or-equal constraints ensures that models stored with different internal conventions hash identically. The zero normalization prevents negative zero from producing a different hash than positive zero.
@@ -495,7 +493,6 @@ The violation categories computed by cxf_compute_violations correspond to standa
 
 - **Primal feasibility violation**: max_i |a_i^T x - b_i| for equality constraints, max(0, a_i^T x - b_i) for inequality constraints. This is compared against the solver's feasibility tolerance (typically 1e-6).
 - **Bound violation**: max_j max(0, lb_j - x_j, x_j - ub_j). Also compared against the feasibility tolerance.
-- **Integrality violation**: max_j |x_j - round(x_j)| for integer variables. Compared against the integrality feasibility tolerance (typically 1e-5).
 - **SOS violations**: Based on the defining property of each SOS type (at most k nonzeros in a prescribed order).
 
 These definitions are standard across commercial LP solvers (see Achterberg, 2007; Koch et al., 2011).

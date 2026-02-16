@@ -72,8 +72,6 @@ The callback system supports distinct event types that indicate the solver phase
 | POLLING | Periodic polling during long operations |
 | PRESOLVE | During presolve phase |
 | SIMPLEX | During simplex iterations |
-| MIP_SOLUTION | When a new integer-feasible solution is found |
-| MIP_NODE | At each node of the branch-and-bound tree |
 | BARRIER | During barrier (interior point) iterations |
 | MESSAGE | When a log message is generated |
 
@@ -122,7 +120,7 @@ If the allocation fails at step 2, the function returns an out-of-memory error a
 3. The CallbackState memory is freed.
 4. The Environment's pointer to the CallbackState is set to null.
 
-For environments connected to a remote remote solver, additional cleanup is required before the CallbackState can be freed:
+For environments connected to a remote solver, additional cleanup is required before the CallbackState can be freed:
 - If an optimization is in progress on the remote server, the solver attempts to terminate it and waits for the remote operation to complete (with a bounded polling loop).
 - A disconnect message is sent to the remote server.
 - The response is processed, and any remote error conditions are reported through the environment's error handling system.

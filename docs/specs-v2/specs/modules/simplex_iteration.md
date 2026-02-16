@@ -41,7 +41,7 @@ This function provides progress reporting during the LP solve. It is called once
 
 **Step 3: Format and emit message.** The message format depends on the current solve mode:
 - During general constraint preprocessing: reports the preprocessing phase and elapsed time.
-- During standard presolve: reports the number of rows and columns removed and the elapsed time. The message prefix varies depending on whether this is the initial presolve or a root relaxation presolve within a MIP solve.
+- During standard presolve: reports the number of rows and columns removed and the elapsed time. The message prefix varies depending on whether this is the initial presolve or a subsequent presolve phase.
 
 **Step 4: Callback invocation.** The external logging callback is always invoked, regardless of whether a message was printed. This ensures that external monitoring systems (GUI progress bars, distributed computing managers) receive regular heartbeat notifications even when console output is suppressed.
 
@@ -197,7 +197,7 @@ This function processes the secondary pricing queue populated during cxf_simplex
 
 6. **Infeasibility handling.** Infeasibility detection uses a two-stage procedure: the initial ratio check is confirmed against dual activity bounds before returning the infeasibility code. If confirmation fails, the candidate entry is restored and processing continues. This prevents false infeasibility alarms caused by numerical noise.
 
-7. **Bound-change eta record creation.** A lightweight bound-change eta record is created for each processed candidate (when eta tracking is active). This record stores the variable index, constraint index, flip classification, pivot coefficient, and ratio value. For integer variables, the flip classification includes an additional flag to enable downstream MIP processing.
+7. **Bound-change eta record creation.** A lightweight bound-change eta record is created for each processed candidate (when eta tracking is active). This record stores the variable index, constraint index, flip classification, pivot coefficient, and ratio value.
 
 8. **Bound update and notification.** New bounds are written to the variable's working bound arrays, cxf_pivot_update (P3.19) is called to incrementally update constraint activity bounds, and the pricing subsystem is notified via dirty-marking. If the flip type indicates both bounds are tightened (variable fixed), cxf_pivot_bound (P3.19) is called to fully fix the variable.
 
@@ -275,7 +275,7 @@ This technique is a standard LP presolve reduction also applicable during simple
 
 6. **Infeasibility handling.** As in step2, a two-stage procedure confirms infeasibility before reporting: the initial implication is verified against the constraint's minimum and maximum activity bounds. Unconfirmed infeasibilities are treated as false alarms (the constraint entry is restored and processing continues).
 
-7. **Bound-change eta record creation.** A lightweight bound-change eta record is created for each processed constraint (same format as step2). The record stores the variable index, constraint index, violation flags, coefficient, and implied value. Piecewise-linear and integer variables receive additional flags.
+7. **Bound-change eta record creation.** A lightweight bound-change eta record is created for each processed constraint (same format as step2). The record stores the variable index, constraint index, violation flags, coefficient, and implied value. Piecewise-linear variables receive additional flags.
 
 8. **Bound update and notification.** New bounds are applied, activity bounds are updated via cxf_pivot_update (P3.19), and the pricing subsystem is notified. If both bounds are tightened, cxf_pivot_bound (P3.19) fixes the variable.
 
@@ -434,7 +434,7 @@ The constraint-side propagation (step3) is the standard implied-bound technique 
 | cxf_simplex_step2 | BOUND_CHANGE | Lightweight bound-change record for variable-side flips |
 | cxf_simplex_step3 | BOUND_CHANGE | Lightweight bound-change record for constraint-side propagation |
 
-The bound-change eta records created by step2 and step3 are a lightweight variant distinct from the full pivot eta records (Variant 1) and the variable-fixing records (Variant 2) created by cxf_pivot_bound (P3.19). They store only the variable index, constraint index, classification flags, pivot coefficient, and ratio/implied value. For integer and piecewise-linear variables, an additional flag is included in the classification to enable downstream MIP or PWL processing.
+The bound-change eta records created by step2 and step3 are a lightweight variant distinct from the full pivot eta records (Variant 1) and the variable-fixing records (Variant 2) created by cxf_pivot_bound (P3.19). They store only the variable index, constraint index, classification flags, pivot coefficient, and ratio/implied value. For piecewise-linear variables, an additional flag is included in the classification to enable downstream PWL processing.
 
 All eta records are allocated from the SolverState's memory pool via bump allocation and are freed in bulk during basis refactorization.
 

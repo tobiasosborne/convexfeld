@@ -35,7 +35,7 @@ The most complex function in this module is the lazy modification applicator. Co
 
 **Side Effects:**
 - Allocates memory for the Model structure and its internal data storage
-- If create_child_environment is nonzero, creates a child environment (which may involve license inheritance and parameter table duplication)
+- If create_child_environment is nonzero, creates a child environment (which may involve parameter table duplication)
 - Performs initial model setup (attribute table construction, internal vector initialization)
 
 **Error Conditions:**
@@ -73,7 +73,7 @@ If any step fails, the function invokes a cleanup routine that frees all previou
 
 ### cxf_env_model_cleanup
 
-**Purpose:** Clean up all child environments associated with a parent environment, handling reference counting, deferred frees for still-referenced environments, and termination of remote remote solver jobs.
+**Purpose:** Clean up all child environments associated with a parent environment, handling reference counting, deferred frees for still-referenced environments, and termination of remote solver jobs.
 
 **Signature:**
 - Input: `parent_environment` : pointer-to-Environment -- The parent environment whose child environment array should be cleaned up
@@ -85,7 +85,7 @@ If any step fails, the function invokes a cleanup routine that frees all previou
 **Postconditions:**
 - All child environments that can be immediately freed have been freed via the internal environment destructor
 - Child environments that are still referenced by other entities (reference count has not reached zero) have been logged with a warning and their slots cleared; the actual free is deferred until the reference count reaches zero
-- Any active remote remote solver jobs associated with child environments have been terminated
+- Any active remote solver jobs associated with child environments have been terminated
 - The parent's child environment count is set to zero
 - The parent's child environment array is freed and its pointer set to null
 
@@ -95,7 +95,7 @@ If any step fails, the function invokes a cleanup routine that frees all previou
 - May free root environments whose reference counts reach zero
 - Logs warning messages when environments cannot be immediately freed (still referenced)
 - Logs warning messages when remote jobs are killed
-- Terminates remote remote solver jobs (sends termination signals over the network)
+- Terminates remote solver jobs (sends termination signals over the network)
 - Frees the child environment array itself
 
 **Error Conditions:**
@@ -116,9 +116,9 @@ The function processes all child environments registered with the parent environ
       - If the child is a different object from its root, or the root's reference count reached zero, free the child environment immediately using the internal environment destructor. If the root is a different object and its reference count also reached zero, free the root as well.
       - If the child is the same as its root and the reference count is still positive (other entities still hold references), the environment cannot be freed yet. Log a warning indicating the free is deferred.
 
-   c. **Handle deferred-free environments:** For environments that cannot be freed immediately, check for special license service connections that may need to continue operating. Log appropriate warnings.
+   c. **Handle deferred-free environments:** For environments that cannot be freed immediately, log appropriate warnings.
 
-   d. **Terminate remote remote solver jobs:** If the deferred-free environment has an active remote solver connection with a valid server address and job identifier:
+   d. **Terminate remote solver jobs:** If the deferred-free environment has an active remote solver connection with a valid server address and job identifier:
       - Check if the remote job is still active.
       - If active, set a termination flag on the environment's async state to signal the job.
       - Poll for graceful job completion, yielding and sleeping between polls, up to a maximum poll count (on the order of hundreds of thousands of iterations).
@@ -202,7 +202,7 @@ The function performs a clean teardown of the model management structure:
   - All pending modifications have been applied to the model's matrix data
   - The pending modifications buffer has been cleared and reset
   - Warm-start data has been validated, downgraded, or discarded as appropriate based on compatibility with the modifications
-  - Cached data structures that are invalidated by the modifications (solution data, row-major representation, presolve state, basis data, solver state, MIP data) have been freed
+  - Cached data structures that are invalidated by the modifications (solution data, row-major representation, presolve state, basis data, solver state) have been freed
   - Name uniqueness has been validated (duplicate variable, constraint, or range constraint names produce an error)
   - Variable type counts (binary, integer, continuous) have been updated
   - The model's state flags have been updated to reflect the modification
@@ -246,7 +246,7 @@ If the model has warm-start data (primal start, dual start, or basis start):
 If the pending modifications buffer is not active (no modifications pending), skip to cleanup. Otherwise:
 
 - Cache the current matrix dimensions (number of variables, number of constraints).
-- Check if dimensions have decreased (indicating deletions). If so, invoke the dimension reduction handler, which compacts the matrix and updates all dependent structures. This involves freeing numerous cached structures (solution cache, callback state, internal vectors, solver state, presolve state, MIP data), recalculating the nonzero count from the sparse column start array, and recomputing variable type counts.
+- Check if dimensions have decreased (indicating deletions). If so, invoke the dimension reduction handler, which compacts the matrix and updates all dependent structures. This involves freeing numerous cached structures (solution cache, callback state, internal vectors, solver state, presolve state), recalculating the nonzero count from the sparse column start array, and recomputing variable type counts.
 
 - **Variable modification flag counting:** If variable modifications exist, iterate through the per-variable modification flags array, counting modifications by category: bound changes, objective coefficient changes, variable type changes, name changes, and several other per-variable attribute changes. Update the name change counter on the model.
 
@@ -271,7 +271,7 @@ For substantive modifications:
 
 - **Modification tracking allocation:** Allocate a modification tracking structure if one does not exist, recording summary counts of additions, deletions, and other changes.
 
-- **Cache invalidation:** Free all cached derived data that is invalidated by the modifications. The set of caches freed depends on the modification categories: constraint changes invalidate solution-related caches, variable/constraint additions or deletions invalidate objective and bound caches, and any structural change invalidates internal vectors, solver state, presolve state, MIP data, and global caches.
+- **Cache invalidation:** Free all cached derived data that is invalidated by the modifications. The set of caches freed depends on the modification categories: constraint changes invalidate solution-related caches, variable/constraint additions or deletions invalidate objective and bound caches, and any structural change invalidates internal vectors, solver state, presolve state, and global caches.
 
 - **Basis transfer:** If a prior basis exists and the modifications are compatible with incremental basis reuse, transfer the basis from the old structure to a new one, skipping entries for deleted variables/constraints and appending space for new ones. This avoids a full basis recomputation on the next solve.
 
@@ -316,7 +316,7 @@ Throughout all phases, a work counter on the model is incremented by the number 
 **Dependencies:**
 - SOS validation function
 - Dimension reduction handler
-- Various cache invalidation and cleanup functions (solution cache, callback state, internal vectors, solver state, presolve state, MIP data)
+- Various cache invalidation and cleanup functions (solution cache, callback state, internal vectors, solver state, presolve state)
 - Memory allocation and deallocation (via the environment's allocator)
 - Hash table creation, lookup, insertion, and destruction (for name uniqueness checking)
 - String pool management (creation, allocation from pool, freeing)
@@ -371,10 +371,6 @@ The modification applicator recognizes and handles the following categories of c
 ### Reference Counting in Environment Cleanup
 
 The child environment cleanup function uses a reference counting scheme to safely manage shared environments. When a child environment is created, it increments the reference count on its root environment. During cleanup, the reference count is decremented under mutex protection. The environment is only freed when its reference count reaches zero, ensuring that no other entity holds a dangling reference. Environments that are still referenced when cleanup is requested have their cleanup deferred with a logged warning.
-
-### Compute Server Job Termination
-
-When an environment with an active remote remote solver job is being cleaned up, the function follows a graceful shutdown protocol: set a termination flag, poll for the job to stop, and if the job does not stop within the polling limit, send an explicit termination message. This ensures that remote resources are released even if the local environment is being destroyed unexpectedly.
 
 ### Internal Storage Convention for Constraint Senses
 

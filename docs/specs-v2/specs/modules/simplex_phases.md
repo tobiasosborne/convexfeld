@@ -479,12 +479,12 @@ All functions operate within a single-threaded simplex solve. Thread safety for 
 
 ## References
 
-- Achterberg, T., Bixby, R.E., Gu, Z., Rothberg, E., and Weninger, D. (2020). "Presolve Reductions in Mixed Integer Programming." *INFORMS Journal on Computing*, 32(2):473-506.
+- Achterberg, T., Bixby, R.E., Gu, Z., Rothberg, E., and Weninger, D. (2020). "Presolve Reductions in Linear Programming." *INFORMS Journal on Computing*, 32(2):473-506.
 - Chvatal, V. (1983). *Linear Programming*. W.H. Freeman.
 - Dantzig, G.B. (1963). *Linear Programming and Extensions*. Princeton University Press.
 - Gill, P.E., Murray, W., Saunders, M.A., and Wright, M.H. (1989). "A practical anti-cycling procedure for linearly constrained optimization." *Mathematical Programming*, 45(1-3):437-474.
 - Gleixner, A.M., Steffy, D.E., and Wolter, K. (2016). "Iterative refinement for linear programming." *INFORMS Journal on Computing*, 28(3):449-464.
 - Gould, N.I.M. and Reid, J.K. (1989). "New crash procedures for large systems of linear constraints." *Mathematical Programming*, 45(1-3):475-501.
 - Maros, I. (2003). *Computational Techniques of the Simplex Method*. Springer. International Series in Operations Research and Management Science, Vol. 61.
-- Savelsbergh, M.W.P. (1994). "Preprocessing and Probing Techniques for Mixed Integer Programming Problems." *ORSA Journal on Computing*, 6(4):445-454.
+- Savelsbergh, M.W.P. (1994). "Preprocessing and Probing Techniques for Linear Programming Problems." *ORSA Journal on Computing*, 6(4):445-454.
 - Vanderbei, R.J. (2014). *Linear Programming: Foundations and Extensions*. 4th ed. Springer.

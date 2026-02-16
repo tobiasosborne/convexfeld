@@ -138,7 +138,7 @@ The standard error codes cover the following categories:
 - Memory and argument errors (null argument, invalid argument, out of memory)
 - Attribute and parameter errors (unknown attribute, unknown parameter, value out of range, data not available)
 - Index errors (index out of range)
-- License errors (no license, size limit exceeded)
+- Size limit errors (size limit exceeded)
 - I/O errors (file read, file write, callback, node file)
 - Numerical errors (numeric error)
 - Model state errors (optimization in progress, duplicates, model modification)
@@ -182,7 +182,7 @@ One error code in the standard range (10015) is reserved and has no predefined m
 **Behavioral Description:**
 This function is the environment-level equivalent of cxf_set_error_message. It operates directly on an Environment pointer rather than extracting the environment from a model. After validating the environment pointer and error buffer pointer, it applies the same logic: clearing the buffer for a zero error code, applying the first-error preservation rule (out-of-memory always overwrites; other errors only write to an empty buffer), and mapping the error code to a predefined message string from the same standard error code table. The error code-to-message mapping is identical to cxf_set_error_message.
 
-The key difference from cxf_set_error_message is the entry point: this function does not require a Model and does not perform model validation. It is used by environment-level operations (initialization, licensing, parameter configuration) that may need to set error messages before any Model exists.
+The key difference from cxf_set_error_message is the entry point: this function does not require a Model and does not perform model validation. It is used by environment-level operations (initialization, parameter configuration) that may need to set error messages before any Model exists.
 
 **Thread Safety:** Unsafe. The caller is responsible for thread-safe access to the environment.
 
@@ -203,7 +203,7 @@ The four error handling functions form two pairs along two dimensions:
 
 - **Custom message functions** (cxf_error_env, cxf_error_model): Accept a printf-style format string and variadic arguments, producing a context-specific error message. Used for detailed internal error messages that include runtime values (e.g., "Failed to allocate N bytes", "Variable index K out of range").
 - **Predefined message functions** (cxf_set_error_message, cxf_env_set_status): Map a standard error code to a fixed human-readable string from a built-in table. Used at API boundaries and for standard error conditions where a consistent message is preferred.
-- **Environment-entry functions** (cxf_error_env, cxf_env_set_status): Operate directly on an Environment pointer. Used during environment initialization, licensing, and other operations that do not have a Model context.
+- **Environment-entry functions** (cxf_error_env, cxf_env_set_status): Operate directly on an Environment pointer. Used during environment initialization and other operations that do not have a Model context.
 - **Model-entry functions** (cxf_error_model, cxf_set_error_message): Accept a Model pointer and resolve to the Model's associated Environment. Used during model manipulation, optimization, and API functions that operate on models.
 
 ### Error Code Semantics

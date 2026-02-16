@@ -2,11 +2,11 @@
 
 ## Purpose
 
-The Solution Processing module implements the post-solve pipeline that transforms raw solver output into user-accessible result data. After an LP, MIP, or barrier solver method has found a solution (or determined infeasibility/unboundedness), this module performs all steps necessary to make solution information available through the solver's public attribute API: binding result attributes to their storage locations, reversing presolve transformations, computing derived quantities such as optimality gaps and objective values, and managing the MIP solution pool.
+The Solution Processing module implements the post-solve pipeline that transforms raw solver output into user-accessible result data. After an LP or barrier solver method has found a solution (or determined infeasibility/unboundedness), this module performs all steps necessary to make solution information available through the solver's public attribute API: binding result attributes to their storage locations, reversing presolve transformations, computing derived quantities such as optimality gaps and objective values, and managing the solution pool.
 
-The module embodies two key design patterns. First, it uses a **direct-pointer wiring pattern** in which attribute entries are linked to the memory locations where result values reside, enabling attribute queries to read solution data without function-call dispatch overhead. This wiring must be reconfigured after each solve because the storage locations may differ depending on the solve outcome (optimal, infeasible, MIP with multiple solutions, etc.). Second, it implements a **presolve reversal pattern** through which solutions obtained in the reduced (presolved) variable space are mapped back to the original problem's variable space, restoring values for variables that were eliminated, substituted, or aggregated during presolve. This reversal is a standard postsolve operation (Andersen and Andersen, 1995; Gondzio, 1997) that every LP solver with a presolve phase must provide.
+The module embodies two key design patterns. First, it uses a **direct-pointer wiring pattern** in which attribute entries are linked to the memory locations where result values reside, enabling attribute queries to read solution data without function-call dispatch overhead. This wiring must be reconfigured after each solve because the storage locations may differ depending on the solve outcome (optimal, infeasible, multiple solutions, etc.). Second, it implements a **presolve reversal pattern** through which solutions obtained in the reduced (presolved) variable space are mapped back to the original problem's variable space, restoring values for variables that were eliminated, substituted, or aggregated during presolve. This reversal is a standard postsolve operation (Andersen and Andersen, 1995; Gondzio, 1997) that every LP solver with a presolve phase must provide.
 
-The six functions span the full post-solve pipeline: attribute wiring for LP results (cxf_process_lp_solution), attribute wiring for MIP/general results (cxf_wire_result_attributes), presolve reversal (cxf_uncrush_solution), objective value evaluation (cxf_scale_objval), optimality gap computation (cxf_compute_gap), and solution pool management (cxf_copy_solution).
+The six functions span the full post-solve pipeline: attribute wiring for LP results (cxf_process_lp_solution), attribute wiring for general results (cxf_wire_result_attributes), presolve reversal (cxf_uncrush_solution), objective value evaluation (cxf_scale_objval), optimality gap computation (cxf_compute_gap), and solution pool management (cxf_copy_solution).
 
 ## Functions
 
@@ -46,14 +46,14 @@ The function proceeds through four phases:
 
 2. **Iteration and node count wiring.** The function wires six attributes to their backing storage:
    - Three iteration count attributes (simplex iteration count, barrier iteration count, and first-order method iteration count) are each wired to the corresponding field in the solution information structure.
-   - Three node count attributes (node count, open node count, and time-open) are all wired to the same location on the model, since LP solves do not explore branch-and-bound nodes.
-   - Two solution count attributes (solution count and first solution node) are set to unavailable (null pointer), indicating that no MIP-style solutions have been recorded.
+   - Three node count attributes (node count, open node count, and time-open) are all wired to the same location on the model, since LP solves always report zero nodes.
+   - Two solution count attributes (solution count and first solution node) are set to unavailable (null pointer), indicating that no multi-solution pool entries have been recorded.
 
 3. **Status-dependent objective wiring (solution available).** If the optimization status indicates a valid solution exists (any status other than loaded, infeasible, infeasible-or-unbounded, or unbounded), the objective value, objective bound, and continuous objective bound attributes are all wired to their respective fields in the solution information structure. For LP results, the objective bound and continuous objective bound share the same field.
 
 4. **Status-dependent objective wiring (no solution).** If the status indicates no valid solution, the function checks whether an objective value can be computed from presolve data for diagnostic purposes. This diagnostic computation requires all of the following conditions:
    - The infeasibility/unboundedness diagnostic parameter is enabled on the environment
-   - The model has no integer variables (pure continuous LP)
+   - The model is a pure continuous LP
    - No reduced (presolved) model copy exists
    - Presolve data is available and indicates an infeasible status
    - Presolve solution arrays are populated
@@ -65,7 +65,7 @@ The attribute wiring pattern used throughout is: look up the attribute by name i
 
 **Thread Safety:** Unsafe. Must be called from a single thread; the model must not be accessed concurrently.
 
-**Dependencies:** Attribute table lookup and name initialization helpers; cxf_scale_objval (for diagnostic objective computation); a helper that checks whether the model contains integer variables.
+**Dependencies:** Attribute table lookup and name initialization helpers; cxf_scale_objval (for diagnostic objective computation).
 
 ---
 
@@ -118,7 +118,7 @@ The function handles the edge case of an empty model (zero original variables) b
 
 ### cxf_wire_result_attributes
 
-**Purpose:** Connect optimization result attributes to their storage locations in the solver result state after MIP or general optimization completes, enabling direct-pointer attribute access.
+**Purpose:** Connect optimization result attributes to their storage locations in the solver result state after general optimization completes, enabling direct-pointer attribute access.
 
 **Signature:**
 - Input: `model` : pointer-to-Model - The model whose optimization has completed
@@ -132,12 +132,12 @@ The function handles the edge case of an empty model (zero original variables) b
 - All standard result attributes are wired to their backing storage locations
 - Objective-related attributes are wired differently depending on the solve outcome mode (see behavioral description)
 - For the infeasible/unbounded mode, objective bound fields are initialized to a direction-dependent infinity value (positive infinity times the optimization direction, so that minimization gets positive infinity and maximization gets negative infinity)
-- For modes with a solution count available, the MIP gap is computed and stored
+- For modes with a solution count available, the optimality gap is computed and stored
 
 **Side Effects:**
 - Modifies the direct-value pointer (and for array attributes, the size pointer) of multiple attribute entries in the model's attribute table
-- May modify objective bound and MIP gap fields in the solver result state
-- Calls the MIP gap computation function
+- May modify objective bound and optimality gap fields in the solver result state
+- Calls the optimality gap computation function
 
 **Error Conditions:**
 - Null attribute table -> returns uninitialized marker
@@ -145,13 +145,13 @@ The function handles the edge case of an empty model (zero original variables) b
 
 **Behavioral Description:**
 
-This function is the MIP/general counterpart to cxf_process_lp_solution. While cxf_process_lp_solution handles the simpler LP case (binding iteration counts and a single objective value), cxf_wire_result_attributes handles the full result set including solution arrays, MIP gap, solution pool bounds, and mode-dependent objective attribute wiring. The function proceeds through seven phases:
+This function is the general counterpart to cxf_process_lp_solution. While cxf_process_lp_solution handles the simpler LP case (binding iteration counts and a single objective value), cxf_wire_result_attributes handles the full result set including solution arrays, optimality gap, solution pool bounds, and mode-dependent objective attribute wiring. The function proceeds through seven phases:
 
 1. **Validation.** Checks that the attribute table and solver result state are both present; returns an uninitialized marker if either is missing.
 
 2. **Iteration count wiring.** Wires four iteration count attributes: simplex iteration count, initial iteration count (for reoptimization tracking), barrier iteration count, and first-order method iteration count. Each is wired to its dedicated field in the solver result state.
 
-3. **Node count wiring.** Wires three attributes (node count, open node count, and time-open) to their respective fields in the solver result state. Unlike cxf_process_lp_solution (which shares a single backing location), each node count attribute here has its own field, reflecting the meaningful node tracking that occurs during MIP optimization.
+3. **Node count wiring.** Wires three attributes (node count, open node count, and time-open) to their respective fields in the solver result state. Unlike cxf_process_lp_solution (which shares a single backing location), each node count attribute here has its own field.
 
 4. **Solution count initialization.** Wires the solution count and first-solution-node attributes to unavailable (null pointer), as these will be populated later during solution pool management.
 
@@ -161,22 +161,22 @@ This function is the MIP/general counterpart to cxf_process_lp_solution. While c
 
    **Mode: Optimal / Cutoff / Iteration-Limit** (solve modes 1, 4, or 5):
    - Objective value is wired to the solver result state's objective field if at least one solution exists; otherwise wired to unavailable
-   - Objective bound, continuous objective bound, and pool objective bound are all wired to the model's own bound field (a single shared location, as these are identical for non-MIP or trivially-bounded results)
+   - Objective bound, continuous objective bound, and pool objective bound are all wired to the model's own bound field (a single shared location, as these are identical for trivially-bounded results)
 
    **Mode: Infeasible/Unbounded** (solve mode 3):
    - Three objective bound fields on the solver result state are initialized to a direction-dependent infinity value (the product of the optimization direction and a large constant representing solver infinity), ensuring that the bound reflects the worst-case value for the given optimization direction
    - Objective value is wired to unavailable (no solution exists)
    - Objective bound, continuous objective bound, and pool objective bound are each wired to their distinct fields in the solver result state
-   - MIP gap is wired to the model's bound field
+   - Optimality gap is wired to the model's bound field
 
-   **Mode: General MIP** (all other solve modes):
-   - The MIP gap is computed by calling cxf_compute_gap with the optimization direction, the objective bound, and the objective value from the solver result state; the computed gap is stored in the solver result state
+   **Mode: General** (all other solve modes):
+   - The optimality gap is computed by calling cxf_compute_gap with the optimization direction, the objective bound, and the objective value from the solver result state; the computed gap is stored in the solver result state
    - Objective value, objective bound, continuous objective bound, and pool objective bound are each wired to their respective fields in the solver result state
-   - MIP gap is wired to the computed gap field in the solver result state
+   - Optimality gap is wired to the computed gap field in the solver result state
 
 **Thread Safety:** Unsafe. Must be called from a single thread after optimization completes.
 
-**Dependencies:** Attribute table lookup and name initialization helpers; cxf_compute_gap (for MIP gap computation in the general MIP mode).
+**Dependencies:** Attribute table lookup and name initialization helpers; cxf_compute_gap (for optimality gap computation in the general mode).
 
 ---
 
@@ -186,7 +186,7 @@ This function is the MIP/general counterpart to cxf_process_lp_solution. While c
 
 **Signature:**
 - Input: `optimization_direction` : double - The optimization direction: positive for minimization, negative for maximization
-- Input: `best_bound` : double - The best dual bound from the branch-and-bound tree (lower bound for minimization, upper bound for maximization)
+- Input: `best_bound` : double - The best dual bound (lower bound for minimization, upper bound for maximization)
 - Input: `objective_value` : double - The incumbent solution's objective value
 - Output: double - The relative optimality gap as a non-negative fraction, or solver infinity if the gap is undefined or unbounded
 
@@ -206,17 +206,17 @@ This function is the MIP/general counterpart to cxf_process_lp_solution. While c
 
 **Behavioral Description:**
 
-This function computes the standard MIP optimality gap as documented in the ConvexFeld Reference Manual. The gap measures how far the current best solution (incumbent) is from being provably optimal, expressed as a fraction of the objective value. The formula is:
+This function computes the standard optimality gap as documented in the ConvexFeld Reference Manual. The gap measures how far the current best solution (incumbent) is from being provably optimal, expressed as a fraction of the objective value. The formula is:
 
 ```
 gap = |objective_value - best_bound| / |objective_value|
 ```
 
-This is the standard relative gap formula used in branch-and-bound algorithms (Wolsey, 1998; Nemhauser and Wolsey, 1988). It provides a scale-invariant measure of solution quality that is comparable across problems of different magnitudes.
+This is the standard relative gap formula used in optimization algorithms (Wolsey, 1998; Nemhauser and Wolsey, 1988). It provides a scale-invariant measure of solution quality that is comparable across problems of different magnitudes.
 
 The function handles five cases in priority order:
 
-1. **Infinite bound:** If the best bound equals solver infinity (indicating that no valid bound has been established yet, as happens early in MIP optimization before any nodes are processed), the function returns solver infinity.
+1. **Infinite bound:** If the best bound equals solver infinity (indicating that no valid bound has been established yet), the function returns solver infinity.
 
 2. **Infinite objective or bound:** If the absolute value of either the objective value or the best bound is at or above the solver infinity threshold, the function returns solver infinity. This handles cases where the problem is unbounded or the values are numerically unreliable.
 
@@ -296,7 +296,7 @@ where each component accounts for column scaling as appropriate.
 
 ### cxf_copy_solution
 
-**Purpose:** Add a new feasible solution to the MIP solution pool, maintaining solutions in sorted order by objective value with deterministic tie-breaking, and enforcing pool size and gap limits.
+**Purpose:** Add a new feasible solution to the solution pool, maintaining solutions in sorted order by objective value with deterministic tie-breaking, and enforcing pool size and gap limits.
 
 **Signature:**
 - Input: `model` : pointer-to-Model - The model whose solution pool is being managed
@@ -319,7 +319,6 @@ where each component accounts for column scaling as appropriate.
 - May reallocate pool arrays when capacity is exceeded
 - May free solution vectors that are pruned by size or gap limits
 - Updates the pool's best objective metric for pruning decisions
-- May update integer solution tracking arrays
 
 **Error Conditions:**
 - Memory allocation failure during pool initialization -> returns out-of-memory error code
@@ -328,11 +327,11 @@ where each component accounts for column scaling as appropriate.
 
 **Behavioral Description:**
 
-This function manages the MIP solution pool, a sorted collection of feasible solutions discovered during branch-and-bound search. The pool supports the ConvexFeld PoolSolutions, PoolGap, and PoolGapAbs parameters, enabling users to collect multiple high-quality solutions rather than just the single best. Solutions are maintained in ascending objective order (for minimization) to enable efficient pruning of suboptimal solutions. The function implements the solution pool management pattern described in the ConvexFeld documentation for the PoolSolutions parameter.
+This function manages the solution pool, a sorted collection of feasible solutions discovered during the optimization process. The pool supports the ConvexFeld PoolSolutions, PoolGap, and PoolGapAbs parameters, enabling users to collect multiple high-quality solutions rather than just the single best. Solutions are maintained in ascending objective order (for minimization) to enable efficient pruning of suboptimal solutions. The function implements the solution pool management pattern described in the ConvexFeld documentation for the PoolSolutions parameter.
 
 The function proceeds through eleven phases:
 
-1. **Pool initialization (lazy).** If the pool's allocated capacity is zero (indicating first use), the function performs full initialization: frees any stale pool data from a previous solve, allocates fresh arrays for solution vector pointers, weighted metrics, and objective values with a default initial capacity, and optionally allocates integer solution tracking arrays if the model has integer variables. Integer solution objective values are initialized with a sentinel marker indicating they have not yet been populated.
+1. **Pool initialization (lazy).** If the pool's allocated capacity is zero (indicating first use), the function performs full initialization: frees any stale pool data from a previous solve, and allocates fresh arrays for solution vector pointers, weighted metrics, and objective values with a default initial capacity.
 
 2. **Objective computation.** The solution's objective value is computed by calling cxf_scale_objval, which evaluates the full objective function (linear, quadratic, piecewise-linear terms with scaling).
 
@@ -352,8 +351,6 @@ The function proceeds through eleven phases:
 
 10. **Gap-based pruning.** When the PoolGap or PoolGapAbs parameter is set to a finite value, the function computes a cutoff threshold based on the best objective value and the gap parameters. Solutions whose objective values exceed the cutoff are removed from the pool. The cutoff computation accounts for the optimization direction and combines relative and absolute gap tolerances. This pruning is triggered only when a new best solution is found (insertion at position zero) or when a solution is added at the end of the pool, avoiding unnecessary pruning overhead on interior insertions.
 
-11. **Integer solution tracking.** If the model has integer variables and the pool has integer tracking arrays, the function checks whether the new solution represents a better objective for its integer variable configuration. If so, the solution is recorded (or updated) in the integer tracking arrays, supporting solution pool diversity across different integer assignments.
-
 Throughout the function, the `solution_added` output flag is set to 1 only if the solution was actually inserted (not rejected as a duplicate). Before returning, the pool's final count field is synchronized with the current solution count.
 
 **Thread Safety:** Unsafe. Must be called from a single thread; solution pool state is not protected by synchronization.
@@ -369,7 +366,7 @@ Throughout the function, the `solution_added` output flag is set to 1 only if th
 The six functions form a pipeline that can be organized into three functional groups:
 
 **Result attribute wiring** (cxf_process_lp_solution, cxf_wire_result_attributes):
-These two functions serve the same purpose -- connecting result attributes to their storage locations -- but for different solve contexts. cxf_process_lp_solution handles the LP case, wiring a smaller set of attributes (iteration counts, node counts, objective values) using the LP-specific solution information structure. cxf_wire_result_attributes handles the general case (MIP, concurrent, multi-scenario), wiring a broader set of attributes including solution arrays (X, Slack, QCSlack), MIP gap, solution pool bounds, and multiple iteration counters, using the general solver result state. Both functions use the identical attribute wiring pattern: look up the attribute by name, find the entry, set the direct-value pointer.
+These two functions serve the same purpose -- connecting result attributes to their storage locations -- but for different solve contexts. cxf_process_lp_solution handles the LP case, wiring a smaller set of attributes (iteration counts, node counts, objective values) using the LP-specific solution information structure. cxf_wire_result_attributes handles the general case (concurrent, multi-scenario), wiring a broader set of attributes including solution arrays (X, Slack, QCSlack), optimality gap, solution pool bounds, and multiple iteration counters, using the general solver result state. Both functions use the identical attribute wiring pattern: look up the attribute by name, find the entry, set the direct-value pointer.
 
 **Solution transformation** (cxf_uncrush_solution, cxf_scale_objval):
 These functions transform solution data from the solver's internal representation back to the user's problem space. cxf_uncrush_solution reverses presolve transformations on the variable values. cxf_scale_objval reverses scaling transformations on the objective function. Together they ensure that solution data returned to the user accurately reflects the original problem formulation, even though the solver may have heavily transformed the problem for numerical stability and efficiency.
@@ -388,15 +385,9 @@ cxf_solve_lp / cxf_solver_dispatch (callers)
     |       |
     |       +-> cxf_scale_objval  (compute objective for infeasibility diagnostic)
     |
-    +-> cxf_wire_result_attributes  (wire MIP/general attributes)
+    +-> cxf_wire_result_attributes  (wire general attributes)
             |
-            +-> cxf_compute_gap  (compute MIP optimality gap)
-
-cxf_solve_mip (caller)
-    |
-    +-> cxf_copy_solution  (add solution to pool)
-            |
-            +-> cxf_scale_objval  (compute objective value for pool)
+            +-> cxf_compute_gap  (compute optimality gap)
 ```
 
 ### Attribute Wiring Pattern
@@ -407,7 +398,7 @@ Both cxf_process_lp_solution and cxf_wire_result_attributes use a consistent pat
 2. Retrieve the attribute entry from the entries array at the found index
 3. Set the entry's direct-value pointer to the address of the value to expose
 
-For scalar result attributes (e.g., ObjVal, MIPGap), the direct-value pointer points to a double in the solution state. For array result attributes (e.g., X, Slack), the direct-value pointer points to an array, and an additional size pointer is set to point to the dimension count (enabling bounds checking on array access). Setting the direct-value pointer to null marks the attribute as unavailable, causing queries to return a "data not available" error.
+For scalar result attributes (e.g., ObjVal, Gap), the direct-value pointer points to a double in the solution state. For array result attributes (e.g., X, Slack), the direct-value pointer points to an array, and an additional size pointer is set to point to the dimension count (enabling bounds checking on array access). Setting the direct-value pointer to null marks the attribute as unavailable, causing queries to return a "data not available" error.
 
 ### Solve Mode Classification
 
@@ -417,7 +408,7 @@ cxf_wire_result_attributes classifies solve outcomes into three categories that 
 |----------|-------|-----------------|
 | Optimal/Limited | Optimal, Cutoff, Iteration Limit | Solution may exist; objective bound from model |
 | Infeasible/Unbounded | Infeasible or Unbounded | No solution; bounds initialized to infinity |
-| General MIP | All others | Solution exists; MIP gap computed; full bound set |
+| General | All others | Solution exists; optimality gap computed; full bound set |
 
 ### Solution Pool Ordering
 
