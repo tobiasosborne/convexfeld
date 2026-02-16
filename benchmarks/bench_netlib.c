@@ -3,7 +3,7 @@
  * @brief Netlib LP benchmark runner
  *
  * Runs the Netlib LP test suite and compares against reference solutions.
- * Reference values from Gurobi 10 with 1e-8 tolerance.
+ * Reference values from a commercial solver with 1e-8 tolerance.
  */
 
 #define _POSIX_C_SOURCE 199309L
@@ -167,7 +167,7 @@ static void run_benchmark(const char *mps_path, const char *name, Stats *stats) 
 
 int main(int argc, char **argv) {
     const char *mps_dir = "benchmarks/netlib/feasible";
-    const char *csv_path = "benchmarks/netlib/feasible_gurobi_1e-8.csv";
+    const char *csv_path = "benchmarks/netlib/feasible_reference_1e-8.csv";
     const char *filter = NULL;
 
     for (int i = 1; i < argc; i++) {

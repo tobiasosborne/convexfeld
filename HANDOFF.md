@@ -1,178 +1,93 @@
 # Agent Handoff
 
-*Last updated: 2026-02-15*
+*Last updated: 2026-02-16*
 
 ---
 
-## STATUS: V2 Spec Gap Analysis Complete — Major Rework Needed
+## STATUS: V2 Spec Migration — Phase 1 Complete, Phase 2 Needed
 
 ### Session Summary
 
-Compared ConvexFeld's entire codebase against the corrected v2 cleanroom specification from GRB-decomp. The v1 spec ConvexFeld was built against was ~36% hallucinated. This analysis identifies every divergence.
+Migrated v2 cleanroom specs to ConvexFeld. **Phase 1 (naming) is 100% complete. Phase 2 (deep content cleanup) remains.**
 
-**Overall alignment: ~40-50%.** Foundation (matrix, eta vectors, basic simplex loop, memory) is sound. Two subsystems are fundamentally wrong, and several critical features are missing entirely.
+#### What was done:
+1. **Archived v1 specs** to `docs/specs-v1/` (preserves all original v1 content)
+2. **Copied 66 v2 spec files** to `docs/specs-v2/` (62 individual specs + SPECIFICATION.md + 5 supporting files)
+3. **Excluded 2 MIP-only files**: `solve_mip.md`, `solve_multiobj.md`
+4. **Naming transform: 100% CLEAN** — zero traces of upstream naming remain anywhere in specs-v2
+5. **Transformation script**: stored in the upstream project (can be re-run)
 
----
+#### What remains (Phase 2):
 
-## RED — Complete Rewrite Required
+**A. License-server content removal (~370 hits across ~24 files)**
 
-### 1. Pricing System (all files in `src/pricing/`)
+The initial transform replaced simple patterns (`license validation` → `initialization validation`, etc.) but missed deeply embedded license infrastructure: WLS, ISV, token servers, compute servers, license acquisition pipelines, license thread limits, license error codes.
 
-V1 hallucinated a simple sectional partial pricing scheme. V2 reveals a **13-function producer-consumer architecture**:
-- Dual queue systems (constraint + variable queues)
-- Committed/pending split within each queue
-- Per-element flag arrays for O(1) duplicate prevention
-- Neighbor-based expansion through constraint matrix (not fixed partitions)
-- Adaptive strategy selection with 3 threshold checks
-- DSE weight updates with +1 term from ||alpha_q - e_r||^2
-- Devex weights with reference framework tracking
+**Heaviest files needing cleanup:**
+- `specs/modules/environment_lifecycle.md` — ~50+ hits, entire license acquisition pipeline
+- `specs/data-model/environment.md` — ~39 hits, license fields/WLS/ISV/license type enum
+- `specs/modules/allocation_helpers.md` — license validation in cxf_setup_resources
+- `specs/reference/parameters_defaults.md` — WLS/TokenServer/ComputeServer parameter sections
+- `specs/integration/parameter_system.md` — license thread limits, Layer 2 license overrides
+- `specs/integration/threading_model.md` — license thread limits
+- `specs/modules/solve_barrier_concurrent.md` — distributed license locks
+- `specs/reference/error_status_codes.md` — NO_LICENSE, license error codes
+- ~16 more files with lighter license references
 
-ConvexFeld has **none of this**. Its pricing is Dantzig sectional scanning, and SE/Devex weight updates are **stubs that set weights to 1.0**. PricingContext struct is 20% aligned — needs full replacement.
+**B. MIP reference cleanup (~559 hits across ~30 files)**
 
-### 2. Bound Propagation (entirely missing — ~1,500 LOC new subsystem)
+MIP references are pervasive (parameter tables, callback events, function cross-refs, dispatch paths). Key cleanup:
+- Remove MIP parameter sections from `parameters_defaults.md`
+- Remove MIP dispatch paths from `solve_entry.md`, `solve_lp_core.md`
+- Remove MIP callback events from `callback_protocol.md`
+- Clean dangling cross-refs to excluded `solve_mip.md` and `solve_multiobj.md`
+- Remove MIP functions from `FUNCTION_MAP.md` and `PLAN.md`
+- Strip MIP-specific sections from `solution_processing.md`, `model_type_checking.md`
 
-V2's `step2`/`step3` are **bidirectional bound propagation** (variable-side / constraint-side), an FBBT system integrated with simplex. ConvexFeld's `phase_steps.c` implements them as primal/dual pivot extensions — **completely wrong purpose**.
-
-### 3. Perturbation (`perturbation.c`)
-
-Direction is **reversed**: shrinks bounds (`lb += eps, ub -= eps`) when v2 says expand (`lb -= eps, ub += eps`). Also only perturbs original vars, not auxiliaries. Scale wrong. Known bug — stubs in context.c shadow the broken code.
-
----
-
-## YELLOW — Significant Rework Needed
-
-### 4. Data Structures
-
-| Struct | Alignment | Key Gap |
-|--------|-----------|---------|
-| Model | 60% | Missing dual matrix (primary/working), attribute table |
-| SparseMatrix | 85% | **Missing scaling system** (critical for numerics) |
-| SolverState | 65% | Missing duplicated matrix, steepest edge arrays |
-| BasisState | 90% | Missing memory pool, cycling detection snapshot |
-| PricingContext | 20% | Fundamentally wrong (see above) |
-| EtaVector | 60% | Missing VARIABLE_FIX and WARM_START variants |
-
-### 5. Ratio Test — Missing BFRT
-
-Has Harris two-pass (correct) but **no Bound-Flipping Ratio Test**. BFRT gives 20-50% iteration reduction on bounded-variable problems. V2 spec P2.4 has full algorithm.
-
-### 6. Phase I→II Transition
-
-Missing 3 of 6 state transformations: reduced cost recomputation via BTRAN, constraint cleanup, tolerance adjustment.
-
-### 7. Matrix Scaling (entirely missing — ~500 LOC new subsystem)
-
-V2's P3.15 specifies row/column equilibration (Curtis & Reid 1972). Critical for ill-conditioned problems. ConvexFeld has **zero scaling infrastructure**.
-
-### 8. Method Selection
-
-`solve_lp.c` has simplified heuristic vs v2's scoring system with quantitative thresholds.
+**C. Regenerate `output/SPECIFICATION.md`** after A+B are done (it mirrors all source specs)
 
 ---
 
-## GREEN — Mostly Correct
+## Recommended Approach for Phase 2
 
-### 9. Basis Operations (~70% correct)
+1. **Write a second-pass Python cleanup script** that handles:
+   - Whole-section removal (sections with "License" headings)
+   - MIP parameter table removal
+   - Dangling cross-reference cleanup
 
-- `pivot_eta.c`: Exact match to v2
-- `eta_factors.c`, `lu_factors.c`, `basis_state.c`: Correct
-- `snapshot.c`: Better than v2 (captures full basis, not just counters)
-- `ftran.c` / `btran.c`: Correct algorithms, wrong abstraction (v2 uses PFI inline, not standalone APIs). Keep as internal helpers.
-- `lu_factorize.c`: Over-engineered (v2 says use external LU) but functional
-- `refactor.c`: Works, naming is confusing (`cxf_basis_refactor` is really just clearing etas)
-- `basis_stub.c`: Can be deleted (all functions implemented elsewhere)
+2. **Use parallel subagents** — one per file, NO race conditions:
+   - Group A: Heavy license files (environment_lifecycle.md, environment.md, allocation_helpers.md, parameters_defaults.md)
+   - Group B: Moderate license + MIP files (solve_entry.md, threading_model.md, etc.)
+   - Group C: Light cleanup (1-2 line fixes across ~16 files)
 
-### 10. Support Modules
+3. **Re-run SPECIFICATION.md assembly** after all source specs are clean
 
-- **Memory** (`src/memory/`): 90% correct
-- **Callbacks** (`src/callbacks/`): 75% correct (missing thread-safe mutex)
-- **Error handling** (`src/error/`): 60% correct (missing buffer locking)
-- **Matrix core** (`src/matrix/`): 85% correct for LP
-- **Crossover, barrier, MIP**: Intentionally absent (LP-only scope — fine)
-
-### 11. Simplex Core
-
-- `iterate.c`: Right general structure, needs BFRT and stall detection
-- `crash.c`: Minor gaps only
-- `cleanup.c`: Minor gaps only
-- `step.c`: Needs BFRT integration
+4. **Final verification** — grep for `license`, `License`, `MIP`, `compute.server`, `single.use`, `WLS`, `ISV`, `token.server`
 
 ---
 
-## Root Cause of Current Bugs (explained by v2 spec)
+## File Locations
 
-| Bug Category | Root Cause per V2 |
-|-------------|-------------------|
-| **Cycling** (capri, grow7, seba) | Perturbation direction reversed + no-op stubs. V2: expand bounds. |
-| **Phase I false INFEASIBLE** (8+ problems) | Incomplete Phase I→II transition + missing bound propagation (FBBT pre-tightens bounds) |
-| **Numerical errors** (5 problems) | No matrix scaling. V2 specifies row/column equilibration. |
-
----
-
-## Estimated Rework
-
-| Area | LOC | Type |
-|------|-----|------|
-| Pricing system | ~2,000 | Full rewrite |
-| Bound propagation | ~1,500 | New subsystem |
-| Matrix scaling | ~500 | New subsystem |
-| BFRT ratio test | ~400 | Add to existing |
-| Perturbation fix | ~300 | Rewrite |
-| DSE/Devex weights | ~300 | Implement stubs |
-| Phase transitions | ~200 | Modify existing |
-| PricingState struct | ~200 | Replace existing |
-| **Total** | **~5,400** | |
-
-~10,000 LOC of existing code is correct and needs no changes.
+| Item | Path |
+|------|------|
+| V2 specs (target) | `~/Projects/convexfeld/docs/specs-v2/` |
+| V1 specs (archived) | `~/Projects/convexfeld/docs/specs-v1/` |
+| Transform script | stored in upstream project |
+| Original v2 specs | stored in upstream project |
+| Consolidated output | `~/Projects/convexfeld/docs/specs-v2/output/SPECIFICATION.md` |
 
 ---
 
-## Recommended Priority Order
+## Previous Handoff (V2 Spec Gap Analysis)
 
-### P0: Fix perturbation (unblocks 3 cycling problems)
-1. Remove no-op stubs from `context.c`
-2. Fix `perturbation.c`: expand bounds (`lb -= eps`, `ub += eps`), extend to auxiliaries, scale ~1e-8
-3. Recompute basic variable values after perturbing
+The v2 spec gap analysis from 2026-02-15 identified these rework areas for ConvexFeld implementation:
 
-### P1: Add matrix scaling (unblocks 5 numerical-error problems)
-- Row/column equilibration per Curtis & Reid 1972
-- Apply D_r * A * D_c, scale bounds and RHS
-- Unscale solution after solve
+- **RED** (rewrite): Pricing system (~2,000 LOC), Bound propagation (~1,500 LOC), Perturbation
+- **YELLOW** (significant rework): Data structures, BFRT ratio test, Phase I→II, Matrix scaling, Method selection
+- **GREEN** (mostly correct): Basis operations, Support modules, Simplex core
 
-### P2: Add BFRT to ratio test (20-50% iteration reduction)
-- Extend Harris two-pass with bound-flipping per v2 P2.4
+Priority order: P0 Fix perturbation → P1 Matrix scaling → P2 BFRT → P3 Phase transitions → P4 Pricing → P5 Bound propagation
 
-### P3: Fix Phase I→II transition (unblocks 8+ false-INFEASIBLE problems)
-- Add reduced cost recomputation via BTRAN
-- Constraint cleanup, tolerance adjustment
+Quality gates: 35/36 tests pass, build clean, Netlib 11/27 pass.
 
-### P4: Rewrite pricing system (performance, not correctness)
-- Implement dual queue producer-consumer architecture
-- DSE weight updates with correct +1 term
-- Devex with reference framework
-
-### P5: Add bound propagation (new subsystem)
-- Variable-side and constraint-side propagation
-- Integrate with simplex iteration
-
----
-
-## Quality Gate Status
-
-- **Tests:** 35/36 pass (pre-existing `test_simplex_edge` failure)
-- **Build:** Clean (no warnings)
-- **Netlib:** 11 pass, 13 fail, 3 timeout (unchanged)
-
----
-
-## Reference
-
-Full v2 spec: `/home/tobiasosborne/Projects/GRB-decomp/cleanroom/v2/output/SPECIFICATION.md` (24,070 lines)
-Key sections for each rework area:
-- Pricing: P2.3, P3.17, P3.18
-- Bound propagation: P2.8, `step2`/`step3` in P3.21
-- Perturbation: P2.6
-- Ratio test: P2.4
-- Scaling: P3.15
-- Phase transitions: P3.21 (6 state transformations)
-- DSE/Devex formulas: P2.1 Step 6
+Full v2 spec: `docs/specs-v2/output/SPECIFICATION.md` (24,070 lines, now with cxf_ naming)

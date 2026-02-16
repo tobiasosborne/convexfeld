@@ -627,7 +627,7 @@ x[227]: dj = 0 - π[49]*(-0.290) - π[50]*(-0.030)
 The variable could help satisfy the violated constraint, but pricing doesn't select it because dj = 0 (not negative).
 
 **Implications:**
-1. Problem IS feasible (Gurobi solves it)
+1. Problem IS feasible (reference solver confirms it)
 2. Simplex is at dual degenerate point
 3. Need anti-cycling mechanism: Bland's rule, lexicographic pivoting, or symbolic perturbation
 
