@@ -4,59 +4,36 @@
 
 ---
 
-## STATUS: V2 Specs Fully Cleaned and Renamed
+## STATUS: M-Z Function Audit Phase 1 Complete
 
 ### Session Summary
 
-Completed full v2 spec cleanup: MIP/license/compute-server content removal, misnomer renaming, and SPECIFICATION.md regeneration.
-
-#### Commits this session:
-1. **`ed8270e`** — Deep cleanup: removed MIP, license server, compute server content from 46 source specs (-1,043 net lines)
-2. **`ec86025`** — Regenerated SPECIFICATION.md (v2.1, 22,222 lines) + added `assemble_spec.py`
-3. **`381f192`** — Renamed 16 misnomer functions/structures across 23 files (285 replacements), updated commentary, regenerated SPECIFICATION.md
+Completed Phase 1 of M-Z function signature audit: discovered 31 implemented functions and 44 missing functions. Phase 2 (detailed signature comparison) pending.
 
 #### What was done:
 
-**Phase 2: Deep content cleanup (complete)**
-- Removed all MIP content: callback events (MIP_SOLUTION/MIP_NODE), MIPGap, integrality checks, MIP var types, MIP dispatch paths, MIP parameter sections
-- Removed all license infrastructure: WLS/ISV/token server fields, license acquisition pipeline, license thread limits, license error codes
-- Removed all compute server content: communication model, callback protocol, job termination, lock hierarchy, error codes, environment fields
-- Fixed "remote remote solver" doubled-word artifact across 13+ files
-- Bibliography citations to MIP papers intentionally retained
+**Function Audit - Phase 1: Discovery (COMPLETE)**
+- Audited all 75 M-Z functions from v2 specs against codebase
+- Found 31 functions implemented (41%)
+- Identified 44 missing functions (59%)
+- Created detailed audit report: `docs/audit/18_function_signatures_MZ.md`
 
-**Misnomer renames (complete)**
-16 functions/structures renamed to match actual behavior:
-
-| Old Name | New Name | Reason |
-|----------|----------|--------|
-| `cxf_simplex_iterate` | `cxf_log_iteration_progress` | Logs progress, doesn't iterate |
-| `cxf_simplex_cleanup` | `cxf_simplex_postsolve` | Post-solve analysis, not just cleanup |
-| `cxf_basis_refactor` | `cxf_fix_variables_at_bounds` | Variable fixing, not LU refactor |
-| `cxf_basis_snapshot` | `cxf_progress_snapshot` | Scalar counters, not full basis |
-| `cxf_sort_indices` | `cxf_sort_by_values` | Sorts by values, not indices |
-| `cxf_check_nan_or_inf` | `cxf_is_finite` | Returns true for finite (inverted) |
-| `cxf_cleanup_helper` | `cxf_propagate_bounds` | Constraint-based bound tightening |
-| `cxf_setup_basis` | `cxf_free_warmstart_basis` | Destructor, not setup |
-| `cxf_setup_work_arrays` | `cxf_free_work_arrays` | Destructor, not setup |
-| `cxf_free_solver_state` | `cxf_free_attribute_table` | Frees attr table specifically |
-| `cxf_errorlog` | `cxf_set_error_string` | Writes error buffer, not log |
-| `cxf_pre_optimize_callback` | `cxf_pre_optimize_hook` | Lifecycle hook, not user callback |
-| `cxf_post_optimize_callback` | `cxf_post_optimize_hook` | Lifecycle hook, not user callback |
-| `cxf_acquire_solve_lock` | `cxf_save_locale_state` | Saves locale, no mutex |
-| `cxf_set_thread_count` | `cxf_validate_thread_count` | Validates, doesn't set |
-| `WorkArrays` | `SolutionData` | Solution output, not scratch buffers |
-
-**Tools created:**
-- `docs/specs-v2/assemble_spec.py` — Regenerates SPECIFICATION.md from source specs
-- `docs/specs-v2/rename_misnomers.py` — Reference for the rename mappings
+**Key findings:**
+- Several complete subsystems missing:
+  - Concurrent/barrier solving (P3.26): 0/3 implemented
+  - Solution processing (P3.29): 0/5 implemented
+  - Pricing support (P3.18): 0/8 implemented
+  - Model lifecycle (P3.31): 0/3 implemented
+- Phase 2 (signature validation for 31 found functions) still needed
 
 ---
 
 ## Next Steps
 
-### Immediate (spec-related)
-1. **Rename misnomers in code** — The specs now use new names; implementation code still uses old names. Apply same renames to `src/` and `tests/`.
-2. **Verify SPECIFICATION.md quality** — Spot-check TOC anchors work, section ordering is correct
+### Immediate (audit-related)
+1. **Complete M-Z audit Phase 2** — Validate signatures for all 31 found functions against specs (4-6 hours work)
+2. **Audit A-L functions** — Complete coverage of all 158 functions (not yet started)
+3. **Investigate missing functions** — Determine if 44 missing M-Z functions are unimplemented, renamed, or intentionally omitted
 
 ### Implementation priorities (from v2 spec gap analysis, 2026-02-15)
 - **P0:** Fix perturbation (stubs override real impl in context.c)
@@ -83,3 +60,4 @@ Completed full v2 spec cleanup: MIP/license/compute-server content removal, misn
 | Rename reference | `docs/specs-v2/rename_misnomers.py` |
 | FUNCTION_MAP | `docs/specs-v2/FUNCTION_MAP.md` |
 | PLAN | `docs/specs-v2/PLAN.md` |
+| Audit report (M-Z) | `docs/audit/18_function_signatures_MZ.md` |
