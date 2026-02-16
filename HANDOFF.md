@@ -4,61 +4,54 @@
 
 ---
 
-## STATUS: Error/Parameter/Callback Audit Complete
+## STATUS: Full V2 Spec Audit Complete + Remediation Plan Created
 
 ### Session Summary
 
-Completed comprehensive audit of error propagation, parameter system, and callback protocol against v2 integration specs. Found major architectural misalignment requiring 10-12 days of rework.
+Ran 20 parallel Sonnet audit agents comparing entire codebase against v2 specs (ground truth). Created remediation plan and 26 beads issues with dependencies.
 
-#### What was done:
+#### Key Result: ~25-30% overall spec compliance
 
-**Integration Audit: Error/Param/Callback (COMPLETE)**
-- Audited error propagation system (P3.09) against specs/integration/error_propagation.md
-- Audited parameter system (P3.04) against specs/integration/parameter_system.md
-- Audited callback protocol (P3.13) against specs/integration/callback_protocol.md
-- Read 11 implementation files (~1,200 LOC)
-- Read 3 spec files (~1,400 lines)
-- Created detailed audit report: `docs/audit/15_error_param_callback.md` (861 lines)
+#### Deliverables Created:
+1. **20 audit reports** — `docs/audit/01_*.md` through `docs/audit/20_*.md` (512KB total)
+2. **Remediation plan** — `docs/audit/REMEDIATION_PLAN.md` (8 phases, 45-67 days estimated)
+3. **26 new beads issues** with dependency graph
 
-**Key findings (24 critical violations):**
-- **Error system:** Missing 4 core functions (cxf_error_env, cxf_error_model, cxf_env_set_status, cxf_set_error_message)
-- **Error system:** Missing errorCode field on Environment (cannot propagate codes)
-- **Error system:** Error buffer lock mechanism non-functional
-- **Error system:** No predefined error message table
-- **Parameter system:** Hardcoded fields instead of table-driven
-- **Parameter system:** Missing setters for double/string parameters
-- **Parameter system:** No backup/restore mechanism for optimization
-- **Callback system:** Missing mutex (not thread-safe)
-- **Callback system:** Missing 4 WHERE codes (SIMPLEX, BARRIER, PRESOLVE, MESSAGE)
-- **Callback system:** Lifecycle hooks confused with user callbacks
+#### Top 5 Findings:
+1. Tolerances off by orders of magnitude (perturbation 10,000x wrong)
+2. Core simplex algorithm only ~40% complete (missing BTRAN, Phase I/II, steepest edge)
+3. Pricing is completely different architecture (0% compliance)
+4. solve_lp.c is 1262-line monolith with 10 hallucinated functions
+5. Variable status encoding fundamentally wrong (breaks simplex)
 
-**Positive findings:**
-- Tolerance helper functions correctly implemented
-- Basic callback structure has correct fields
-- Termination signaling basics work
-- NULL safety patterns used consistently
+#### What Works (keep these):
+- Basis/LU math (~70% compliant, best module)
+- CSC/CSR sparse matrix format + SpMV
+- Callback basics (~70%)
+- MPS parser, test framework, build system
 
 ---
 
 ## Next Steps
 
-### Immediate (critical fixes needed)
-1. **Fix error propagation system** — Add errorCode field, implement 4 core functions, create message table (2-3 days)
-2. **Fix parameter system** — Implement table structure, add missing setters, implement save/restore (3-4 days)
-3. **Fix callback system** — Add mutex, implement missing WHERE codes, separate lifecycle hooks (2-3 days)
-4. **Write tests for fixes** — ~30 new tests covering error cascades, param restore, callback thread safety (2 days)
+### Immediate (Phase 0 — do first)
+1. **Fix tolerance values** — `convexfeld-nso9` (P0) — perturbation, pivot, Markowitz constants
+2. **Fix variable status encoding** — `convexfeld-clow` (P0) — enum → row indices + negative codes
 
-### Implementation priorities (from v2 spec gap analysis, 2026-02-15)
-- **P0:** Fix perturbation (stubs override real impl in context.c)
-- **P1:** Matrix scaling
-- **P2:** BFRT ratio test
-- **P3:** Phase I→II transitions
-- **P4:** Pricing system rewrite (~2,000 LOC)
-- **P5:** Bound propagation rewrite (~1,500 LOC)
+### Then (Phase 1 — mechanical renames)
+3. **Apply 16 function/struct renames** — `convexfeld-b7ow` (P1)
+4. **Rename core structures** — `convexfeld-dv0k` (P1)
 
-### Quality gates
-- 35/36 tests pass, build clean
-- Netlib: 11/27 pass
+### Then (Phase 2-3 — structural)
+5. **Decompose solve_lp.c** — `convexfeld-23p6` (blocked by renames)
+6. **Align data structures** — multiple P2 issues (blocked by renames)
+
+### Full dependency chain:
+```
+P0 tolerances + var status → P1 renames → P2 structs → P3 decompose solve_lp → P4 algorithms + pricing → P5 infrastructure → P6 modules → P7 signatures
+```
+
+Run `bd ready` to see unblocked work.
 
 ---
 
@@ -66,12 +59,8 @@ Completed comprehensive audit of error propagation, parameter system, and callba
 
 | Item | Path |
 |------|------|
-| V2 specs (clean) | `docs/specs-v2/specs/` (62 source files) |
-| V1 specs (archived) | `docs/specs-v1/` |
-| Consolidated spec | `docs/specs-v2/output/SPECIFICATION.md` (22,219 lines) |
-| Assembly script | `docs/specs-v2/assemble_spec.py` |
-| Rename reference | `docs/specs-v2/rename_misnomers.py` |
+| Audit reports (20) | `docs/audit/01_*.md` through `20_*.md` |
+| Remediation plan | `docs/audit/REMEDIATION_PLAN.md` |
+| V2 specs (ground truth) | `docs/specs-v2/specs/` |
+| V1 specs (archived, hallucinated) | `docs/specs-v1/` |
 | FUNCTION_MAP | `docs/specs-v2/FUNCTION_MAP.md` |
-| PLAN | `docs/specs-v2/PLAN.md` |
-| Audit report (M-Z) | `docs/audit/18_function_signatures_MZ.md` |
-| Audit report (Error/Param/CB) | `docs/audit/15_error_param_callback.md` (861 lines) |
