@@ -2,7 +2,7 @@
  * @file core.c
  * @brief Core error functions implementation (M3.1.2)
  *
- * Implements cxf_error and cxf_errorlog with enhanced functionality.
+ * Implements cxf_error and cxf_set_error_string with enhanced functionality.
  * Thread safety features deferred until critical section infrastructure exists.
  */
 
@@ -63,7 +63,7 @@ const char *cxf_geterrormsg(CxfEnv *env) {
  * @param env Environment with logging configuration
  * @param message Message to output (NULL is safe)
  */
-void cxf_errorlog(CxfEnv *env, const char *message) {
+void cxf_set_error_string(CxfEnv *env, const char *message) {
     if (env == NULL || message == NULL) {
         return;
     }

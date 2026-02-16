@@ -28,7 +28,7 @@
 /* External declarations */
 extern int cxf_simplex_init(CxfModel *model, SolverContext **stateP);
 extern void cxf_simplex_final(SolverContext *state);
-extern int cxf_simplex_iterate(SolverContext *state, CxfEnv *env);
+extern int cxf_log_iteration_progress(SolverContext *state, CxfEnv *env);
 extern int cxf_extract_solution(SolverContext *state, CxfModel *model);
 extern int cxf_simplex_perturbation(SolverContext *state, CxfEnv *env);
 extern int cxf_simplex_unperturb(SolverContext *state, CxfEnv *env);
@@ -734,7 +734,7 @@ int cxf_solve_lp(CxfModel *model) {
         if (!state->use_bland && phase_iters > 3 * state->num_constrs) {
             state->use_bland = 1;
         }
-        status = cxf_simplex_iterate(state, env);
+        status = cxf_log_iteration_progress(state, env);
 
 #ifdef DEBUG_PHASE1
         /* Show early iterations, then periodic, then near end */
@@ -1230,7 +1230,7 @@ int cxf_solve_lp(CxfModel *model) {
         if (!state->use_bland && phase_iters > 3 * state->num_constrs) {
             state->use_bland = 1;
         }
-        status = cxf_simplex_iterate(state, env);
+        status = cxf_log_iteration_progress(state, env);
 
         if (status == ITERATE_OPTIMAL) {
             model->status = CXF_OPTIMAL;

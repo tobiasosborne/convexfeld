@@ -59,7 +59,7 @@ void cxf_leave_critical_section(CxfEnv *env) {
  *
  * @param state Solver state to lock (NULL-safe)
  */
-void cxf_acquire_solve_lock(void *state) {
+void cxf_save_locale_state(void *state) {
     if (state == NULL) {
         return;  /* NULL-safe: no lock to acquire */
     }

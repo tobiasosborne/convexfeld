@@ -39,8 +39,8 @@ int cxf_build_row_major(SparseMatrix *mat);
 int cxf_finalize_row_data(SparseMatrix *mat);
 
 /* Functions to be implemented in M4.1.6 */
-void cxf_sort_indices(int *indices, int n);
-void cxf_sort_indices_values(int *indices, double *values, int n);
+void cxf_sort_by_values(int *indices, int n);
+void cxf_sort_by_values_paired(int *indices, double *values, int n);
 
 /*******************************************************************************
  * Test fixtures
@@ -341,7 +341,7 @@ void test_row_major_empty_matrix(void) {
 
 void test_sort_indices_basic(void) {
     int indices[] = {5, 2, 8, 1, 9};
-    cxf_sort_indices(indices, 5);
+    cxf_sort_by_values(indices, 5);
 
     TEST_ASSERT_EQUAL_INT(1, indices[0]);
     TEST_ASSERT_EQUAL_INT(2, indices[1]);
@@ -352,7 +352,7 @@ void test_sort_indices_basic(void) {
 
 void test_sort_indices_already_sorted(void) {
     int indices[] = {1, 2, 3, 4, 5};
-    cxf_sort_indices(indices, 5);
+    cxf_sort_by_values(indices, 5);
 
     TEST_ASSERT_EQUAL_INT(1, indices[0]);
     TEST_ASSERT_EQUAL_INT(5, indices[4]);
@@ -360,7 +360,7 @@ void test_sort_indices_already_sorted(void) {
 
 void test_sort_indices_reverse(void) {
     int indices[] = {5, 4, 3, 2, 1};
-    cxf_sort_indices(indices, 5);
+    cxf_sort_by_values(indices, 5);
 
     TEST_ASSERT_EQUAL_INT(1, indices[0]);
     TEST_ASSERT_EQUAL_INT(2, indices[1]);
@@ -369,11 +369,11 @@ void test_sort_indices_reverse(void) {
 
 void test_sort_indices_single(void) {
     int indices[] = {42};
-    cxf_sort_indices(indices, 1);
+    cxf_sort_by_values(indices, 1);
     TEST_ASSERT_EQUAL_INT(42, indices[0]);
 
     /* Test empty */
-    cxf_sort_indices(NULL, 0);
+    cxf_sort_by_values(NULL, 0);
     TEST_PASS();
 }
 
@@ -381,7 +381,7 @@ void test_sort_indices_values_sync(void) {
     int indices[] = {3, 1, 2};
     double values[] = {30.0, 10.0, 20.0};
 
-    cxf_sort_indices_values(indices, values, 3);
+    cxf_sort_by_values_paired(indices, values, 3);
 
     /* Indices sorted: 1, 2, 3 */
     TEST_ASSERT_EQUAL_INT(1, indices[0]);

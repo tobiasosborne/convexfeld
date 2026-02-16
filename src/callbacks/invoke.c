@@ -8,8 +8,8 @@
  * termination signaling) while delegating domain logic to user code.
  *
  * Specs:
- * - docs/specs/functions/callbacks/cxf_pre_optimize_callback.md
- * - docs/specs/functions/callbacks/cxf_post_optimize_callback.md
+ * - docs/specs/functions/callbacks/cxf_pre_optimize_hook.md
+ * - docs/specs/functions/callbacks/cxf_post_optimize_hook.md
  */
 
 #include "convexfeld/cxf_callback.h"
@@ -39,7 +39,7 @@
  * @note Returns 0 (success) if callback infrastructure is missing/disabled
  * @note Environment lock must be held by caller
  */
-int cxf_pre_optimize_callback(CxfModel *model) {
+int cxf_pre_optimize_hook(CxfModel *model) {
     /* Guard: Check model exists */
     if (model == NULL) {
         return 0;
@@ -121,7 +121,7 @@ int cxf_pre_optimize_callback(CxfModel *model) {
  * @note Environment lock must be held by caller
  * @note Does NOT set termination flag (optimization already complete)
  */
-int cxf_post_optimize_callback(CxfModel *model) {
+int cxf_post_optimize_hook(CxfModel *model) {
     /* Guard: Check model exists */
     if (model == NULL) {
         return 0;

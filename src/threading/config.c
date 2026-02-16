@@ -55,7 +55,7 @@ int cxf_get_threads(CxfEnv *env) {
  *       - Store thread_count in CxfEnv structure
  *       - Allow retrieval via cxf_get_threads()
  */
-int cxf_set_thread_count(CxfEnv *env, int thread_count) {
+int cxf_validate_thread_count(CxfEnv *env, int thread_count) {
     /* Validate environment handle */
     if (env == NULL) {
         return CXF_ERROR_INVALID_ARGUMENT;

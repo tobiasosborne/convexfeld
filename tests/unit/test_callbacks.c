@@ -9,8 +9,8 @@
  * - cxf_check_terminate
  * - cxf_callback_terminate
  * - cxf_reset_callback_state
- * - cxf_pre_optimize_callback
- * - cxf_post_optimize_callback
+ * - cxf_pre_optimize_hook
+ * - cxf_post_optimize_hook
  */
 
 #include "unity.h"
@@ -30,8 +30,8 @@ void cxf_set_terminate(CxfEnv *env);
 int cxf_check_terminate(CxfEnv *env);
 void cxf_callback_terminate(CxfModel *model);
 void cxf_reset_callback_state(CxfEnv *env);
-int cxf_pre_optimize_callback(CxfModel *model);
-int cxf_post_optimize_callback(CxfModel *model);
+int cxf_pre_optimize_hook(CxfModel *model);
+int cxf_post_optimize_hook(CxfModel *model);
 
 /* API functions for setup */
 int cxf_loadenv(CxfEnv **envP, const char *logfilename);
@@ -351,36 +351,36 @@ void test_reset_callback_state_clears_statistics(void) {
 }
 
 /*******************************************************************************
- * cxf_pre_optimize_callback Tests
+ * cxf_pre_optimize_hook Tests
  ******************************************************************************/
 
 void test_pre_optimize_callback_null_env_returns_success(void) {
     CxfModel temp_model;
     memset(&temp_model, 0, sizeof(temp_model));
     temp_model.env = NULL;
-    int result = cxf_pre_optimize_callback(&temp_model);
+    int result = cxf_pre_optimize_hook(&temp_model);
     TEST_ASSERT_EQUAL_INT(0, result);
 }
 
 void test_pre_optimize_callback_no_callback_returns_success(void) {
-    int result = cxf_pre_optimize_callback(model);
+    int result = cxf_pre_optimize_hook(model);
     TEST_ASSERT_EQUAL_INT(0, result);
 }
 
 /*******************************************************************************
- * cxf_post_optimize_callback Tests
+ * cxf_post_optimize_hook Tests
  ******************************************************************************/
 
 void test_post_optimize_callback_null_env_returns_success(void) {
     CxfModel temp_model;
     memset(&temp_model, 0, sizeof(temp_model));
     temp_model.env = NULL;
-    int result = cxf_post_optimize_callback(&temp_model);
+    int result = cxf_post_optimize_hook(&temp_model);
     TEST_ASSERT_EQUAL_INT(0, result);
 }
 
 void test_post_optimize_callback_no_callback_returns_success(void) {
-    int result = cxf_post_optimize_callback(model);
+    int result = cxf_post_optimize_hook(model);
     TEST_ASSERT_EQUAL_INT(0, result);
 }
 
@@ -430,11 +430,11 @@ int main(void) {
     RUN_TEST(test_reset_callback_state_no_callback_state_safe);
     RUN_TEST(test_reset_callback_state_clears_statistics);
 
-    /* cxf_pre_optimize_callback tests */
+    /* cxf_pre_optimize_hook tests */
     RUN_TEST(test_pre_optimize_callback_null_env_returns_success);
     RUN_TEST(test_pre_optimize_callback_no_callback_returns_success);
 
-    /* cxf_post_optimize_callback tests */
+    /* cxf_post_optimize_hook tests */
     RUN_TEST(test_post_optimize_callback_null_env_returns_success);
     RUN_TEST(test_post_optimize_callback_no_callback_returns_success);
 

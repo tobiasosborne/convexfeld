@@ -7,7 +7,7 @@
  * is stored using the Product Form of Inverse (PFI) representation
  * with eta vectors for compatibility with FTRAN/BTRAN.
  *
- * Spec: docs/specs/functions/basis/cxf_basis_refactor.md
+ * Spec: docs/specs/functions/basis/cxf_fix_variables_at_bounds.md
  */
 
 #include "convexfeld/cxf_basis.h"
@@ -58,7 +58,7 @@ static void clear_eta_list(BasisState *basis) {
  * @param basis BasisState to refactor.
  * @return CXF_OK on success, error code on failure.
  */
-int cxf_basis_refactor(BasisState *basis) {
+int cxf_fix_variables_at_bounds(BasisState *basis) {
     if (basis == NULL) {
         return CXF_ERROR_NULL_ARGUMENT;
     }

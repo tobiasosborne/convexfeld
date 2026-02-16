@@ -21,7 +21,7 @@ extern void cxf_basis_free(BasisState *basis);
 extern void cxf_pricing_free(PricingContext *ctx);
 
 /*============================================================================
- * cxf_free_solver_state - SolverContext Cleanup
+ * cxf_free_attribute_table - SolverContext Cleanup
  *===========================================================================*/
 
 /**
@@ -37,7 +37,7 @@ extern void cxf_pricing_free(PricingContext *ctx);
  *
  * @param ctx SolverContext to free (may be NULL)
  */
-void cxf_free_solver_state(SolverContext *ctx) {
+void cxf_free_attribute_table(SolverContext *ctx) {
     if (ctx == NULL) {
         return;
     }

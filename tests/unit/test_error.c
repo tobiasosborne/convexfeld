@@ -17,11 +17,11 @@
 
 /* Core Error Functions (M3.1.2) */
 void cxf_error(CxfEnv *env, const char *format, ...);
-void cxf_errorlog(CxfEnv *env, const char *message);
+void cxf_set_error_string(CxfEnv *env, const char *message);
 
 /* NaN/Inf Detection (M3.1.3) */
 int cxf_check_nan(const double *arr, int n);
-int cxf_check_nan_or_inf(const double *arr, int n);
+int cxf_is_finite(const double *arr, int n);
 
 /* Model Flag Checks (M3.1.5) */
 int cxf_check_model_flags1(CxfModel *model);
@@ -82,21 +82,21 @@ void test_geterrormsg_null_env(void) {
 }
 
 /*============================================================================
- * cxf_errorlog Tests
+ * cxf_set_error_string Tests
  *===========================================================================*/
 
 void test_errorlog_null_env(void) {
-    cxf_errorlog(NULL, "message");
+    cxf_set_error_string(NULL, "message");
     TEST_PASS();  /* Should not crash */
 }
 
 void test_errorlog_null_message(void) {
-    cxf_errorlog(env, NULL);
+    cxf_set_error_string(env, NULL);
     TEST_PASS();  /* Should not crash */
 }
 
 void test_errorlog_basic(void) {
-    cxf_errorlog(env, "Test log message");
+    cxf_set_error_string(env, "Test log message");
     TEST_PASS();  /* Basic call should not crash */
 }
 
@@ -134,35 +134,35 @@ void test_check_nan_inf_not_detected(void) {
 }
 
 /*============================================================================
- * cxf_check_nan_or_inf Tests
+ * cxf_is_finite Tests
  *===========================================================================*/
 
 void test_check_nan_or_inf_clean_array(void) {
     double arr[] = {1.0, -2.0, 0.0, DBL_MAX, -DBL_MAX};
-    int result = cxf_check_nan_or_inf(arr, 5);
+    int result = cxf_is_finite(arr, 5);
     TEST_ASSERT_EQUAL_INT(0, result);  /* All finite */
 }
 
 void test_check_nan_or_inf_with_nan(void) {
     double arr[] = {1.0, 2.0, NAN};
-    int result = cxf_check_nan_or_inf(arr, 3);
+    int result = cxf_is_finite(arr, 3);
     TEST_ASSERT_EQUAL_INT(1, result);  /* Found bad value */
 }
 
 void test_check_nan_or_inf_with_inf(void) {
     double arr[] = {1.0, INFINITY, 3.0};
-    int result = cxf_check_nan_or_inf(arr, 3);
+    int result = cxf_is_finite(arr, 3);
     TEST_ASSERT_EQUAL_INT(1, result);  /* Found infinity */
 }
 
 void test_check_nan_or_inf_with_neg_inf(void) {
     double arr[] = {-INFINITY, 2.0, 3.0};
-    int result = cxf_check_nan_or_inf(arr, 3);
+    int result = cxf_is_finite(arr, 3);
     TEST_ASSERT_EQUAL_INT(1, result);  /* Found -infinity */
 }
 
 void test_check_nan_or_inf_null_array(void) {
-    int result = cxf_check_nan_or_inf(NULL, 5);
+    int result = cxf_is_finite(NULL, 5);
     TEST_ASSERT_EQUAL_INT(-1, result);  /* Error indicator */
 }
 
@@ -369,7 +369,7 @@ int main(void) {
     RUN_TEST(test_error_empty_message);
     RUN_TEST(test_geterrormsg_null_env);
 
-    /* cxf_errorlog tests */
+    /* cxf_set_error_string tests */
     RUN_TEST(test_errorlog_null_env);
     RUN_TEST(test_errorlog_null_message);
     RUN_TEST(test_errorlog_basic);
@@ -381,7 +381,7 @@ int main(void) {
     RUN_TEST(test_check_nan_null_array);
     RUN_TEST(test_check_nan_inf_not_detected);
 
-    /* cxf_check_nan_or_inf tests */
+    /* cxf_is_finite tests */
     RUN_TEST(test_check_nan_or_inf_clean_array);
     RUN_TEST(test_check_nan_or_inf_with_nan);
     RUN_TEST(test_check_nan_or_inf_with_inf);

@@ -83,7 +83,7 @@ struct BasisState {
      * Applied in FTRAN (before etas) and BTRAN (after etas). */
     double *diag_coeff;       /**< Initial basis diagonal [m] (±1 values) */
 
-    /* LU factorization (computed by cxf_basis_refactor) */
+    /* LU factorization (computed by cxf_fix_variables_at_bounds) */
     LUFactors *lu;            /**< LU factors, NULL if using eta-only mode */
 
     /* Eta factorization */
@@ -178,7 +178,7 @@ int cxf_lu_factorize(LUFactors *lu, SolverContext *ctx);
  * @param includeFactors If 1, copy factorization data (currently no-op).
  * @return CXF_OK on success, CXF_ERROR_OUT_OF_MEMORY on allocation failure.
  */
-int cxf_basis_snapshot_create(BasisState *basis, BasisSnapshot *snapshot,
+int cxf_progress_snapshot_create(BasisState *basis, BasisSnapshot *snapshot,
                               int includeFactors);
 
 /**
@@ -188,7 +188,7 @@ int cxf_basis_snapshot_create(BasisState *basis, BasisSnapshot *snapshot,
  * @param s2 Second snapshot.
  * @return Number of differing elements, or -1 on error.
  */
-int cxf_basis_snapshot_diff(const BasisSnapshot *s1, const BasisSnapshot *s2);
+int cxf_progress_snapshot_diff(const BasisSnapshot *s1, const BasisSnapshot *s2);
 
 /**
  * @brief Check if two snapshots are identical.
@@ -197,14 +197,14 @@ int cxf_basis_snapshot_diff(const BasisSnapshot *s1, const BasisSnapshot *s2);
  * @param s2 Second snapshot.
  * @return 1 if equal, 0 if different.
  */
-int cxf_basis_snapshot_equal(const BasisSnapshot *s1, const BasisSnapshot *s2);
+int cxf_progress_snapshot_equal(const BasisSnapshot *s1, const BasisSnapshot *s2);
 
 /**
  * @brief Free memory allocated within a snapshot.
  *
  * @param snapshot Snapshot to free (does not free the struct itself).
  */
-void cxf_basis_snapshot_free(BasisSnapshot *snapshot);
+void cxf_progress_snapshot_free(BasisSnapshot *snapshot);
 
 /*******************************************************************************
  * BTRAN with arbitrary input vector

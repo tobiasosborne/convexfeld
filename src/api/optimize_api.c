@@ -17,8 +17,8 @@
 extern int cxf_solve_lp(CxfModel *model);
 extern int cxf_checkmodel(CxfModel *model);
 extern void cxf_log_printf(CxfEnv *env, int level, const char *format, ...);
-extern int cxf_pre_optimize_callback(CxfModel *model);
-extern int cxf_post_optimize_callback(CxfModel *model);
+extern int cxf_pre_optimize_hook(CxfModel *model);
+extern int cxf_post_optimize_hook(CxfModel *model);
 
 /**
  * @brief Internal optimization dispatcher.
@@ -76,7 +76,7 @@ int cxf_optimize_internal(CxfModel *model) {
     env->optimizing = 1;
 
     /* Pre-optimization callback */
-    status = cxf_pre_optimize_callback(model);
+    status = cxf_pre_optimize_hook(model);
     if (status != 0) {
         cxf_log_printf(env, 0, "Pre-optimization callback requested termination");
         env->optimizing = 0;
@@ -90,7 +90,7 @@ int cxf_optimize_internal(CxfModel *model) {
     status = cxf_solve_lp(model);
 
     /* Post-optimization callback */
-    (void)cxf_post_optimize_callback(model);
+    (void)cxf_post_optimize_hook(model);
 
     /* Log optimization completion */
     if (status == CXF_OPTIMAL) {

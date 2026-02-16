@@ -5,7 +5,7 @@
  * Provides snapshot functionality for capturing, comparing, and restoring
  * basis states. Used for debugging, warm-starting, and iteration tracking.
  *
- * Spec: docs/specs/functions/cxf_basis_snapshot.md
+ * Spec: docs/specs/functions/cxf_progress_snapshot.md
  */
 
 #include "convexfeld/cxf_basis.h"
@@ -31,7 +31,7 @@
  * @return CXF_OK on success, CXF_ERROR_NULL_ARGUMENT if args are NULL,
  *         CXF_ERROR_OUT_OF_MEMORY on allocation failure.
  */
-int cxf_basis_snapshot_create(BasisState *basis, BasisSnapshot *snapshot,
+int cxf_progress_snapshot_create(BasisState *basis, BasisSnapshot *snapshot,
                               int includeFactors) {
     if (basis == NULL || snapshot == NULL) {
         return CXF_ERROR_NULL_ARGUMENT;
@@ -89,7 +89,7 @@ int cxf_basis_snapshot_create(BasisState *basis, BasisSnapshot *snapshot,
  * @param s2 Second snapshot.
  * @return Number of differing elements, or -1 on error/mismatch.
  */
-int cxf_basis_snapshot_diff(const BasisSnapshot *s1, const BasisSnapshot *s2) {
+int cxf_progress_snapshot_diff(const BasisSnapshot *s1, const BasisSnapshot *s2) {
     if (s1 == NULL || s2 == NULL) {
         return -1;
     }
@@ -126,8 +126,8 @@ int cxf_basis_snapshot_diff(const BasisSnapshot *s1, const BasisSnapshot *s2) {
  * @param s2 Second snapshot.
  * @return 1 if equal, 0 if different or on error.
  */
-int cxf_basis_snapshot_equal(const BasisSnapshot *s1, const BasisSnapshot *s2) {
-    return cxf_basis_snapshot_diff(s1, s2) == 0;
+int cxf_progress_snapshot_equal(const BasisSnapshot *s1, const BasisSnapshot *s2) {
+    return cxf_progress_snapshot_diff(s1, s2) == 0;
 }
 
 /**
@@ -139,7 +139,7 @@ int cxf_basis_snapshot_equal(const BasisSnapshot *s1, const BasisSnapshot *s2) {
  *
  * @param snapshot Snapshot to free (may be NULL).
  */
-void cxf_basis_snapshot_free(BasisSnapshot *snapshot) {
+void cxf_progress_snapshot_free(BasisSnapshot *snapshot) {
     if (snapshot == NULL) {
         return;
     }

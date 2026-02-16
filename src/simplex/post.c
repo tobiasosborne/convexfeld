@@ -12,7 +12,7 @@
 #include "convexfeld/cxf_model.h"
 #include "convexfeld/cxf_types.h"
 
-extern int cxf_basis_refactor(BasisState *basis);
+extern int cxf_fix_variables_at_bounds(BasisState *basis);
 
 /**
  * Post-iteration housekeeping
@@ -36,7 +36,7 @@ int cxf_simplex_post_iterate(SolverContext *state, CxfEnv *env) {
 
     /* Check if refactorization is needed */
     if (state->eta_count >= env->refactor_interval) {
-        int status = cxf_basis_refactor(state->basis);
+        int status = cxf_fix_variables_at_bounds(state->basis);
         if (status != CXF_OK) {
             return status;
         }

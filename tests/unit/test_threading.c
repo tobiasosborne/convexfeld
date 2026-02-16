@@ -10,7 +10,7 @@
 /* Forward declarations for threading functions */
 int cxf_get_logical_processors(void);
 int cxf_get_physical_cores(void);
-int cxf_set_thread_count(CxfEnv *env, int thread_count);
+int cxf_validate_thread_count(CxfEnv *env, int thread_count);
 int cxf_get_threads(CxfEnv *env);
 void cxf_env_acquire_lock(CxfEnv *env);
 void cxf_leave_critical_section(CxfEnv *env);
@@ -63,27 +63,27 @@ void test_get_physical_cores_consistent(void) {
 }
 
 /*============================================================================
- * cxf_set_thread_count Tests
+ * cxf_validate_thread_count Tests
  *===========================================================================*/
 
 void test_set_thread_count_success(void) {
-    int result = cxf_set_thread_count(env, 1);
+    int result = cxf_validate_thread_count(env, 1);
     TEST_ASSERT_EQUAL_INT(CXF_OK, result);
 }
 
 void test_set_thread_count_null_env(void) {
-    int result = cxf_set_thread_count(NULL, 4);
+    int result = cxf_validate_thread_count(NULL, 4);
     TEST_ASSERT_EQUAL_INT(CXF_ERROR_INVALID_ARGUMENT, result);
 }
 
 void test_set_thread_count_invalid(void) {
-    TEST_ASSERT_EQUAL_INT(CXF_ERROR_INVALID_ARGUMENT, cxf_set_thread_count(env, 0));
-    TEST_ASSERT_EQUAL_INT(CXF_ERROR_INVALID_ARGUMENT, cxf_set_thread_count(env, -1));
+    TEST_ASSERT_EQUAL_INT(CXF_ERROR_INVALID_ARGUMENT, cxf_validate_thread_count(env, 0));
+    TEST_ASSERT_EQUAL_INT(CXF_ERROR_INVALID_ARGUMENT, cxf_validate_thread_count(env, -1));
 }
 
 void test_set_thread_count_caps_at_logical(void) {
     int logical = cxf_get_logical_processors();
-    int result = cxf_set_thread_count(env, logical + 100);
+    int result = cxf_validate_thread_count(env, logical + 100);
     TEST_ASSERT_EQUAL_INT(CXF_OK, result);
 }
 
@@ -157,7 +157,7 @@ int main(void) {
     RUN_TEST(test_get_physical_cores_not_more_than_logical);
     RUN_TEST(test_get_physical_cores_consistent);
 
-    /* cxf_set_thread_count tests */
+    /* cxf_validate_thread_count tests */
     RUN_TEST(test_set_thread_count_success);
     RUN_TEST(test_set_thread_count_null_env);
     RUN_TEST(test_set_thread_count_invalid);

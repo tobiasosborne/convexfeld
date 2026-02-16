@@ -1,11 +1,11 @@
 /**
  * @file iterate.c
- * @brief Full cxf_simplex_iterate implementation (M7.1.2)
+ * @brief Full cxf_log_iteration_progress implementation (M7.1.2)
  *
  * Performs a single iteration of the simplex algorithm:
  * pricing, FTRAN, ratio test, and basis update.
  *
- * Spec: docs/specs/functions/simplex/cxf_simplex_iterate.md
+ * Spec: docs/specs/functions/simplex/cxf_log_iteration_progress.md
  */
 
 #include "convexfeld/cxf_solver.h"
@@ -119,7 +119,7 @@ static void extract_column_ext(const SparseMatrix *matrix, BasisState *basis,
  * @return ITERATE_CONTINUE (0) to continue, ITERATE_OPTIMAL (1) if optimal,
  *         ITERATE_UNBOUNDED (3) if unbounded, or error code
  */
-int cxf_simplex_iterate(SolverContext *state, CxfEnv *env) {
+int cxf_log_iteration_progress(SolverContext *state, CxfEnv *env) {
     int rc;
     int entering = -1, leavingRow = -1;
     double pivotElement = 0.0, stepSize = 0.0;

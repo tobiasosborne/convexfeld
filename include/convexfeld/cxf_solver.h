@@ -140,7 +140,7 @@ int cxf_simplex_get_phase(SolverContext *state);
  * @param env Environment
  * @return CXF_OK on success, error code otherwise
  */
-int cxf_simplex_iterate(SolverContext *state, CxfEnv *env);
+int cxf_log_iteration_progress(SolverContext *state, CxfEnv *env);
 
 /**
  * @brief Handle phase end transition (stub - to be implemented in M7.1.2).
@@ -207,7 +207,7 @@ int cxf_simplex_unperturb(SolverContext *state, CxfEnv *env);
  * @param env Environment
  * @return CXF_OK on success, error code otherwise
  */
-int cxf_simplex_cleanup(SolverContext *state, CxfEnv *env);
+int cxf_simplex_postsolve(SolverContext *state, CxfEnv *env);
 
 /**
  * @brief Adjust reduced costs for quadratic programming.

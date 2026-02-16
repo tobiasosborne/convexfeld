@@ -15,7 +15,7 @@
  * Scans array for Not-a-Number values. Uses the property that
  * NaN != NaN (IEEE 754) for portable detection.
  *
- * Does NOT detect infinity - use cxf_check_nan_or_inf for that.
+ * Does NOT detect infinity - use cxf_is_finite for that.
  *
  * @param arr Array to check
  * @param n Number of elements
@@ -43,7 +43,7 @@ int cxf_check_nan(const double *arr, int n) {
  * @param n Number of elements
  * @return 0 if all finite, 1 if NaN/Inf found, -1 on error (NULL array)
  */
-int cxf_check_nan_or_inf(const double *arr, int n) {
+int cxf_is_finite(const double *arr, int n) {
     if (arr == NULL) {
         return -1;
     }

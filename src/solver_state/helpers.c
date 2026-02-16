@@ -21,7 +21,7 @@
  * Iteratively tightens variable bounds through constraint activity analysis.
  * Returns 0 on success, CXF_INFEASIBLE if infeasible, or error code.
  */
-int cxf_cleanup_helper(
+int cxf_propagate_bounds(
     void *env,
     SolverContext *state,
     double *lb_working,

@@ -5,7 +5,7 @@
  * Implements sparse LU factorization with Markowitz pivot selection
  * and threshold pivoting for numerical stability.
  *
- * Spec: docs/specs/functions/basis/cxf_basis_refactor.md
+ * Spec: docs/specs/functions/basis/cxf_fix_variables_at_bounds.md
  */
 
 #include "convexfeld/cxf_basis.h"

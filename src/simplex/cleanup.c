@@ -2,7 +2,7 @@
  * @file cleanup.c
  * @brief Simplex cleanup function (M7.1.14)
  *
- * Implements cxf_simplex_cleanup for post-solve cleanup.
+ * Implements cxf_simplex_postsolve for post-solve cleanup.
  * This function restores the original problem space by unscaling values
  * and restoring eliminated variables after preprocessing.
  *
@@ -34,7 +34,7 @@
  * @param env Environment (unused in current stub implementation)
  * @return CXF_OK on success, error code otherwise
  */
-int cxf_simplex_cleanup(SolverContext *state, CxfEnv *env) {
+int cxf_simplex_postsolve(SolverContext *state, CxfEnv *env) {
     /* Validate inputs */
     if (state == NULL) {
         return CXF_ERROR_NULL_ARGUMENT;

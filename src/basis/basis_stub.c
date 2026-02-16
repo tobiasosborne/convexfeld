@@ -30,7 +30,7 @@
  * Refactorization - Implemented in refactor.c (M5.1.6)
  ******************************************************************************/
 
-/* cxf_basis_refactor, cxf_solver_refactor, cxf_refactor_check
+/* cxf_fix_variables_at_bounds, cxf_solver_refactor, cxf_refactor_check
  * are implemented in refactor.c */
 
 /*******************************************************************************
@@ -41,7 +41,7 @@
  * @brief Create a snapshot of the current basis.
  * @note Full implementation in M5.1.7
  */
-int *cxf_basis_snapshot(BasisState *basis) {
+int *cxf_progress_snapshot(BasisState *basis) {
     if (basis == NULL || basis->m == 0) {
         return NULL;
     }

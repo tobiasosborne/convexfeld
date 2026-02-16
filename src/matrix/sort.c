@@ -5,7 +5,7 @@
  * Sorts arrays of integer indices with optional value synchronization.
  * Uses insertion sort for small arrays, qsort-based approach for larger.
  *
- * Spec: docs/specs/functions/matrix/cxf_sort_indices.md
+ * Spec: docs/specs/functions/matrix/cxf_sort_by_values.md
  */
 
 #include <stdlib.h>
@@ -43,7 +43,7 @@ static void insertion_sort(int *indices, double *values, int n) {
 }
 
 /*============================================================================
- * cxf_sort_indices - Indices only
+ * cxf_sort_by_values - Indices only
  *===========================================================================*/
 
 /**
@@ -52,7 +52,7 @@ static void insertion_sort(int *indices, double *values, int n) {
  * @param indices Array of indices to sort (modified in-place)
  * @param n Number of elements
  */
-void cxf_sort_indices(int *indices, int n) {
+void cxf_sort_by_values(int *indices, int n) {
     if (indices == NULL || n <= 1) {
         return;
     }
@@ -61,7 +61,7 @@ void cxf_sort_indices(int *indices, int n) {
 }
 
 /*============================================================================
- * cxf_sort_indices_values - Indices with synchronized values
+ * cxf_sort_by_values_paired - Indices with synchronized values
  *===========================================================================*/
 
 /**
@@ -74,7 +74,7 @@ void cxf_sort_indices(int *indices, int n) {
  * @param values Array of values to reorder (modified in-place)
  * @param n Number of elements
  */
-void cxf_sort_indices_values(int *indices, double *values, int n) {
+void cxf_sort_by_values_paired(int *indices, double *values, int n) {
     if (indices == NULL || values == NULL || n <= 1) {
         return;
     }

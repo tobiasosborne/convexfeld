@@ -23,7 +23,7 @@ typedef struct BasisState BasisState;
 typedef struct CallbackContext CallbackContext;
 
 /* State cleanup functions (M2.1.4) */
-void cxf_free_solver_state(SolverContext *ctx);
+void cxf_free_attribute_table(SolverContext *ctx);
 void cxf_free_basis_state(BasisState *basis);
 void cxf_free_callback_state(CallbackContext *ctx);
 
@@ -143,7 +143,7 @@ void test_cxf_free_after_malloc(void) {
 /*----------------------------------------------------------------------------*/
 
 void test_free_solver_state_null_safe(void) {
-    cxf_free_solver_state(NULL);  /* Should not crash */
+    cxf_free_attribute_table(NULL);  /* Should not crash */
     TEST_PASS();
 }
 
