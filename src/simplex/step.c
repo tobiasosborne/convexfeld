@@ -53,7 +53,7 @@ extern int cxf_pivot_with_eta(BasisState *basis, int pivotRow,
  * @param stepSize Step length for pivot (distance to bound).
  * @return CXF_OK on success, -1 if pivot too small (refactorization needed).
  */
-int cxf_simplex_step(SolverContext *state, int entering, int leavingRow,
+int cxf_simplex_step(SolverState *state, int entering, int leavingRow,
                      const double *pivotCol, double stepSize) {
     int i, basicVar, leaving, result;
 

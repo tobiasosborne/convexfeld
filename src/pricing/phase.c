@@ -34,7 +34,7 @@
  * @param tolerance Optimality tolerance
  * @return Index of entering variable, or -1 if optimal
  */
-int cxf_pricing_step2(PricingContext *ctx, const double *reduced_costs,
+int cxf_pricing_step2(PricingState *ctx, const double *reduced_costs,
                       const int *var_status, int num_vars, double tolerance) {
     if (ctx == NULL || reduced_costs == NULL || var_status == NULL) {
         return -1;

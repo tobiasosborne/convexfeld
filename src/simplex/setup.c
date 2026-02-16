@@ -25,8 +25,8 @@
 #define SCALE_CLAMP_MAX 1e6
 
 /* Forward declarations */
-extern PricingContext *cxf_pricing_create(int num_vars, int max_levels);
-extern int cxf_pricing_init(PricingContext *ctx, int num_vars, int strategy);
+extern PricingState *cxf_pricing_create(int num_vars, int max_levels);
+extern int cxf_pricing_init(PricingState *ctx, int num_vars, int strategy);
 
 /**
  * @brief Clamp a value to [min, max].
@@ -53,7 +53,7 @@ static int has_bound_violation(const double *lb, const double *ub,
 /**
  * @brief Initialize reduced costs from objective coefficients.
  */
-static void init_reduced_costs(SolverContext *state) {
+static void init_reduced_costs(SolverState *state) {
     int n = state->num_vars;
     if (n > 0 && state->work_dj != NULL && state->work_obj != NULL) {
         memcpy(state->work_dj, state->work_obj, (size_t)n * sizeof(double));
@@ -63,7 +63,7 @@ static void init_reduced_costs(SolverContext *state) {
 /**
  * @brief Zero-initialize dual values.
  */
-static void init_dual_values(SolverContext *state) {
+static void init_dual_values(SolverState *state) {
     int m = state->num_constrs;
     if (m > 0 && state->work_pi != NULL) {
         memset(state->work_pi, 0, (size_t)m * sizeof(double));
@@ -73,7 +73,7 @@ static void init_dual_values(SolverContext *state) {
 /**
  * @brief Initialize pricing context.
  */
-static int init_pricing(SolverContext *state) {
+static int init_pricing(SolverState *state) {
     int n = state->num_vars;
 
     if (n == 0) {
@@ -106,7 +106,7 @@ static int init_pricing(SolverContext *state) {
  * @param env Environment containing solver parameters
  * @return CXF_OK on success, error code otherwise
  */
-int cxf_simplex_setup(SolverContext *state, CxfEnv *env) {
+int cxf_simplex_setup(SolverState *state, CxfEnv *env) {
     if (state == NULL || env == NULL) {
         return CXF_ERROR_NULL_ARGUMENT;
     }
@@ -170,7 +170,7 @@ int cxf_simplex_setup(SolverContext *state, CxfEnv *env) {
  * @param flags Control flags (bit 0: skip if set)
  * @return CXF_OK on success, 3=infeasible
  */
-int cxf_simplex_preprocess(SolverContext *state, CxfEnv *env, int flags) {
+int cxf_simplex_preprocess(SolverState *state, CxfEnv *env, int flags) {
     if (state == NULL || env == NULL) {
         return CXF_ERROR_NULL_ARGUMENT;
     }

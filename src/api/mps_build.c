@@ -18,7 +18,7 @@ extern void *cxf_realloc(void *ptr, size_t size);
 extern void cxf_free(void *ptr);
 extern int cxf_addvar(CxfModel *model, int numnz, int *vind, double *vval,
                       double obj, double lb, double ub, char vtype, const char *name);
-extern int cxf_sparse_init_csc(SparseMatrix *mat, int num_rows, int num_cols,
+extern int cxf_sparse_init_csc(MatrixData *mat, int num_rows, int num_cols,
                                int64_t nnz);
 
 /**
@@ -32,7 +32,7 @@ extern int cxf_sparse_init_csc(SparseMatrix *mat, int num_rows, int num_cols,
  */
 static int build_csc_direct(MpsState *s, CxfModel *model, const int *row_map,
                             int num_constrs) {
-    SparseMatrix *mat = model->matrix;
+    MatrixData *mat = model->matrix;
     int num_cols = s->num_cols;
     int64_t total_nnz = 0;
 

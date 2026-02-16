@@ -1,6 +1,6 @@
 /**
  * @file cxf_basis.h
- * @brief BasisState and EtaFactors structures - basis representation.
+ * @brief BasisState and EtaVector structures - basis representation.
  *
  * Maintains the simplex basis using Product Form of Inverse (PFI).
  * The basis inverse is represented as a product of eta matrices.
@@ -50,7 +50,7 @@ typedef struct LUFactors {
  * Represents a single elementary transformation matrix.
  * Eta matrices form a linked list for PFI representation.
  */
-struct EtaFactors {
+struct EtaVector {
     int type;                 /**< 1=refactorization, 2=pivot */
     int pivot_row;            /**< Row index for pivot */
     int pivot_var;            /**< Variable index involved in transformation */
@@ -60,7 +60,7 @@ struct EtaFactors {
     double pivot_elem;        /**< Pivot element */
     double obj_coeff;         /**< Objective coefficient of pivot_var */
     int status;               /**< New status of pivot_var: -1=lower, -2=upper, -3=superbasic, >=0=basic */
-    EtaFactors *next;         /**< Link to next eta (newer) */
+    EtaVector *next;         /**< Link to next eta (newer) */
 };
 
 /**
@@ -89,7 +89,7 @@ struct BasisState {
     /* Eta factorization */
     int eta_count;            /**< Number of eta vectors */
     int eta_capacity;         /**< Capacity for eta vectors */
-    EtaFactors *eta_head;     /**< Head of eta linked list */
+    EtaVector *eta_head;     /**< Head of eta linked list */
 
     /* Working storage */
     double *work;             /**< Working array [m] */
@@ -161,10 +161,10 @@ void cxf_lu_clear(LUFactors *lu);
  * Stores result in lu structure.
  *
  * @param lu LUFactors structure to store results.
- * @param ctx SolverContext with basis and matrix access.
+ * @param ctx SolverState with basis and matrix access.
  * @return 0 on success, 3 for singular matrix, 1001 for OOM.
  */
-int cxf_lu_factorize(LUFactors *lu, SolverContext *ctx);
+int cxf_lu_factorize(LUFactors *lu, SolverState *ctx);
 
 /*******************************************************************************
  * BasisSnapshot functions (M5.1.7)

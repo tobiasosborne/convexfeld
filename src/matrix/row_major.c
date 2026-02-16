@@ -16,7 +16,7 @@
 #include <string.h>
 
 /* Forward declaration */
-int cxf_sparse_validate(const SparseMatrix *mat);
+int cxf_sparse_validate(const MatrixData *mat);
 
 /*============================================================================
  * Stage 1: Prepare Row Data (Allocate CSR Arrays)
@@ -31,7 +31,7 @@ int cxf_sparse_validate(const SparseMatrix *mat);
  * @param mat Matrix with valid CSC format
  * @return CXF_OK on success, error code on failure
  */
-int cxf_prepare_row_data(SparseMatrix *mat) {
+int cxf_prepare_row_data(MatrixData *mat) {
     if (mat == NULL) {
         return CXF_ERROR_NULL_ARGUMENT;
     }
@@ -91,7 +91,7 @@ int cxf_prepare_row_data(SparseMatrix *mat) {
  * @param mat Matrix with prepared CSR arrays
  * @return CXF_OK on success, error code on failure
  */
-int cxf_build_row_major(SparseMatrix *mat) {
+int cxf_build_row_major(MatrixData *mat) {
     if (mat == NULL) {
         return CXF_ERROR_NULL_ARGUMENT;
     }
@@ -152,7 +152,7 @@ int cxf_build_row_major(SparseMatrix *mat) {
  * @param mat Matrix with built CSR format
  * @return CXF_OK on success, error code on failure
  */
-int cxf_finalize_row_data(SparseMatrix *mat) {
+int cxf_finalize_row_data(MatrixData *mat) {
     if (mat == NULL) {
         return CXF_ERROR_NULL_ARGUMENT;
     }

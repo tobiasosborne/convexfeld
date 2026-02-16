@@ -18,7 +18,7 @@
  * multiple objective functions.
  *
  * Note: Currently returns 0 as multi-objective fields are not yet implemented
- * in the SparseMatrix structure. This is a stub implementation that will be
+ * in the MatrixData structure. This is a stub implementation that will be
  * completed when multi-objective support is added.
  *
  * @param model Model to check (may be NULL)
@@ -43,7 +43,7 @@ int cxf_is_multi_objective(CxfModel *model) {
      *     }
      * }
      *
-     * For now, this field is not yet implemented in SparseMatrix.
+     * For now, this field is not yet implemented in MatrixData.
      * Default to single objective (standard LP case).
      */
 

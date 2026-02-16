@@ -18,26 +18,26 @@
 
 /* Forward declarations for module-specific free functions */
 extern void cxf_basis_free(BasisState *basis);
-extern void cxf_pricing_free(PricingContext *ctx);
+extern void cxf_pricing_free(PricingState *ctx);
 
 /*============================================================================
- * cxf_free_attribute_table - SolverContext Cleanup
+ * cxf_free_attribute_table - SolverState Cleanup
  *===========================================================================*/
 
 /**
- * @brief Free a SolverContext and all associated memory.
+ * @brief Free a SolverState and all associated memory.
  *
  * Deallocates:
  * - All working arrays (work_lb, work_ub, work_obj, work_x, work_pi, work_dj)
  * - BasisState subcomponent (via cxf_basis_free)
- * - PricingContext subcomponent (via cxf_pricing_free)
- * - The SolverContext structure itself
+ * - PricingState subcomponent (via cxf_pricing_free)
+ * - The SolverState structure itself
  *
  * Does NOT free the model_ref (owned by caller).
  *
- * @param ctx SolverContext to free (may be NULL)
+ * @param ctx SolverState to free (may be NULL)
  */
-void cxf_free_attribute_table(SolverContext *ctx) {
+void cxf_free_attribute_table(SolverState *ctx) {
     if (ctx == NULL) {
         return;
     }

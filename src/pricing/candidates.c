@@ -78,7 +78,7 @@ static int compare_by_abs_rc_desc(const void *a, const void *b, void *context) {
  * @param max_candidates Maximum candidates to return
  * @return Number of candidates found
  */
-int cxf_pricing_candidates(PricingContext *ctx, const double *reduced_costs,
+int cxf_pricing_candidates(PricingState *ctx, const double *reduced_costs,
                            const int *var_status, int num_vars, double tolerance,
                            int *candidates, int max_candidates) {
     if (ctx == NULL || reduced_costs == NULL || var_status == NULL ||

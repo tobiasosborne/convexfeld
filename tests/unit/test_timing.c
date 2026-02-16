@@ -18,11 +18,11 @@
 #include <string.h>
 
 /* Forward declarations for operation timing functions */
-void cxf_timing_pivot(SolverContext *state,
+void cxf_timing_pivot(SolverState *state,
                       double pricing_work,
                       double ratio_work,
                       double update_work);
-int cxf_timing_refactor(SolverContext *state, CxfEnv *env);
+int cxf_timing_refactor(SolverState *state, CxfEnv *env);
 
 /* API functions */
 int cxf_loadenv(CxfEnv **envP, const char *logfilename);
@@ -254,7 +254,7 @@ void test_timing_pivot_null_safe(void) {
 
 void test_timing_pivot_updates_work_counter(void) {
     /* Create a solver context with work tracking */
-    SolverContext ctx;
+    SolverState ctx;
     memset(&ctx, 0, sizeof(ctx));
 
     double work_counter = 0.0;
@@ -269,7 +269,7 @@ void test_timing_pivot_updates_work_counter(void) {
 }
 
 void test_timing_pivot_scales_work(void) {
-    SolverContext ctx;
+    SolverState ctx;
     memset(&ctx, 0, sizeof(ctx));
 
     double work_counter = 0.0;
@@ -284,7 +284,7 @@ void test_timing_pivot_scales_work(void) {
 }
 
 void test_timing_pivot_updates_timing_stats(void) {
-    SolverContext ctx;
+    SolverState ctx;
     memset(&ctx, 0, sizeof(ctx));
 
     TimingState ts;
@@ -305,7 +305,7 @@ void test_timing_pivot_updates_timing_stats(void) {
 }
 
 void test_timing_pivot_accumulates_multiple_calls(void) {
-    SolverContext ctx;
+    SolverState ctx;
     memset(&ctx, 0, sizeof(ctx));
 
     double work_counter = 0.0;
@@ -336,7 +336,7 @@ void test_timing_refactor_null_state(void) {
 }
 
 void test_timing_refactor_null_env(void) {
-    SolverContext ctx;
+    SolverState ctx;
     memset(&ctx, 0, sizeof(ctx));
 
     int result = cxf_timing_refactor(&ctx, NULL);
@@ -350,7 +350,7 @@ void test_timing_refactor_not_needed(void) {
     env->max_eta_memory = 1000000;
     env->refactor_interval = 100;
 
-    SolverContext ctx;
+    SolverState ctx;
     memset(&ctx, 0, sizeof(ctx));
     ctx.eta_count = 0;  /* No eta vectors */
     ctx.iteration = 0;
@@ -369,7 +369,7 @@ void test_timing_refactor_required_eta_count(void) {
     env->max_eta_memory = 1000000;
     env->refactor_interval = 200;
 
-    SolverContext ctx;
+    SolverState ctx;
     memset(&ctx, 0, sizeof(ctx));
     ctx.eta_count = 150;  /* Exceeds limit */
 
@@ -386,7 +386,7 @@ void test_timing_refactor_required_eta_memory(void) {
     env->max_eta_memory = 1000;  /* Low memory limit */
     env->refactor_interval = 200;
 
-    SolverContext ctx;
+    SolverState ctx;
     memset(&ctx, 0, sizeof(ctx));
     ctx.eta_count = 10;
     ctx.eta_memory = 2000;  /* Exceeds memory limit */
@@ -404,7 +404,7 @@ void test_timing_refactor_recommended_iterations(void) {
     env->max_eta_memory = 10000000;
     env->refactor_interval = 50;
 
-    SolverContext ctx;
+    SolverState ctx;
     memset(&ctx, 0, sizeof(ctx));
     ctx.eta_count = 10;
     ctx.iteration = 100;
@@ -423,7 +423,7 @@ void test_timing_refactor_recommended_ftran_degradation(void) {
     env->max_eta_memory = 10000000;
     env->refactor_interval = 1000;  /* High interval */
 
-    SolverContext ctx;
+    SolverState ctx;
     memset(&ctx, 0, sizeof(ctx));
     ctx.eta_count = 10;
     ctx.baseline_ftran = 0.001;  /* 1 ms baseline */

@@ -16,8 +16,8 @@ extern void *cxf_malloc(size_t size);
 extern void cxf_free(void *ptr);
 
 /* Forward declare sparse matrix functions */
-extern SparseMatrix *cxf_sparse_create(void);
-extern void cxf_sparse_free(SparseMatrix *mat);
+extern MatrixData *cxf_sparse_create(void);
+extern void cxf_sparse_free(MatrixData *mat);
 
 /* Initial capacity for variable arrays */
 #define INITIAL_VAR_CAPACITY 16

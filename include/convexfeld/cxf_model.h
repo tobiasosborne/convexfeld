@@ -34,7 +34,7 @@ struct CxfModel {
     char *vtype;              /**< Variable types [num_vars] (NULL = all continuous) */
 
     /* Constraint matrix (CSC format) */
-    SparseMatrix *matrix;     /**< Constraint matrix */
+    MatrixData *matrix;     /**< Constraint matrix */
 
     /* Solution data */
     double *solution;         /**< Solution values [num_vars] */

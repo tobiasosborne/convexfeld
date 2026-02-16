@@ -13,7 +13,7 @@
 /* Test fixture state */
 static CxfEnv *env = NULL;
 static CxfModel *model = NULL;
-static SolverContext *state = NULL;
+static SolverState *state = NULL;
 
 void setUp(void) {
     /* Create environment */

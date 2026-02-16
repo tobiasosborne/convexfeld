@@ -15,31 +15,31 @@
 /* Forward declarations for functions under test */
 /* These will be implemented in M6.1.2-M6.1.7 */
 
-/* PricingContext lifecycle */
-PricingContext *cxf_pricing_create(int num_vars, int max_levels);
-void cxf_pricing_free(PricingContext *ctx);
-int cxf_pricing_init(PricingContext *ctx, int num_vars, int strategy);
+/* PricingState lifecycle */
+PricingState *cxf_pricing_create(int num_vars, int max_levels);
+void cxf_pricing_free(PricingState *ctx);
+int cxf_pricing_init(PricingState *ctx, int num_vars, int strategy);
 
 /* Candidate selection */
-int cxf_pricing_candidates(PricingContext *ctx, const double *reduced_costs,
+int cxf_pricing_candidates(PricingState *ctx, const double *reduced_costs,
                            const int *var_status, int num_vars, double tolerance,
                            int *candidates, int max_candidates);
 
 /* Steepest edge */
-int cxf_pricing_steepest(PricingContext *ctx, const double *reduced_costs,
+int cxf_pricing_steepest(PricingState *ctx, const double *reduced_costs,
                          const double *weights, const int *var_status,
                          int num_vars, double tolerance);
 
 /* Post-pivot update */
-int cxf_pricing_update(PricingContext *ctx, int entering_var, int leaving_row,
+int cxf_pricing_update(PricingState *ctx, int entering_var, int leaving_row,
                        const double *pivot_column, const double *pivot_row,
                        int num_rows);
 
 /* Cache management */
-void cxf_pricing_invalidate(PricingContext *ctx, int flags);
+void cxf_pricing_invalidate(PricingState *ctx, int flags);
 
 /* Two-phase pricing */
-int cxf_pricing_step2(PricingContext *ctx, const double *reduced_costs,
+int cxf_pricing_step2(PricingState *ctx, const double *reduced_costs,
                       const int *var_status, int num_vars, double tolerance);
 
 /* Invalidation flags */
@@ -58,23 +58,23 @@ void setUp(void) {}
 void tearDown(void) {}
 
 /*============================================================================
- * PricingContext Creation/Free Tests
+ * PricingState Creation/Free Tests
  *===========================================================================*/
 
 void test_pricing_create_basic(void) {
-    PricingContext *ctx = cxf_pricing_create(100, 3);
+    PricingState *ctx = cxf_pricing_create(100, 3);
     TEST_ASSERT_NOT_NULL(ctx);
     TEST_ASSERT_EQUAL_INT(3, ctx->max_levels);
     cxf_pricing_free(ctx);
 }
 
 void test_pricing_create_null_on_zero_vars(void) {
-    PricingContext *ctx = cxf_pricing_create(0, 3);
+    PricingState *ctx = cxf_pricing_create(0, 3);
     TEST_ASSERT_NULL(ctx);
 }
 
 void test_pricing_create_single_level(void) {
-    PricingContext *ctx = cxf_pricing_create(50, 1);
+    PricingState *ctx = cxf_pricing_create(50, 1);
     TEST_ASSERT_NOT_NULL(ctx);
     TEST_ASSERT_EQUAL_INT(1, ctx->max_levels);
     cxf_pricing_free(ctx);
@@ -90,7 +90,7 @@ void test_pricing_free_null_safe(void) {
  *===========================================================================*/
 
 void test_pricing_init_basic(void) {
-    PricingContext *ctx = cxf_pricing_create(100, 3);
+    PricingState *ctx = cxf_pricing_create(100, 3);
     TEST_ASSERT_NOT_NULL(ctx);
 
     int result = cxf_pricing_init(ctx, 100, 1);  /* Strategy 1 = partial */
@@ -108,7 +108,7 @@ void test_pricing_init_null_context(void) {
 }
 
 void test_pricing_init_steepest_edge(void) {
-    PricingContext *ctx = cxf_pricing_create(100, 3);
+    PricingState *ctx = cxf_pricing_create(100, 3);
     TEST_ASSERT_NOT_NULL(ctx);
 
     int result = cxf_pricing_init(ctx, 100, 2);  /* Strategy 2 = steepest edge */
@@ -119,7 +119,7 @@ void test_pricing_init_steepest_edge(void) {
 
 void test_pricing_init_small_problem(void) {
     /* Small problems (n < 1000) should use full pricing */
-    PricingContext *ctx = cxf_pricing_create(50, 3);
+    PricingState *ctx = cxf_pricing_create(50, 3);
     TEST_ASSERT_NOT_NULL(ctx);
 
     int result = cxf_pricing_init(ctx, 50, 0);  /* Strategy 0 = auto */
@@ -133,7 +133,7 @@ void test_pricing_init_small_problem(void) {
  *===========================================================================*/
 
 void test_pricing_candidates_finds_negative_rc(void) {
-    PricingContext *ctx = cxf_pricing_create(5, 1);
+    PricingState *ctx = cxf_pricing_create(5, 1);
     TEST_ASSERT_NOT_NULL(ctx);
     cxf_pricing_init(ctx, 5, 1);
 
@@ -151,7 +151,7 @@ void test_pricing_candidates_finds_negative_rc(void) {
 }
 
 void test_pricing_candidates_finds_positive_rc_at_upper(void) {
-    PricingContext *ctx = cxf_pricing_create(5, 1);
+    PricingState *ctx = cxf_pricing_create(5, 1);
     TEST_ASSERT_NOT_NULL(ctx);
     cxf_pricing_init(ctx, 5, 1);
 
@@ -169,7 +169,7 @@ void test_pricing_candidates_finds_positive_rc_at_upper(void) {
 }
 
 void test_pricing_candidates_skips_basic_vars(void) {
-    PricingContext *ctx = cxf_pricing_create(5, 1);
+    PricingState *ctx = cxf_pricing_create(5, 1);
     TEST_ASSERT_NOT_NULL(ctx);
     cxf_pricing_init(ctx, 5, 1);
 
@@ -186,7 +186,7 @@ void test_pricing_candidates_skips_basic_vars(void) {
 }
 
 void test_pricing_candidates_optimal(void) {
-    PricingContext *ctx = cxf_pricing_create(5, 1);
+    PricingState *ctx = cxf_pricing_create(5, 1);
     TEST_ASSERT_NOT_NULL(ctx);
     cxf_pricing_init(ctx, 5, 1);
 
@@ -207,7 +207,7 @@ void test_pricing_candidates_optimal(void) {
  *===========================================================================*/
 
 void test_pricing_steepest_basic(void) {
-    PricingContext *ctx = cxf_pricing_create(5, 1);
+    PricingState *ctx = cxf_pricing_create(5, 1);
     TEST_ASSERT_NOT_NULL(ctx);
     cxf_pricing_init(ctx, 5, 2);  /* Steepest edge strategy */
 
@@ -223,7 +223,7 @@ void test_pricing_steepest_basic(void) {
 }
 
 void test_pricing_steepest_considers_weight(void) {
-    PricingContext *ctx = cxf_pricing_create(5, 1);
+    PricingState *ctx = cxf_pricing_create(5, 1);
     TEST_ASSERT_NOT_NULL(ctx);
     cxf_pricing_init(ctx, 5, 2);
 
@@ -241,7 +241,7 @@ void test_pricing_steepest_considers_weight(void) {
 }
 
 void test_pricing_steepest_optimal_returns_minus_one(void) {
-    PricingContext *ctx = cxf_pricing_create(5, 1);
+    PricingState *ctx = cxf_pricing_create(5, 1);
     TEST_ASSERT_NOT_NULL(ctx);
     cxf_pricing_init(ctx, 5, 2);
 
@@ -257,7 +257,7 @@ void test_pricing_steepest_optimal_returns_minus_one(void) {
 }
 
 void test_pricing_steepest_handles_zero_weight(void) {
-    PricingContext *ctx = cxf_pricing_create(5, 1);
+    PricingState *ctx = cxf_pricing_create(5, 1);
     TEST_ASSERT_NOT_NULL(ctx);
     cxf_pricing_init(ctx, 5, 2);
 
@@ -277,7 +277,7 @@ void test_pricing_steepest_handles_zero_weight(void) {
  *===========================================================================*/
 
 void test_pricing_update_basic(void) {
-    PricingContext *ctx = cxf_pricing_create(5, 1);
+    PricingState *ctx = cxf_pricing_create(5, 1);
     TEST_ASSERT_NOT_NULL(ctx);
     cxf_pricing_init(ctx, 5, 1);
 
@@ -303,7 +303,7 @@ void test_pricing_update_null_context(void) {
  *===========================================================================*/
 
 void test_pricing_invalidate_candidates(void) {
-    PricingContext *ctx = cxf_pricing_create(5, 1);
+    PricingState *ctx = cxf_pricing_create(5, 1);
     TEST_ASSERT_NOT_NULL(ctx);
     cxf_pricing_init(ctx, 5, 1);
 
@@ -315,7 +315,7 @@ void test_pricing_invalidate_candidates(void) {
 }
 
 void test_pricing_invalidate_all(void) {
-    PricingContext *ctx = cxf_pricing_create(5, 3);
+    PricingState *ctx = cxf_pricing_create(5, 3);
     TEST_ASSERT_NOT_NULL(ctx);
     cxf_pricing_init(ctx, 5, 1);
 
@@ -338,7 +338,7 @@ void test_pricing_invalidate_null_safe(void) {
  *===========================================================================*/
 
 void test_pricing_step2_finds_after_partial_miss(void) {
-    PricingContext *ctx = cxf_pricing_create(10, 3);
+    PricingState *ctx = cxf_pricing_create(10, 3);
     TEST_ASSERT_NOT_NULL(ctx);
     cxf_pricing_init(ctx, 10, 1);  /* Partial pricing */
 
@@ -354,7 +354,7 @@ void test_pricing_step2_finds_after_partial_miss(void) {
 }
 
 void test_pricing_step2_confirms_optimal(void) {
-    PricingContext *ctx = cxf_pricing_create(5, 1);
+    PricingState *ctx = cxf_pricing_create(5, 1);
     TEST_ASSERT_NOT_NULL(ctx);
     cxf_pricing_init(ctx, 5, 1);
 
@@ -373,7 +373,7 @@ void test_pricing_step2_confirms_optimal(void) {
  *===========================================================================*/
 
 void test_pricing_statistics_tracked(void) {
-    PricingContext *ctx = cxf_pricing_create(5, 1);
+    PricingState *ctx = cxf_pricing_create(5, 1);
     TEST_ASSERT_NOT_NULL(ctx);
     cxf_pricing_init(ctx, 5, 1);
 
@@ -390,7 +390,7 @@ void test_pricing_statistics_tracked(void) {
 int main(void) {
     UNITY_BEGIN();
 
-    /* PricingContext creation/free */
+    /* PricingState creation/free */
     RUN_TEST(test_pricing_create_basic);
     RUN_TEST(test_pricing_create_null_on_zero_vars);
     RUN_TEST(test_pricing_create_single_level);

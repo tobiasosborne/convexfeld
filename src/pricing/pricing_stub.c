@@ -5,7 +5,7 @@
  * These stubs enable TDD by allowing tests to link and run.
  *
  * Implementations moved to dedicated files:
- * - PricingContext lifecycle (create/free/init): context.c (M6.1.2)
+ * - PricingState lifecycle (create/free/init): context.c (M6.1.2)
  * - cxf_pricing_candidates: candidates.c (M6.1.4)
  * - cxf_pricing_steepest: steepest.c (M6.1.5)
  * - cxf_pricing_update, cxf_pricing_invalidate: update.c (M6.1.6)

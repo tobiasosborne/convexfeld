@@ -2,9 +2,9 @@
  * @file cxf_solve_state.h
  * @brief SolveState structure - lightweight solve control and tracking.
  *
- * SolveState is a small stack-allocated structure that wraps SolverContext
+ * SolveState is a small stack-allocated structure that wraps SolverState
  * and tracks solve progress, manages limits (time, iterations), handles
- * interrupts, and coordinates callbacks. Unlike the heavyweight SolverContext
+ * interrupts, and coordinates callbacks. Unlike the heavyweight SolverState
  * allocation, SolveState performs simple field initialization.
  */
 
@@ -28,7 +28,7 @@
 /**
  * @brief Lightweight solve control structure.
  *
- * Stack-allocated control structure that wraps SolverContext and manages:
+ * Stack-allocated control structure that wraps SolverState and manages:
  * - Solve progress tracking (iterations, phase)
  * - Termination conditions (time limit, iteration limit)
  * - Interrupt handling
@@ -45,7 +45,7 @@ typedef struct SolveState {
     int phase;                /**< Current phase (0=initial, 1=Phase I, 2=Phase II) */
 
     /* References */
-    SolverContext *solverState; /**< Pointer to solver working state */
+    SolverState *solverState; /**< Pointer to solver working state */
     CxfEnv *env;                /**< Environment pointer */
 
     /* Timing and limits */
@@ -73,7 +73,7 @@ typedef struct SolveState {
  * Performs lightweight initialization of a SolveState structure:
  * - Sets validation magic number
  * - Initializes status, counters, and phase
- * - Stores references to SolverContext and environment
+ * - Stores references to SolverState and environment
  * - Captures start timestamp
  * - Reads configuration (time limit, iteration limit, callback state)
  * - Extracts solve method from solver state
@@ -87,7 +87,7 @@ typedef struct SolveState {
  * @param env Environment with parameters (may be NULL)
  * @return CXF_OK on success, CXF_ERROR_NULL_ARGUMENT if solve is NULL
  */
-int cxf_init_solve_state(SolveState *solve, SolverContext *state, CxfEnv *env);
+int cxf_init_solve_state(SolveState *solve, SolverState *state, CxfEnv *env);
 
 /**
  * @brief Cleanup (invalidate) a solve state structure.

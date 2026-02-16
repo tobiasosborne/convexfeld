@@ -1,6 +1,6 @@
 /**
  * @file sparse_stub.c
- * @brief Stub implementation for SparseMatrix operations.
+ * @brief Stub implementation for MatrixData operations.
  *
  * Provides minimal stubs for creating and freeing sparse matrices.
  * Full implementation comes in M4.1 (Matrix Operations).
@@ -12,15 +12,15 @@
 #include <string.h>
 
 /**
- * @brief Allocate and initialize an empty SparseMatrix.
+ * @brief Allocate and initialize an empty MatrixData.
  *
- * Creates a SparseMatrix with zero dimensions. Arrays are not allocated
+ * Creates a MatrixData with zero dimensions. Arrays are not allocated
  * until matrix is populated.
  *
- * @return Pointer to new SparseMatrix, or NULL on allocation failure.
+ * @return Pointer to new MatrixData, or NULL on allocation failure.
  */
-SparseMatrix *cxf_sparse_create(void) {
-    SparseMatrix *mat = (SparseMatrix *)calloc(1, sizeof(SparseMatrix));
+MatrixData *cxf_sparse_create(void) {
+    MatrixData *mat = (MatrixData *)calloc(1, sizeof(MatrixData));
     if (mat == NULL) {
         return NULL;
     }
@@ -30,14 +30,14 @@ SparseMatrix *cxf_sparse_create(void) {
 }
 
 /**
- * @brief Free a SparseMatrix and all its arrays.
+ * @brief Free a MatrixData and all its arrays.
  *
  * Frees all allocated arrays (CSC and CSR formats) and the structure itself.
  * Safe to call with NULL pointer.
  *
  * @param mat Matrix to free (may be NULL).
  */
-void cxf_sparse_free(SparseMatrix *mat) {
+void cxf_sparse_free(MatrixData *mat) {
     if (mat == NULL) {
         return;
     }
@@ -61,7 +61,7 @@ void cxf_sparse_free(SparseMatrix *mat) {
 }
 
 /**
- * @brief Initialize CSC arrays for a SparseMatrix.
+ * @brief Initialize CSC arrays for a MatrixData.
  *
  * Allocates col_ptr, row_idx, and values arrays based on dimensions.
  * Does not populate values - caller must fill arrays.
@@ -72,7 +72,7 @@ void cxf_sparse_free(SparseMatrix *mat) {
  * @param nnz Number of non-zero entries.
  * @return CXF_OK on success, error code on failure.
  */
-int cxf_sparse_init_csc(SparseMatrix *mat, int num_rows, int num_cols,
+int cxf_sparse_init_csc(MatrixData *mat, int num_rows, int num_cols,
                         int64_t nnz) {
     if (mat == NULL) {
         return CXF_ERROR_NULL_ARGUMENT;

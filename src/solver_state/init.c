@@ -19,7 +19,7 @@
  *
  * Performs lightweight initialization of a SolveState structure. Sets a
  * validation magic number, initializes status and counters to zero, stores
- * references to the provided SolverContext and environment, captures the
+ * references to the provided SolverState and environment, captures the
  * current timestamp for timing, reads configuration parameters (time limit,
  * iteration limit, callback state) from the environment, and extracts the
  * solve method from the solver state.
@@ -31,7 +31,7 @@
  * @param env Environment with parameters (may be NULL)
  * @return CXF_OK on success, CXF_ERROR_NULL_ARGUMENT if solve is NULL
  */
-int cxf_init_solve_state(SolveState *solve, SolverContext *state, CxfEnv *env) {
+int cxf_init_solve_state(SolveState *solve, SolverState *state, CxfEnv *env) {
     /* Validate solve pointer */
     if (solve == NULL) {
         return CXF_ERROR_NULL_ARGUMENT;

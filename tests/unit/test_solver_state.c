@@ -2,8 +2,8 @@
  * @file test_solver_state.c
  * @brief TDD tests for solver state module (M5.3.1)
  *
- * Tests for SolverContext lifecycle functions:
- * - SolverContext structure verification
+ * Tests for SolverState lifecycle functions:
+ * - SolverState structure verification
  * - cxf_simplex_init (M5.3.3)
  * - cxf_simplex_final (M5.3.3)
  * - Helper and solution extraction functions (M5.3.4, M5.3.5)
@@ -34,12 +34,12 @@ void tearDown(void) {
 }
 
 /*******************************************************************************
- * SolverContext Structure Tests
+ * SolverState Structure Tests
  ******************************************************************************/
 
 void test_solver_context_structure_exists(void) {
-    /* Verify SolverContext can be instantiated */
-    SolverContext ctx;
+    /* Verify SolverState can be instantiated */
+    SolverState ctx;
     ctx.num_vars = 0;
     ctx.num_constrs = 0;
     ctx.phase = 0;
@@ -49,13 +49,13 @@ void test_solver_context_structure_exists(void) {
 }
 
 void test_solver_context_has_model_reference(void) {
-    SolverContext ctx;
+    SolverState ctx;
     ctx.model_ref = model;
     TEST_ASSERT_EQUAL_PTR(model, ctx.model_ref);
 }
 
 void test_solver_context_has_working_arrays(void) {
-    SolverContext ctx;
+    SolverState ctx;
     double lb[5], ub[5], obj[5], x[5], pi[3], dj[5];
     ctx.work_lb = lb;
     ctx.work_ub = ub;
@@ -72,10 +72,10 @@ void test_solver_context_has_working_arrays(void) {
 }
 
 void test_solver_context_has_subcomponents(void) {
-    SolverContext ctx;
+    SolverState ctx;
     /* Use pointer assignments without instantiating opaque types */
     BasisState *basis_ptr = (BasisState *)0x12345678;
-    PricingContext *pricing_ptr = (PricingContext *)0x87654321;
+    PricingState *pricing_ptr = (PricingState *)0x87654321;
     ctx.basis = basis_ptr;
     ctx.pricing = pricing_ptr;
     TEST_ASSERT_EQUAL_PTR(basis_ptr, ctx.basis);
@@ -87,7 +87,7 @@ void test_solver_context_has_subcomponents(void) {
  ******************************************************************************/
 
 void test_simplex_init_null_model_fails(void) {
-    SolverContext *state = NULL;
+    SolverState *state = NULL;
     int status = cxf_simplex_init(NULL, &state);
     TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT, status);
     TEST_ASSERT_NULL(state);
@@ -99,7 +99,7 @@ void test_simplex_init_null_state_pointer_fails(void) {
 }
 
 void test_simplex_init_returns_non_null_state(void) {
-    SolverContext *state = NULL;
+    SolverState *state = NULL;
     int status = cxf_simplex_init(model, &state);
     TEST_ASSERT_EQUAL_INT(CXF_OK, status);
     TEST_ASSERT_NOT_NULL(state);
@@ -108,7 +108,7 @@ void test_simplex_init_returns_non_null_state(void) {
 
 void test_simplex_init_sets_model_reference(void) {
     cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x");
-    SolverContext *state = NULL;
+    SolverState *state = NULL;
     cxf_simplex_init(model, &state);
     TEST_ASSERT_NOT_NULL(state);
     TEST_ASSERT_EQUAL_PTR(model, state->model_ref);
@@ -120,7 +120,7 @@ void test_simplex_init_copies_dimensions(void) {
     cxf_addvar(model, 0, NULL, NULL, 2.0, 0.0, 10.0, 'C', "x2");
     cxf_addvar(model, 0, NULL, NULL, 3.0, 0.0, 10.0, 'C', "x3");
 
-    SolverContext *state = NULL;
+    SolverState *state = NULL;
     cxf_simplex_init(model, &state);
     TEST_ASSERT_NOT_NULL(state);
     TEST_ASSERT_EQUAL_INT(3, state->num_vars);
@@ -131,7 +131,7 @@ void test_simplex_init_copies_dimensions(void) {
 
 void test_simplex_init_sets_initial_phase_zero(void) {
     cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x");
-    SolverContext *state = NULL;
+    SolverState *state = NULL;
     cxf_simplex_init(model, &state);
     TEST_ASSERT_NOT_NULL(state);
     /* Phase should be 0 (setup) after init, before setup() call */
@@ -143,7 +143,7 @@ void test_simplex_init_allocates_working_arrays(void) {
     cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x1");
     cxf_addvar(model, 0, NULL, NULL, 2.0, 0.0, 10.0, 'C', "x2");
 
-    SolverContext *state = NULL;
+    SolverState *state = NULL;
     cxf_simplex_init(model, &state);
     TEST_ASSERT_NOT_NULL(state);
     TEST_ASSERT_NOT_NULL(state->work_lb);
@@ -157,7 +157,7 @@ void test_simplex_init_allocates_working_arrays(void) {
 
 void test_simplex_init_initializes_iteration_counters(void) {
     cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x");
-    SolverContext *state = NULL;
+    SolverState *state = NULL;
     cxf_simplex_init(model, &state);
     TEST_ASSERT_NOT_NULL(state);
     TEST_ASSERT_EQUAL_INT(0, state->iteration);
@@ -177,7 +177,7 @@ void test_simplex_final_null_safe(void) {
 
 void test_simplex_final_frees_state(void) {
     cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x");
-    SolverContext *state = NULL;
+    SolverState *state = NULL;
     cxf_simplex_init(model, &state);
     TEST_ASSERT_NOT_NULL(state);
     cxf_simplex_final(state);
@@ -201,12 +201,12 @@ void test_init_final_cycle(void) {
     /* Multiple init/final cycles should work */
     cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x");
 
-    SolverContext *state1 = NULL;
+    SolverState *state1 = NULL;
     cxf_simplex_init(model, &state1);
     TEST_ASSERT_NOT_NULL(state1);
     cxf_simplex_final(state1);
 
-    SolverContext *state2 = NULL;
+    SolverState *state2 = NULL;
     cxf_simplex_init(model, &state2);
     TEST_ASSERT_NOT_NULL(state2);
     cxf_simplex_final(state2);
@@ -214,7 +214,7 @@ void test_init_final_cycle(void) {
 
 void test_init_empty_model(void) {
     /* Init with model that has no variables */
-    SolverContext *state = NULL;
+    SolverState *state = NULL;
     int status = cxf_simplex_init(model, &state);
     TEST_ASSERT_EQUAL_INT(CXF_OK, status);
     TEST_ASSERT_NOT_NULL(state);
@@ -230,7 +230,7 @@ void test_init_empty_model(void) {
 int main(void) {
     UNITY_BEGIN();
 
-    /* SolverContext structure tests */
+    /* SolverState structure tests */
     RUN_TEST(test_solver_context_structure_exists);
     RUN_TEST(test_solver_context_has_model_reference);
     RUN_TEST(test_solver_context_has_working_arrays);

@@ -2,7 +2,7 @@
  * @file test_matrix.c
  * @brief TDD tests for matrix operations (M4.1.1)
  *
- * Tests for SparseMatrix operations, SpMV, dot product, and vector norms.
+ * Tests for MatrixData operations, SpMV, dot product, and vector norms.
  * ~200 LOC of comprehensive tests.
  */
 
@@ -16,9 +16,9 @@
  ******************************************************************************/
 
 /* Existing stub functions */
-SparseMatrix *cxf_sparse_create(void);
-void cxf_sparse_free(SparseMatrix *mat);
-int cxf_sparse_init_csc(SparseMatrix *mat, int num_rows, int num_cols,
+MatrixData *cxf_sparse_create(void);
+void cxf_sparse_free(MatrixData *mat);
+int cxf_sparse_init_csc(MatrixData *mat, int num_rows, int num_cols,
                         int64_t nnz);
 
 /* Functions to be implemented in M4.1.3 */
@@ -34,9 +34,9 @@ double cxf_dot_product_sparse(const int *x_indices, const double *x_values,
 double cxf_vector_norm(const double *x, int n, int norm_type);
 
 /* Functions to be implemented in M4.1.5 */
-int cxf_prepare_row_data(SparseMatrix *mat);
-int cxf_build_row_major(SparseMatrix *mat);
-int cxf_finalize_row_data(SparseMatrix *mat);
+int cxf_prepare_row_data(MatrixData *mat);
+int cxf_build_row_major(MatrixData *mat);
+int cxf_finalize_row_data(MatrixData *mat);
 
 /* Functions to be implemented in M4.1.6 */
 void cxf_sort_by_values(int *indices, int n);
@@ -50,11 +50,11 @@ void setUp(void) {}
 void tearDown(void) {}
 
 /*******************************************************************************
- * SparseMatrix creation/free tests (already implemented in stub)
+ * MatrixData creation/free tests (already implemented in stub)
  ******************************************************************************/
 
 void test_sparse_create_returns_valid_matrix(void) {
-    SparseMatrix *mat = cxf_sparse_create();
+    MatrixData *mat = cxf_sparse_create();
     TEST_ASSERT_NOT_NULL(mat);
     TEST_ASSERT_EQUAL_INT(0, mat->num_rows);
     TEST_ASSERT_EQUAL_INT(0, mat->num_cols);
@@ -68,7 +68,7 @@ void test_sparse_free_null_safe(void) {
 }
 
 void test_sparse_init_csc_basic(void) {
-    SparseMatrix *mat = cxf_sparse_create();
+    MatrixData *mat = cxf_sparse_create();
     TEST_ASSERT_NOT_NULL(mat);
 
     int status = cxf_sparse_init_csc(mat, 3, 4, 5);
@@ -84,7 +84,7 @@ void test_sparse_init_csc_basic(void) {
 }
 
 void test_sparse_init_csc_empty_matrix(void) {
-    SparseMatrix *mat = cxf_sparse_create();
+    MatrixData *mat = cxf_sparse_create();
     int status = cxf_sparse_init_csc(mat, 0, 0, 0);
     TEST_ASSERT_EQUAL_INT(CXF_OK, status);
     TEST_ASSERT_EQUAL_INT(0, mat->num_rows);
@@ -266,7 +266,7 @@ void test_vector_norm_single_element(void) {
 
 void test_row_major_full_pipeline(void) {
     /* Create 2x3 matrix: A = [[1, 2, 0], [3, 0, 4]] in CSC */
-    SparseMatrix *mat = cxf_sparse_create();
+    MatrixData *mat = cxf_sparse_create();
     cxf_sparse_init_csc(mat, 2, 3, 4);
 
     /* CSC: col 0 has [1,3], col 1 has [2], col 2 has [4] */
@@ -307,7 +307,7 @@ void test_prepare_row_data_null_returns_error(void) {
 }
 
 void test_build_row_major_without_prepare_returns_error(void) {
-    SparseMatrix *mat = cxf_sparse_create();
+    MatrixData *mat = cxf_sparse_create();
     cxf_sparse_init_csc(mat, 2, 2, 1);
     mat->col_ptr[0] = 0; mat->col_ptr[1] = 1; mat->col_ptr[2] = 1;
     mat->row_idx[0] = 0; mat->values[0] = 1.0;
@@ -319,7 +319,7 @@ void test_build_row_major_without_prepare_returns_error(void) {
 }
 
 void test_row_major_empty_matrix(void) {
-    SparseMatrix *mat = cxf_sparse_create();
+    MatrixData *mat = cxf_sparse_create();
     cxf_sparse_init_csc(mat, 3, 3, 0);
     mat->col_ptr[0] = 0; mat->col_ptr[1] = 0; mat->col_ptr[2] = 0; mat->col_ptr[3] = 0;
 
@@ -401,7 +401,7 @@ void test_sort_indices_values_sync(void) {
 int main(void) {
     UNITY_BEGIN();
 
-    /* SparseMatrix tests (stub already implemented) */
+    /* MatrixData tests (stub already implemented) */
     RUN_TEST(test_sparse_create_returns_valid_matrix);
     RUN_TEST(test_sparse_free_null_safe);
     RUN_TEST(test_sparse_init_csc_basic);

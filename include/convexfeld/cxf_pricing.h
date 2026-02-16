@@ -1,6 +1,6 @@
 /**
  * @file cxf_pricing.h
- * @brief PricingContext structure - partial pricing state.
+ * @brief PricingState structure - partial pricing state.
  *
  * Implements multi-level partial pricing for efficient
  * entering variable selection in the simplex method.
@@ -17,7 +17,7 @@
  * Maintains a hierarchy of candidate subsets for efficient pricing.
  * Starts with small candidate sets and expands only when necessary.
  */
-struct PricingContext {
+struct PricingState {
     int current_level;        /**< Active pricing level (0=full) */
     int max_levels;           /**< Number of levels (typically 3-5) */
 

@@ -122,11 +122,11 @@ int cxf_ftran(BasisState *basis, const double *column, double *result) {
     }
 
     /* Use stack allocation for small eta counts, heap for large */
-    EtaFactors *stack_etas[MAX_STACK_ETAS];
-    EtaFactors **etas = stack_etas;
+    EtaVector *stack_etas[MAX_STACK_ETAS];
+    EtaVector **etas = stack_etas;
 
     if (eta_count > MAX_STACK_ETAS) {
-        etas = (EtaFactors **)malloc((size_t)eta_count * sizeof(EtaFactors *));
+        etas = (EtaVector **)malloc((size_t)eta_count * sizeof(EtaVector *));
         if (etas == NULL) {
             return CXF_ERROR_OUT_OF_MEMORY;
         }
@@ -134,7 +134,7 @@ int cxf_ftran(BasisState *basis, const double *column, double *result) {
 
     /* Traverse linked list to collect eta pointers
      * Head is newest, tail (last in list) is oldest */
-    EtaFactors *eta = basis->eta_head;
+    EtaVector *eta = basis->eta_head;
     int count = 0;
     while (eta != NULL && count < eta_count) {
         etas[count++] = eta;

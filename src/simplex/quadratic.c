@@ -41,7 +41,7 @@
  * @param varIndex Variable index to adjust (-1 for all nonbasic variables)
  * @return CXF_OK on success, CXF_ERROR_NULL_ARGUMENT if state is NULL
  */
-int cxf_quadratic_adjust(SolverContext *state, int varIndex) {
+int cxf_quadratic_adjust(SolverState *state, int varIndex) {
     /* Validate inputs */
     if (state == NULL) {
         return CXF_ERROR_NULL_ARGUMENT;
@@ -60,7 +60,7 @@ int cxf_quadratic_adjust(SolverContext *state, int varIndex) {
     /*
      * TODO: Implement full quadratic adjustment when Q matrix is available.
      *
-     * When CxfModel includes Q matrix (SparseMatrix *Q), implement:
+     * When CxfModel includes Q matrix (MatrixData *Q), implement:
      *
      * 1. Check if problem has quadratic terms:
      *    if (state->model_ref->Q == NULL) {
@@ -69,7 +69,7 @@ int cxf_quadratic_adjust(SolverContext *state, int varIndex) {
      *
      * 2. Single variable case (varIndex >= 0):
      *    double q_j = 0.0;
-     *    SparseMatrix *Q = state->model_ref->Q;
+     *    MatrixData *Q = state->model_ref->Q;
      *    int col_start = Q->col_ptrs[varIndex];
      *    int col_end = Q->col_ptrs[varIndex + 1];
      *    for (int k = col_start; k < col_end; k++) {

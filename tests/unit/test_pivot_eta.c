@@ -16,7 +16,7 @@ BasisState *cxf_basis_create(int m, int n);
 void cxf_basis_free(BasisState *basis);
 int cxf_pivot_with_eta(BasisState *basis, int pivotRow, const double *pivotCol,
                        int enteringVar, int leavingVar);
-void cxf_eta_free(EtaFactors *eta);
+void cxf_eta_free(EtaVector *eta);
 
 /*******************************************************************************
  * Test fixtures
@@ -231,7 +231,7 @@ void test_pivot_eta_computes_eta_values(void) {
     /* Values are stored raw (unscaled, positive):
      * eta[1] = 0.6 (raw column value)
      * eta[2] = 0.4 (raw column value) */
-    EtaFactors *eta = test_basis->eta_head;
+    EtaVector *eta = test_basis->eta_head;
     TEST_ASSERT_EQUAL_INT(2, eta->nnz);
     TEST_ASSERT_EQUAL_INT(1, eta->indices[0]);
     TEST_ASSERT_EQUAL_INT(2, eta->indices[1]);

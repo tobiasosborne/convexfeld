@@ -4,51 +4,32 @@
 
 ---
 
-## STATUS: P1 Function Renames COMPLETE — Next: P1 Struct Renames
+## STATUS: P1 Struct Renames COMPLETE — Next: P2 Decompose solve_lp
 
 ### Session Summary
 
-1. **P1 function renames (convexfeld-b7ow) — CLOSED**
-   - Applied all 13 implemented v2 function renames (3 of 16 not yet implemented)
-   - Renames applied across src/, include/, tests/unit/ via whole-word sed
-   - All 36/36 tests pass, clean build
+1. **P1 struct renames (convexfeld-dv0k) — CLOSED**
+   - Renamed 4 core structures across entire codebase:
+     - `SolverContext` → `SolverState` (199 occurrences, 36 files)
+     - `PricingContext` → `PricingState` (56 occurrences, 15 files)
+     - `EtaFactors` → `EtaVector` (57 occurrences, 12 files)
+     - `SparseMatrix` → `MatrixData` (70 occurrences, 20 files)
+   - Zero old names remain (verified via grep)
+   - Clean build, 36/36 tests pass
 
-2. **P0 variable status encoding (convexfeld-clow) — CLOSED**
-   - Replaced `CxfVarStatus` enum (0-4) with spec-compliant row-index encoding
-
-3. **P0 tolerance fix (convexfeld-nso9) — CLOSED** (previous session)
-
-### Renames Applied
-
-| Old Name (v1) | New Name (v2) |
-|---|---|
-| `cxf_simplex_iterate` | `cxf_log_iteration_progress` |
-| `cxf_simplex_cleanup` | `cxf_simplex_postsolve` |
-| `cxf_basis_refactor` | `cxf_fix_variables_at_bounds` |
-| `cxf_basis_snapshot_*` | `cxf_progress_snapshot_*` |
-| `cxf_sort_indices` | `cxf_sort_by_values` |
-| `cxf_sort_indices_values` | `cxf_sort_by_values_paired` |
-| `cxf_check_nan_or_inf` | `cxf_is_finite` |
-| `cxf_cleanup_helper` | `cxf_propagate_bounds` |
-| `cxf_free_solver_state` | `cxf_free_attribute_table` |
-| `cxf_errorlog` | `cxf_set_error_string` |
-| `cxf_pre_optimize_callback` | `cxf_pre_optimize_hook` |
-| `cxf_post_optimize_callback` | `cxf_post_optimize_hook` |
-| `cxf_acquire_solve_lock` | `cxf_save_locale_state` |
-| `cxf_set_thread_count` | `cxf_validate_thread_count` |
+2. **Previous sessions (all CLOSED):**
+   - P1 function renames (convexfeld-b7ow)
+   - P0 variable status encoding (convexfeld-clow)
+   - P0 tolerance fix (convexfeld-nso9)
 
 ### Note: Local #defines still exist in pricing/pivot files
 VAR_AT_LOWER=-1, AT_LOWER=-1 etc. in `src/pricing/phase.c`, `candidates.c`, `steepest.c`, `src/simplex/pivot_special.c`, `tests/unit/test_pricing.c` — correct values, consolidation is cleanup only.
 
 ---
 
-## NEXT STEP: P1 Struct Renames (convexfeld-dv0k)
+## NEXT STEP: P2 Decompose solve_lp (convexfeld-23p6)
 
-Run `bd show convexfeld-dv0k` for details. Rename 4 core structures:
-- SolverContext → SolverState
-- PricingContext → PricingState
-- EtaFactors → EtaVector
-- SparseMatrix → MatrixData
+Run `bd show convexfeld-23p6` for details. This was blocked by the struct renames and is now unblocked. It blocks 5 downstream issues.
 
 ### Critical Path
 
@@ -56,8 +37,8 @@ Run `bd show convexfeld-dv0k` for details. Rename 4 core structures:
 P0 tolerances (convexfeld-nso9) ← DONE ✓
   → P0 var status (convexfeld-clow) ← DONE ✓
     → P1 function renames (convexfeld-b7ow) ← DONE ✓
-      → P1 4 struct renames (convexfeld-dv0k) ← NEXT
-        → P2 decompose solve_lp (convexfeld-23p6) — unblocks 5
+      → P1 4 struct renames (convexfeld-dv0k) ← DONE ✓
+        → P2 decompose solve_lp (convexfeld-23p6) ← NEXT (unblocks 5)
 ```
 
 ---

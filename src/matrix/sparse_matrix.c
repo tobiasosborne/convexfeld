@@ -1,6 +1,6 @@
 /**
  * @file sparse_matrix.c
- * @brief Full SparseMatrix implementation (M4.1.2)
+ * @brief Full MatrixData implementation (M4.1.2)
  *
  * Implements CSC validation, CSR construction from CSC, and related utilities.
  * Creation/destruction functions are in sparse_stub.c.
@@ -25,7 +25,7 @@
  * @param mat Matrix to validate.
  * @return CXF_OK if valid, error code otherwise.
  */
-int cxf_sparse_validate(const SparseMatrix *mat) {
+int cxf_sparse_validate(const MatrixData *mat) {
     if (mat == NULL) {
         return CXF_ERROR_NULL_ARGUMENT;
     }
@@ -86,7 +86,7 @@ int cxf_sparse_validate(const SparseMatrix *mat) {
  * @param mat Matrix with valid CSC format (will have CSR added).
  * @return CXF_OK on success, error code on failure.
  */
-int cxf_sparse_build_csr(SparseMatrix *mat) {
+int cxf_sparse_build_csr(MatrixData *mat) {
     if (mat == NULL) {
         return CXF_ERROR_NULL_ARGUMENT;
     }
@@ -178,7 +178,7 @@ int cxf_sparse_build_csr(SparseMatrix *mat) {
  *
  * @param mat Matrix to modify.
  */
-void cxf_sparse_free_csr(SparseMatrix *mat) {
+void cxf_sparse_free_csr(MatrixData *mat) {
     if (mat == NULL) {
         return;
     }

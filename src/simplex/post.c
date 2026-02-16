@@ -24,7 +24,7 @@ extern int cxf_fix_variables_at_bounds(BasisState *basis);
  * @return 0 if continue normally, 1 if refactor triggered,
  *         CXF_ERROR_NULL_ARGUMENT if NULL pointers
  */
-int cxf_simplex_post_iterate(SolverContext *state, CxfEnv *env) {
+int cxf_simplex_post_iterate(SolverState *state, CxfEnv *env) {
     if (state == NULL || env == NULL) {
         return CXF_ERROR_NULL_ARGUMENT;
     }
@@ -58,7 +58,7 @@ int cxf_simplex_post_iterate(SolverContext *state, CxfEnv *env) {
  *         CXF_INFEASIBLE if Phase I failed to find feasible solution,
  *         CXF_ERROR_NULL_ARGUMENT if NULL pointers
  */
-int cxf_simplex_phase_end(SolverContext *state, CxfEnv *env) {
+int cxf_simplex_phase_end(SolverState *state, CxfEnv *env) {
     if (state == NULL || env == NULL) {
         return CXF_ERROR_NULL_ARGUMENT;
     }

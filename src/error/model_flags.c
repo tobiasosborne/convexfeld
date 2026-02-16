@@ -48,7 +48,7 @@ int cxf_check_model_flags1(CxfModel *model) {
      *     if (model->matrix->genConstrCount > 0) return 1;
      * }
      *
-     * For now, these fields are not yet implemented in SparseMatrix.
+     * For now, these fields are not yet implemented in MatrixData.
      */
 
     return 0;  /* Pure continuous model */
@@ -92,7 +92,7 @@ int cxf_check_model_flags2(CxfModel *model, int flag) {
      *     if (model->matrix->nlConstrCount > 0) return 1;
      * }
      *
-     * For now, these fields are not yet implemented in SparseMatrix.
+     * For now, these fields are not yet implemented in MatrixData.
      * The current implementation returns 0 (pure linear) for all models.
      */
 

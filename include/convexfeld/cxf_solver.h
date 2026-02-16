@@ -1,6 +1,6 @@
 /**
  * @file cxf_solver.h
- * @brief SolverContext structure - runtime solver state.
+ * @brief SolverState structure - runtime solver state.
  *
  * The solver context holds all working state during LP optimization.
  * It isolates mutable solver data from the immutable model definition.
@@ -18,7 +18,7 @@
  * Contains problem data copies, algorithmic state, and working arrays.
  * Created at solve start, destroyed after completion.
  */
-struct SolverContext {
+struct SolverState {
     CxfModel *model_ref;      /**< Back-pointer to model */
 
     /* Problem dimensions */
@@ -44,7 +44,7 @@ struct SolverContext {
 
     /* Subcomponents */
     BasisState *basis;        /**< Current basis state */
-    PricingContext *pricing;  /**< Pricing context */
+    PricingState *pricing;  /**< Pricing context */
 
     /* Work tracking for refactorization decisions */
     double *work_counter;     /**< Accumulated work counter (NULL to disable) */
@@ -71,7 +71,7 @@ struct SolverContext {
 };
 
 /*******************************************************************************
- * SolverContext Lifecycle API
+ * SolverState Lifecycle API
  ******************************************************************************/
 
 /**
@@ -80,13 +80,13 @@ struct SolverContext {
  * @param stateP Output pointer for new context
  * @return CXF_OK on success, error code otherwise
  */
-int cxf_simplex_init(CxfModel *model, SolverContext **stateP);
+int cxf_simplex_init(CxfModel *model, SolverState **stateP);
 
 /**
  * @brief Free solver context and all resources.
  * @param state Context to free (may be NULL)
  */
-void cxf_simplex_final(SolverContext *state);
+void cxf_simplex_final(SolverState *state);
 
 /**
  * @brief Set up solver context for iteration.
@@ -98,7 +98,7 @@ void cxf_simplex_final(SolverContext *state);
  * @param env Environment containing solver parameters
  * @return CXF_OK on success, error code otherwise
  */
-int cxf_simplex_setup(SolverContext *state, CxfEnv *env);
+int cxf_simplex_setup(SolverState *state, CxfEnv *env);
 
 /**
  * @brief Preprocess the LP problem.
@@ -111,28 +111,28 @@ int cxf_simplex_setup(SolverContext *state, CxfEnv *env);
  * @param flags Control flags (bit 0: skip preprocessing if set)
  * @return CXF_OK on success, 3=infeasible detected
  */
-int cxf_simplex_preprocess(SolverContext *state, CxfEnv *env, int flags);
+int cxf_simplex_preprocess(SolverState *state, CxfEnv *env, int flags);
 
 /**
  * @brief Get solver status (stub - to be implemented).
  * @param state Solver context
  * @return Status code or error
  */
-int cxf_simplex_get_status(SolverContext *state);
+int cxf_simplex_get_status(SolverState *state);
 
 /**
  * @brief Get iteration count (stub - to be implemented).
  * @param state Solver context
  * @return Iteration count or error
  */
-int cxf_simplex_get_iteration(SolverContext *state);
+int cxf_simplex_get_iteration(SolverState *state);
 
 /**
  * @brief Get solver phase (stub - to be implemented).
  * @param state Solver context
  * @return Phase (0, 1, or 2) or error
  */
-int cxf_simplex_get_phase(SolverContext *state);
+int cxf_simplex_get_phase(SolverState *state);
 
 /**
  * @brief Perform one simplex iteration (stub - to be implemented in M7.1.2).
@@ -140,7 +140,7 @@ int cxf_simplex_get_phase(SolverContext *state);
  * @param env Environment
  * @return CXF_OK on success, error code otherwise
  */
-int cxf_log_iteration_progress(SolverContext *state, CxfEnv *env);
+int cxf_log_iteration_progress(SolverState *state, CxfEnv *env);
 
 /**
  * @brief Handle phase end transition (stub - to be implemented in M7.1.2).
@@ -148,7 +148,7 @@ int cxf_log_iteration_progress(SolverContext *state, CxfEnv *env);
  * @param env Environment
  * @return CXF_OK on success, error code otherwise
  */
-int cxf_simplex_phase_end(SolverContext *state, CxfEnv *env);
+int cxf_simplex_phase_end(SolverState *state, CxfEnv *env);
 
 /**
  * @brief Post-iteration processing (stub - to be implemented in M7.1.2).
@@ -156,14 +156,14 @@ int cxf_simplex_phase_end(SolverContext *state, CxfEnv *env);
  * @param env Environment
  * @return CXF_OK on success, error code otherwise
  */
-int cxf_simplex_post_iterate(SolverContext *state, CxfEnv *env);
+int cxf_simplex_post_iterate(SolverState *state, CxfEnv *env);
 
 /**
  * @brief Get current objective value (stub - to be implemented).
  * @param state Solver context
  * @return Objective value or NaN on error
  */
-double cxf_simplex_get_objval(SolverContext *state);
+double cxf_simplex_get_objval(SolverState *state);
 
 /**
  * @brief Set iteration limit (stub - to be implemented).
@@ -171,14 +171,14 @@ double cxf_simplex_get_objval(SolverContext *state);
  * @param limit Iteration limit (must be >= 0)
  * @return CXF_OK on success, error code otherwise
  */
-int cxf_simplex_set_iteration_limit(SolverContext *state, int limit);
+int cxf_simplex_set_iteration_limit(SolverState *state, int limit);
 
 /**
  * @brief Get iteration limit (stub - to be implemented).
  * @param state Solver context
  * @return Iteration limit or error code
  */
-int cxf_simplex_get_iteration_limit(SolverContext *state);
+int cxf_simplex_get_iteration_limit(SolverState *state);
 
 /**
  * @brief Apply perturbation for degeneracy handling (stub - to be implemented in M7.1.3).
@@ -186,7 +186,7 @@ int cxf_simplex_get_iteration_limit(SolverContext *state);
  * @param env Environment
  * @return CXF_OK on success, error code otherwise
  */
-int cxf_simplex_perturbation(SolverContext *state, CxfEnv *env);
+int cxf_simplex_perturbation(SolverState *state, CxfEnv *env);
 
 /**
  * @brief Remove perturbation (stub - to be implemented in M7.1.3).
@@ -194,7 +194,7 @@ int cxf_simplex_perturbation(SolverContext *state, CxfEnv *env);
  * @param env Environment
  * @return CXF_OK on success, error code otherwise
  */
-int cxf_simplex_unperturb(SolverContext *state, CxfEnv *env);
+int cxf_simplex_unperturb(SolverState *state, CxfEnv *env);
 
 /**
  * @brief Post-solve cleanup to restore original problem space.
@@ -207,7 +207,7 @@ int cxf_simplex_unperturb(SolverContext *state, CxfEnv *env);
  * @param env Environment
  * @return CXF_OK on success, error code otherwise
  */
-int cxf_simplex_postsolve(SolverContext *state, CxfEnv *env);
+int cxf_simplex_postsolve(SolverState *state, CxfEnv *env);
 
 /**
  * @brief Adjust reduced costs for quadratic programming.
@@ -222,7 +222,7 @@ int cxf_simplex_postsolve(SolverContext *state, CxfEnv *env);
  * @param varIndex Variable index to adjust (-1 for all nonbasic variables)
  * @return CXF_OK on success, error code otherwise
  */
-int cxf_quadratic_adjust(SolverContext *state, int varIndex);
+int cxf_quadratic_adjust(SolverState *state, int varIndex);
 
 /**
  * @brief Extract solution from solver state to model.
@@ -235,6 +235,6 @@ int cxf_quadratic_adjust(SolverContext *state, int varIndex);
  * @param model Model to receive solution (non-NULL)
  * @return CXF_OK on success, error code otherwise
  */
-int cxf_extract_solution(SolverContext *state, CxfModel *model);
+int cxf_extract_solution(SolverState *state, CxfModel *model);
 
 #endif /* CXF_SOLVER_H */

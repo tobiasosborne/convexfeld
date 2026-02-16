@@ -34,7 +34,7 @@
  * @param env Environment (unused in current stub implementation)
  * @return CXF_OK on success, error code otherwise
  */
-int cxf_simplex_postsolve(SolverContext *state, CxfEnv *env) {
+int cxf_simplex_postsolve(SolverState *state, CxfEnv *env) {
     /* Validate inputs */
     if (state == NULL) {
         return CXF_ERROR_NULL_ARGUMENT;
@@ -66,7 +66,7 @@ int cxf_simplex_postsolve(SolverContext *state, CxfEnv *env) {
      *    - Restore original reduced cost magnitudes
      *
      * Implementation notes:
-     * - Scaling factors will be stored in SolverContext during preprocessing
+     * - Scaling factors will be stored in SolverState during preprocessing
      * - Fixed variable indices and values will be tracked in a separate structure
      * - All operations must be numerically stable and preserve solution quality
      * - Should validate that solution arrays (work_x, work_pi, work_dj) exist

@@ -68,7 +68,7 @@ static double pseudo_random(int index) {
  * @param env Environment with tolerances
  * @return 0 on success, CXF_ERROR_OUT_OF_MEMORY on allocation failure
  */
-int cxf_simplex_perturbation(SolverContext *state, CxfEnv *env) {
+int cxf_simplex_perturbation(SolverState *state, CxfEnv *env) {
     /* Validate inputs */
     if (state == NULL || env == NULL) {
         return CXF_ERROR_NULL_ARGUMENT;
@@ -168,7 +168,7 @@ int cxf_simplex_perturbation(SolverContext *state, CxfEnv *env) {
  * @param env Environment (unused but required by signature)
  * @return 0 on success, 1 if no perturbation was applied
  */
-int cxf_simplex_unperturb(SolverContext *state, CxfEnv *env) {
+int cxf_simplex_unperturb(SolverState *state, CxfEnv *env) {
     /* Validate inputs */
     if (state == NULL || env == NULL) {
         return CXF_ERROR_NULL_ARGUMENT;

@@ -33,7 +33,7 @@ extern void *cxf_malloc(size_t size);
  * @retval CXF_ERROR_NULL_ARGUMENT  state or model is NULL
  * @retval CXF_ERROR_OUT_OF_MEMORY  Allocation failed
  */
-int cxf_extract_solution(SolverContext *state, CxfModel *model) {
+int cxf_extract_solution(SolverState *state, CxfModel *model) {
     /* Validate inputs */
     if (state == NULL || model == NULL) {
         return CXF_ERROR_NULL_ARGUMENT;

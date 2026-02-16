@@ -47,7 +47,7 @@
  * @param tolerance Optimality tolerance (typically 1e-6)
  * @return Index of entering variable, or -1 if optimal
  */
-int cxf_pricing_steepest(PricingContext *ctx, const double *reduced_costs,
+int cxf_pricing_steepest(PricingState *ctx, const double *reduced_costs,
                          const double *weights, const int *var_status,
                          int num_vars, double tolerance) {
     /* Validate inputs */

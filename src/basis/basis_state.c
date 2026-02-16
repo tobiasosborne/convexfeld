@@ -100,9 +100,9 @@ void cxf_basis_free(BasisState *basis) {
     }
 
     /* Free eta linked list */
-    EtaFactors *eta = basis->eta_head;
+    EtaVector *eta = basis->eta_head;
     while (eta != NULL) {
-        EtaFactors *next = eta->next;
+        EtaVector *next = eta->next;
         free(eta->indices);
         free(eta->values);
         free(eta);

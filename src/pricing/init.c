@@ -86,7 +86,7 @@ static int compute_level_size(int num_vars, int level, int strategy) {
  * @param strategy Pricing strategy (0=auto, 1=partial, 2=SE, 3=Devex)
  * @return CXF_OK on success, error code on failure
  */
-int cxf_pricing_init(PricingContext *ctx, int num_vars, int strategy) {
+int cxf_pricing_init(PricingState *ctx, int num_vars, int strategy) {
     if (ctx == NULL) {
         return CXF_ERROR_NULL_ARGUMENT;
     }

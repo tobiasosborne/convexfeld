@@ -12,7 +12,7 @@
 #include <math.h>
 
 /* External declarations */
-extern int cxf_simplex_step(SolverContext *state, int entering, int leavingRow,
+extern int cxf_simplex_step(SolverState *state, int entering, int leavingRow,
                             const double *pivotCol, double stepSize);
 extern int cxf_pivot_with_eta(BasisState *basis, int pivotRow,
                               const double *pivotCol, int enteringVar,
@@ -35,7 +35,7 @@ extern int cxf_pivot_with_eta(BasisState *basis, int pivotRow,
  * @param dualStepSize Dual step length for dual solution update
  * @return 0 on normal pivot, 1 on bound flip, CXF_ERROR_NULL_ARGUMENT on NULL input
  */
-int cxf_simplex_step2(SolverContext *state, int entering, int leavingRow,
+int cxf_simplex_step2(SolverState *state, int entering, int leavingRow,
                       const double *pivotCol, const double *pivotRow,
                       double stepSize, double dualStepSize) {
     int i, result;
@@ -125,7 +125,7 @@ int cxf_simplex_step2(SolverContext *state, int entering, int leavingRow,
  * @param dualStepSize Dual step length
  * @return CXF_OK on success, CXF_ERROR_NULL_ARGUMENT on NULL input, -1 on pivot too small
  */
-int cxf_simplex_step3(SolverContext *state, int leavingRow, int entering,
+int cxf_simplex_step3(SolverState *state, int leavingRow, int entering,
                       const double *pivotCol, const double *pivotRow,
                       double dualStepSize) {
     int i, leaving, result;

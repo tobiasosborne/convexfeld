@@ -58,14 +58,14 @@
  */
 int cxf_pivot_primal(void *env, void *state, int var, double tolerance) {
     CxfEnv *e;
-    SolverContext *ctx;
+    SolverState *ctx;
     double lb, ub, boundRange;
     double c, pivotValue;
     int n;
 
     /* Cast void pointers to proper types */
     e = (CxfEnv *)env;
-    ctx = (SolverContext *)state;
+    ctx = (SolverState *)state;
 
     /* Validate arguments */
     if (ctx == NULL) {
@@ -183,7 +183,7 @@ int cxf_pivot_primal(void *env, void *state, int var, double tolerance) {
      * This maintains constraint satisfaction after fixing the variable.
      */
     if (ctx->model_ref != NULL && ctx->model_ref->matrix != NULL) {
-        SparseMatrix *matrix = ctx->model_ref->matrix;
+        MatrixData *matrix = ctx->model_ref->matrix;
 
         /* Check if matrix has data structures allocated */
         if (matrix->col_ptr != NULL && matrix->row_idx != NULL &&

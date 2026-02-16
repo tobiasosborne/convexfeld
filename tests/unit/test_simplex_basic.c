@@ -17,12 +17,12 @@
  ******************************************************************************/
 
 /* Setup - to be implemented in M7.1.6 */
-int cxf_simplex_setup(SolverContext *state, CxfEnv *env);
+int cxf_simplex_setup(SolverState *state, CxfEnv *env);
 
 /* Status queries - to be implemented */
-int cxf_simplex_get_status(SolverContext *state);
-int cxf_simplex_get_iteration(SolverContext *state);
-int cxf_simplex_get_phase(SolverContext *state);
+int cxf_simplex_get_status(SolverState *state);
+int cxf_simplex_get_iteration(SolverState *state);
+int cxf_simplex_get_phase(SolverState *state);
 
 /*******************************************************************************
  * Test fixtures
@@ -46,14 +46,14 @@ void tearDown(void) {
 }
 
 /*******************************************************************************
- * SolverContext creation tests
+ * SolverState creation tests
  ******************************************************************************/
 
 void test_simplex_init_creates_state(void) {
     /* Add a simple variable to have a non-trivial model */
     cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x");
 
-    SolverContext *state = NULL;
+    SolverState *state = NULL;
     int status = cxf_simplex_init(model, &state);
 
     TEST_ASSERT_EQUAL_INT(CXF_OK, status);
@@ -65,7 +65,7 @@ void test_simplex_init_creates_state(void) {
 }
 
 void test_simplex_init_null_model_fails(void) {
-    SolverContext *state = NULL;
+    SolverState *state = NULL;
     int status = cxf_simplex_init(NULL, &state);
 
     TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT, status);
@@ -81,7 +81,7 @@ void test_simplex_init_null_stateout_fails(void) {
 
 void test_simplex_init_empty_model(void) {
     /* Model with no variables */
-    SolverContext *state = NULL;
+    SolverState *state = NULL;
     int status = cxf_simplex_init(model, &state);
 
     TEST_ASSERT_EQUAL_INT(CXF_OK, status);
@@ -95,7 +95,7 @@ void test_simplex_init_empty_model(void) {
 void test_simplex_init_primal_mode(void) {
     cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x");
 
-    SolverContext *state = NULL;
+    SolverState *state = NULL;
     int status = cxf_simplex_init(model, &state);  /* defaults to primal */
 
     TEST_ASSERT_EQUAL_INT(CXF_OK, status);
@@ -108,7 +108,7 @@ void test_simplex_init_primal_mode(void) {
 void test_simplex_init_dual_mode(void) {
     cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x");
 
-    SolverContext *state = NULL;
+    SolverState *state = NULL;
     int status = cxf_simplex_init(model, &state);
 
     TEST_ASSERT_EQUAL_INT(CXF_OK, status);
@@ -120,13 +120,13 @@ void test_simplex_init_dual_mode(void) {
 }
 
 /*******************************************************************************
- * SolverContext cleanup tests
+ * SolverState cleanup tests
  ******************************************************************************/
 
 void test_simplex_final_frees_state(void) {
     cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x");
 
-    SolverContext *state = NULL;
+    SolverState *state = NULL;
     cxf_simplex_init(model, &state);
     TEST_ASSERT_NOT_NULL(state);
 
@@ -146,7 +146,7 @@ void test_simplex_final_null_safe(void) {
 void test_simplex_setup_basic(void) {
     cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x");
 
-    SolverContext *state = NULL;
+    SolverState *state = NULL;
     cxf_simplex_init(model, &state);
 
     int status = cxf_simplex_setup(state, env);
@@ -166,7 +166,7 @@ void test_simplex_setup_null_state_fails(void) {
 void test_simplex_setup_null_env_fails(void) {
     cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x");
 
-    SolverContext *state = NULL;
+    SolverState *state = NULL;
     cxf_simplex_init(model, &state);
 
     int status = cxf_simplex_setup(state, NULL);
@@ -182,7 +182,7 @@ void test_simplex_setup_null_env_fails(void) {
 void test_simplex_get_status_initial(void) {
     cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x");
 
-    SolverContext *state = NULL;
+    SolverState *state = NULL;
     cxf_simplex_init(model, &state);
 
     int status = cxf_simplex_get_status(state);
@@ -200,7 +200,7 @@ void test_simplex_get_status_null_returns_error(void) {
 void test_simplex_get_iteration_initial(void) {
     cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x");
 
-    SolverContext *state = NULL;
+    SolverState *state = NULL;
     cxf_simplex_init(model, &state);
 
     int iter = cxf_simplex_get_iteration(state);
@@ -217,7 +217,7 @@ void test_simplex_get_iteration_null_returns_error(void) {
 void test_simplex_get_phase_after_setup(void) {
     cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x");
 
-    SolverContext *state = NULL;
+    SolverState *state = NULL;
     cxf_simplex_init(model, &state);
     cxf_simplex_setup(state, env);
 
@@ -239,7 +239,7 @@ void test_simplex_get_phase_null_returns_error(void) {
 int main(void) {
     UNITY_BEGIN();
 
-    /* SolverContext creation tests */
+    /* SolverState creation tests */
     RUN_TEST(test_simplex_init_creates_state);
     RUN_TEST(test_simplex_init_null_model_fails);
     RUN_TEST(test_simplex_init_null_stateout_fails);
@@ -247,7 +247,7 @@ int main(void) {
     RUN_TEST(test_simplex_init_primal_mode);
     RUN_TEST(test_simplex_init_dual_mode);
 
-    /* SolverContext cleanup tests */
+    /* SolverState cleanup tests */
     RUN_TEST(test_simplex_final_frees_state);
     RUN_TEST(test_simplex_final_null_safe);
 

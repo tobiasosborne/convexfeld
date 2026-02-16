@@ -2,7 +2,7 @@
  * @file test_basis.c
  * @brief TDD tests for basis operations (M5.1.1)
  *
- * Tests for BasisState, EtaFactors, FTRAN, BTRAN, refactorization.
+ * Tests for BasisState, EtaVector, FTRAN, BTRAN, refactorization.
  * ~250 LOC of comprehensive tests.
  */
 
@@ -21,9 +21,9 @@ BasisState *cxf_basis_create(int m, int n);
 void cxf_basis_free(BasisState *basis);
 int cxf_basis_init(BasisState *basis, int m, int n);
 
-/* EtaFactors lifecycle - to be implemented in M5.1.3 */
-EtaFactors *cxf_eta_create(int type, int pivot_row, int nnz);
-void cxf_eta_free(EtaFactors *eta);
+/* EtaVector lifecycle - to be implemented in M5.1.3 */
+EtaVector *cxf_eta_create(int type, int pivot_row, int nnz);
+void cxf_eta_free(EtaVector *eta);
 
 /* FTRAN/BTRAN - to be implemented in M5.1.4 / M5.1.5 */
 int cxf_ftran(BasisState *basis, const double *column, double *result);
@@ -104,11 +104,11 @@ void test_basis_init_sets_arrays(void) {
 }
 
 /*******************************************************************************
- * EtaFactors creation/free tests
+ * EtaVector creation/free tests
  ******************************************************************************/
 
 void test_eta_create_type1(void) {
-    EtaFactors *eta = cxf_eta_create(1, 2, 5);  /* Type 1, pivot row 2, 5 nnz */
+    EtaVector *eta = cxf_eta_create(1, 2, 5);  /* Type 1, pivot row 2, 5 nnz */
     TEST_ASSERT_NOT_NULL(eta);
     TEST_ASSERT_EQUAL_INT(1, eta->type);
     TEST_ASSERT_EQUAL_INT(2, eta->pivot_row);
@@ -120,7 +120,7 @@ void test_eta_create_type1(void) {
 }
 
 void test_eta_create_type2(void) {
-    EtaFactors *eta = cxf_eta_create(2, 0, 3);  /* Type 2, pivot row 0, 3 nnz */
+    EtaVector *eta = cxf_eta_create(2, 0, 3);  /* Type 2, pivot row 0, 3 nnz */
     TEST_ASSERT_NOT_NULL(eta);
     TEST_ASSERT_EQUAL_INT(2, eta->type);
     cxf_eta_free(eta);
@@ -132,7 +132,7 @@ void test_eta_free_null_safe(void) {
 }
 
 void test_eta_create_empty(void) {
-    EtaFactors *eta = cxf_eta_create(1, 0, 0);  /* Empty eta */
+    EtaVector *eta = cxf_eta_create(1, 0, 0);  /* Empty eta */
     TEST_ASSERT_NOT_NULL(eta);
     TEST_ASSERT_EQUAL_INT(0, eta->nnz);
     cxf_eta_free(eta);
@@ -961,7 +961,7 @@ int main(void) {
     RUN_TEST(test_basis_create_zero_constraints);
     RUN_TEST(test_basis_init_sets_arrays);
 
-    /* EtaFactors tests */
+    /* EtaVector tests */
     RUN_TEST(test_eta_create_type1);
     RUN_TEST(test_eta_create_type2);
     RUN_TEST(test_eta_free_null_safe);

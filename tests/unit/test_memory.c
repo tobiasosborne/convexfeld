@@ -15,15 +15,15 @@ void *cxf_realloc(void *ptr, size_t size);
 void cxf_free(void *ptr);
 
 /* Forward declarations for structures */
-struct SolverContext;
+struct SolverState;
 struct BasisState;
 struct CallbackContext;
-typedef struct SolverContext SolverContext;
+typedef struct SolverState SolverState;
 typedef struct BasisState BasisState;
 typedef struct CallbackContext CallbackContext;
 
 /* State cleanup functions (M2.1.4) */
-void cxf_free_attribute_table(SolverContext *ctx);
+void cxf_free_attribute_table(SolverState *ctx);
 void cxf_free_basis_state(BasisState *basis);
 void cxf_free_callback_state(CallbackContext *ctx);
 

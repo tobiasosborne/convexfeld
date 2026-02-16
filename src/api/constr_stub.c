@@ -19,7 +19,7 @@ extern void *cxf_realloc(void *ptr, size_t size);
 extern void cxf_free(void *ptr);
 
 /* Forward declare sparse matrix helper */
-extern int cxf_sparse_init_csc(SparseMatrix *mat, int num_rows, int num_cols,
+extern int cxf_sparse_init_csc(MatrixData *mat, int num_rows, int num_cols,
                                int64_t nnz);
 
 /* Initial capacity for constraint tracking */
@@ -30,7 +30,7 @@ extern int cxf_sparse_init_csc(SparseMatrix *mat, int num_rows, int num_cols,
  *
  * Reallocates rhs and sense arrays to accommodate more constraints.
  */
-static int cxf_matrix_grow_constrs(SparseMatrix *matrix, int needed_rows) {
+static int cxf_matrix_grow_constrs(MatrixData *matrix, int needed_rows) {
     double *new_rhs;
     char *new_sense;
 
@@ -59,7 +59,7 @@ static int cxf_matrix_grow_constrs(SparseMatrix *matrix, int needed_rows) {
  * Adds a single row to the existing CSC structure by appending to columns.
  * This is a simplified approach - full implementation will use pending buffer.
  */
-static int cxf_matrix_add_row(SparseMatrix *matrix, int row_idx, int numnz,
+static int cxf_matrix_add_row(MatrixData *matrix, int row_idx, int numnz,
                               const int *cind, const double *cval) {
     int64_t new_nnz;
     int64_t *new_col_ptr;

@@ -70,7 +70,7 @@ int cxf_pivot_with_eta(BasisState *basis, int pivotRow, const double *pivotCol,
     }
 
     /* Step 4: Allocate eta structure */
-    EtaFactors *eta = (EtaFactors *)calloc(1, sizeof(EtaFactors));
+    EtaVector *eta = (EtaVector *)calloc(1, sizeof(EtaVector));
     if (eta == NULL) {
         return CXF_ERROR_OUT_OF_MEMORY;
     }

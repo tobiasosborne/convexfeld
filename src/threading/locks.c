@@ -55,7 +55,7 @@ void cxf_leave_critical_section(CxfEnv *env) {
  * solver state operations. In single-threaded mode, this is a no-op.
  *
  * Note: Using void* for state parameter to avoid circular dependencies.
- * Cast to SolverContext* internally when needed.
+ * Cast to SolverState* internally when needed.
  *
  * @param state Solver state to lock (NULL-safe)
  */
@@ -66,7 +66,7 @@ void cxf_save_locale_state(void *state) {
 
     /* Single-threaded stub: no actual locking yet */
     /* Future: pthread_mutex_lock(&solver_context->mutex) or similar */
-    /* SolverContext *ctx = (SolverContext *)state; */
+    /* SolverState *ctx = (SolverState *)state; */
 }
 
 /**
@@ -76,7 +76,7 @@ void cxf_save_locale_state(void *state) {
  * In single-threaded mode, this is a no-op.
  *
  * Note: Using void* for state parameter to avoid circular dependencies.
- * Cast to SolverContext* internally when needed.
+ * Cast to SolverState* internally when needed.
  *
  * @param state Solver state to unlock (NULL-safe)
  */
@@ -87,5 +87,5 @@ void cxf_release_solve_lock(void *state) {
 
     /* Single-threaded stub: no actual locking yet */
     /* Future: pthread_mutex_unlock(&solver_context->mutex) or similar */
-    /* SolverContext *ctx = (SolverContext *)state; */
+    /* SolverState *ctx = (SolverState *)state; */
 }

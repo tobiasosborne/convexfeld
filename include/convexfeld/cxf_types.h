@@ -197,13 +197,13 @@ typedef struct CxfModel CxfModel;
  * @brief Sparse matrix in CSC format with optional CSR.
  * @see include/convexfeld/cxf_matrix.h
  */
-typedef struct SparseMatrix SparseMatrix;
+typedef struct MatrixData MatrixData;
 
 /**
  * @brief Solver context - working state during optimization.
  * @see include/convexfeld/cxf_solver.h
  */
-typedef struct SolverContext SolverContext;
+typedef struct SolverState SolverState;
 
 /**
  * @brief Basis state - current basis and factorization.
@@ -215,13 +215,13 @@ typedef struct BasisState BasisState;
  * @brief Eta factors for basis updates.
  * @see include/convexfeld/cxf_basis.h
  */
-typedef struct EtaFactors EtaFactors;
+typedef struct EtaVector EtaVector;
 
 /**
  * @brief Pricing context - partial pricing state.
  * @see include/convexfeld/cxf_pricing.h
  */
-typedef struct PricingContext PricingContext;
+typedef struct PricingState PricingState;
 
 /**
  * @brief Callback context - user callback state.

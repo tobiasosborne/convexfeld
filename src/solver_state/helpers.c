@@ -23,7 +23,7 @@
  */
 int cxf_propagate_bounds(
     void *env,
-    SolverContext *state,
+    SolverState *state,
     double *lb_working,
     double *ub_working,
     uint8_t *constrSenses,
@@ -71,7 +71,7 @@ int cxf_propagate_bounds(
     }
 
     int head = 0, tail = worklistCount, passCount = 0, processed = 0;
-    SparseMatrix *matrix = state->model_ref->matrix;
+    MatrixData *matrix = state->model_ref->matrix;
 
     while (head != tail && passCount <= MAX_PASSES) {
         int varIdx = worklist[head];

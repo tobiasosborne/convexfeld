@@ -41,9 +41,9 @@
  * @brief Free all eta factors in the linked list.
  */
 static void clear_eta_list(BasisState *basis) {
-    EtaFactors *eta = basis->eta_head;
+    EtaVector *eta = basis->eta_head;
     while (eta != NULL) {
-        EtaFactors *next = eta->next;
+        EtaVector *next = eta->next;
         free(eta->indices);
         free(eta->values);
         free(eta);

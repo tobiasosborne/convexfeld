@@ -25,7 +25,7 @@
  * @param ratio_work Work units spent in ratio test phase (>= 0)
  * @param update_work Work units spent in basis update phase (>= 0)
  */
-void cxf_timing_pivot(SolverContext *state,
+void cxf_timing_pivot(SolverState *state,
                       double pricing_work,
                       double ratio_work,
                       double update_work) {
@@ -74,7 +74,7 @@ void cxf_timing_pivot(SolverContext *state,
  * @param env Environment with refactorization parameters (may be NULL)
  * @return 0 = not needed, 1 = recommended, 2 = required
  */
-int cxf_timing_refactor(SolverContext *state, CxfEnv *env) {
+int cxf_timing_refactor(SolverState *state, CxfEnv *env) {
     if (state == NULL || env == NULL) {
         return 0;  /* Cannot evaluate, assume not needed */
     }

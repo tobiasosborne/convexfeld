@@ -1,6 +1,6 @@
 /**
  * @file context.c
- * @brief PricingContext structure lifecycle management (M6.1.2)
+ * @brief PricingState structure lifecycle management (M6.1.2)
  *
  * Implements multi-level partial pricing context for efficient
  * entering variable selection in the simplex method.
@@ -11,28 +11,28 @@
 #include "convexfeld/cxf_pricing.h"
 
 /* Forward declaration for use in cxf_pricing_create error handling */
-void cxf_pricing_free(PricingContext *ctx);
+void cxf_pricing_free(PricingState *ctx);
 
 /*============================================================================
- * PricingContext Creation
+ * PricingState Creation
  *===========================================================================*/
 
 /**
  * @brief Create a new pricing context.
  *
- * Allocates and initializes a PricingContext with the specified number
+ * Allocates and initializes a PricingState with the specified number
  * of variables and pricing levels.
  *
  * @param num_vars Number of variables in the problem
  * @param max_levels Number of pricing levels (typically 3-5)
  * @return Newly allocated context, or NULL on failure
  */
-PricingContext *cxf_pricing_create(int num_vars, int max_levels) {
+PricingState *cxf_pricing_create(int num_vars, int max_levels) {
     if (num_vars <= 0 || max_levels <= 0) {
         return NULL;
     }
 
-    PricingContext *ctx = (PricingContext *)calloc(1, sizeof(PricingContext));
+    PricingState *ctx = (PricingState *)calloc(1, sizeof(PricingState));
     if (ctx == NULL) {
         return NULL;
     }
@@ -71,7 +71,7 @@ PricingContext *cxf_pricing_create(int num_vars, int max_levels) {
 }
 
 /*============================================================================
- * PricingContext Destruction
+ * PricingState Destruction
  *===========================================================================*/
 
 /**
@@ -81,7 +81,7 @@ PricingContext *cxf_pricing_create(int num_vars, int max_levels) {
  *
  * @param ctx Context to free
  */
-void cxf_pricing_free(PricingContext *ctx) {
+void cxf_pricing_free(PricingState *ctx) {
     if (ctx == NULL) {
         return;
     }

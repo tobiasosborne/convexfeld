@@ -34,7 +34,7 @@
  * @param pivotElement_out Output: pivot element value
  * @return CXF_OK on success, CXF_UNBOUNDED if no variable reaches bound
  */
-int cxf_ratio_test(SolverContext *state, CxfEnv *env, int enteringVar,
+int cxf_ratio_test(SolverState *state, CxfEnv *env, int enteringVar,
                    const double *pivotColumn, int columnNZ,
                    int *leavingRow_out, double *pivotElement_out) {
     double feasTol, infinity, relaxedTol;

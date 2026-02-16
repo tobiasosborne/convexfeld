@@ -54,7 +54,7 @@
 int cxf_pivot_bound(void *env, void *state, int var, double new_value,
                     double tolerance, int fix_mode) {
     CxfEnv *e;
-    SolverContext *ctx;
+    SolverState *ctx;
     double obj_coeff;
     int n;
 
@@ -64,7 +64,7 @@ int cxf_pivot_bound(void *env, void *state, int var, double new_value,
 
     /* Cast void pointers to proper types */
     e = (CxfEnv *)env;
-    ctx = (SolverContext *)state;
+    ctx = (SolverState *)state;
 
     /* Validate arguments */
     if (ctx == NULL || e == NULL) {
@@ -129,14 +129,14 @@ int cxf_pivot_bound(void *env, void *state, int var, double new_value,
 int cxf_pivot_special(void *env, void *state, int var, double lb_limit,
                      double ub_limit) {
     CxfEnv *e;
-    SolverContext *ctx;
+    SolverState *ctx;
     double obj_coeff, lb, ub;
     int can_decrease, can_increase;
     int n;
 
     /* Cast void pointers to proper types */
     e = (CxfEnv *)env;
-    ctx = (SolverContext *)state;
+    ctx = (SolverState *)state;
 
     /* Validate arguments */
     if (ctx == NULL || e == NULL) {

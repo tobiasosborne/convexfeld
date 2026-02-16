@@ -1,6 +1,6 @@
 /**
  * @file context.c
- * @brief SolverContext lifecycle functions (M7.1.1)
+ * @brief SolverState lifecycle functions (M7.1.1)
  *
  * Implements creation and destruction of solver context for simplex method.
  */
@@ -31,8 +31,8 @@ extern void cxf_basis_free(BasisState *basis);
  * @param stateP Output pointer for solver context
  * @return CXF_OK on success, error code otherwise
  */
-int cxf_simplex_init(CxfModel *model, SolverContext **stateP) {
-    SolverContext *ctx;
+int cxf_simplex_init(CxfModel *model, SolverState **stateP) {
+    SolverState *ctx;
     int n, m;
 
     if (model == NULL || stateP == NULL) {
@@ -44,7 +44,7 @@ int cxf_simplex_init(CxfModel *model, SolverContext **stateP) {
     n = model->num_vars;
     m = model->num_constrs;
 
-    ctx = (SolverContext *)calloc(1, sizeof(SolverContext));
+    ctx = (SolverState *)calloc(1, sizeof(SolverState));
     if (ctx == NULL) {
         return CXF_ERROR_OUT_OF_MEMORY;
     }
@@ -144,7 +144,7 @@ int cxf_simplex_init(CxfModel *model, SolverContext **stateP) {
  *
  * @param state Context to free (may be NULL)
  */
-void cxf_simplex_final(SolverContext *state) {
+void cxf_simplex_final(SolverState *state) {
     if (state == NULL) {
         return;
     }
@@ -181,7 +181,7 @@ void cxf_simplex_final(SolverContext *state) {
  * @param state Solver context
  * @return Status code or error
  */
-int cxf_simplex_get_status(SolverContext *state) {
+int cxf_simplex_get_status(SolverState *state) {
     if (state == NULL) {
         return CXF_ERROR_NULL_ARGUMENT;
     }
@@ -194,7 +194,7 @@ int cxf_simplex_get_status(SolverContext *state) {
  * @param state Solver context
  * @return Iteration count or error
  */
-int cxf_simplex_get_iteration(SolverContext *state) {
+int cxf_simplex_get_iteration(SolverState *state) {
     if (state == NULL) {
         return CXF_ERROR_NULL_ARGUMENT;
     }
@@ -207,7 +207,7 @@ int cxf_simplex_get_iteration(SolverContext *state) {
  * @param state Solver context
  * @return Phase (0, 1, or 2) or error
  */
-int cxf_simplex_get_phase(SolverContext *state) {
+int cxf_simplex_get_phase(SolverState *state) {
     if (state == NULL) {
         return CXF_ERROR_NULL_ARGUMENT;
     }
@@ -226,7 +226,7 @@ int cxf_simplex_get_phase(SolverContext *state) {
  * @param state Solver context
  * @return Objective value or NaN on error
  */
-double cxf_simplex_get_objval(SolverContext *state) {
+double cxf_simplex_get_objval(SolverState *state) {
     if (state == NULL) {
         return 0.0 / 0.0;  /* NaN */
     }
@@ -240,7 +240,7 @@ double cxf_simplex_get_objval(SolverContext *state) {
  * @param limit Iteration limit (must be >= 0)
  * @return CXF_OK on success, error code otherwise
  */
-int cxf_simplex_set_iteration_limit(SolverContext *state, int limit) {
+int cxf_simplex_set_iteration_limit(SolverState *state, int limit) {
     if (state == NULL) {
         return CXF_ERROR_NULL_ARGUMENT;
     }
@@ -257,7 +257,7 @@ int cxf_simplex_set_iteration_limit(SolverContext *state, int limit) {
  * @param state Solver context
  * @return Iteration limit or error code
  */
-int cxf_simplex_get_iteration_limit(SolverContext *state) {
+int cxf_simplex_get_iteration_limit(SolverState *state) {
     if (state == NULL) {
         return CXF_ERROR_NULL_ARGUMENT;
     }

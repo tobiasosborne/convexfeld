@@ -27,7 +27,7 @@
  * Invalidates cached candidate lists.
  *
  * Full reduced cost update requires solver state access, which is
- * deferred until SolverContext integration.
+ * deferred until SolverState integration.
  *
  * @param ctx Pricing context
  * @param entering_var Index of entering variable
@@ -37,7 +37,7 @@
  * @param num_rows Number of rows in basis
  * @return CXF_OK on success, error code on failure
  */
-int cxf_pricing_update(PricingContext *ctx, int entering_var, int leaving_row,
+int cxf_pricing_update(PricingState *ctx, int entering_var, int leaving_row,
                        const double *pivot_column, const double *pivot_row,
                        int num_rows) {
     if (ctx == NULL) {
@@ -96,7 +96,7 @@ int cxf_pricing_update(PricingContext *ctx, int entering_var, int leaving_row,
  * @param ctx Pricing context
  * @param flags Bitmask of CXF_INVALID_* flags
  */
-void cxf_pricing_invalidate(PricingContext *ctx, int flags) {
+void cxf_pricing_invalidate(PricingState *ctx, int flags) {
     if (ctx == NULL) {
         return;
     }

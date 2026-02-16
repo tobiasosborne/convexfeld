@@ -55,7 +55,7 @@ int cxf_is_mip_model(CxfModel *model) {
  * features (quadratic constraints, bilinear terms, etc.).
  *
  * Note: Currently returns 0 as quadratic objective fields are not yet
- * implemented in the SparseMatrix structure.
+ * implemented in the MatrixData structure.
  *
  * @param model Model to check (may be NULL)
  * @return 1 if model is QP, 0 otherwise or NULL
@@ -90,7 +90,7 @@ int cxf_is_quadratic(CxfModel *model) {
  * bilinear terms, and other conic features that require barrier methods.
  *
  * Note: Currently returns 0 as SOCP/QCP fields are not yet implemented
- * in the SparseMatrix structure.
+ * in the MatrixData structure.
  *
  * @param model Model to check (may be NULL)
  * @return 1 if model has SOCP/QCP features, 0 if pure linear or NULL

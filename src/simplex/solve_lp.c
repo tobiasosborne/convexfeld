@@ -26,13 +26,13 @@
 #define ITERATE_UNBOUNDED  3
 
 /* External declarations */
-extern int cxf_simplex_init(CxfModel *model, SolverContext **stateP);
-extern void cxf_simplex_final(SolverContext *state);
-extern int cxf_log_iteration_progress(SolverContext *state, CxfEnv *env);
-extern int cxf_extract_solution(SolverContext *state, CxfModel *model);
-extern int cxf_simplex_perturbation(SolverContext *state, CxfEnv *env);
-extern int cxf_simplex_unperturb(SolverContext *state, CxfEnv *env);
-extern int cxf_simplex_refine(SolverContext *state, CxfEnv *env);
+extern int cxf_simplex_init(CxfModel *model, SolverState **stateP);
+extern void cxf_simplex_final(SolverState *state);
+extern int cxf_log_iteration_progress(SolverState *state, CxfEnv *env);
+extern int cxf_extract_solution(SolverState *state, CxfModel *model);
+extern int cxf_simplex_perturbation(SolverState *state, CxfEnv *env);
+extern int cxf_simplex_unperturb(SolverState *state, CxfEnv *env);
+extern int cxf_simplex_refine(SolverState *state, CxfEnv *env);
 
 /**
  * @brief Set up Phase I with slack/artificial variables.
@@ -51,10 +51,10 @@ extern int cxf_simplex_refine(SolverContext *state, CxfEnv *env);
  * @param state Solver context
  * @return CXF_OK on success
  */
-static int setup_phase_one(SolverContext *state) {
+static int setup_phase_one(SolverState *state) {
     BasisState *basis = state->basis;
     CxfModel *model = state->model_ref;
-    SparseMatrix *mat = model->matrix;
+    MatrixData *mat = model->matrix;
     int m = state->num_constrs;
     int n = state->num_vars;
 
@@ -217,10 +217,10 @@ static int setup_phase_one(SolverContext *state) {
  * @param model Original model with true objective
  * @return CXF_OK on success
  */
-static int transition_to_phase_two(SolverContext *state, CxfModel *model) {
+static int transition_to_phase_two(SolverState *state, CxfModel *model) {
     int n = state->num_vars;
     int m = state->num_constrs;
-    SparseMatrix *mat = model->matrix;
+    MatrixData *mat = model->matrix;
 
     /* Restore original objective coefficients */
     for (int j = 0; j < n; j++) {
@@ -287,7 +287,7 @@ extern int cxf_btran_vec(BasisState *basis, const double *input, double *result)
  *   - If RHS >= 0: Ax + a = b, a = b at x=0 ✓
  *   - If RHS < 0: Ax - a = b, -a = b, a = -b > 0 ✓
  */
-static double get_auxiliary_coeff(const SparseMatrix *mat, int row) {
+static double get_auxiliary_coeff(const MatrixData *mat, int row) {
     if (mat == NULL || mat->sense == NULL) return 1.0;
     char sense = mat->sense[row];
     double rhs = (mat->rhs != NULL) ? mat->rhs[row] : 0.0;
@@ -317,9 +317,9 @@ static double get_auxiliary_coeff(const SparseMatrix *mat, int row) {
  *
  * @param state Solver context
  */
-static void compute_reduced_costs(SolverContext *state) {
+static void compute_reduced_costs(SolverState *state) {
     CxfModel *model = state->model_ref;
-    SparseMatrix *mat = model->matrix;
+    MatrixData *mat = model->matrix;
     BasisState *basis = state->basis;
     int n = state->num_vars;
     int m = state->num_constrs;
@@ -437,7 +437,7 @@ static int solve_unconstrained(CxfModel *model) {
  * Uses CSR (row-major) format if available for O(nnz_row) access.
  * Falls back to CSC scan which is O(n * avg_col_height).
  */
-static void get_row_coeffs(SparseMatrix *mat, int row, int n, double *coeffs) {
+static void get_row_coeffs(MatrixData *mat, int row, int n, double *coeffs) {
     memset(coeffs, 0, (size_t)n * sizeof(double));
 
     /* Fast path: use row-major (CSR) format if available */
@@ -484,8 +484,8 @@ static int rows_parallel(double *r1, double *r2, int n, double *scale) {
 #define MAX_PARALLEL_CHECK_ROWS 100
 
 /* External declarations for row-major format */
-extern int cxf_prepare_row_data(SparseMatrix *mat);
-extern int cxf_build_row_major(SparseMatrix *mat);
+extern int cxf_prepare_row_data(MatrixData *mat);
+extern int cxf_build_row_major(MatrixData *mat);
 
 /**
  * @brief Check if problem is obviously infeasible via simple analysis.
@@ -495,7 +495,7 @@ extern int cxf_build_row_major(SparseMatrix *mat);
  * 2. Parallel constraint contradiction - O(m²*n), ONLY for small problems
  */
 static int check_obvious_infeasibility(CxfModel *model) {
-    SparseMatrix *mat = model->matrix;
+    MatrixData *mat = model->matrix;
     if (mat == NULL) return 0;
 
     int m = mat->num_rows;
@@ -594,7 +594,7 @@ static int check_obvious_infeasibility(CxfModel *model) {
  * check if constraints allow infinite increase.
  */
 static int check_obvious_unboundedness(CxfModel *model) {
-    SparseMatrix *mat = model->matrix;
+    MatrixData *mat = model->matrix;
     if (mat == NULL) return 0;
 
     int m = mat->num_rows;
@@ -669,7 +669,7 @@ static int check_obvious_unboundedness(CxfModel *model) {
  * @brief Solve an LP using the simplex method.
  */
 int cxf_solve_lp(CxfModel *model) {
-    SolverContext *state = NULL;
+    SolverState *state = NULL;
     int rc, status;
 
     if (model == NULL) return CXF_ERROR_NULL_ARGUMENT;
@@ -768,7 +768,7 @@ int cxf_solve_lp(CxfModel *model) {
              * Due to numerical drift, recompute actual constraint violations.
              */
             double true_infeasibility = 0;
-            SparseMatrix *matrix = model->matrix;
+            MatrixData *matrix = model->matrix;
             for (int i = 0; i < state->num_constrs; i++) {
                 /* Compute Ax for this row */
                 double ax = 0;
@@ -1007,7 +1007,7 @@ int cxf_solve_lp(CxfModel *model) {
                 /* Verify: compute TRUE artificial values from constraint gaps */
                 fprintf(stderr, "  Verifying constraint satisfaction:\n");
                 double true_infeas = 0;
-                SparseMatrix *mat = model->matrix;
+                MatrixData *mat = model->matrix;
                 for (int i = 0; i < state->num_constrs; i++) {
                     int basic_var = state->basis->basic_vars[i];
                     if (basic_var >= state->num_vars && state->work_obj[basic_var] > 0.5) {
@@ -1080,7 +1080,7 @@ int cxf_solve_lp(CxfModel *model) {
                         state->work_obj[basic_var] > 0.5 &&
                         fabs(state->work_x[basic_var]) > 1e-10) {
                         fprintf(stderr, "  Examining row %d (artificial var=%d):\n", i, basic_var);
-                        SparseMatrix *mat = model->matrix;
+                        MatrixData *mat = model->matrix;
                         double rhs = mat->rhs ? mat->rhs[i] : 0;
                         char sense = mat->sense ? mat->sense[i] : '?';
                         fprintf(stderr, "    sense='%c', rhs=%.6f, diag_coeff=%.1f\n",

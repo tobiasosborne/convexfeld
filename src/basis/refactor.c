@@ -34,9 +34,9 @@
 static void clear_eta_list(BasisState *basis) {
     if (basis == NULL) return;
 
-    EtaFactors *eta = basis->eta_head;
+    EtaVector *eta = basis->eta_head;
     while (eta != NULL) {
-        EtaFactors *next = eta->next;
+        EtaVector *next = eta->next;
         free(eta->indices);
         free(eta->values);
         free(eta);
@@ -89,11 +89,11 @@ int cxf_fix_variables_at_bounds(BasisState *basis) {
  * Markowitz-ordered Gaussian elimination. The result is stored
  * in the LUFactors structure for use by FTRAN/BTRAN.
  *
- * @param ctx SolverContext containing basis and model.
+ * @param ctx SolverState containing basis and model.
  * @param env Environment with tolerances.
  * @return 0 on success, error code on failure.
  */
-int cxf_solver_refactor(SolverContext *ctx, CxfEnv *env) {
+int cxf_solver_refactor(SolverState *ctx, CxfEnv *env) {
     if (ctx == NULL || ctx->basis == NULL) {
         return CXF_ERROR_NULL_ARGUMENT;
     }
@@ -181,11 +181,11 @@ int cxf_solver_refactor(SolverContext *ctx, CxfEnv *env) {
  * - Iterations since last refactorization
  * - FTRAN performance degradation
  *
- * @param ctx SolverContext with current state.
+ * @param ctx SolverState with current state.
  * @param env Environment with thresholds.
  * @return 0=not needed, 1=recommended, 2=required.
  */
-int cxf_refactor_check(SolverContext *ctx, CxfEnv *env) {
+int cxf_refactor_check(SolverState *ctx, CxfEnv *env) {
     if (ctx == NULL || ctx->basis == NULL) {
         return 0;
     }

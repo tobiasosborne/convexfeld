@@ -1,9 +1,9 @@
 /**
  * @file eta_factors.c
- * @brief EtaFactors structure implementation (M5.1.3)
+ * @brief EtaVector structure implementation (M5.1.3)
  *
- * Implements lifecycle and utility functions for EtaFactors structure.
- * EtaFactors represents elementary transformation matrices in the
+ * Implements lifecycle and utility functions for EtaVector structure.
+ * EtaVector represents elementary transformation matrices in the
  * Product Form of Inverse (PFI) representation of the basis inverse.
  */
 
@@ -14,11 +14,11 @@
 #include <math.h>
 
 /*******************************************************************************
- * EtaFactors lifecycle
+ * EtaVector lifecycle
  ******************************************************************************/
 
 /**
- * @brief Create an EtaFactors structure.
+ * @brief Create an EtaVector structure.
  *
  * Allocates an eta matrix with space for the specified number of non-zeros.
  * The eta represents an elementary transformation matrix that differs from
@@ -27,14 +27,14 @@
  * @param type Eta type: 1=refactorization, 2=pivot.
  * @param pivot_row Row index for the pivot operation.
  * @param nnz Number of non-zeros in the sparse representation.
- * @return Pointer to new EtaFactors, or NULL on failure.
+ * @return Pointer to new EtaVector, or NULL on failure.
  */
-EtaFactors *cxf_eta_create(int type, int pivot_row, int nnz) {
+EtaVector *cxf_eta_create(int type, int pivot_row, int nnz) {
     if (nnz < 0) {
         return NULL;
     }
 
-    EtaFactors *eta = (EtaFactors *)calloc(1, sizeof(EtaFactors));
+    EtaVector *eta = (EtaVector *)calloc(1, sizeof(EtaVector));
     if (eta == NULL) {
         return NULL;
     }
@@ -60,13 +60,13 @@ EtaFactors *cxf_eta_create(int type, int pivot_row, int nnz) {
 }
 
 /**
- * @brief Free an EtaFactors structure.
+ * @brief Free an EtaVector structure.
  *
  * Frees the eta and all associated arrays. Safe to call with NULL.
  *
- * @param eta EtaFactors to free (may be NULL).
+ * @param eta EtaVector to free (may be NULL).
  */
-void cxf_eta_free(EtaFactors *eta) {
+void cxf_eta_free(EtaVector *eta) {
     if (eta == NULL) {
         return;
     }
@@ -76,17 +76,17 @@ void cxf_eta_free(EtaFactors *eta) {
 }
 
 /**
- * @brief Initialize/reinitialize an existing EtaFactors.
+ * @brief Initialize/reinitialize an existing EtaVector.
  *
  * Resizes arrays if necessary. Clears all values to zero.
  *
- * @param eta EtaFactors to initialize.
+ * @param eta EtaVector to initialize.
  * @param type Eta type: 1=refactorization, 2=pivot.
  * @param pivot_row Row index for pivot.
  * @param nnz Number of non-zeros (must match allocated capacity).
  * @return CXF_OK on success, error code on failure.
  */
-int cxf_eta_init(EtaFactors *eta, int type, int pivot_row, int nnz) {
+int cxf_eta_init(EtaVector *eta, int type, int pivot_row, int nnz) {
     if (eta == NULL) {
         return CXF_ERROR_NULL_ARGUMENT;
     }
@@ -129,15 +129,15 @@ int cxf_eta_init(EtaFactors *eta, int type, int pivot_row, int nnz) {
 }
 
 /**
- * @brief Validate EtaFactors invariants.
+ * @brief Validate EtaVector invariants.
  *
  * Checks that the eta structure is consistent and all values are finite.
  *
- * @param eta EtaFactors to validate.
+ * @param eta EtaVector to validate.
  * @param max_rows Maximum valid row index (exclusive).
  * @return CXF_OK if valid, error code otherwise.
  */
-int cxf_eta_validate(const EtaFactors *eta, int max_rows) {
+int cxf_eta_validate(const EtaVector *eta, int max_rows) {
     if (eta == NULL) {
         return CXF_ERROR_NULL_ARGUMENT;
     }
@@ -183,16 +183,16 @@ int cxf_eta_validate(const EtaFactors *eta, int max_rows) {
 }
 
 /**
- * @brief Set values in EtaFactors arrays.
+ * @brief Set values in EtaVector arrays.
  *
  * Copies indices and values into the eta structure.
  *
- * @param eta EtaFactors to modify.
+ * @param eta EtaVector to modify.
  * @param indices Array of row indices (length = eta->nnz).
  * @param values Array of coefficient values (length = eta->nnz).
  * @return CXF_OK on success, error code on failure.
  */
-int cxf_eta_set(EtaFactors *eta, const int *indices, const double *values) {
+int cxf_eta_set(EtaVector *eta, const int *indices, const double *values) {
     if (eta == NULL) {
         return CXF_ERROR_NULL_ARGUMENT;
     }

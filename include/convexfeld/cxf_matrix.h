@@ -1,6 +1,6 @@
 /**
  * @file cxf_matrix.h
- * @brief SparseMatrix structure - constraint matrix storage.
+ * @brief MatrixData structure - constraint matrix storage.
  *
  * Stores the constraint matrix A in CSC (Compressed Sparse Column) format
  * with optional CSR (Compressed Sparse Row) for efficient row access.
@@ -23,7 +23,7 @@
  * - This saves 50% memory on index arrays compared to all-int64_t
  * - For problems exceeding 2B rows/columns, recompile with int64_t indices
  */
-struct SparseMatrix {
+struct MatrixData {
     /* Dimensions */
     int num_rows;             /**< Number of rows (m) */
     int num_cols;             /**< Number of columns (n) */

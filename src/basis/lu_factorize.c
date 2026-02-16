@@ -28,10 +28,10 @@
  * Output is stored in sparse LUFactors structure.
  *
  * @param lu LUFactors structure to store results (must be pre-allocated).
- * @param ctx SolverContext with basis and matrix access.
+ * @param ctx SolverState with basis and matrix access.
  * @return 0 on success, 3 for singular matrix, 1001 for OOM.
  */
-int cxf_lu_factorize(LUFactors *lu, SolverContext *ctx) {
+int cxf_lu_factorize(LUFactors *lu, SolverState *ctx) {
     if (lu == NULL || ctx == NULL || ctx->basis == NULL) {
         return CXF_ERROR_NULL_ARGUMENT;
     }
@@ -49,7 +49,7 @@ int cxf_lu_factorize(LUFactors *lu, SolverContext *ctx) {
         return CXF_ERROR_NULL_ARGUMENT;
     }
 
-    SparseMatrix *A = model->matrix;
+    MatrixData *A = model->matrix;
     int n_orig = ctx->num_vars;
 
     /* Allocate dense working matrix B[m][m] */

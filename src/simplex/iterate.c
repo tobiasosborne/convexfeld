@@ -30,16 +30,16 @@
 #define REFACTOR_INTERVAL  100
 
 /* External function declarations */
-extern int cxf_pricing_candidates(PricingContext *ctx, const double *reduced_costs,
+extern int cxf_pricing_candidates(PricingState *ctx, const double *reduced_costs,
                                   const int *var_status, int num_vars, double tolerance,
                                   int *candidates, int max_candidates);
 extern int cxf_ftran(BasisState *basis, const double *column, double *result);
-extern int cxf_ratio_test(SolverContext *state, CxfEnv *env, int enteringVar,
+extern int cxf_ratio_test(SolverState *state, CxfEnv *env, int enteringVar,
                           const double *pivotColumn, int columnNZ,
                           int *leavingRow_out, double *pivotElement_out);
-extern int cxf_simplex_step(SolverContext *state, int entering, int leavingRow,
+extern int cxf_simplex_step(SolverState *state, int entering, int leavingRow,
                             const double *pivotCol, double stepSize);
-extern int cxf_solver_refactor(SolverContext *ctx, CxfEnv *env);
+extern int cxf_solver_refactor(SolverState *ctx, CxfEnv *env);
 
 /**
  * @brief Get the coefficient for slack/surplus/artificial variable.
@@ -52,7 +52,7 @@ extern int cxf_solver_refactor(SolverContext *ctx, CxfEnv *env);
  * @param row Constraint row index
  * @return +1.0 or -1.0
  */
-static double get_auxiliary_coeff_fallback(const SparseMatrix *matrix, int row) {
+static double get_auxiliary_coeff_fallback(const MatrixData *matrix, int row) {
     if (matrix == NULL || matrix->sense == NULL) return 1.0;
     char sense = matrix->sense[row];
     double rhs = (matrix->rhs != NULL) ? matrix->rhs[row] : 0.0;
@@ -84,7 +84,7 @@ static double get_auxiliary_coeff_fallback(const SparseMatrix *matrix, int row) 
  * @param m Number of constraints (rows)
  * @param dense Output dense array (must be size m)
  */
-static void extract_column_ext(const SparseMatrix *matrix, BasisState *basis,
+static void extract_column_ext(const MatrixData *matrix, BasisState *basis,
                                int col, int n, int m, double *dense) {
     /* Clear the dense array */
     memset(dense, 0, (size_t)m * sizeof(double));
@@ -119,7 +119,7 @@ static void extract_column_ext(const SparseMatrix *matrix, BasisState *basis,
  * @return ITERATE_CONTINUE (0) to continue, ITERATE_OPTIMAL (1) if optimal,
  *         ITERATE_UNBOUNDED (3) if unbounded, or error code
  */
-int cxf_log_iteration_progress(SolverContext *state, CxfEnv *env) {
+int cxf_log_iteration_progress(SolverState *state, CxfEnv *env) {
     int rc;
     int entering = -1, leavingRow = -1;
     double pivotElement = 0.0, stepSize = 0.0;

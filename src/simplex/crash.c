@@ -34,7 +34,7 @@
  * @param env Environment (currently unused, reserved for future parameters)
  * @return CXF_OK on success, CXF_ERROR_OUT_OF_MEMORY on allocation failure
  */
-int cxf_simplex_crash(SolverContext *state, CxfEnv *env) {
+int cxf_simplex_crash(SolverState *state, CxfEnv *env) {
     int n, m;
     int *var_status;
     int *basis_header;

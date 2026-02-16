@@ -24,7 +24,7 @@
  * @param env Environment with tolerance settings
  * @return 0 if no adjustments made, 1 if adjustments made, negative on error
  */
-int cxf_simplex_refine(SolverContext *state, CxfEnv *env) {
+int cxf_simplex_refine(SolverState *state, CxfEnv *env) {
     /* Validate inputs */
     if (!state || !env) {
         return CXF_ERROR_NULL_ARGUMENT;

@@ -139,18 +139,18 @@ int cxf_btran(BasisState *basis, int row, double *result) {
     int eta_count = basis->eta_count;
     if (eta_count > 0) {
         /* Use stack allocation for small eta counts, heap for large */
-        EtaFactors *stack_etas[MAX_STACK_ETAS];
-        EtaFactors **etas = stack_etas;
+        EtaVector *stack_etas[MAX_STACK_ETAS];
+        EtaVector **etas = stack_etas;
 
         if (eta_count > MAX_STACK_ETAS) {
-            etas = (EtaFactors **)malloc((size_t)eta_count * sizeof(EtaFactors *));
+            etas = (EtaVector **)malloc((size_t)eta_count * sizeof(EtaVector *));
             if (etas == NULL) {
                 return CXF_ERROR_OUT_OF_MEMORY;
             }
         }
 
         /* Traverse linked list to collect eta pointers */
-        EtaFactors *eta = basis->eta_head;
+        EtaVector *eta = basis->eta_head;
         int count = 0;
         while (eta != NULL && count < eta_count) {
             etas[count++] = eta;
@@ -244,18 +244,18 @@ int cxf_btran_vec(BasisState *basis, const double *input, double *result) {
     int eta_count = basis->eta_count;
     if (eta_count > 0) {
         /* Use stack allocation for small eta counts, heap for large */
-        EtaFactors *stack_etas[MAX_STACK_ETAS];
-        EtaFactors **etas = stack_etas;
+        EtaVector *stack_etas[MAX_STACK_ETAS];
+        EtaVector **etas = stack_etas;
 
         if (eta_count > MAX_STACK_ETAS) {
-            etas = (EtaFactors **)malloc((size_t)eta_count * sizeof(EtaFactors *));
+            etas = (EtaVector **)malloc((size_t)eta_count * sizeof(EtaVector *));
             if (etas == NULL) {
                 return CXF_ERROR_OUT_OF_MEMORY;
             }
         }
 
         /* Traverse linked list to collect eta pointers */
-        EtaFactors *eta = basis->eta_head;
+        EtaVector *eta = basis->eta_head;
         int count = 0;
         while (eta != NULL && count < eta_count) {
             etas[count++] = eta;

@@ -2,7 +2,7 @@
  * @file basis_stub.c
  * @brief Stub implementations for basis operations (M5.1.1 TDD).
  *
- * Provides minimal stubs for EtaFactors, FTRAN, BTRAN, and related
+ * Provides minimal stubs for EtaVector, FTRAN, BTRAN, and related
  * functions. BasisState lifecycle in basis_state.c (M5.1.2).
  * Full implementations in M5.1.3-M5.1.8.
  */
@@ -13,7 +13,7 @@
 #include <string.h>
 
 /*******************************************************************************
- * EtaFactors lifecycle - Implemented in eta_factors.c (M5.1.3)
+ * EtaVector lifecycle - Implemented in eta_factors.c (M5.1.3)
  ******************************************************************************/
 
 /* cxf_eta_create, cxf_eta_free, cxf_eta_init, cxf_eta_validate, cxf_eta_set
