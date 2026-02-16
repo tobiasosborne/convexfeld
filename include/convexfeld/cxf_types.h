@@ -91,19 +91,35 @@ typedef enum {
 } CxfObjSense;
 
 /*******************************************************************************
- * Variable Basis Status
+ * Variable Status Encoding
+ *
+ * Uses the standard revised simplex convention:
+ *   >= 0 : BASIC — value is the constraint row index
+ *   -1   : AT_LOWER — nonbasic at lower bound
+ *   -2   : AT_UPPER — nonbasic at upper bound
+ *   -3   : SUPERBASIC — nonbasic between bounds (free variables)
+ *   -4   : FIXED — nonbasic, lb == ub
+ *
+ * This encoding stores basis membership and bound status in a single int
+ * array, eliminating the need for a separate lookup structure.
+ *
+ * Invariant: for every row i, varStatus[basisHeader[i]] == i
  ******************************************************************************/
 
-/**
- * @brief Variable status in the current basis.
- */
-typedef enum {
-    CXF_BASIC      = 0,  /**< Variable is basic */
-    CXF_NONBASIC_L = 1,  /**< Variable is at lower bound */
-    CXF_NONBASIC_U = 2,  /**< Variable is at upper bound */
-    CXF_SUPERBASIC = 3,  /**< Variable is superbasic (between bounds) */
-    CXF_FIXED      = 4   /**< Variable is fixed (lb == ub) */
-} CxfVarStatus;
+/** @brief Nonbasic at lower bound */
+#define CXF_VAR_AT_LOWER     (-1)
+
+/** @brief Nonbasic at upper bound */
+#define CXF_VAR_AT_UPPER     (-2)
+
+/** @brief Nonbasic between bounds (free/superbasic) */
+#define CXF_VAR_SUPERBASIC   (-3)
+
+/** @brief Nonbasic, lower bound == upper bound */
+#define CXF_VAR_FIXED        (-4)
+
+/** @brief Check if a variable status indicates basic (row index >= 0) */
+#define CXF_VAR_IS_BASIC(status) ((status) >= 0)
 
 /*******************************************************************************
  * Numerical Constants

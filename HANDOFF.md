@@ -4,53 +4,50 @@
 
 ---
 
-## STATUS: P0 Tolerance Fix COMPLETE — Next: P0 Variable Status Encoding
+## STATUS: P0 Variable Status Encoding COMPLETE — Next: P1 Function Renames
 
 ### Session Summary
 
-1. **P0 tolerance fix (convexfeld-nso9) — CLOSED**
-   - Aligned all tolerance #defines to v2 spec values
-   - Added 6 named constants to `cxf_types.h` (CXF_MIN_PIVOT, CXF_MARKOWITZ_TOL, CXF_BOUND_EQUALITY_TOL, CXF_PERTURB_FLOOR, CXF_PERTURB_CEILING, CXF_LARGE_BOUND_MARKER)
-   - Fixed perturbation.c to use spec values as absolute magnitudes (not multiplied by feas_tol)
-   - Fixed pivot_check.c infinity thresholds to use CXF_INFINITY
-   - Removed duplicate perturbation/unperturb stubs from context.c that were shadowing real implementations
-   - Fixed pre-existing test_unperturb_sequence failure (static state leak + stub override)
-   - Fixed test_pivot_check threshold test for new infinity value
+1. **P0 variable status encoding (convexfeld-clow) — CLOSED**
+   - Replaced `CxfVarStatus` enum (0-4) with spec-compliant `#define` constants
+   - New encoding: `>=0` = basic (value is row index), `-1` = AT_LOWER, `-2` = AT_UPPER, `-3` = SUPERBASIC, `-4` = FIXED
+   - Added `CXF_VAR_IS_BASIC(status)` helper macro
+   - Fixed `warm.c` consistency check to verify `var_status[var] == row` (not just `!= 0`)
+   - Fixed `helpers.c` non-basic check to use `< 0` instead of `!= CXF_BASIC`
+   - Fixed `basis_state.c` to initialize var_status to `CXF_VAR_AT_LOWER` (-1) instead of 0
+   - Updated all test_basis.c cases to use row-index encoding for basic vars
    - All 36/36 tests pass
+
+2. **P0 tolerance fix (convexfeld-nso9) — CLOSED** (previous session)
 
 ### Changes Made
 
 | File | Change |
 |------|--------|
-| `include/convexfeld/cxf_types.h` | CXF_PIVOT_TOL 1e-10→1e-9, added 6 new named constants |
-| `src/basis/lu_factorize.c` | MARKOWITZ_THRESHOLD 0.1→CXF_MARKOWITZ_TOL, MIN_PIVOT 1e-12→CXF_MIN_PIVOT |
-| `src/simplex/perturbation.c` | PERTURB_BASE_SCALE→CXF_PERTURB_FLOOR, PERTURB_MAX_SCALE→CXF_PERTURB_CEILING, use as absolute values |
-| `src/basis/refactor.c` | MIN_PIVOT_TOL 1e-10→CXF_PIVOT_TOL (1e-9) |
-| `src/error/pivot_check.c` | Infinity thresholds -1e99/1e99→-CXF_INFINITY/CXF_INFINITY |
-| `src/simplex/context.c` | Removed perturbation/unperturb stubs (real impl is in perturbation.c) |
-| `tests/unit/test_pivot_check.c` | Updated unbounded lower test to use -2e100 |
-| `tests/unit/test_simplex_edge.c` | Added unperturb cleanup in test_perturbation_basic |
+| `include/convexfeld/cxf_types.h` | Removed `CxfVarStatus` enum, added `CXF_VAR_AT_LOWER/AT_UPPER/SUPERBASIC/FIXED` defines + `CXF_VAR_IS_BASIC` macro |
+| `src/basis/basis_state.c` | Default var_status init changed from 0 (calloc) to CXF_VAR_AT_LOWER (-1) |
+| `src/basis/warm.c` | Consistency check: `!= CXF_BASIC` → `!= row` (proper row-index check) |
+| `src/solver_state/helpers.c` | Non-basic check: `!= CXF_BASIC` → `< 0` |
+| `tests/unit/test_basis.c` | All snapshot/validate tests updated to use row-index encoding |
 
-### Values NOT Changed (already correct)
-- CXF_ZERO_TOL 1e-12, CXF_INFINITY 1e100, CXF_FEASIBILITY_TOL 1e-6, CXF_OPTIMALITY_TOL 1e-6
-- pivot_special.c THRESHOLD 1e-10, refine.c NEAR_ZERO_TOL 1e-12
-
-### Values Left for Investigation
-- `pivot_primal.c` TINY_THRESHOLD 1e-8 — no direct spec mapping, used as relative scaling factor
-- `perturbation.c` MIN_OBJ_COEFF 1e-8 — heuristic, not in spec
+### Note: Local #defines still exist in pricing/pivot files
+The following files define their own local constants (VAR_AT_LOWER=-1, AT_LOWER=-1, etc.) which are correct but could be consolidated to use the central CXF_VAR_* constants. This is cleanup, not a correctness issue:
+- `src/pricing/phase.c`, `candidates.c`, `steepest.c`
+- `src/simplex/pivot_special.c`
+- `tests/unit/test_pricing.c`
 
 ---
 
-## NEXT STEP: P0 Variable Status Encoding (convexfeld-clow)
+## NEXT STEP: P1 Function Renames (convexfeld-b7ow)
 
-Run `bd show convexfeld-clow` for details. This is the second P0 issue.
+Run `bd show convexfeld-b7ow` for details. Apply 16 v2 function/struct renames across src/tests/include (~155 occurrences).
 
 ### Critical Path
 
 ```
 P0 tolerances (convexfeld-nso9) ← DONE ✓
-  → P0 var status (convexfeld-clow) ← NEXT
-    → P1 16 function renames (convexfeld-b7ow) — unblocks 2
+  → P0 var status (convexfeld-clow) ← DONE ✓
+    → P1 16 function renames (convexfeld-b7ow) ← NEXT
       → P1 4 struct renames (convexfeld-dv0k) — unblocks 5
         → P2 decompose solve_lp (convexfeld-23p6) — unblocks 5
 ```

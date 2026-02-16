@@ -68,14 +68,18 @@ BasisState *cxf_basis_create(int m, int n) {
         }
     }
 
-    /* Allocate variable status array */
+    /* Allocate variable status array (default: nonbasic at lower bound) */
     if (n > 0) {
-        basis->var_status = (int *)calloc((size_t)n, sizeof(int));
+        basis->var_status = (int *)malloc((size_t)n * sizeof(int));
         if (basis->var_status == NULL) {
             free(basis->basic_vars);
             free(basis->work);
+            free(basis->diag_coeff);
             free(basis);
             return NULL;
+        }
+        for (int j = 0; j < n; j++) {
+            basis->var_status[j] = CXF_VAR_AT_LOWER;
         }
     }
 
@@ -150,7 +154,9 @@ int cxf_basis_init(BasisState *basis, int m, int n) {
         memset(basis->basic_vars, 0, (size_t)m * sizeof(int));
     }
     if (basis->var_status != NULL && n > 0) {
-        memset(basis->var_status, 0, (size_t)n * sizeof(int));
+        for (int j = 0; j < n; j++) {
+            basis->var_status[j] = CXF_VAR_AT_LOWER;
+        }
     }
     if (basis->work != NULL && m > 0) {
         memset(basis->work, 0, (size_t)m * sizeof(double));

@@ -168,11 +168,11 @@ int cxf_basis_validate_ex(BasisState *basis, int flags) {
 
     /* Consistency check: varStatus matches basisHeader */
     if (flags & CXF_CHECK_CONSISTENCY) {
-        /* For each basic variable, its status should be CXF_BASIC */
+        /* For each basic variable, its status should be its row index (>= 0) */
         for (int row = 0; row < basis->m; row++) {
             int var = basis->basic_vars[row];
             if (var >= 0 && var < basis->n) {
-                if (basis->var_status[var] != CXF_BASIC) {
+                if (basis->var_status[var] != row) {
                     return CXF_ERROR_INVALID_ARGUMENT;
                 }
             }

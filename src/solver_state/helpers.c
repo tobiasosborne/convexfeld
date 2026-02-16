@@ -58,7 +58,7 @@ int cxf_cleanup_helper(
     int worklistCount = 0;
     for (int j = 0; j < num_vars; j++) {
         if (state->basis && state->basis->var_status &&
-            state->basis->var_status[j] != CXF_BASIC) {
+            state->basis->var_status[j] < 0) {
             worklist[worklistCount++] = j;
             inWorklist[j] = 1;
         }

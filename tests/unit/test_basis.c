@@ -464,9 +464,10 @@ void test_snapshot_create_copies_data(void) {
     basis->basic_vars[0] = 2;
     basis->basic_vars[1] = 4;
     basis->basic_vars[2] = 0;
-    basis->var_status[0] = CXF_BASIC;
-    basis->var_status[1] = CXF_NONBASIC_L;
-    basis->var_status[2] = CXF_BASIC;
+    basis->var_status[0] = 2;                /* Basic in row 2 */
+    basis->var_status[1] = CXF_VAR_AT_LOWER; /* Nonbasic */
+    basis->var_status[2] = 0;                /* Basic in row 0 */
+    basis->var_status[4] = 1;                /* Basic in row 1 */
     basis->iteration = 42;
 
     BasisSnapshot snap;
@@ -524,8 +525,9 @@ void test_snapshot_diff_identical(void) {
     basis->basic_vars[0] = 1;
     basis->basic_vars[1] = 2;
     basis->basic_vars[2] = 3;
-    basis->var_status[0] = CXF_BASIC;
-    basis->var_status[1] = CXF_BASIC;
+    basis->var_status[1] = 0;  /* Basic in row 0 */
+    basis->var_status[2] = 1;  /* Basic in row 1 */
+    basis->var_status[3] = 2;  /* Basic in row 2 */
 
     BasisSnapshot snap1, snap2;
     cxf_basis_snapshot_create(basis, &snap1, 0);
@@ -564,14 +566,14 @@ void test_snapshot_diff_var_status_change(void) {
     BasisState *basis = cxf_basis_create(2, 3);
     basis->basic_vars[0] = 0;
     basis->basic_vars[1] = 1;
-    basis->var_status[0] = CXF_BASIC;
-    basis->var_status[1] = CXF_BASIC;
-    basis->var_status[2] = CXF_NONBASIC_L;
+    basis->var_status[0] = 0;                /* Basic in row 0 */
+    basis->var_status[1] = 1;                /* Basic in row 1 */
+    basis->var_status[2] = CXF_VAR_AT_LOWER; /* Nonbasic */
 
     BasisSnapshot snap1;
     cxf_basis_snapshot_create(basis, &snap1, 0);
 
-    basis->var_status[2] = CXF_NONBASIC_U;  /* Change var status */
+    basis->var_status[2] = CXF_VAR_AT_UPPER;  /* Change var status */
     BasisSnapshot snap2;
     cxf_basis_snapshot_create(basis, &snap2, 0);
 
@@ -759,6 +761,10 @@ void test_basis_validate_ex_check_all(void) {
     basis->basic_vars[0] = 0;
     basis->basic_vars[1] = 2;
     basis->basic_vars[2] = 4;
+    /* Set var_status to match basic_vars (consistency check requires it) */
+    basis->var_status[0] = 0;  /* Basic in row 0 */
+    basis->var_status[2] = 1;  /* Basic in row 1 */
+    basis->var_status[4] = 2;  /* Basic in row 2 */
 
     /* With all checks, valid basis should pass */
     int status = cxf_basis_validate_ex(basis, CXF_CHECK_ALL);
@@ -849,9 +855,9 @@ void test_basis_warm_snapshot_copies_basis(void) {
     source->basic_vars[0] = 1;
     source->basic_vars[1] = 3;
     source->basic_vars[2] = 4;
-    source->var_status[0] = CXF_BASIC;
-    source->var_status[1] = CXF_NONBASIC_L;
-    source->var_status[2] = CXF_BASIC;
+    source->var_status[1] = 0;                /* Basic in row 0 */
+    source->var_status[3] = 1;                /* Basic in row 1 */
+    source->var_status[4] = 2;                /* Basic in row 2 */
 
     BasisSnapshot snap;
     cxf_basis_snapshot_create(source, &snap, 0);
@@ -867,9 +873,9 @@ void test_basis_warm_snapshot_copies_basis(void) {
     TEST_ASSERT_EQUAL_INT(4, target->basic_vars[2]);
 
     /* Verify var status copied */
-    TEST_ASSERT_EQUAL_INT(CXF_BASIC, target->var_status[0]);
-    TEST_ASSERT_EQUAL_INT(CXF_NONBASIC_L, target->var_status[1]);
-    TEST_ASSERT_EQUAL_INT(CXF_BASIC, target->var_status[2]);
+    TEST_ASSERT_EQUAL_INT(CXF_VAR_AT_LOWER, target->var_status[0]);  /* Nonbasic */
+    TEST_ASSERT_EQUAL_INT(0, target->var_status[1]);                /* Basic in row 0 */
+    TEST_ASSERT_EQUAL_INT(CXF_VAR_AT_LOWER, target->var_status[2]); /* Nonbasic */
 
     cxf_basis_snapshot_free(&snap);
     cxf_basis_free(source);
