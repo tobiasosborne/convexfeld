@@ -73,9 +73,9 @@ cxf_optimize_internal
 
 Before and after optimization, the system invokes lifecycle hooks that share the "callback" name but are NOT user callbacks:
 
-1. **cxf_pre_optimize_callback (P3.13):** Called at the start of cxf_optimize. Sets the error buffer lock on the environment to preserve the first error message throughout the solve. Does not interact with CallbackState or invoke user code.
+1. **cxf_pre_optimize_hook (P3.13):** Called at the start of cxf_optimize. Sets the error buffer lock on the environment to preserve the first error message throughout the solve. Does not interact with CallbackState or invoke user code.
 
-2. **cxf_post_optimize_callback (P3.13):** Called at the end of cxf_optimize, on all exit paths. Clears the error buffer lock, restoring normal error reporting. Does not interact with CallbackState or invoke user code.
+2. **cxf_post_optimize_hook (P3.13):** Called at the end of cxf_optimize, on all exit paths. Clears the error buffer lock, restoring normal error reporting. Does not interact with CallbackState or invoke user code.
 
 These hooks implement a first-error preservation pattern: in cascading error scenarios, the user sees the root cause rather than a secondary symptom.
 
@@ -102,13 +102,13 @@ The following table maps each callback event type to the module and function tha
 |------------|-------------------|----------------------|----------------|
 | POLLING | P3.25 (Solve LP Core) | cxf_solver_dispatch, cxf_solve_lp | Elapsed runtime |
 | PRESOLVE | P3.25 (Solve LP Core) | cxf_solver_dispatch (during presolve phase) | Rows removed, columns removed, elapsed time |
-| SIMPLEX | P3.20 (Simplex Iteration) | cxf_simplex_iterate | Iteration count, objective value, primal/dual infeasibility, elapsed time, simplex phase (primal/dual) |
+| SIMPLEX | P3.20 (Simplex Iteration) | cxf_log_iteration_progress | Iteration count, objective value, primal/dual infeasibility, elapsed time, simplex phase (primal/dual) |
 | BARRIER | P3.26 (Solve Barrier & Concurrent) | Barrier iteration loop (internal) | Iteration count, primal objective, dual objective, primal infeasibility, dual infeasibility, complementarity |
 | MESSAGE | P3.10 (Logging) | Log output functions | The log message string |
 
 **Detailed invocation context by solver phase:**
 
-**Simplex callbacks (SIMPLEX):** Invoked by cxf_simplex_iterate (P3.20) once per iteration batch. This function is called within the two-level iteration loop of cxf_solve_lp (P3.25) and reports progress regardless of whether console logging is enabled. The callback receives the current iteration count, objective value, and infeasibility measures. The callback is invoked even when console output is suppressed, ensuring that external monitoring systems (GUI progress bars, distributed managers) receive regular heartbeat notifications.
+**Simplex callbacks (SIMPLEX):** Invoked by cxf_log_iteration_progress (P3.20) once per iteration batch. This function is called within the two-level iteration loop of cxf_solve_lp (P3.25) and reports progress regardless of whether console logging is enabled. The callback receives the current iteration count, objective value, and infeasibility measures. The callback is invoked even when console output is suppressed, ensuring that external monitoring systems (GUI progress bars, distributed managers) receive regular heartbeat notifications.
 
 **Barrier callbacks (BARRIER):** Invoked during each iteration of the interior-point method. The callback receives the barrier iteration count, primal and dual objective values, and convergence measures (primal infeasibility, dual infeasibility, complementarity gap).
 
@@ -234,7 +234,7 @@ Errors during callback processing propagate through several layers:
 
 ### Error Buffer Locking
 
-The error buffer locking mechanism (cxf_pre_optimize_callback / cxf_post_optimize_callback, P3.13) ensures that during optimization, the first error message is preserved even when cascading errors occur. This is critical for callback-intensive solves where multiple callback invocations might generate error messages. The lock prevents secondary error messages from overwriting the root-cause message while still allowing error codes to be updated.
+The error buffer locking mechanism (cxf_pre_optimize_hook / cxf_post_optimize_hook, P3.13) ensures that during optimization, the first error message is preserved even when cascading errors occur. This is critical for callback-intensive solves where multiple callback invocations might generate error messages. The lock prevents secondary error messages from overwriting the root-cause message while still allowing error codes to be updated.
 
 ## Configuration
 

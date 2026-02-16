@@ -325,7 +325,7 @@ When multiple threads must access the same environment's error state (e.g., duri
 
 ### Error Buffer Lock (Not a Thread Lock)
 
-The error buffer locked flag (P3.13 lifecycle hooks) is a **single-thread cascading-error guard**, not a thread synchronization mechanism. It prevents inner functions from overwriting the root-cause error message during a cascading failure within a single API call. The lock is set by cxf_pre_optimize_callback at optimization start and cleared by cxf_post_optimize_callback at optimization end.
+The error buffer locked flag (P3.13 lifecycle hooks) is a **single-thread cascading-error guard**, not a thread synchronization mechanism. It prevents inner functions from overwriting the root-cause error message during a cascading failure within a single API call. The lock is set by cxf_pre_optimize_hook at optimization start and cleared by cxf_post_optimize_hook at optimization end.
 
 ### Errors in Concurrent Solver Instances
 

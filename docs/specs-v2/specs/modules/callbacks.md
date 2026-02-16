@@ -7,7 +7,7 @@ The Callbacks module provides the infrastructure for user callback invocation, s
 This module contains a mix of function types that share the "callback" naming convention but serve distinct architectural roles:
 
 1. **Callback infrastructure** (cxf_init_callback_struct): Allocates and initializes the mutex used to serialize callback invocations.
-2. **Optimization lifecycle hooks** (cxf_pre_optimize_callback, cxf_post_optimize_callback): Internal hooks called before and after optimization to manage error buffer state. Despite their names, these are NOT user callbacks.
+2. **Optimization lifecycle hooks** (cxf_pre_optimize_hook, cxf_post_optimize_hook): Internal hooks called before and after optimization to manage error buffer state.
 3. **User-facing callback operations** (cxf_callback_terminate, cxf_getconstrs_callback): Functions invoked from within a user callback to interact with the solver.
 4. **Callback propagation** (cxf_copy_env_callbacks): Copies callback registration and configuration from one environment to another during environment or model cloning.
 
@@ -92,7 +92,7 @@ The non-blocking lock test serves as a discriminator between local and remote op
 
 ---
 
-### cxf_pre_optimize_callback
+### cxf_pre_optimize_hook
 
 **Purpose:** Lock the error buffer before optimization begins to preserve any pre-existing error messages during the solve.
 
@@ -114,11 +114,13 @@ The non-blocking lock test serves as a discriminator between local and remote op
 - Invalid model (fails structural validation) -> silent return, no action
 
 **Behavioral Description:**
-This function is an internal optimization lifecycle hook, NOT a user callback. Despite its name suggesting callback behavior, it is called by the optimization infrastructure at the very beginning of an optimization operation, before the solver loop starts.
+This function is an internal optimization lifecycle hook, NOT a user callback. It is called by the optimization infrastructure at the very beginning of an optimization operation, before the solver loop starts.
+
+**Naming history:** Formerly `cxf_pre_optimize_callback`; renamed to `cxf_pre_optimize_hook` to better reflect that it is an internal lifecycle hook, not a user callback.
 
 The function validates the model using the standard structural validation check (sentinel-based). If validation passes, it sets the error buffer lock flag on the model's environment. This lock causes subsequent error-reporting functions to preserve the existing error message text while still updating the error code. The primary purpose is to ensure that if an error was set before optimization (such as a parameter validation error), that message is not overwritten by cascading errors that may occur during the solve process.
 
-This function is always paired with cxf_post_optimize_callback, which clears the lock after optimization completes.
+This function is always paired with cxf_post_optimize_hook, which clears the lock after optimization completes.
 
 **Thread Safety:** Unsafe. The error buffer lock flag is not protected by a mutex. The function is expected to be called from the optimization entry point, which is single-threaded at that stage.
 
@@ -127,7 +129,7 @@ This function is always paired with cxf_post_optimize_callback, which clears the
 
 ---
 
-### cxf_post_optimize_callback
+### cxf_post_optimize_hook
 
 **Purpose:** Unlock the error buffer after optimization completes, restoring normal error reporting behavior.
 
@@ -149,7 +151,9 @@ This function is always paired with cxf_post_optimize_callback, which clears the
 - Invalid model (fails structural validation) -> silent return, no action
 
 **Behavioral Description:**
-This function is an internal optimization lifecycle hook, NOT a user callback. It is the complement of cxf_pre_optimize_callback and is called by the optimization infrastructure after the solver loop completes, regardless of the optimization outcome (success, error, user termination, time limit, iteration limit, etc.).
+This function is an internal optimization lifecycle hook, NOT a user callback. It is the complement of cxf_pre_optimize_hook and is called by the optimization infrastructure after the solver loop completes, regardless of the optimization outcome (success, error, user termination, time limit, iteration limit, etc.).
+
+**Naming history:** Formerly `cxf_post_optimize_callback`; renamed to `cxf_post_optimize_hook` to better reflect that it is an internal lifecycle hook, not a user callback.
 
 The function validates the model using the standard structural validation check. If validation passes, it clears the error buffer lock flag on the model's environment, restoring the normal error reporting mode where new error messages overwrite the buffer.
 
@@ -301,21 +305,21 @@ The term "callback" is overloaded in this module's function names, referring to 
 
 1. **User callbacks** (optimization callbacks, log callbacks): Functions registered by the user that the solver invokes during optimization to report progress or allow intervention. cxf_callback_terminate and cxf_getconstrs_callback operate within this context -- they are called from inside a user callback to interact with the solver.
 
-2. **Lifecycle hooks** (cxf_pre_optimize_callback, cxf_post_optimize_callback): Internal functions called by the optimization infrastructure at the start and end of optimization. Despite their "callback" suffix, these have nothing to do with user callbacks. They manage the error buffer lock, ensuring that the first error message recorded before optimization is preserved throughout the solve.
+2. **Lifecycle hooks** (cxf_pre_optimize_hook, cxf_post_optimize_hook): Internal functions called by the optimization infrastructure at the start and end of optimization. They manage the error buffer lock, ensuring that the first error message recorded before optimization is preserved throughout the solve.
 
 3. **Callback infrastructure** (cxf_init_callback_struct, cxf_copy_env_callbacks): Functions that set up, initialize, and propagate the callback system itself, including mutex allocation and CallbackState configuration.
 
-Users of this specification should be aware that cxf_pre_optimize_callback and cxf_post_optimize_callback are purely internal lifecycle hooks. They do not invoke user callbacks, do not interact with the CallbackState, and do not involve the callback mutex. Their only relationship to "callbacks" is their name and their position in the optimization lifecycle.
+Users of this specification should be aware that cxf_pre_optimize_hook and cxf_post_optimize_hook are purely internal lifecycle hooks. They do not invoke user callbacks, do not interact with the CallbackState, and do not involve the callback mutex. Their only relationship to "callbacks" is their name and their position in the optimization lifecycle.
 
 ### Error Buffer Locking Pattern
 
-The cxf_pre_optimize_callback / cxf_post_optimize_callback pair implements a first-error preservation pattern for optimization. The typical control flow is:
+The cxf_pre_optimize_hook / cxf_post_optimize_hook pair implements a first-error preservation pattern for optimization. The typical control flow is:
 
 1. User calls the optimization entry point.
-2. cxf_pre_optimize_callback sets the error buffer lock.
+2. cxf_pre_optimize_hook sets the error buffer lock.
 3. The optimization loop executes, potentially encountering multiple errors.
 4. Because the lock is set, only error codes are updated but the original error message text is preserved.
-5. cxf_post_optimize_callback clears the lock.
+5. cxf_post_optimize_hook clears the lock.
 6. The original (root cause) error message is available to the user.
 
 This pattern ensures that in cascading error scenarios (common during optimization, where one failure triggers multiple downstream failures), the user sees the original error rather than a secondary symptom.
@@ -336,8 +340,8 @@ The log callback function pointer and its user data reside in the Environment, n
 |----------|---------------|-------|
 | cxf_init_callback_struct | Safe | Pure allocation and initialization; no shared state |
 | cxf_callback_terminate | Conditional | Local path uses atomic flag write; remote path acquires remote solver lock |
-| cxf_pre_optimize_callback | Unsafe | Called from single-threaded optimization entry point |
-| cxf_post_optimize_callback | Unsafe | Called from single-threaded optimization cleanup path |
+| cxf_pre_optimize_hook | Unsafe | Called from single-threaded optimization entry point |
+| cxf_post_optimize_hook | Unsafe | Called from single-threaded optimization cleanup path |
 | cxf_getconstrs_callback | Conditional | Acquires remote solver lock; must be called from within a callback context |
 | cxf_copy_env_callbacks | Unsafe | Called during environment/model setup before concurrent access |
 

@@ -49,7 +49,7 @@ This module does not contain any solver algorithms. Its role is purely organizat
 **Side Effects:**
 - Validates the model via the structural validation check (P3.07)
 - Sets up a signal handler for interrupt handling on applicable deployment types
-- Acquires the locale safety state (cxf_acquire_solve_lock, P3.11), ensuring the "C" locale for consistent numeric formatting
+- Acquires the locale safety state (cxf_save_locale_state, P3.11), ensuring the "C" locale for consistent numeric formatting
 - Clears the environment's message buffers and resets message state
 - Sets the model's modification-blocked flag to prevent concurrent modifications
 - Clears the model's status code
@@ -100,8 +100,8 @@ This function is the sole public entry point for optimization. It wraps the enti
 
 **Dependencies:**
 - P3.07 (Input Validation) - cxf_checkmodel for model validation
-- P3.11 (Threading & Synchronization) - cxf_acquire_solve_lock / cxf_release_solve_lock for locale safety; cxf_get_threads, cxf_get_physical_cores, cxf_get_logical_processors, cxf_set_thread_count for hardware logging
-- P3.13 (Callbacks) - cxf_pre_optimize_callback / cxf_post_optimize_callback for error buffer lifecycle
+- P3.11 (Threading & Synchronization) - cxf_save_locale_state / cxf_release_solve_lock for locale safety; cxf_get_threads, cxf_get_physical_cores, cxf_get_logical_processors, cxf_validate_thread_count for hardware logging
+- P3.13 (Callbacks) - cxf_pre_optimize_hook / cxf_post_optimize_hook for error buffer lifecycle
 - P3.09 (Error Handling) - cxf_error_model, cxf_set_error_message for error reporting
 - P1.01 (Environment) - environment state fields (message buffers, output flag, session reference, callback state)
 - P1.02 (Model) - model state fields (modification-blocked, status code, callback count, remote solver flag)

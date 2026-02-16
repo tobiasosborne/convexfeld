@@ -10,13 +10,15 @@ The Threading & Synchronization module provides the solver's thread resource man
 
 3. **Error Buffer Preparation:** The module includes a function that prepares the environment's error buffer for a new API operation by clearing stale error state, unless the buffer is currently locked for nested error handling.
 
-Despite the module name, none of the functions in this module implement mutual exclusion or thread synchronization primitives. The "lock" and "acquire" terminology in several function names is a historical misnomer; see the Module-Level Behavioral Notes section for details.
+Despite the module name, none of the functions in this module implement mutual exclusion or thread synchronization primitives. Several functions have been renamed from their original "lock" and "acquire" terminology to better reflect their actual behavior; see the Module-Level Behavioral Notes section for details.
 
 ## Functions
 
-### cxf_acquire_solve_lock
+### cxf_save_locale_state
 
 **Purpose:** Save the calling thread's locale state and switch to the standard numeric locale before optimization begins, ensuring consistent decimal point formatting.
+
+**Naming history:** Formerly `cxf_acquire_solve_lock`; renamed to better reflect its actual behavior of managing locale state rather than acquiring a mutex.
 
 **Signature:**
 - Input: `environment` : pointer-to-Environment - The environment controlling the optimization context
@@ -62,17 +64,17 @@ The per-thread locale isolation mechanism is critical for correctness in multi-t
 
 ### cxf_release_solve_lock
 
-**Purpose:** Restore the calling thread's original locale state after optimization completes, reversing the locale change made by cxf_acquire_solve_lock.
+**Purpose:** Restore the calling thread's original locale state after optimization completes, reversing the locale change made by cxf_save_locale_state.
 
 **Signature:**
-- Input: `locale_state` : pointer-to-LocaleSaveData - The structure populated by a prior call to cxf_acquire_solve_lock
+- Input: `locale_state` : pointer-to-LocaleSaveData - The structure populated by a prior call to cxf_save_locale_state
 - Output: void
 
 **Preconditions:**
-- The locale_state must have been populated by a prior call to cxf_acquire_solve_lock (or be zero-initialized, in which case this function is a no-op)
+- The locale_state must have been populated by a prior call to cxf_save_locale_state (or be zero-initialized, in which case this function is a no-op)
 
 **Postconditions:**
-- If the locale_state contained saved locale data, the calling thread's locale has been restored to its original setting (the locale that was active before cxf_acquire_solve_lock was called)
+- If the locale_state contained saved locale data, the calling thread's locale has been restored to its original setting (the locale that was active before cxf_save_locale_state was called)
 - All allocated locale data structures have been freed
 - All pointers in the locale_state structure have been set to null
 
@@ -84,12 +86,12 @@ The per-thread locale isolation mechanism is critical for correctness in multi-t
 - Clears the pointers in the locale_state structure
 
 **Error Conditions:**
-- None. This function always succeeds. If the locale_state contains null pointers (because cxf_acquire_solve_lock determined no locale change was needed), the function simply returns.
+- None. This function always succeeds. If the locale_state contains null pointers (because cxf_save_locale_state determined no locale change was needed), the function simply returns.
 
 **Behavioral Description:**
-This function is the cleanup companion to cxf_acquire_solve_lock. It first frees the target locale structure (which held the "C" locale configuration) if one was allocated. Then, if a saved locale structure exists, it enables per-thread locale mode, restores the original locale by applying the saved locale category and string, restores the original thread locale mode, and frees the saved locale structure. Both pointers in the locale_state are cleared to null to prevent double-free.
+This function is the cleanup companion to cxf_save_locale_state. It first frees the target locale structure (which held the "C" locale configuration) if one was allocated. Then, if a saved locale structure exists, it enables per-thread locale mode, restores the original locale by applying the saved locale category and string, restores the original thread locale mode, and frees the saved locale structure. Both pointers in the locale_state are cleared to null to prevent double-free.
 
-The function handles partial initialization gracefully: if cxf_acquire_solve_lock returned early (because the locale was already "C" or the environment was already in an optimization context), the locale_state contains null pointers and this function becomes a no-op.
+The function handles partial initialization gracefully: if cxf_save_locale_state returned early (because the locale was already "C" or the environment was already in an optimization context), the locale_state contains null pointers and this function becomes a no-op.
 
 **Thread Safety:** Safe. Operates on per-thread locale state using per-thread locale isolation. The locale_state structure is caller-owned and not shared.
 
@@ -239,9 +241,11 @@ The function always returns the most restrictive of all applicable limits.
 
 ---
 
-### cxf_set_thread_count
+### cxf_validate_thread_count
 
 **Purpose:** Validate a requested thread count against available hardware and emit a warning via the logging system if the thread count exceeds the logical processor count.
+
+**Naming history:** Formerly `cxf_set_thread_count`; renamed to better reflect its actual behavior of validating and warning rather than setting a thread count value.
 
 **Signature:**
 - Input: `environment` : pointer-to-Environment - The environment for log output and hardware info
@@ -266,8 +270,6 @@ This function checks whether a requested thread count exceeds the number of logi
 
 The function does not modify the thread count or any thread-related state. It is purely a validation and diagnostic function.
 
-Note: Despite the name "set_thread_count," this function does not set or store any thread count value. It only validates and warns. See the Module-Level Behavioral Notes section for further discussion of this misnomer.
-
 **Thread Safety:** Conditional. Thread safety depends on the logging system's thread safety. If cxf_log is called from multiple threads, the caller must ensure the environment's logging state is properly synchronized. In practice, this function is called during solver initialization when logging is typically single-threaded.
 
 **Dependencies:**
@@ -277,26 +279,24 @@ Note: Despite the name "set_thread_count," this function does not set or store a
 
 ## Module-Level Behavioral Notes
 
-### Naming Misnomers
+### Naming History
 
-This module contains several functions whose names are historically misleading. Understanding these misnomers is important for correct usage:
+This module contains several functions that have been renamed to correct historical misnomers:
 
-| Function Name | What the Name Suggests | What the Function Actually Does |
-|---------------|----------------------|-------------------------------|
-| cxf_acquire_solve_lock | Acquires a mutex for solving | Saves locale state and switches to "C" locale |
-| cxf_release_solve_lock | Releases a mutex after solving | Restores original locale state |
-| cxf_env_acquire_lock | Acquires a mutex on the environment | Clears the error buffer state |
-| cxf_set_thread_count | Sets the thread count | Validates and warns about thread oversubscription |
+| Current Name | Former Name | Reason for Rename |
+|--------------|-------------|-------------------|
+| cxf_save_locale_state | cxf_acquire_solve_lock | Original name suggested mutex acquisition but function manages locale state |
+| cxf_release_solve_lock | (unchanged) | Counterpart to renamed function; retains "lock" terminology for pairing consistency |
+| cxf_env_acquire_lock | (unchanged) | Despite name suggesting mutex, function clears error buffer state |
+| cxf_validate_thread_count | cxf_set_thread_count | Original name suggested setting a value but function only validates and warns |
 
-The "lock" terminology in cxf_acquire_solve_lock / cxf_release_solve_lock may reflect a conceptual "locking" of the numeric locale into the "C" setting for the duration of optimization. The acquire/release pairing follows the RAII-like pattern of save-modify-restore, which is similar to lock/unlock semantics in resource management.
+The "lock" terminology in cxf_save_locale_state / cxf_release_solve_lock reflects a conceptual "locking" of the numeric locale into the "C" setting for the duration of optimization. The acquire/release pairing follows the RAII-like pattern of save-modify-restore, which is similar to lock/unlock semantics in resource management.
 
-The "lock" in cxf_env_acquire_lock may reflect a conceptual "acquisition" of the right to write errors: the function checks whether the error buffer is "locked" (protected by nested error handling) and, if not, clears it for new error reporting. It "acquires" permission to write new error messages.
-
-The "set" in cxf_set_thread_count may reflect an earlier design where the function both set and validated the thread count. In its current form, it only validates and warns.
+The "lock" in cxf_env_acquire_lock reflects a conceptual "acquisition" of the right to write errors: the function checks whether the error buffer is "locked" (protected by nested error handling) and, if not, clears it for new error reporting.
 
 ### Locale Safety Architecture
 
-The locale acquire/release pair (cxf_acquire_solve_lock / cxf_release_solve_lock) implements a critical safety mechanism for international LP solver deployment. Different system locales use different decimal separators:
+The locale acquire/release pair (cxf_save_locale_state / cxf_release_solve_lock) implements a critical safety mechanism for international LP solver deployment. Different system locales use different decimal separators:
 
 - "C" / "POSIX" locale: period (1234.567)
 - Many European locales: comma (1234,567)
@@ -309,7 +309,7 @@ LP and MPS file formats universally use the period as the decimal separator. If 
 3. Using per-thread locale isolation so that other threads in the application (which may need their original locale for GUI display, for example) are not affected
 4. Restoring the user's locale after optimization completes
 
-The optimization-active check at the beginning of cxf_acquire_solve_lock prevents redundant save/restore cycles when the function is called from within an already-active optimization context.
+The optimization-active check at the beginning of cxf_save_locale_state prevents redundant save/restore cycles when the function is called from within an already-active optimization context.
 
 ### Thread Count Resolution Hierarchy
 
@@ -326,22 +326,22 @@ This "most restrictive wins" design ensures the solver never exceeds any applica
 This module interacts with several other modules:
 
 - **Environment Lifecycle (P3.30):** The hardware detection fields (logical processor count, physical core count) are populated during environment initialization. The Threading fields in the Environment data model (Layer 1) document these fields.
-- **Logging (P3.10):** cxf_set_thread_count uses the logging system to emit oversubscription warnings.
+- **Logging (P3.10):** cxf_validate_thread_count uses the logging system to emit oversubscription warnings.
 - **Error Handling (P3.09):** cxf_env_acquire_lock operates on the error buffer, which is shared with the Error Handling module. It clears error state at the start of API operations; the Error Handling module sets error state when errors occur.
-- **Memory Primitives (P3.01):** cxf_acquire_solve_lock / cxf_release_solve_lock allocate and free locale state structures.
+- **Memory Primitives (P3.01):** cxf_save_locale_state / cxf_release_solve_lock allocate and free locale state structures.
 - **Parameter System:** cxf_get_threads reads the Threads parameter from the environment's parameter table.
 
 ### Thread Safety Summary
 
 | Function | Thread Safety | Notes |
 |----------|---------------|-------|
-| cxf_acquire_solve_lock | Safe | Operates on per-thread locale state with per-thread isolation |
+| cxf_save_locale_state | Safe | Operates on per-thread locale state with per-thread isolation |
 | cxf_release_solve_lock | Safe | Operates on per-thread locale state with per-thread isolation |
 | cxf_env_acquire_lock | Unsafe | Caller must synchronize access to environment error buffer |
 | cxf_get_logical_processors | Safe | Returns immutable value set during initialization |
 | cxf_get_physical_cores | Safe | Reads immutable values set during initialization |
 | cxf_get_threads | Safe | Reads stable configuration values |
-| cxf_set_thread_count | Conditional | Depends on logging system thread safety |
+| cxf_validate_thread_count | Conditional | Depends on logging system thread safety |
 
 ---
 

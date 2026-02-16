@@ -6,7 +6,7 @@ The Cleanup Utilities module contains functions responsible for restoring solver
 
 Despite the module's name, its most algorithmically significant member is the bound propagation function (also known as the cleanup helper), which implements Feasibility-Based Bound Tightening (FBBT) -- a standard preprocessing technique described by Savelsbergh (1994) and Brearley, Mitra, and Williams (1975). This function derives tighter variable bounds from constraint activity analysis and detects hidden infeasibilities. The remaining functions handle resource cleanup for coefficient change tracking structures and signal handler restoration.
 
-Two of the four function names in this module -- cxf_cleanup_helper and cxf_propagate_bounds -- refer to the same underlying function. cxf_propagate_bounds is the algorithmically descriptive name; cxf_cleanup_helper reflects its calling context (invoked during the simplex cleanup phase). Both names are documented here, with cxf_propagate_bounds as the primary specification and cxf_cleanup_helper as an alias.
+Two of the four function names in this module -- cxf_propagate_bounds and cxf_propagate_bounds -- refer to the same underlying function. cxf_propagate_bounds is the algorithmically descriptive name; cxf_propagate_bounds reflects its calling context (invoked during the simplex cleanup phase). Both names are documented here, with cxf_propagate_bounds as the primary specification and cxf_propagate_bounds as an alias.
 
 ## Functions
 
@@ -103,7 +103,7 @@ This function is the cleanup counterpart to a setup function that is called befo
 
 **Purpose:** Perform iterative constraint-based bound tightening using a worklist-driven propagation algorithm, deriving tighter variable bounds from constraint activity analysis and detecting infeasibilities.
 
-**Aliases:** cxf_cleanup_helper (reflects the calling context: invoked during the simplex cleanup phase)
+**Aliases:** cxf_propagate_bounds (reflects the calling context: invoked during the simplex cleanup phase)
 
 **Signature:**
 - Input: `environment` : pointer-to-Environment -- The environment providing memory allocation services
@@ -201,11 +201,11 @@ The algorithm proceeds in the following phases:
 
 ---
 
-### cxf_cleanup_helper
+### cxf_propagate_bounds
 
 **Purpose:** Alias for cxf_propagate_bounds. See cxf_propagate_bounds for the complete behavioral specification.
 
-**Note on naming:** The name "cleanup_helper" reflects the calling context: this function is invoked during the simplex cleanup phase by cxf_simplex_cleanup. Despite its name suggesting a simple utility, it performs the most algorithmically complex operation in this module -- iterative constraint-based bound tightening. The name cxf_propagate_bounds more accurately describes the function's behavior.
+**Naming history:** Formerly `cxf_cleanup_helper`; renamed to `cxf_propagate_bounds` to better reflect its actual behavior of performing iterative constraint-based bound tightening.
 
 **Signature:** Identical to cxf_propagate_bounds.
 
@@ -223,11 +223,11 @@ The four functions in this module serve three distinct purposes:
 |----------|----------|------------|-------------|
 | cxf_cleanup_coeff_change | Resource cleanup | Simple (leaf function) | Model destruction, model update, pending buffer cleanup |
 | cxf_cleanup_optimization | Signal restoration | Simple (leaf function) | Optimization dispatch (after optimization completes) |
-| cxf_propagate_bounds / cxf_cleanup_helper | Bound tightening algorithm | Complex (iterative, allocates working memory) | Simplex cleanup phase |
+| cxf_propagate_bounds / cxf_propagate_bounds | Bound tightening algorithm | Complex (iterative, allocates working memory) | Simplex cleanup phase |
 
 ### Naming Convention
 
-Two of the four listed function names -- cxf_cleanup_helper and cxf_propagate_bounds -- are aliases for the same underlying function. The name cxf_cleanup_helper was assigned during early analysis based on its call site (the simplex cleanup function). The name cxf_propagate_bounds was assigned during deeper analysis when the function's algorithm was understood. Both names appear in the function map for traceability. In this specification, cxf_propagate_bounds is the primary name and cxf_cleanup_helper is documented as an alias.
+Two of the four listed function names -- cxf_propagate_bounds and cxf_propagate_bounds -- are aliases for the same underlying function. The name cxf_propagate_bounds was assigned during early analysis based on its call site (the simplex cleanup function). The name cxf_propagate_bounds was assigned during deeper analysis when the function's algorithm was understood. Both names appear in the function map for traceability. In this specification, cxf_propagate_bounds is the primary name and cxf_propagate_bounds is documented as an alias.
 
 ### Common Patterns
 

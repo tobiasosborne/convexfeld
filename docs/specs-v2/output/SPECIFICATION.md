@@ -3,7 +3,7 @@
 **Version:** 2.1 (Consolidated, LP-only)
 **Date:** 2026-02-16
 **Files assembled:** 62
-**Total lines:** 22,222
+**Total lines:** 22,219
 
 ---
 
@@ -2045,7 +2045,7 @@ As eta vectors accumulate, the cost of FTRAN and BTRAN grows linearly with the n
 
 ## Purpose
 
-WorkArrays is the model-level container for all optimization output data. Despite its name (which derives from the internal allocation and deallocation function names), this structure does not hold scratch buffers for simplex iterations -- that role belongs to SolverState. Instead, WorkArrays stores the results of an optimization call: primal variable values, dual values (for constraints, range constraints, and SOS constraints), objective function values and bounds, iteration and node counts, and solution pool entries. It is allocated at the beginning of an optimization call, populated by the solver during and after the solve, and retained on the Model so that the user can query solution attributes (such as variable values, objective value, iteration count, and solution pool entries) after the optimization returns. It is freed when the solution is cleared or the model is destroyed.
+SolutionData is the model-level container for all optimization output data. **Naming history:** Formerly `WorkArrays`; renamed to better reflect its actual role as a solution data container rather than a scratch buffer structure. This structure stores the results of an optimization call: primal variable values, dual values (for constraints, range constraints, and SOS constraints), objective function values and bounds, iteration and node counts, and solution pool entries. It does not hold scratch buffers for simplex iterations -- that role belongs to SolverState. It is allocated at the beginning of an optimization call, populated by the solver during and after the solve, and retained on the Model so that the user can query solution attributes (such as variable values, objective value, iteration count, and solution pool entries) after the optimization returns. It is freed when the solution is cleared or the model is destroyed.
 
 This structure serves as the bridge between the solver's internal state and the public attribute system. After optimization completes, a wiring step connects entries in the model's attribute table to specific fields within this structure, enabling the attribute getter API to return solution data without additional computation.
 
@@ -2135,9 +2135,9 @@ This structure serves as the bridge between the solver's internal state and the 
 
 ## Relationships
 
-- **Owned by** Model. The Model holds a pointer to the WorkArrays structure. The Model is responsible for allocating and freeing WorkArrays.
+- **Owned by** Model. The Model holds a pointer to the SolutionData structure. The Model is responsible for allocating and freeing SolutionData.
 
-- **Owns** primalValues and dualValues arrays. These are separately allocated arrays whose lifetime is managed by the WorkArrays allocation and deallocation functions.
+- **Owns** primalValues and dualValues arrays. These are separately allocated arrays whose lifetime is managed by the SolutionData allocation and deallocation functions.
 
 - **Borrows** rangeDuals and sosDuals. These typically point into the interior of the dualValues allocation rather than being independently allocated. They must not be freed separately.
 
@@ -2145,17 +2145,17 @@ This structure serves as the bridge between the solver's internal state and the 
 
 - **Owns** cutVariableValues and cutObjectiveValues arrays. Similar ownership semantics as the solution pool arrays.
 
-- **Referenced by** the attribute table. After optimization, the attribute wiring step stores pointers into WorkArrays fields within the model's attribute table entries. These pointers become invalid when WorkArrays is freed, so attribute cache invalidation must precede WorkArrays deallocation.
+- **Referenced by** the attribute table. After optimization, the attribute wiring step stores pointers into SolutionData fields within the model's attribute table entries. These pointers become invalid when SolutionData is freed, so attribute cache invalidation must precede SolutionData deallocation.
 
-- **Populated by** the solver (SolverState or barrier state). The solver writes solution data into WorkArrays during and after optimization.
+- **Populated by** the solver (SolverState or barrier state). The solver writes solution data into SolutionData during and after optimization.
 
-- **Read by** the presolve uncrushing step. After solving a presolved model, the uncrush operation reads primal values from WorkArrays to map them back to the original variable space.
+- **Read by** the presolve uncrushing step. After solving a presolved model, the uncrush operation reads primal values from SolutionData to map them back to the original variable space.
 
 ## Lifecycle
 
 ### Creation
 
-1. At the start of an optimization call, the allocation function checks whether the Model already has a WorkArrays instance.
+1. At the start of an optimization call, the allocation function checks whether the Model already has a SolutionData instance.
 2. If not, a zero-initialized block is allocated, large enough to hold all fixed-size fields.
 3. The activeFlag is set to 1, indicating the structure is live.
 4. Scale factors are computed from the model's variable count multiplied by standard algorithmic tolerance and scaling constants.
@@ -2163,30 +2163,30 @@ This structure serves as the bridge between the solver's internal state and the 
 6. History tracking fields (previousEnteringVar, previousLeavingVar, previousPivotRow) are set to -1 (unset).
 7. Threshold values are set to -1.0 (not yet activated).
 8. Auxiliary indices are set to -1 (not active).
-9. If a template WorkArrays is provided (e.g., from a scenario model), the non-pointer fields are bulk-copied from the template. After copying, all pointer fields (primalValues, dualValues, rangeDuals, sosDuals) are explicitly set to null to prevent aliasing of the template's owned arrays.
+9. If a template SolutionData is provided (e.g., from a scenario model), the non-pointer fields are bulk-copied from the template. After copying, all pointer fields (primalValues, dualValues, rangeDuals, sosDuals) are explicitly set to null to prevent aliasing of the template's owned arrays.
 10. Solution pool and cut counters are cleared to zero, and their associated pointer arrays are set to null.
 
 ### Mutation
 
 - **During simplex iterations**: the cycle detection fields, threshold values, and auxiliary indices are updated as the solver progresses. Scale factors may be adjusted. Iteration counters are incremented.
 - **On finding a feasible solution**: primalValues and dualValues arrays are allocated (if not already) and populated. The objectiveValue is set. The solutionCount is incremented.
-- **On solve completion**: the attribute wiring function connects attribute table entries to WorkArrays fields. The solveMode is finalized.
+- **On solve completion**: the attribute wiring function connects attribute table entries to SolutionData fields. The solveMode is finalized.
 
 ### Destruction
 
-1. The attribute cache on the Model is invalidated, breaking any wired pointers from the attribute table into WorkArrays.
+1. The attribute cache on the Model is invalidated, breaking any wired pointers from the attribute table into SolutionData.
 2. The primalValues array is freed if non-null.
 3. The dualValues array is freed if non-null. Since rangeDuals and sosDuals alias into this allocation, they are not freed separately; they are simply set to null.
 4. Each entry in poolVariableValues (if the pool is active) is freed individually, then the poolVariableValues array itself is freed. poolObjectiveValues and poolObjectiveBounds are freed.
 5. Each entry in cutVariableValues is freed, then the array itself. cutObjectiveValues is freed.
-6. The WorkArrays structure itself is freed.
-7. The Model's pointer to WorkArrays is set to null.
+6. The SolutionData structure itself is freed.
+7. The Model's pointer to SolutionData is set to null.
 
 Deallocation must occur in reverse allocation order to avoid dangling references. In particular, attribute cache invalidation must happen before any field deallocation.
 
 ## Invariants
 
-1. **Active flag consistency**: If activeFlag is 0, no other field should be read or written. Callers must check activeFlag (or the null-ness of the Model's pointer) before accessing WorkArrays.
+1. **Active flag consistency**: If activeFlag is 0, no other field should be read or written. Callers must check activeFlag (or the null-ness of the Model's pointer) before accessing SolutionData.
 
 2. **Array length consistency**: The length of primalValues equals numVars from the model's matrix data. The length of dualValues equals numConstrs plus numRangeConstrs plus numSOSConstraints. Each poolVariableValues entry has length numVars.
 
@@ -2198,23 +2198,23 @@ Deallocation must occur in reverse allocation order to avoid dangling references
 
 6. **Index sentinel**: Any auxiliary index or previous-pivot index equal to -1 indicates "not set" and must not be used as an array index.
 
-7. **Attribute wiring validity**: If attribute table entries have been wired to WorkArrays fields, the WorkArrays structure must remain allocated and at the same memory address until the attribute cache is invalidated. Freeing or reallocating WorkArrays without invalidating the cache produces dangling pointers.
+7. **Attribute wiring validity**: If attribute table entries have been wired to SolutionData fields, the SolutionData structure must remain allocated and at the same memory address until the attribute cache is invalidated. Freeing or reallocating SolutionData without invalidating the cache produces dangling pointers.
 
 ## Thread Safety
 
-WorkArrays is **not thread-safe**. It is designed to be accessed by a single thread during and after a single optimization call.
+SolutionData is **not thread-safe**. It is designed to be accessed by a single thread during and after a single optimization call.
 
 - All fields are read and written without synchronization.
-- Each concurrent optimization (e.g., concurrent LP solves or scenario processing) must operate on its own Model with its own WorkArrays instance.
-- After optimization returns, the user's thread may read WorkArrays fields (via the attribute API) without locking, since no other thread should be modifying the structure post-solve.
+- Each concurrent optimization (e.g., concurrent LP solves or scenario processing) must operate on its own Model with its own SolutionData instance.
+- After optimization returns, the user's thread may read SolutionData fields (via the attribute API) without locking, since no other thread should be modifying the structure post-solve.
 
 ## Design Rationale
 
-**Separation from SolverState**: While SolverState holds the internal working data needed *during* simplex iterations (basis arrays, reduced costs, sparse matrix copies, eta vectors), WorkArrays holds the *results* that persist after the solver finishes. This separation means the solver can free all its temporary working data (SolverState) immediately after completing, while the solution data (WorkArrays) remains available for the user to query. This is a standard pattern in commercial LP solvers where the solver's internal memory footprint should be reclaimed promptly, but solution attributes must remain accessible.
+**Separation from SolverState**: While SolverState holds the internal working data needed *during* simplex iterations (basis arrays, reduced costs, sparse matrix copies, eta vectors), SolutionData holds the *results* that persist after the solver finishes. This separation means the solver can free all its temporary working data (SolverState) immediately after completing, while the solution data (SolutionData) remains available for the user to query. This is a standard pattern in commercial LP solvers where the solver's internal memory footprint should be reclaimed promptly, but solution attributes must remain accessible.
 
 **Dual value aliasing**: Rather than allocating three separate arrays for linear constraint duals, range constraint duals, and SOS constraint duals, a single contiguous allocation is made and the three pointers are set to offsets within it. This reduces the number of allocations and improves cache locality when iterating over all dual values. The trade-off is slightly more complex deallocation logic (only the base array is freed). This is a common memory management optimization in numerical software (Maros, 2003, Section 2.2 on efficient memory management).
 
-**Template copying**: When solving multi-scenario optimization problems, the solver clones the model and solves each scenario independently. After a scenario solve, the scenario model's WorkArrays serves as a template for populating the original model's WorkArrays. The bulk copy transfers scalar fields (counters, objective values, scale factors, thresholds) efficiently, while pointer fields are cleared afterward to prevent double ownership. This is a standard "copy-then-fixup" pattern for structures containing a mix of value and pointer fields.
+**Template copying**: When solving multi-scenario optimization problems, the solver clones the model and solves each scenario independently. After a scenario solve, the scenario model's SolutionData serves as a template for populating the original model's SolutionData. The bulk copy transfers scalar fields (counters, objective values, scale factors, thresholds) efficiently, while pointer fields are cleared afterward to prevent double ownership. This is a standard "copy-then-fixup" pattern for structures containing a mix of value and pointer fields.
 
 **Adaptive thresholds initialized to -1.0**: The threshold array uses -1.0 as a sentinel value meaning "not yet set." Many simplex implementations use adaptive tolerances that are computed lazily on first need, based on problem characteristics observed during the solve (e.g., the magnitude of matrix coefficients or the degree of degeneracy). Initializing to -1.0 allows each consumer to detect "first use" and compute an appropriate initial threshold. This pattern is described in the context of dynamic tolerance adjustment by Maros (2003, Chapter 8).
 
@@ -6021,7 +6021,7 @@ cxf_vector_free follows a strict deallocation order designed to prevent dangling
 
 ## Purpose
 
-This module provides higher-level allocation functions that build on the memory primitives to allocate and initialize domain-specific solver structures. It includes the arena allocator for eta vectors used in the Product Form of the Inverse and the allocation and initialization of the WorkArrays (solution data container). These functions bridge the gap between raw memory allocation and the solver's runtime data structures.
+This module provides higher-level allocation functions that build on the memory primitives to allocate and initialize domain-specific solver structures. It includes the arena allocator for eta vectors used in the Product Form of the Inverse and the allocation and initialization of the SolutionData (solution data container). These functions bridge the gap between raw memory allocation and the solver's runtime data structures.
 
 ## Functions
 
@@ -6067,20 +6067,20 @@ cxf_alloc_eta implements a region-based memory allocator (arena allocator) optim
 
 ### cxf_alloc_work_arrays
 
-**Purpose:** Allocate (if necessary) and initialize the WorkArrays solution data container on a Model, preparing it for a new optimization call.
+**Purpose:** Allocate (if necessary) and initialize the SolutionData solution data container on a Model, preparing it for a new optimization call.
 
 **Signature:**
-- Input: model : pointer-to-Model - The model on which to allocate or reinitialize the WorkArrays
-- Input: template : pointer-to-WorkArrays (nullable) - Optional template from which to copy scalar field values (e.g., from a scenario model); if null, fields are initialized to defaults
+- Input: model : pointer-to-Model - The model on which to allocate or reinitialize the SolutionData
+- Input: template : pointer-to-SolutionData (nullable) - Optional template from which to copy scalar field values (e.g., from a scenario model); if null, fields are initialized to defaults
 - Output: int - Error code: zero on success, OUT_OF_MEMORY error code on allocation failure
 
 **Preconditions:**
 - model must be a valid, initialized Model with a valid environment and matrix data
-- If template is non-null, it must point to a valid, initialized WorkArrays structure
+- If template is non-null, it must point to a valid, initialized SolutionData structure
 - The model's matrix data must be populated (the function reads the variable count from it)
 
 **Postconditions:**
-- On success, the model's WorkArrays pointer references an initialized structure with:
+- On success, the model's SolutionData pointer references an initialized structure with:
   - The active flag set to indicate the structure is live
   - Scale factors computed from the model's variable count multiplied by standard algorithmic tolerance and scaling constants
   - The base tolerance stored from the solver's tolerance constant
@@ -6090,19 +6090,19 @@ cxf_alloc_eta implements a region-based memory allocator (arena allocator) optim
   - All solution pool and cut counters cleared to zero
   - All pointer fields for solution arrays (primal values, dual values) set to null
   - If a template was provided, scalar fields (counters, objective values, scale factors, thresholds) have been bulk-copied from the template, with pointer fields subsequently cleared to prevent aliasing
-- Any previously allocated solution arrays (primal values, dual values) within the WorkArrays have been freed before reinitialization
+- Any previously allocated solution arrays (primal values, dual values) within the SolutionData have been freed before reinitialization
 
 **Side Effects:**
-- Allocates the WorkArrays structure via cxf_calloc if not already present on the model
-- Frees any existing solution arrays owned by the WorkArrays
+- Allocates the SolutionData structure via cxf_calloc if not already present on the model
+- Frees any existing solution arrays owned by the SolutionData
 - Clears borrowed pointer fields to prevent aliasing
 - Invokes an internal cleanup routine on the model
 
 **Error Conditions:**
-- Out of memory during WorkArrays structure allocation -> returns OUT_OF_MEMORY error code
+- Out of memory during SolutionData structure allocation -> returns OUT_OF_MEMORY error code
 
 **Behavioral Description:**
-cxf_alloc_work_arrays prepares the model's solution data container for a new optimization run. If the model does not yet have a WorkArrays structure, one is allocated as a zero-initialized block. Any existing solution arrays (primal and dual value arrays) are freed to avoid memory leaks from a previous solve. The function then initializes all fields to their default states: the active flag is set, scale factors are computed as the product of the variable count and standard tolerance/scaling constants, anti-cycling indices are set to sentinel values indicating "not set," and adaptive threshold values are set to sentinel values indicating "not yet activated." If a template WorkArrays is provided (used in multi-scenario optimization where a scenario model's results are transferred to the original model), the scalar fields are bulk-copied from the template and pointer fields are then explicitly cleared to null to prevent double-ownership of the template's arrays. Finally, additional tracking fields (counters, pool data) are zeroed.
+cxf_alloc_work_arrays prepares the model's solution data container for a new optimization run. If the model does not yet have a SolutionData structure, one is allocated as a zero-initialized block. Any existing solution arrays (primal and dual value arrays) are freed to avoid memory leaks from a previous solve. The function then initializes all fields to their default states: the active flag is set, scale factors are computed as the product of the variable count and standard tolerance/scaling constants, anti-cycling indices are set to sentinel values indicating "not set," and adaptive threshold values are set to sentinel values indicating "not yet activated." If a template SolutionData is provided (used in multi-scenario optimization where a scenario model's results are transferred to the original model), the scalar fields are bulk-copied from the template and pointer fields are then explicitly cleared to null to prevent double-ownership of the template's arrays. Finally, additional tracking fields (counters, pool data) are zeroed.
 
 **Thread Safety:** unsafe - Must be called from a single thread. The Model structure is not thread-safe.
 
@@ -6126,9 +6126,9 @@ The eta vector memory pool uses a region-based (arena) allocator rather than ind
 
 The Product Form of the Inverse (PFI) approach that generates these eta vectors is described in Dantzig and Orchard-Hays (1954), "The Product Form for the Inverse in the Simplex Method," *Mathematical Tables and Other Aids to Computation*.
 
-### WorkArrays Initialization Pattern
+### SolutionData Initialization Pattern
 
-The WorkArrays allocation function follows a "create-or-reinitialize" pattern common in solver implementations:
+The SolutionData allocation function follows a "create-or-reinitialize" pattern common in solver implementations:
 
 - If the structure does not exist, it is allocated.
 - If it already exists from a previous solve, its arrays are freed but the structure itself is reused.
@@ -6164,7 +6164,7 @@ The adaptive threshold pattern (initialized to -1.0 meaning "compute on first us
 
 ## Purpose
 
-This module provides the functions that prepare model-level state at the beginning of an optimization call. It encompasses three concerns: initializing the solver's runtime environment (clearing flags, recording timestamps, adjusting tolerances), freeing stale warm-start basis data when a reset has been requested, and tearing down the solution output container (WorkArrays) to prepare for fresh results. Despite the "setup" naming convention in some of these functions, two of the three actually perform cleanup operations that establish a clean slate for the next optimization attempt. This reflects the solver's lifecycle pattern: "initialization" at the optimization boundary often means "clear previous results."
+This module provides the functions that prepare model-level state at the beginning of an optimization call. It encompasses three concerns: initializing the solver's runtime environment (clearing flags, recording timestamps, adjusting tolerances), freeing stale warm-start basis data when a reset has been requested, and tearing down the solution output container (SolutionData) to prepare for fresh results. Despite the "setup" naming convention in some of these functions, two of the three actually perform cleanup operations that establish a clean slate for the next optimization attempt. This reflects the solver's lifecycle pattern: "initialization" at the optimization boundary often means "clear previous results."
 
 ## Functions
 
@@ -6212,11 +6212,11 @@ cxf_init_solve_state is called once at the top of each optimization invocation t
 
 ---
 
-### cxf_setup_basis
+### cxf_free_warmstart_basis
 
 **Purpose:** Free the warm-start basis data structure associated with the model, deallocating all owned arrays and nested sub-structures.
 
-**Note:** Despite its name suggesting initialization, this function is a destructor. Analysis of the implementation confirms it performs only deallocation operations (no allocations, no field initialization to non-zero values). The name is a historical misnomer; the function is functionally identical to cxf_free_warmstart_basis.
+**Naming history:** Formerly `cxf_setup_basis`; renamed to better reflect its actual behavior as a destructor rather than an initialization function.
 
 **Signature:**
 - Input: env : pointer-to-Environment - The environment for memory tracking during deallocation
@@ -6244,7 +6244,7 @@ cxf_init_solve_state is called once at the top of each optimization invocation t
 - None. This function does not return an error code. Null pointer inputs are handled gracefully.
 
 **Behavioral Description:**
-cxf_setup_basis (which is functionally cxf_free_warmstart_basis) performs an inside-out deallocation of the WarmStartData structure. It first frees the leaf-level arrays (variable basis status, primal/dual values, constraint basis status), then frees the nested factorization cache sub-structure (its index array, its value array, then the sub-structure itself), then frees the main WarmStartData structure, and finally nulls the caller's reference pointer. Each pointer is null-checked before freeing, and each pointer is set to null after freeing, following the solver's standard defensive memory management pattern.
+cxf_free_warmstart_basis (which is functionally cxf_free_warmstart_basis) performs an inside-out deallocation of the WarmStartData structure. It first frees the leaf-level arrays (variable basis status, primal/dual values, constraint basis status), then frees the nested factorization cache sub-structure (its index array, its value array, then the sub-structure itself), then frees the main WarmStartData structure, and finally nulls the caller's reference pointer. Each pointer is null-checked before freeing, and each pointer is set to null after freeing, following the solver's standard defensive memory management pattern.
 
 **Deallocation Order:**
 1. Variable basis status array (within WarmStartData)
@@ -6263,51 +6263,51 @@ cxf_setup_basis (which is functionally cxf_free_warmstart_basis) performs an ins
 
 ---
 
-### cxf_setup_work_arrays
+### cxf_free_work_arrays
 
-**Purpose:** Free the WorkArrays (solution output container) structure from the model, invalidating cached attributes and deallocating all owned arrays before removing the structure.
+**Purpose:** Free the SolutionData (solution output container) structure from the model, invalidating cached attributes and deallocating all owned arrays before removing the structure.
 
-**Note:** Despite its name suggesting initialization, this function is a destructor/reset function. It frees the existing WorkArrays structure and all its owned allocations, preparing the model for either a fresh optimization attempt or final cleanup.
+**Naming history:** Formerly `cxf_setup_work_arrays`; renamed to better reflect its actual behavior as a destructor/reset function rather than an initialization function.
 
 **Signature:**
-- Input: model : pointer-to-Model - The model whose WorkArrays structure should be freed
+- Input: model : pointer-to-Model - The model whose SolutionData structure should be freed
 - Output: void
 
 **Preconditions:**
 - The model may be null; if so, the function returns immediately.
-- If the model is non-null but has no WorkArrays structure, the function returns immediately.
+- If the model is non-null but has no SolutionData structure, the function returns immediately.
 
 **Postconditions:**
-- The model's attribute cache has been invalidated, breaking any wired pointers from the attribute table into WorkArrays fields.
-- All owned arrays within the WorkArrays structure have been freed (primal solution array, dual solution array).
+- The model's attribute cache has been invalidated, breaking any wired pointers from the attribute table into SolutionData fields.
+- All owned arrays within the SolutionData structure have been freed (primal solution array, dual solution array).
 - Borrowed pointers within the structure (e.g., range dual and SOS dual aliases into the dual array) have been cleared without being independently freed.
 - Any unrecoverable error state associated with the model has been cleaned up.
-- The WorkArrays structure itself has been freed.
-- The model's reference to the WorkArrays structure has been set to null.
+- The SolutionData structure itself has been freed.
+- The model's reference to the SolutionData structure has been set to null.
 
 **Side Effects:**
 - Invalidates the model's attribute cache (must occur first, before any field deallocation, to prevent dangling pointers in the attribute table).
 - Deallocates memory through the environment's memory management system.
 - Clears borrowed pointer fields without freeing them (these alias into other allocations).
 - Invokes the unrecoverable state cleanup helper.
-- Nulls the model's WorkArrays pointer.
+- Nulls the model's SolutionData pointer.
 
 **Error Conditions:**
-- None. This function does not return an error code. Null model and null WorkArrays cases are handled gracefully.
+- None. This function does not return an error code. Null model and null SolutionData cases are handled gracefully.
 
 **Behavioral Description:**
-cxf_setup_work_arrays performs a controlled teardown of the model's solution output container. The first action is attribute cache invalidation, which must precede any deallocation because the attribute table may hold direct pointers into WorkArrays fields. After invalidation, the function frees the two owned arrays (solution index array and solution value array), clears two borrowed pointer fields without freeing them (these are aliases into allocations owned by other structures), invokes the unrecoverable state cleanup helper to handle any orphaned allocations, and finally frees the WorkArrays structure itself and nulls the model's reference.
+cxf_free_work_arrays performs a controlled teardown of the model's solution output container. The first action is attribute cache invalidation, which must precede any deallocation because the attribute table may hold direct pointers into SolutionData fields. After invalidation, the function frees the two owned arrays (solution index array and solution value array), clears two borrowed pointer fields without freeing them (these are aliases into allocations owned by other structures), invokes the unrecoverable state cleanup helper to handle any orphaned allocations, and finally frees the SolutionData structure itself and nulls the model's reference.
 
 **Deallocation Order:**
 1. Attribute cache invalidation (must be first)
-2. Owned solution index array (within WorkArrays)
-3. Owned solution value array (within WorkArrays)
+2. Owned solution index array (within SolutionData)
+3. Owned solution value array (within SolutionData)
 4. Borrowed pointers cleared (not freed)
 5. Unrecoverable state cleanup
-6. WorkArrays structure itself
-7. Model's WorkArrays reference set to null
+6. SolutionData structure itself
+7. Model's SolutionData reference set to null
 
-**Thread Safety:** unsafe -- Assumes single-threaded access to the model and its WorkArrays.
+**Thread Safety:** unsafe -- Assumes single-threaded access to the model and its SolutionData.
 
 **Dependencies:**
 - cxf_clear_attr_cache (attribute module) -- invalidates the attribute table's cached pointers
@@ -6318,24 +6318,24 @@ cxf_setup_work_arrays performs a controlled teardown of the model's solution out
 
 ## Module-Level Notes
 
-### Naming Misnomers
+### Naming History
 
-Two of the three functions in this module have names that suggest initialization but actually perform cleanup:
+Two of the three functions in this module have been renamed to correct historical misnomers:
 
-| Audit Name | Actual Behavior | Canonical Name |
-|------------|-----------------|----------------|
-| cxf_setup_basis | Frees warm-start basis data | cxf_free_warmstart_basis |
-| cxf_setup_work_arrays | Frees WorkArrays structure | cxf_free_work_arrays |
+| Current Name | Former Name | Reason for Rename |
+|--------------|-------------|-------------------|
+| cxf_free_warmstart_basis | cxf_setup_basis | Original name suggested initialization but function performs deallocation |
+| cxf_free_work_arrays | cxf_setup_work_arrays | Original name suggested initialization but function performs cleanup |
 
-These naming misnomers appear to reflect the perspective that "setting up" for a new optimization means "clearing out" the previous optimization's residual state. The behavioral contracts above describe the actual behavior regardless of the name.
+The original naming reflected the perspective that "setting up" for a new optimization means "clearing out" the previous optimization's residual state. The current names accurately describe the actual behavior.
 
 ### Calling Context
 
 These three functions are called early in the optimization pipeline:
 
 1. **cxf_init_solve_state** is called at the very beginning of the optimization entry point, after model validation but before solver dispatch.
-2. **cxf_setup_basis** is called conditionally when an environment parameter indicates that warm-start data should be cleared before re-optimization.
-3. **cxf_setup_work_arrays** is called on error recovery paths during optimization and during solution clearing operations.
+2. **cxf_free_warmstart_basis** is called conditionally when an environment parameter indicates that warm-start data should be cleared before re-optimization.
+3. **cxf_free_work_arrays** is called on error recovery paths during optimization and during solution clearing operations.
 
 ### Relationship to Cleanup Module (P3.04)
 
@@ -6670,11 +6670,11 @@ cxf_cleanup_solve_state is the cleanup counterpart to cxf_init_solve_state, call
 
 ---
 
-### cxf_free_solver_state
+### cxf_free_attribute_table
 
 **Purpose:** Free the model's attribute table structure and its owned entries array, removing the metadata that supports the model's attribute access API.
 
-**Note:** Despite the name suggesting it frees "solver state," this function specifically frees the attribute table structure. The naming reflects an earlier architectural phase where this model field held broader solver state.
+**Naming history:** Formerly `cxf_free_solver_state`; renamed to better reflect its specific responsibility of freeing the attribute table structure rather than broader solver state.
 
 **Signature:**
 - Input: model : pointer-to-Model - The model whose attribute table should be freed
@@ -6701,7 +6701,7 @@ cxf_cleanup_solve_state is the cleanup counterpart to cxf_init_solve_state, call
 - None. This function does not return an error code. Null attribute table is handled gracefully.
 
 **Behavioral Description:**
-cxf_free_solver_state performs a two-level deallocation of the model's attribute table. It first frees the nested entries array (which contains the per-attribute metadata descriptors), nulls the entries pointer defensively, and then frees the attribute table wrapper structure itself. The model's reference to the attribute table is set to null to prevent use-after-free. The function re-reads the attribute table pointer after freeing the entries array as a defensive measure against potential side effects.
+cxf_free_attribute_table performs a two-level deallocation of the model's attribute table. It first frees the nested entries array (which contains the per-attribute metadata descriptors), nulls the entries pointer defensively, and then frees the attribute table wrapper structure itself. The model's reference to the attribute table is set to null to prevent use-after-free. The function re-reads the attribute table pointer after freeing the entries array as a defensive measure against potential side effects.
 
 **Null Safety:** The function checks for null at every level: if the attribute table pointer is null, it returns immediately; if the entries array is null, it skips to freeing the table structure.
 
@@ -6943,7 +6943,7 @@ During model destruction (cxf_freemodel), the functions in this module are calle
 2. **cxf_free_basis_state** -- Free concurrent environments (may involve remote job termination)
 3. **cxf_free_iis_state** -- Free IIS diagnostic data
 4. **cxf_free_warmstart_basis** -- Free warm-start data
-5. **cxf_free_solver_state** -- Free attribute table (last, as other cleanup may query attributes)
+5. **cxf_free_attribute_table** -- Free attribute table (last, as other cleanup may query attributes)
 6. **cxf_cleanup_solve_state** -- Finalize timing and callbacks (called at end of each solve, not just destruction)
 
 ### Defensive Memory Patterns
@@ -6962,7 +6962,7 @@ The cleanup functions in this module are the inverse counterparts to initializat
 | Cleanup Function (P3.04) | Initialization Counterpart |
 |--------------------------|---------------------------|
 | cxf_cleanup_solve_state | cxf_init_solve_state (P3.03) |
-| cxf_free_solver_state | Attribute table creation during model init |
+| cxf_free_attribute_table | Attribute table creation during model init |
 | cxf_free_basis_state | Concurrent environment creation during concurrent solve setup |
 | cxf_free_iis_state | IIS computation (cxf_computeIIS) |
 | cxf_free_warmstart_basis | Warm-start creation (via VBasis/CBasis attribute setting) |
@@ -7311,7 +7311,7 @@ The function tests for finiteness using a branchless arithmetic technique on the
 
 ---
 
-### cxf_check_nan_or_inf
+### cxf_is_finite
 
 **Purpose:** Determine whether a double-precision floating-point value is finite (neither NaN nor infinity) per the IEEE 754 standard.
 
@@ -7332,7 +7332,9 @@ The function tests for finiteness using a branchless arithmetic technique on the
 - None. The function is total.
 
 **Behavioral Description:**
-This function is identical in behavior to cxf_check_is_finite. Both names refer to the same underlying operation. Despite the name suggesting it returns true for NaN/infinity values, the function actually returns true for finite values and false for non-finite values (inverted semantics relative to the name). The name is a historical misnomer preserved for backward compatibility. An implementor should treat this as an alias for cxf_check_is_finite. The implementation uses the same branchless IEEE 754 bit-manipulation technique described in that function's specification.
+This function is identical in behavior to cxf_check_is_finite. Both names refer to the same underlying operation. The implementation uses the same branchless IEEE 754 bit-manipulation technique described in that function's specification.
+
+**Naming history:** Formerly `cxf_check_nan_or_inf`; renamed to better reflect that it returns true for finite values and false for non-finite values (NaN or infinity).
 
 **Thread Safety:** safe (pure function, no shared state)
 
@@ -7939,7 +7941,7 @@ Messages that span multiple lines are split at newline characters and each line 
 
 ## Functions
 
-### cxf_errorlog
+### cxf_set_error_string
 
 **Purpose:** Set a predefined error message on the environment's error buffer based on a standard error code, accessed through a Model.
 
@@ -7968,7 +7970,7 @@ Messages that span multiple lines are split at newline characters and each line 
 **Behavioral Description:**
 This function maps standard solver error codes to predefined human-readable message strings and writes them to the environment's error buffer. It first validates the model structure. Then it extracts the environment and error buffer pointer. If the error code is zero, the buffer is cleared. For nonzero codes, it applies the first-error preservation rule: the out-of-memory error always overwrites (as memory exhaustion is typically the root cause of cascading failures), while all other errors write only to an empty buffer. The error code-to-message mapping covers approximately 30 standard error codes spanning memory errors, argument validation errors, attribute and parameter errors, I/O errors, numerical errors, model state errors, quadratic programming errors, network and server errors, and miscellaneous operational errors. One code in the standard range (10015) is reserved and has no mapping. Unrecognized codes receive a fallback message that includes the numeric value.
 
-Note: Despite its name suggesting "error log," this function writes to the error message buffer (the same buffer used by the Error Handling module's cxf_set_error_message), not to the log output system. The naming reflects that it "logs" an error state on the environment for later retrieval, rather than producing log file output.
+**Naming history:** Formerly `cxf_errorlog`; renamed to `cxf_set_error_string` to better reflect that it writes to the error message buffer, not to the log output system.
 
 **Thread Safety:** Unsafe. The caller is responsible for thread-safe access to the environment.
 
@@ -8102,14 +8104,14 @@ If a model reference is provided, the function inherits callback configuration f
 
 ### Naming Clarification
 
-The function named cxf_errorlog is somewhat confusingly placed in this Logging module. Despite its name, cxf_errorlog does not produce log file output; it sets a predefined error message on the environment's error buffer, which is the same operation performed by cxf_set_error_message and cxf_env_set_status in the Error Handling module. It is included in the Logging module per the project's function-to-module mapping. The function's "log" suffix reflects that it "logs" (records) an error state, not that it writes to the log output system.
+The function named cxf_set_error_string is somewhat confusingly placed in this Logging module. It sets a predefined error message on the environment's error buffer, which is the same operation performed by cxf_set_error_message and cxf_env_set_status in the Error Handling module. It is included in the Logging module per the project's function-to-module mapping.
 
 ### Relationship to Error Handling Module
 
 The Error Handling module (P3.09) and this Logging module share responsibility for the error message buffer:
 
 - **Error Handling** provides cxf_error_env and cxf_error_model (custom formatted messages) and cxf_set_error_message / cxf_env_set_status (predefined messages from codes).
-- **Logging** provides cxf_errorlog (predefined messages from codes, identical behavior to cxf_set_error_message) and cxf_log / cxf_register_log_callback (log output system, unrelated to the error buffer).
+- **Logging** provides cxf_set_error_string (predefined messages from codes, identical behavior to cxf_set_error_message) and cxf_log / cxf_register_log_callback (log output system, unrelated to the error buffer).
 
 The error message buffer and the log output system are entirely separate subsystems: the error buffer holds the most recent error for user retrieval via the API, while the log system produces ongoing progress and diagnostic output.
 
@@ -8136,7 +8138,7 @@ The environment maintains an internal log buffer that accumulates formatted text
 
 | Function | Thread Safety | Notes |
 |----------|---------------|-------|
-| cxf_errorlog | Unsafe | Caller must synchronize |
+| cxf_set_error_string | Unsafe | Caller must synchronize |
 | cxf_log | Conditional | Reentrancy-protected within one thread; caller must synchronize cross-thread |
 | cxf_register_log_callback | Conditional | Must not race with active callback invocations |
 
@@ -8168,13 +8170,15 @@ The Threading & Synchronization module provides the solver's thread resource man
 
 3. **Error Buffer Preparation:** The module includes a function that prepares the environment's error buffer for a new API operation by clearing stale error state, unless the buffer is currently locked for nested error handling.
 
-Despite the module name, none of the functions in this module implement mutual exclusion or thread synchronization primitives. The "lock" and "acquire" terminology in several function names is a historical misnomer; see the Module-Level Behavioral Notes section for details.
+Despite the module name, none of the functions in this module implement mutual exclusion or thread synchronization primitives. Several functions have been renamed from their original "lock" and "acquire" terminology to better reflect their actual behavior; see the Module-Level Behavioral Notes section for details.
 
 ## Functions
 
-### cxf_acquire_solve_lock
+### cxf_save_locale_state
 
 **Purpose:** Save the calling thread's locale state and switch to the standard numeric locale before optimization begins, ensuring consistent decimal point formatting.
+
+**Naming history:** Formerly `cxf_acquire_solve_lock`; renamed to better reflect its actual behavior of managing locale state rather than acquiring a mutex.
 
 **Signature:**
 - Input: `environment` : pointer-to-Environment - The environment controlling the optimization context
@@ -8220,17 +8224,17 @@ The per-thread locale isolation mechanism is critical for correctness in multi-t
 
 ### cxf_release_solve_lock
 
-**Purpose:** Restore the calling thread's original locale state after optimization completes, reversing the locale change made by cxf_acquire_solve_lock.
+**Purpose:** Restore the calling thread's original locale state after optimization completes, reversing the locale change made by cxf_save_locale_state.
 
 **Signature:**
-- Input: `locale_state` : pointer-to-LocaleSaveData - The structure populated by a prior call to cxf_acquire_solve_lock
+- Input: `locale_state` : pointer-to-LocaleSaveData - The structure populated by a prior call to cxf_save_locale_state
 - Output: void
 
 **Preconditions:**
-- The locale_state must have been populated by a prior call to cxf_acquire_solve_lock (or be zero-initialized, in which case this function is a no-op)
+- The locale_state must have been populated by a prior call to cxf_save_locale_state (or be zero-initialized, in which case this function is a no-op)
 
 **Postconditions:**
-- If the locale_state contained saved locale data, the calling thread's locale has been restored to its original setting (the locale that was active before cxf_acquire_solve_lock was called)
+- If the locale_state contained saved locale data, the calling thread's locale has been restored to its original setting (the locale that was active before cxf_save_locale_state was called)
 - All allocated locale data structures have been freed
 - All pointers in the locale_state structure have been set to null
 
@@ -8242,12 +8246,12 @@ The per-thread locale isolation mechanism is critical for correctness in multi-t
 - Clears the pointers in the locale_state structure
 
 **Error Conditions:**
-- None. This function always succeeds. If the locale_state contains null pointers (because cxf_acquire_solve_lock determined no locale change was needed), the function simply returns.
+- None. This function always succeeds. If the locale_state contains null pointers (because cxf_save_locale_state determined no locale change was needed), the function simply returns.
 
 **Behavioral Description:**
-This function is the cleanup companion to cxf_acquire_solve_lock. It first frees the target locale structure (which held the "C" locale configuration) if one was allocated. Then, if a saved locale structure exists, it enables per-thread locale mode, restores the original locale by applying the saved locale category and string, restores the original thread locale mode, and frees the saved locale structure. Both pointers in the locale_state are cleared to null to prevent double-free.
+This function is the cleanup companion to cxf_save_locale_state. It first frees the target locale structure (which held the "C" locale configuration) if one was allocated. Then, if a saved locale structure exists, it enables per-thread locale mode, restores the original locale by applying the saved locale category and string, restores the original thread locale mode, and frees the saved locale structure. Both pointers in the locale_state are cleared to null to prevent double-free.
 
-The function handles partial initialization gracefully: if cxf_acquire_solve_lock returned early (because the locale was already "C" or the environment was already in an optimization context), the locale_state contains null pointers and this function becomes a no-op.
+The function handles partial initialization gracefully: if cxf_save_locale_state returned early (because the locale was already "C" or the environment was already in an optimization context), the locale_state contains null pointers and this function becomes a no-op.
 
 **Thread Safety:** Safe. Operates on per-thread locale state using per-thread locale isolation. The locale_state structure is caller-owned and not shared.
 
@@ -8397,9 +8401,11 @@ The function always returns the most restrictive of all applicable limits.
 
 ---
 
-### cxf_set_thread_count
+### cxf_validate_thread_count
 
 **Purpose:** Validate a requested thread count against available hardware and emit a warning via the logging system if the thread count exceeds the logical processor count.
+
+**Naming history:** Formerly `cxf_set_thread_count`; renamed to better reflect its actual behavior of validating and warning rather than setting a thread count value.
 
 **Signature:**
 - Input: `environment` : pointer-to-Environment - The environment for log output and hardware info
@@ -8424,8 +8430,6 @@ This function checks whether a requested thread count exceeds the number of logi
 
 The function does not modify the thread count or any thread-related state. It is purely a validation and diagnostic function.
 
-Note: Despite the name "set_thread_count," this function does not set or store any thread count value. It only validates and warns. See the Module-Level Behavioral Notes section for further discussion of this misnomer.
-
 **Thread Safety:** Conditional. Thread safety depends on the logging system's thread safety. If cxf_log is called from multiple threads, the caller must ensure the environment's logging state is properly synchronized. In practice, this function is called during solver initialization when logging is typically single-threaded.
 
 **Dependencies:**
@@ -8435,26 +8439,24 @@ Note: Despite the name "set_thread_count," this function does not set or store a
 
 ## Module-Level Behavioral Notes
 
-### Naming Misnomers
+### Naming History
 
-This module contains several functions whose names are historically misleading. Understanding these misnomers is important for correct usage:
+This module contains several functions that have been renamed to correct historical misnomers:
 
-| Function Name | What the Name Suggests | What the Function Actually Does |
-|---------------|----------------------|-------------------------------|
-| cxf_acquire_solve_lock | Acquires a mutex for solving | Saves locale state and switches to "C" locale |
-| cxf_release_solve_lock | Releases a mutex after solving | Restores original locale state |
-| cxf_env_acquire_lock | Acquires a mutex on the environment | Clears the error buffer state |
-| cxf_set_thread_count | Sets the thread count | Validates and warns about thread oversubscription |
+| Current Name | Former Name | Reason for Rename |
+|--------------|-------------|-------------------|
+| cxf_save_locale_state | cxf_acquire_solve_lock | Original name suggested mutex acquisition but function manages locale state |
+| cxf_release_solve_lock | (unchanged) | Counterpart to renamed function; retains "lock" terminology for pairing consistency |
+| cxf_env_acquire_lock | (unchanged) | Despite name suggesting mutex, function clears error buffer state |
+| cxf_validate_thread_count | cxf_set_thread_count | Original name suggested setting a value but function only validates and warns |
 
-The "lock" terminology in cxf_acquire_solve_lock / cxf_release_solve_lock may reflect a conceptual "locking" of the numeric locale into the "C" setting for the duration of optimization. The acquire/release pairing follows the RAII-like pattern of save-modify-restore, which is similar to lock/unlock semantics in resource management.
+The "lock" terminology in cxf_save_locale_state / cxf_release_solve_lock reflects a conceptual "locking" of the numeric locale into the "C" setting for the duration of optimization. The acquire/release pairing follows the RAII-like pattern of save-modify-restore, which is similar to lock/unlock semantics in resource management.
 
-The "lock" in cxf_env_acquire_lock may reflect a conceptual "acquisition" of the right to write errors: the function checks whether the error buffer is "locked" (protected by nested error handling) and, if not, clears it for new error reporting. It "acquires" permission to write new error messages.
-
-The "set" in cxf_set_thread_count may reflect an earlier design where the function both set and validated the thread count. In its current form, it only validates and warns.
+The "lock" in cxf_env_acquire_lock reflects a conceptual "acquisition" of the right to write errors: the function checks whether the error buffer is "locked" (protected by nested error handling) and, if not, clears it for new error reporting.
 
 ### Locale Safety Architecture
 
-The locale acquire/release pair (cxf_acquire_solve_lock / cxf_release_solve_lock) implements a critical safety mechanism for international LP solver deployment. Different system locales use different decimal separators:
+The locale acquire/release pair (cxf_save_locale_state / cxf_release_solve_lock) implements a critical safety mechanism for international LP solver deployment. Different system locales use different decimal separators:
 
 - "C" / "POSIX" locale: period (1234.567)
 - Many European locales: comma (1234,567)
@@ -8467,7 +8469,7 @@ LP and MPS file formats universally use the period as the decimal separator. If 
 3. Using per-thread locale isolation so that other threads in the application (which may need their original locale for GUI display, for example) are not affected
 4. Restoring the user's locale after optimization completes
 
-The optimization-active check at the beginning of cxf_acquire_solve_lock prevents redundant save/restore cycles when the function is called from within an already-active optimization context.
+The optimization-active check at the beginning of cxf_save_locale_state prevents redundant save/restore cycles when the function is called from within an already-active optimization context.
 
 ### Thread Count Resolution Hierarchy
 
@@ -8484,22 +8486,22 @@ This "most restrictive wins" design ensures the solver never exceeds any applica
 This module interacts with several other modules:
 
 - **Environment Lifecycle (P3.30):** The hardware detection fields (logical processor count, physical core count) are populated during environment initialization. The Threading fields in the Environment data model (Layer 1) document these fields.
-- **Logging (P3.10):** cxf_set_thread_count uses the logging system to emit oversubscription warnings.
+- **Logging (P3.10):** cxf_validate_thread_count uses the logging system to emit oversubscription warnings.
 - **Error Handling (P3.09):** cxf_env_acquire_lock operates on the error buffer, which is shared with the Error Handling module. It clears error state at the start of API operations; the Error Handling module sets error state when errors occur.
-- **Memory Primitives (P3.01):** cxf_acquire_solve_lock / cxf_release_solve_lock allocate and free locale state structures.
+- **Memory Primitives (P3.01):** cxf_save_locale_state / cxf_release_solve_lock allocate and free locale state structures.
 - **Parameter System:** cxf_get_threads reads the Threads parameter from the environment's parameter table.
 
 ### Thread Safety Summary
 
 | Function | Thread Safety | Notes |
 |----------|---------------|-------|
-| cxf_acquire_solve_lock | Safe | Operates on per-thread locale state with per-thread isolation |
+| cxf_save_locale_state | Safe | Operates on per-thread locale state with per-thread isolation |
 | cxf_release_solve_lock | Safe | Operates on per-thread locale state with per-thread isolation |
 | cxf_env_acquire_lock | Unsafe | Caller must synchronize access to environment error buffer |
 | cxf_get_logical_processors | Safe | Returns immutable value set during initialization |
 | cxf_get_physical_cores | Safe | Reads immutable values set during initialization |
 | cxf_get_threads | Safe | Reads stable configuration values |
-| cxf_set_thread_count | Conditional | Depends on logging system thread safety |
+| cxf_validate_thread_count | Conditional | Depends on logging system thread safety |
 
 ---
 
@@ -8669,7 +8671,7 @@ The Callbacks module provides the infrastructure for user callback invocation, s
 This module contains a mix of function types that share the "callback" naming convention but serve distinct architectural roles:
 
 1. **Callback infrastructure** (cxf_init_callback_struct): Allocates and initializes the mutex used to serialize callback invocations.
-2. **Optimization lifecycle hooks** (cxf_pre_optimize_callback, cxf_post_optimize_callback): Internal hooks called before and after optimization to manage error buffer state. Despite their names, these are NOT user callbacks.
+2. **Optimization lifecycle hooks** (cxf_pre_optimize_hook, cxf_post_optimize_hook): Internal hooks called before and after optimization to manage error buffer state.
 3. **User-facing callback operations** (cxf_callback_terminate, cxf_getconstrs_callback): Functions invoked from within a user callback to interact with the solver.
 4. **Callback propagation** (cxf_copy_env_callbacks): Copies callback registration and configuration from one environment to another during environment or model cloning.
 
@@ -8754,7 +8756,7 @@ The non-blocking lock test serves as a discriminator between local and remote op
 
 ---
 
-### cxf_pre_optimize_callback
+### cxf_pre_optimize_hook
 
 **Purpose:** Lock the error buffer before optimization begins to preserve any pre-existing error messages during the solve.
 
@@ -8776,11 +8778,13 @@ The non-blocking lock test serves as a discriminator between local and remote op
 - Invalid model (fails structural validation) -> silent return, no action
 
 **Behavioral Description:**
-This function is an internal optimization lifecycle hook, NOT a user callback. Despite its name suggesting callback behavior, it is called by the optimization infrastructure at the very beginning of an optimization operation, before the solver loop starts.
+This function is an internal optimization lifecycle hook, NOT a user callback. It is called by the optimization infrastructure at the very beginning of an optimization operation, before the solver loop starts.
+
+**Naming history:** Formerly `cxf_pre_optimize_callback`; renamed to `cxf_pre_optimize_hook` to better reflect that it is an internal lifecycle hook, not a user callback.
 
 The function validates the model using the standard structural validation check (sentinel-based). If validation passes, it sets the error buffer lock flag on the model's environment. This lock causes subsequent error-reporting functions to preserve the existing error message text while still updating the error code. The primary purpose is to ensure that if an error was set before optimization (such as a parameter validation error), that message is not overwritten by cascading errors that may occur during the solve process.
 
-This function is always paired with cxf_post_optimize_callback, which clears the lock after optimization completes.
+This function is always paired with cxf_post_optimize_hook, which clears the lock after optimization completes.
 
 **Thread Safety:** Unsafe. The error buffer lock flag is not protected by a mutex. The function is expected to be called from the optimization entry point, which is single-threaded at that stage.
 
@@ -8789,7 +8793,7 @@ This function is always paired with cxf_post_optimize_callback, which clears the
 
 ---
 
-### cxf_post_optimize_callback
+### cxf_post_optimize_hook
 
 **Purpose:** Unlock the error buffer after optimization completes, restoring normal error reporting behavior.
 
@@ -8811,7 +8815,9 @@ This function is always paired with cxf_post_optimize_callback, which clears the
 - Invalid model (fails structural validation) -> silent return, no action
 
 **Behavioral Description:**
-This function is an internal optimization lifecycle hook, NOT a user callback. It is the complement of cxf_pre_optimize_callback and is called by the optimization infrastructure after the solver loop completes, regardless of the optimization outcome (success, error, user termination, time limit, iteration limit, etc.).
+This function is an internal optimization lifecycle hook, NOT a user callback. It is the complement of cxf_pre_optimize_hook and is called by the optimization infrastructure after the solver loop completes, regardless of the optimization outcome (success, error, user termination, time limit, iteration limit, etc.).
+
+**Naming history:** Formerly `cxf_post_optimize_callback`; renamed to `cxf_post_optimize_hook` to better reflect that it is an internal lifecycle hook, not a user callback.
 
 The function validates the model using the standard structural validation check. If validation passes, it clears the error buffer lock flag on the model's environment, restoring the normal error reporting mode where new error messages overwrite the buffer.
 
@@ -8963,21 +8969,21 @@ The term "callback" is overloaded in this module's function names, referring to 
 
 1. **User callbacks** (optimization callbacks, log callbacks): Functions registered by the user that the solver invokes during optimization to report progress or allow intervention. cxf_callback_terminate and cxf_getconstrs_callback operate within this context -- they are called from inside a user callback to interact with the solver.
 
-2. **Lifecycle hooks** (cxf_pre_optimize_callback, cxf_post_optimize_callback): Internal functions called by the optimization infrastructure at the start and end of optimization. Despite their "callback" suffix, these have nothing to do with user callbacks. They manage the error buffer lock, ensuring that the first error message recorded before optimization is preserved throughout the solve.
+2. **Lifecycle hooks** (cxf_pre_optimize_hook, cxf_post_optimize_hook): Internal functions called by the optimization infrastructure at the start and end of optimization. They manage the error buffer lock, ensuring that the first error message recorded before optimization is preserved throughout the solve.
 
 3. **Callback infrastructure** (cxf_init_callback_struct, cxf_copy_env_callbacks): Functions that set up, initialize, and propagate the callback system itself, including mutex allocation and CallbackState configuration.
 
-Users of this specification should be aware that cxf_pre_optimize_callback and cxf_post_optimize_callback are purely internal lifecycle hooks. They do not invoke user callbacks, do not interact with the CallbackState, and do not involve the callback mutex. Their only relationship to "callbacks" is their name and their position in the optimization lifecycle.
+Users of this specification should be aware that cxf_pre_optimize_hook and cxf_post_optimize_hook are purely internal lifecycle hooks. They do not invoke user callbacks, do not interact with the CallbackState, and do not involve the callback mutex. Their only relationship to "callbacks" is their name and their position in the optimization lifecycle.
 
 ### Error Buffer Locking Pattern
 
-The cxf_pre_optimize_callback / cxf_post_optimize_callback pair implements a first-error preservation pattern for optimization. The typical control flow is:
+The cxf_pre_optimize_hook / cxf_post_optimize_hook pair implements a first-error preservation pattern for optimization. The typical control flow is:
 
 1. User calls the optimization entry point.
-2. cxf_pre_optimize_callback sets the error buffer lock.
+2. cxf_pre_optimize_hook sets the error buffer lock.
 3. The optimization loop executes, potentially encountering multiple errors.
 4. Because the lock is set, only error codes are updated but the original error message text is preserved.
-5. cxf_post_optimize_callback clears the lock.
+5. cxf_post_optimize_hook clears the lock.
 6. The original (root cause) error message is available to the user.
 
 This pattern ensures that in cascading error scenarios (common during optimization, where one failure triggers multiple downstream failures), the user sees the original error rather than a secondary symptom.
@@ -8998,8 +9004,8 @@ The log callback function pointer and its user data reside in the Environment, n
 |----------|---------------|-------|
 | cxf_init_callback_struct | Safe | Pure allocation and initialization; no shared state |
 | cxf_callback_terminate | Conditional | Local path uses atomic flag write; remote path acquires remote solver lock |
-| cxf_pre_optimize_callback | Unsafe | Called from single-threaded optimization entry point |
-| cxf_post_optimize_callback | Unsafe | Called from single-threaded optimization cleanup path |
+| cxf_pre_optimize_hook | Unsafe | Called from single-threaded optimization entry point |
+| cxf_post_optimize_hook | Unsafe | Called from single-threaded optimization cleanup path |
 | cxf_getconstrs_callback | Conditional | Acquires remote solver lock; must be called from within a callback context |
 | cxf_copy_env_callbacks | Unsafe | Called during environment/model setup before concurrent access |
 
@@ -9036,7 +9042,7 @@ The conversion pipeline has four stages, three of which are provided by this mod
 | 2 | cxf_build_row_major | Perform two-pass CSC-to-CSR conversion |
 | 3 | cxf_finalize_row_data (external) | Re-apply scaling, restore original arrays |
 
-The fourth function, cxf_sort_indices, is a general-purpose hybrid sorting utility used throughout the matrix subsystem for ordering sparse index arrays.
+The fourth function, cxf_sort_by_values, is a general-purpose hybrid sorting utility used throughout the matrix subsystem for ordering sparse index arrays.
 
 ## Functions
 
@@ -9220,11 +9226,11 @@ The overall time complexity is O(nnz) for the linear CSR construction plus O(nnz
 - Memory allocation and deallocation (Memory Primitives module)
 - Error reporting (Error Handling module)
 - SOS row-major construction helper
-- Quadratic constraint index sorting helper (cxf_sort_indices or a related sorting utility)
+- Quadratic constraint index sorting helper (cxf_sort_by_values or a related sorting utility)
 
 ---
 
-### cxf_sort_indices
+### cxf_sort_by_values
 
 **Purpose:** Sort a pair of parallel sparse arrays (values and associated integer indices) in ascending order of the values, using a hybrid sorting algorithm optimized for the array sizes typical in LP solver operations.
 
@@ -9261,7 +9267,7 @@ The function implements a hybrid sorting algorithm combining quicksort and shell
 
 4. **Parallel array management:** Throughout all sorting operations, whenever two elements are compared and swapped in the values array, the corresponding elements in the indices array are swapped identically, maintaining the value-index correspondence.
 
-Note: Despite the function name suggesting sorting of indices, the primary sort key is the values array. The indices are permuted as satellites. This function is used in contexts such as ordering sparse vector entries by coefficient magnitude, sorting pricing candidates by reduced cost, and arranging quadratic constraint terms by constraint index.
+**Naming history:** Formerly `cxf_sort_indices`; renamed to better reflect that the primary sort key is the values array, with indices permuted as satellites. This function is used in contexts such as ordering sparse vector entries by coefficient magnitude, sorting pricing candidates by reduced cost, and arranging quadratic constraint terms by constraint index.
 
 **Thread Safety:** Safe (operates only on the provided arrays with no shared state).
 
@@ -9293,9 +9299,6 @@ The partitioning performed by cxf_matrix_setup is a critical optimization for pr
 
 The matrix may be stored in scaled form during optimization (where all coefficients have been multiplied by row and column scaling factors to improve numerical conditioning; see Tomlin, 1975; Curtis and Reid, 1972). Row-major access requests from the user API expect unscaled (original) coefficients. The pipeline handles this by unscaling before CSR construction and re-scaling afterward, ensuring that the cached CSR always reflects the appropriate coefficient form for its context.
 
-### Naming Note
-
-The function cxf_sort_indices sorts by values, not by indices, despite its name. The "indices" in the name refers to the fact that integer index arrays are sorted alongside their associated values (as satellites), which is the typical use case in sparse matrix operations.
 
 ### Thread Safety Summary
 
@@ -9304,7 +9307,7 @@ The function cxf_sort_indices sorts by values, not by indices, despite its name.
 | cxf_prepare_row_data | Unsafe | Modifies matrix data in place, releases locks |
 | cxf_matrix_setup | Unsafe | Partitions CSC arrays in place, swaps pointers |
 | cxf_build_row_major | Unsafe | Allocates and stores arrays on the matrix |
-| cxf_sort_indices | Safe | Operates only on provided arrays, no shared state |
+| cxf_sort_by_values | Safe | Operates only on provided arrays, no shared state |
 
 All unsafe functions require the caller to hold the model-level critical section or otherwise ensure exclusive access to the matrix data.
 
@@ -9587,9 +9590,9 @@ The Basis Operations module manages the Product Form of the Inverse (PFI) repres
 
 ## Functions
 
-### cxf_basis_refactor
+### cxf_fix_variables_at_bounds
 
-**Purpose:** Identify and fix variables at their bounds during simplex iterations, creating eta vectors for the PFI representation to reduce the working basis size and improve numerical stability. Despite its name, this function does not perform LU refactorization; it performs constraint-driven variable fixing.
+**Purpose:** Identify and fix variables at their bounds during simplex iterations, creating eta vectors for the PFI representation to reduce the working basis size and improve numerical stability.
 
 **Signature:**
 - Input: `state` : pointer-to-SolverState - The solver's working state containing the basis, constraint matrix, bounds, and objective data
@@ -9650,7 +9653,7 @@ The function processes a list of candidate constraints to identify variables tha
 
 ---
 
-### cxf_basis_snapshot
+### cxf_progress_snapshot
 
 **Purpose:** Capture a lightweight snapshot of the solver's iteration counters and progress metrics, establishing a baseline for subsequent cycling detection via cxf_basis_diff.
 
@@ -9683,7 +9686,7 @@ The function copies a fixed set of integer counter values from the solver state 
 
 The snapshot is extremely lightweight: it consists of exactly SNAPSHOT_SIZE integer copies with no loops over problem data, no memory allocation, and O(1) time complexity. It is designed to be called frequently (e.g., before each batch of simplex iterations) without measurable overhead.
 
-Note on naming: Despite its name suggesting a full basis copy, this function captures only scalar counters -- not the variable status array, not the objective value, and not any basis matrix data. A more descriptive name would be "progress snapshot." The companion function cxf_basis_diff computes a weighted difference score from these counters.
+**Naming history:** Formerly `cxf_basis_snapshot`; renamed to clarify that this function captures only scalar counters (not the variable status array, objective value, or any basis matrix data). The companion function cxf_basis_diff computes a weighted difference score from these counters.
 
 **Thread Safety:** Not thread-safe. The counter values are read without synchronization; must be called from the same thread performing simplex iterations.
 
@@ -9699,12 +9702,12 @@ Note on naming: Despite its name suggesting a full basis copy, this function cap
 
 **Signature:**
 - Input: `state` : pointer-to-SolverState - The current solver state with updated iteration counters
-- Input: `snapshot` : pointer-to-array-of-int - A previously captured snapshot from cxf_basis_snapshot
+- Input: `snapshot` : pointer-to-array-of-int - A previously captured snapshot from cxf_progress_snapshot
 - Output: double - A non-negative progress score; higher values indicate more progress since the snapshot
 
 **Preconditions:**
 - The solver state must be the same state from which the snapshot was captured (same solve instance)
-- The snapshot must have been populated by a prior call to cxf_basis_snapshot
+- The snapshot must have been populated by a prior call to cxf_progress_snapshot
 
 **Postconditions:**
 - Returns a non-negative double representing the weighted, normalized amount of solver progress since the snapshot
@@ -9741,7 +9744,7 @@ All deltas are clamped to zero (negative progress is treated as no progress), an
 
 **Dependencies:**
 - P1.04 (SolverState) - reads current counter values and the nonzero count for normalization
-- cxf_basis_snapshot (this module) - produces the snapshot array that this function compares against
+- cxf_progress_snapshot (this module) - produces the snapshot array that this function compares against
 - cxf_simplex_perturbation (P3.14) - the anti-cycling action triggered when this function reports low progress
 
 ---
@@ -9777,7 +9780,7 @@ All deltas are clamped to zero (negative progress is treated as no progress), an
 - No Q-matrix contributions for the variable -> returns success immediately (no eta created)
 
 **Behavioral Description:**
-This function is part of the PFI update mechanism for problems with quadratic objectives. When a variable with nonzero Q-matrix entries is being fixed at a bound (typically called from cxf_basis_refactor), the solver must record the quadratic contributions so that reduced costs of neighboring variables can be correctly maintained during warm-start restoration or crossover.
+This function is part of the PFI update mechanism for problems with quadratic objectives. When a variable with nonzero Q-matrix entries is being fixed at a bound (typically called from cxf_fix_variables_at_bounds), the solver must record the quadratic contributions so that reduced costs of neighboring variables can be correctly maintained during warm-start restoration or crossover.
 
 The function proceeds as follows:
 
@@ -9801,7 +9804,7 @@ The function proceeds as follows:
 - P1.04 (SolverState) - reads Q-matrix data, bounds, and eta management fields
 - P1.08 (EtaVector) - creates Variant 3 (WARM_START) eta vector
 - P2.01 (Product Form of the Inverse) - memory pool allocation and eta chain management
-- cxf_basis_refactor (this module) - primary caller during variable fixing with quadratic objectives
+- cxf_fix_variables_at_bounds (this module) - primary caller during variable fixing with quadratic objectives
 
 ---
 
@@ -9875,27 +9878,23 @@ After each extraction phase, the performance counter is incremented proportional
 
 ### Naming Clarifications
 
-Several function names in this module are historically misleading:
-
-- **cxf_basis_refactor** does not perform LU refactorization. It identifies and fixes variables at bounds to reduce the working basis size. The actual benefit is a smaller effective basis, which speeds up subsequent FTRAN/BTRAN operations. True LU refactorization of the basis matrix is a separate operation (see P2.01, Step 6: Refactorization).
-
-- **cxf_basis_snapshot** does not capture the actual basis (variable status array, LU factors, or solution vector). It captures only a fixed-size set of scalar iteration counters. A more descriptive name would be "progress counter snapshot."
+**Naming history:** Formerly `cxf_basis_refactor`; renamed to `cxf_fix_variables_at_bounds` to clarify that this function identifies and fixes variables at bounds to reduce the working basis size, rather than performing LU refactorization. The actual benefit is a smaller effective basis, which speeds up subsequent FTRAN/BTRAN operations. True LU refactorization of the basis matrix is a separate operation (see P2.01, Step 6: Refactorization).
 
 ### Relationships Between Functions
 
 The five functions in this module interact as follows:
 
-1. **cxf_basis_refactor** is the primary variable-fixing function. During its fixing phase, it may call **cxf_basis_warm** to record quadratic objective contributions for variables that have Q-matrix entries. Both functions create eta vectors that are prepended to the same eta chain managed by the SolverState.
+1. **cxf_fix_variables_at_bounds** is the primary variable-fixing function. During its fixing phase, it may call **cxf_basis_warm** to record quadratic objective contributions for variables that have Q-matrix entries. Both functions create eta vectors that are prepended to the same eta chain managed by the SolverState.
 
-2. **cxf_pivot_with_eta** is called independently from the simplex iteration loop (not from this module's other functions). It records standard pivot operations, while cxf_basis_refactor records variable-fixing operations. Both contribute to the same eta chain, and both types of records must be processed during FTRAN and BTRAN.
+2. **cxf_pivot_with_eta** is called independently from the simplex iteration loop (not from this module's other functions). It records standard pivot operations, while cxf_fix_variables_at_bounds records variable-fixing operations. Both contribute to the same eta chain, and both types of records must be processed during FTRAN and BTRAN.
 
-3. **cxf_basis_snapshot** and **cxf_basis_diff** form a matched pair for cycling detection. The snapshot captures a baseline, and the diff measures progress against that baseline. They are called from the main LP solve driver (cxf_solve_lp), not from other functions in this module.
+3. **cxf_progress_snapshot** and **cxf_basis_diff** form a matched pair for cycling detection. The snapshot captures a baseline, and the diff measures progress against that baseline. They are called from the main LP solve driver (cxf_solve_lp), not from other functions in this module.
 
 ### Eta Vector Types Created by This Module
 
 | Function | Eta Type | Variant (P1.08) | Purpose |
 |----------|----------|------------------|---------|
-| cxf_basis_refactor | VARIABLE_FIX | Variant 2 (compact or full) | Records variable fixed at bound |
+| cxf_fix_variables_at_bounds | VARIABLE_FIX | Variant 2 (compact or full) | Records variable fixed at bound |
 | cxf_basis_warm | WARM_START | Variant 3 | Records quadratic objective contributions |
 | cxf_pivot_with_eta | PIVOT | Variant 1 (with optional column data) | Records simplex pivot transformation |
 
@@ -9905,14 +9904,14 @@ All eta vectors created by this module are allocated from the SolverState's aren
 
 ### Interaction with the Pricing Subsystem
 
-cxf_basis_refactor is the only function in this module that interacts with the pricing subsystem. When a variable is fixed, the function invalidates the pricing cache entry for that variable (so the pricer does not consider it for future pivot selection) and sends an update notification so the pricing state reflects the reduced problem size. cxf_pivot_with_eta does not interact with pricing directly; pricing updates after a pivot are handled by the calling simplex step function.
+cxf_fix_variables_at_bounds is the only function in this module that interacts with the pricing subsystem. When a variable is fixed, the function invalidates the pricing cache entry for that variable (so the pricer does not consider it for future pivot selection) and sends an update notification so the pricing state reflects the reduced problem size. cxf_pivot_with_eta does not interact with pricing directly; pricing updates after a pivot are handled by the calling simplex step function.
 
 ### Thread Safety Summary
 
 | Function | Thread Safety | Notes |
 |----------|---------------|-------|
-| cxf_basis_refactor | Not thread-safe | Modifies solver state, eta chain, pricing state, and constraint matrix |
-| cxf_basis_snapshot | Not thread-safe | Reads solver counters without synchronization |
+| cxf_fix_variables_at_bounds | Not thread-safe | Modifies solver state, eta chain, pricing state, and constraint matrix |
+| cxf_progress_snapshot | Not thread-safe | Reads solver counters without synchronization |
 | cxf_basis_diff | Not thread-safe | Reads solver counters without synchronization |
 | cxf_basis_warm | Not thread-safe | Modifies eta chain and allocates from memory pool |
 | cxf_pivot_with_eta | Not thread-safe | Modifies eta chain, eta counts, and allocates from memory pool |
@@ -11313,9 +11312,9 @@ The Simplex Iteration module contains the core functions that execute within the
 
 ## Functions
 
-### cxf_simplex_iterate
+### cxf_log_iteration_progress
 
-**Purpose:** Report presolve and iteration progress to the user log and invoke the external monitoring callback. Despite its name, this function does not perform simplex iterations — it is a progress logging and callback notification function.
+**Purpose:** Report presolve and iteration progress to the user log and invoke the external monitoring callback.
 
 **Signature:**
 - Input: `model` : pointer-to-Model - The model containing logging configuration, solve mode, and thread count
@@ -11352,7 +11351,7 @@ This function provides progress reporting during the LP solve. It is called once
 
 **Step 4: Callback invocation.** The external logging callback is always invoked, regardless of whether a message was printed. This ensures that external monitoring systems (GUI progress bars, distributed computing managers) receive regular heartbeat notifications even when console output is suppressed.
 
-**Naming note:** Despite its name suggesting iteration logic, this function is purely a logging and notification utility. The actual simplex iteration logic resides in cxf_simplex_step, cxf_simplex_step2, and cxf_simplex_step3 (all in this module).
+**Naming history:** Formerly `cxf_simplex_iterate`; renamed to better reflect that this function performs progress logging and callback notification, not simplex iteration logic (which resides in cxf_simplex_step, cxf_simplex_step2, and cxf_simplex_step3).
 
 **Thread Safety:** Not thread-safe. Must be called from the main solve thread.
 
@@ -11696,8 +11695,8 @@ This single-interval comparison (rather than tracking progress over multiple int
 
 The five functions in this module are called in a specific order within the main LP solve driver (cxf_solve_lp, P3.25). The typical per-iteration sequence is:
 
-1. **cxf_basis_snapshot** (P3.16) — capture progress baseline
-2. **cxf_simplex_iterate** (this module) — progress logging and callback
+1. **cxf_progress_snapshot** (P3.16) — capture progress baseline
+2. **cxf_log_iteration_progress** (this module) — progress logging and callback
 3. **cxf_simplex_phase_end** (P3.21) — check for phase transition
 4. **cxf_simplex_perturbation** (P3.21) — anti-cycling perturbation if needed
 5. **cxf_simplex_step** (this module) — primary simplex pivot
@@ -11711,11 +11710,7 @@ This sequence repeats until termination. The post_iterate function's return code
 
 ### Naming Clarifications
 
-Several function names in this module are historically misleading:
-
-- **cxf_simplex_iterate** does not perform simplex iterations. It reports presolve progress and invokes the logging callback. A more descriptive name would be "progress_report" or "log_iteration_progress."
-
-- **cxf_simplex_step2** and **cxf_simplex_step3** are not sequential steps of a single operation. They are complementary bound propagation passes that operate on different candidate queues (variable-side and constraint-side, respectively). They can be thought of as "variable_bound_propagation" and "constraint_bound_propagation."
+**cxf_simplex_step2** and **cxf_simplex_step3** are not sequential steps of a single operation. They are complementary bound propagation passes that operate on different candidate queues (variable-side and constraint-side, respectively). They can be thought of as "variable_bound_propagation" and "constraint_bound_propagation."
 
 ### Bidirectional Bound Propagation (step2 + step3)
 
@@ -11758,7 +11753,7 @@ This conservative approach prevents false infeasibility reports caused by accumu
 
 The five functions in this module use two different parameter patterns:
 
-- **cxf_simplex_iterate** and **cxf_simplex_post_iterate** accept a model pointer and a solver state pointer. They require model-level information (logging configuration, stall detection settings, thread count) that is not available in the solver state alone.
+- **cxf_log_iteration_progress** and **cxf_simplex_post_iterate** accept a model pointer and a solver state pointer. They require model-level information (logging configuration, stall detection settings, thread count) that is not available in the solver state alone.
 
 - **cxf_simplex_step**, **cxf_simplex_step2**, and **cxf_simplex_step3** accept a solver state pointer and an environment pointer. They require solver-level tolerances and algorithm parameters but do not need model-level logging or configuration data.
 
@@ -11778,7 +11773,7 @@ This distinction reflects the separation of concerns between monitoring/logging 
 
 | Function | Thread Safety | Notes |
 |----------|---------------|-------|
-| cxf_simplex_iterate | Not thread-safe | Writes to log, invokes callback |
+| cxf_log_iteration_progress | Not thread-safe | Writes to log, invokes callback |
 | cxf_simplex_step | Not thread-safe | Modifies basis, eta chain, pricing, objective, constraint matrix |
 | cxf_simplex_step2 | Not thread-safe | Modifies bounds, pricing, eta chain, activity bounds |
 | cxf_simplex_step3 | Not thread-safe | Modifies bounds, pricing, eta chain, activity bounds |
@@ -11798,7 +11793,7 @@ All functions operate within a single-threaded simplex solve. Thread safety for 
 [x] All descriptions are behavioral, not implementational
 [x] All data structures described semantically using Layer 1/2 references
 [x] Explicit cross-references to P1.03, P1.04, P2.01, P2.1, P2.4 (algorithm specs) and P3.16-P3.19 (module specs)
-[x] Naming misnomers documented (cxf_simplex_iterate is logging, not iteration)
+[x] Naming misnomers documented (cxf_log_iteration_progress is logging, not iteration)
 [x] Passes the Clean Room Test: could be written without seeing the binary
 ```
 
@@ -11962,7 +11957,7 @@ This function performs a lightweight preprocessing pass that reduces the effecti
 
 **Step 1: Candidate identification.** The function scans all variables and collects those whose bound range (upper bound minus lower bound) is below a tightness threshold. The threshold is a multiple of the feasibility tolerance. A minimum candidate count is enforced to prevent degenerate preprocessing on very small problems.
 
-**Step 2: Candidate sorting.** The candidates are sorted by bound width (tightest first) using cxf_sort_indices (P3.14). This ordering ensures that the most constrained variables are fixed first, maximizing the chance that each fixing remains feasible.
+**Step 2: Candidate sorting.** The candidates are sorted by bound width (tightest first) using cxf_sort_by_values (P3.14). This ordering ensures that the most constrained variables are fixed first, maximizing the chance that each fixing remains feasible.
 
 **Step 3: Activity initialization.** The constraint activity arrays are cleared (or initialized from current activity bounds) to provide a clean baseline for tracking the cumulative effect of variable fixings.
 
@@ -11982,7 +11977,7 @@ This function performs a lightweight preprocessing pass that reduces the effecti
 
 **Dependencies:**
 - P3.02 (Allocation Helpers) - cxf_alloc_eta for eta vector allocation
-- P3.14 (Matrix Core) - cxf_sort_indices for candidate sorting
+- P3.14 (Matrix Core) - cxf_sort_by_values for candidate sorting
 - P1.04 (SolverState) - reads bounds, constraint matrix; modifies activity arrays, objective, eta chain
 - P1.05 (BasisState) - eta chain management for fixing records
 
@@ -12105,7 +12100,7 @@ The two-phase simplex method (Dantzig, 1963; Chvatal, 1983) separates feasibilit
 
 4. **Constraint cleanup.** Inactive constraints identified during Phase I processing (those whose activity bounds indicate they are not binding at the current solution) are removed from the active set. This cleanup, performed by the sparse removal mechanism described above, reduces the effective problem size entering Phase II.
 
-5. **Basis preservation.** The basis itself (the set of basic variables and their positions) is carried forward from Phase I to Phase II unchanged. The Phase I solution is a basic feasible solution, and Phase II begins from this vertex of the feasible polyhedron. The basis factorization may be refreshed (via cxf_basis_refactor, P3.16) to ensure numerical accuracy for Phase II iterations, since the objective change can affect the conditioning of subsequent operations.
+5. **Basis preservation.** The basis itself (the set of basic variables and their positions) is carried forward from Phase I to Phase II unchanged. The Phase I solution is a basic feasible solution, and Phase II begins from this vertex of the feasible polyhedron. The basis factorization may be refreshed (via cxf_fix_variables_at_bounds, P3.16) to ensure numerical accuracy for Phase II iterations, since the objective change can affect the conditioning of subsequent operations.
 
 6. **Tolerance adjustment.** The optimality tolerance used for Phase II termination may differ from the feasibility tolerance used for Phase I. Phase I uses the primal feasibility tolerance to determine when constraint violations are acceptable; Phase II uses the dual feasibility (optimality) tolerance to determine when reduced costs are small enough to declare optimality. These are typically configured as separate environment parameters.
 
@@ -12197,10 +12192,10 @@ The six functions in this module bracket and condition the main simplex iteratio
 2. **cxf_simplex_crash** (this module) — construct initial basis
 3. **cxf_simplex_preprocess** (this module) — fix near-bound variables
 4. **cxf_simplex_setup** (this module) — compute activity bounds
-5. cxf_basis_refactor (P3.16) — initial basis factorization
+5. cxf_fix_variables_at_bounds (P3.16) — initial basis factorization
 
 **Within the iteration loop:**
-6. cxf_simplex_iterate (P3.20) — progress logging
+6. cxf_log_iteration_progress (P3.20) — progress logging
 7. **cxf_simplex_phase_end** (this module) — phase transition and constraint cleanup
 8. **cxf_simplex_perturbation** (this module) — anti-cycling when stalling detected
 9. cxf_simplex_step/step2/step3 (P3.20) — main pivot and bound propagation
@@ -12210,7 +12205,7 @@ The six functions in this module bracket and condition the main simplex iteratio
 **Post-iteration cleanup:**
 12. **cxf_simplex_refine** (this module) — solution refinement
 13. cxf_simplex_final (P3.22) — solution extraction
-14. cxf_simplex_cleanup (P3.22) — resource deallocation
+14. cxf_simplex_postsolve (P3.22) — resource deallocation
 
 ### Relationship to Algorithm Specifications
 
@@ -12312,7 +12307,7 @@ All functions operate within a single-threaded simplex solve. Thread safety for 
 
 ## Purpose
 
-The Simplex Lifecycle module contains the three functions that bracket the entire simplex solve: initialization before the iteration loop begins, post-solve variable fixing after it terminates, and post-solve bound tightening with resource deallocation. Together these functions manage the creation, population, and destruction of the SolverState (P1.04), the central data structure through which all simplex functions communicate. cxf_simplex_init allocates and populates the SolverState from the model's problem data. cxf_simplex_final performs dual-feasibility-based variable fixing to simplify the solution. cxf_simplex_cleanup performs implied-bound propagation, additional variable fixing, and frees all temporary working memory. These lifecycle functions implement the initialization and cleanup phases of the revised simplex method described in P2.1 (Revised Simplex Method).
+The Simplex Lifecycle module contains the three functions that bracket the entire simplex solve: initialization before the iteration loop begins, post-solve variable fixing after it terminates, and post-solve bound tightening with resource deallocation. Together these functions manage the creation, population, and destruction of the SolverState (P1.04), the central data structure through which all simplex functions communicate. cxf_simplex_init allocates and populates the SolverState from the model's problem data. cxf_simplex_final performs dual-feasibility-based variable fixing to simplify the solution. cxf_simplex_postsolve performs implied-bound propagation, additional variable fixing, and frees all temporary working memory. These lifecycle functions implement the initialization and cleanup phases of the revised simplex method described in P2.1 (Revised Simplex Method).
 
 ## Functions
 
@@ -12499,7 +12494,7 @@ All temporary arrays (target values, constraint queue, visited flags) are freed 
 
 ---
 
-### cxf_simplex_cleanup
+### cxf_simplex_postsolve
 
 **Purpose:** Perform constraint-based implied bound tightening and variable fixing after the simplex solve, then free all temporary working arrays.
 
@@ -12531,7 +12526,9 @@ All temporary arrays (target values, constraint queue, visited flags) are freed 
 - Errors from the core bound propagation helper are propagated
 
 **Behavioral Description:**
-Despite its name suggesting simple resource cleanup, this function performs substantial post-solve analysis before freeing memory. It implements constraint-based bound propagation -- the standard implied-bound tightening technique from LP presolve (Savelsbergh, 1994) -- applied to the post-solve state to identify variables that can be fixed at their bounds.
+This function performs substantial post-solve analysis before freeing memory. It implements constraint-based bound propagation -- the standard implied-bound tightening technique from LP presolve (Savelsbergh, 1994) -- applied to the post-solve state to identify variables that can be fixed at their bounds.
+
+**Naming history:** Formerly `cxf_simplex_cleanup`; renamed to `cxf_simplex_postsolve` to better reflect its substantial post-solve analysis beyond simple resource cleanup.
 
 **Phase 1: Basis index adjustment.** For variables with special flags (quadratic, semi-continuous, general constraint, piecewise-linear, or ranged), the function temporarily adjusts basis header indices by subtracting an offset. This normalization enables uniform processing of all variables regardless of their special-handling requirements. The adjustment is reversed in Phase 6.
 
@@ -12592,15 +12589,15 @@ The three functions in this module define the outermost brackets of a simplex so
 2. cxf_simplex_crash (P3.21) -- construct initial basis
 3. cxf_simplex_preprocess (P3.21) -- fix near-bound variables
 4. cxf_simplex_setup (P3.21) -- compute activity bounds
-5. cxf_basis_refactor (P3.16) -- initial basis factorization
+5. cxf_fix_variables_at_bounds (P3.16) -- initial basis factorization
 
 **The iteration loop:**
-6. cxf_simplex_iterate through cxf_simplex_post_iterate (P3.20) -- repeated until termination
+6. cxf_log_iteration_progress through cxf_simplex_post_iterate (P3.20) -- repeated until termination
 
 **After the iteration loop:**
 7. cxf_simplex_refine (P3.21) -- solution refinement
 8. **cxf_simplex_final** (this module) -- dual-feasibility variable fixing
-9. **cxf_simplex_cleanup** (this module) -- implied-bound tightening and resource deallocation
+9. **cxf_simplex_postsolve** (this module) -- implied-bound tightening and resource deallocation
 
 ### Relationship to Data Model Specifications
 
@@ -12608,11 +12605,11 @@ The three functions in this module define the outermost brackets of a simplex so
 |----------|------------------------|-----------------|
 | cxf_simplex_init | P1.04 (SolverState) - Creation | Allocates and populates all fields described in P1.04 |
 | cxf_simplex_final | P1.04 (SolverState) - Mutation | Modifies variable status and bounds via pivot operations |
-| cxf_simplex_cleanup | P1.04 (SolverState) - Destruction | Frees all working arrays; corresponds to the Destruction lifecycle phase of P1.04 |
+| cxf_simplex_postsolve | P1.04 (SolverState) - Destruction | Frees all working arrays; corresponds to the Destruction lifecycle phase of P1.04 |
 
 cxf_simplex_init is the sole creator of the SolverState structure. The lifecycle described in P1.04 (SolverState, Lifecycle section) maps directly to the initialization phases of this function: zero-initialized allocation, dimension copying, working array sizing, array allocation, data copying, and special variable processing.
 
-cxf_simplex_cleanup is the primary destructor. While it does not free every array (the solve driver handles some cleanup), it frees the temporary working arrays and performs the bulk of the implied-bound analysis before other cleanup functions handle the remaining arrays and the SolverState structure itself.
+cxf_simplex_postsolve is the primary destructor. While it does not free every array (the solve driver handles some cleanup), it frees the temporary working arrays and performs the bulk of the implied-bound analysis before other cleanup functions handle the remaining arrays and the SolverState structure itself.
 
 ### Initialization Complexity
 
@@ -12645,7 +12642,7 @@ cxf_simplex_init populates a per-variable flags array that marks variables requi
 | PIECEWISE_LINEAR | Variable with multi-segment PWL function | Phase 7 (PWL processing) |
 | RANGED | Ranged constraint slack variable | Phase 8 (finalization) |
 
-These flags are read by the simplex iteration functions (P3.20) and the pivot operations (P3.19) to apply appropriate special-case handling. cxf_simplex_cleanup also reads the flags to adjust basis header indices during its temporary normalization step.
+These flags are read by the simplex iteration functions (P3.20) and the pivot operations (P3.19) to apply appropriate special-case handling. cxf_simplex_postsolve also reads the flags to adjust basis header indices during its temporary normalization step.
 
 ### Allocation Strategy
 
@@ -12661,22 +12658,22 @@ The initialization function follows a strict allocation discipline:
 
 ### Post-Solve Analysis Pipeline
 
-cxf_simplex_final and cxf_simplex_cleanup form a two-stage post-solve analysis pipeline:
+cxf_simplex_final and cxf_simplex_postsolve form a two-stage post-solve analysis pipeline:
 
 | Stage | Function | Technique | Purpose |
 |-------|----------|-----------|---------|
 | 1 | cxf_simplex_final | Dual feasibility analysis | Fix variables at bounds based on reduced cost signs |
-| 2 | cxf_simplex_cleanup | Implied bound propagation | Tighten variable bounds using constraint activity analysis, then fix at bounds |
+| 2 | cxf_simplex_postsolve | Implied bound propagation | Tighten variable bounds using constraint activity analysis, then fix at bounds |
 
-Stage 1 (cxf_simplex_final) uses a local criterion: each variable is evaluated independently based on its dual value and bounds. Stage 2 (cxf_simplex_cleanup) uses a global criterion: constraint activities propagate information across variables, enabling fixings that require knowledge of the full constraint structure.
+Stage 1 (cxf_simplex_final) uses a local criterion: each variable is evaluated independently based on its dual value and bounds. Stage 2 (cxf_simplex_postsolve) uses a global criterion: constraint activities propagate information across variables, enabling fixings that require knowledge of the full constraint structure.
 
 ### Numerical Stability Techniques
 
-Both cxf_simplex_final and cxf_simplex_cleanup use the same numerically stable addition technique when accumulating constraint activities. When the magnitudes of the two operands differ significantly, floating-point addition can lose precision. The functions detect this by checking whether the reverse subtraction recovers the original operand. If precision loss is detected, the result is multiplied by a conservative rounding factor (slightly above 1.0 for positive results, slightly below 1.0 for negative results) to ensure that activity bounds remain conservative. This prevents false infeasibility or false tightness from accumulated rounding errors. The technique is a simplified variant of compensated summation (Kahan, 1965), adapted for the specific needs of bound propagation where conservative over-estimation is preferred over exact summation.
+Both cxf_simplex_final and cxf_simplex_postsolve use the same numerically stable addition technique when accumulating constraint activities. When the magnitudes of the two operands differ significantly, floating-point addition can lose precision. The functions detect this by checking whether the reverse subtraction recovers the original operand. If precision loss is detected, the result is multiplied by a conservative rounding factor (slightly above 1.0 for positive results, slightly below 1.0 for negative results) to ensure that activity bounds remain conservative. This prevents false infeasibility or false tightness from accumulated rounding errors. The technique is a simplified variant of compensated summation (Kahan, 1965), adapted for the specific needs of bound propagation where conservative over-estimation is preferred over exact summation.
 
 ### Work Estimation
 
-cxf_simplex_final supports optional work estimation via the `workOut` parameter. When non-null, the function accumulates a weighted estimate of computational work at each phase transition, using per-operation cost multipliers scaled by a problem-dependent work multiplier stored in the SolverState. This estimate is used by the outer solve driver for progress prediction and time-limit enforcement. cxf_simplex_cleanup uses a similar mechanism via the timing pointer stored in the SolverState.
+cxf_simplex_final supports optional work estimation via the `workOut` parameter. When non-null, the function accumulates a weighted estimate of computational work at each phase transition, using per-operation cost multipliers scaled by a problem-dependent work multiplier stored in the SolverState. This estimate is used by the outer solve driver for progress prediction and time-limit enforcement. cxf_simplex_postsolve uses a similar mechanism via the timing pointer stored in the SolverState.
 
 ### Return Code Conventions
 
@@ -12693,7 +12690,7 @@ cxf_simplex_final supports optional work estimation via the `workOut` parameter.
 |----------|---------------|-------|
 | cxf_simplex_init | Not thread-safe | Allocates and populates a single-threaded SolverState |
 | cxf_simplex_final | Not thread-safe | Modifies variable status, bounds, and pricing state |
-| cxf_simplex_cleanup | Not thread-safe | Modifies bounds, constraint senses, pricing state; frees arrays |
+| cxf_simplex_postsolve | Not thread-safe | Modifies bounds, constraint senses, pricing state; frees arrays |
 
 All functions operate within a single-threaded simplex solve. Thread safety for concurrent solves is achieved at the model level by creating independent solver instances, each with its own SolverState.
 
@@ -13073,7 +13070,7 @@ This module does not contain any solver algorithms. Its role is purely organizat
 **Side Effects:**
 - Validates the model via the structural validation check (P3.07)
 - Sets up a signal handler for interrupt handling on applicable deployment types
-- Acquires the locale safety state (cxf_acquire_solve_lock, P3.11), ensuring the "C" locale for consistent numeric formatting
+- Acquires the locale safety state (cxf_save_locale_state, P3.11), ensuring the "C" locale for consistent numeric formatting
 - Clears the environment's message buffers and resets message state
 - Sets the model's modification-blocked flag to prevent concurrent modifications
 - Clears the model's status code
@@ -13124,8 +13121,8 @@ This function is the sole public entry point for optimization. It wraps the enti
 
 **Dependencies:**
 - P3.07 (Input Validation) - cxf_checkmodel for model validation
-- P3.11 (Threading & Synchronization) - cxf_acquire_solve_lock / cxf_release_solve_lock for locale safety; cxf_get_threads, cxf_get_physical_cores, cxf_get_logical_processors, cxf_set_thread_count for hardware logging
-- P3.13 (Callbacks) - cxf_pre_optimize_callback / cxf_post_optimize_callback for error buffer lifecycle
+- P3.11 (Threading & Synchronization) - cxf_save_locale_state / cxf_release_solve_lock for locale safety; cxf_get_threads, cxf_get_physical_cores, cxf_get_logical_processors, cxf_validate_thread_count for hardware logging
+- P3.13 (Callbacks) - cxf_pre_optimize_hook / cxf_post_optimize_hook for error buffer lifecycle
 - P3.09 (Error Handling) - cxf_error_model, cxf_set_error_message for error reporting
 - P1.01 (Environment) - environment state fields (message buffers, output flag, session reference, callback state)
 - P1.02 (Model) - model state fields (modification-blocked, status code, callback count, remote solver flag)
@@ -13695,8 +13692,8 @@ This crossover procedure converts the interior-point solution to a basic feasibl
 
 *Inner loop:* Within each outer round, the function executes the following sequence repeatedly until the basis stabilizes:
 
-1. **Basis snapshot** (cxf_basis_snapshot, P3.16): Capture the current basis state for later comparison.
-2. **Simplex iterate** (cxf_simplex_iterate, P3.20): Execute progress logging and bookkeeping for the current iteration batch.
+1. **Basis snapshot** (cxf_progress_snapshot, P3.16): Capture the current basis state for later comparison.
+2. **Simplex iterate** (cxf_log_iteration_progress, P3.20): Execute progress logging and bookkeeping for the current iteration batch.
 3. **Iterate variant**: Execute a post-iteration variant for additional processing (phase transition checks).
 4. **Perturbation** (cxf_simplex_perturbation, P3.21): On early iterations only, apply anti-cycling perturbation if the EXPAND procedure (Gill, Murray, Saunders, and Wright, 1989) determines that the solver is stalling.
 5. **Step** (cxf_simplex_step, P3.20): Execute the primary simplex pivot operation (pricing, ratio test, basis update).
@@ -13746,11 +13743,11 @@ The PWL coefficient updates use a batch processing approach for efficiency, proc
 **Thread Safety:** Not thread-safe. Each concurrent solve must use an independent model with its own solver state. Thread safety for concurrent LP solving is achieved at the model level (P3.24, P3.25 cxf_solver_dispatch concurrent dispatch).
 
 **Dependencies:**
-- P3.22 (Simplex Lifecycle) - cxf_simplex_init for state allocation, cxf_simplex_cleanup for bound tightening and deallocation, cxf_solver_state_cleanup for state deallocation
+- P3.22 (Simplex Lifecycle) - cxf_simplex_init for state allocation, cxf_simplex_postsolve for bound tightening and deallocation, cxf_solver_state_cleanup for state deallocation
 - P3.21 (Simplex Phases) - cxf_simplex_crash for crash basis, cxf_simplex_perturbation for anti-cycling, cxf_simplex_phase_end for phase transition processing
-- P3.20 (Simplex Iteration) - cxf_simplex_iterate for logging, cxf_simplex_step/step2/step3 for pivoting and bound propagation, cxf_simplex_post_iterate for stall detection
+- P3.20 (Simplex Iteration) - cxf_log_iteration_progress for logging, cxf_simplex_step/step2/step3 for pivoting and bound propagation, cxf_simplex_post_iterate for stall detection
 - P3.23 (Crossover) - cxf_crossover and cxf_crossover_bounds for barrier-to-simplex crossover
-- P3.16 (Basis Factorization) - cxf_basis_refactor for LU factorization, cxf_basis_snapshot and cxf_basis_diff for convergence detection
+- P3.16 (Basis Factorization) - cxf_fix_variables_at_bounds for LU factorization, cxf_progress_snapshot and cxf_basis_diff for convergence detection
 - P1.02 (Model) - model structure access for matrix data, environment, solution data
 - P1.04 (SolverState) - solver state structure for all working data
 - P1.01 (Environment) - parameter access for solver configuration
@@ -13885,14 +13882,14 @@ cxf_optimize (P3.24, public API)
               -> cxf_simplex_crash (P3.21) -- crash basis
               -> cxf_crossover (P3.23) -- barrier crossover
               -> [iteration loop]:
-                -> cxf_simplex_iterate (P3.20)
+                -> cxf_log_iteration_progress (P3.20)
                 -> cxf_simplex_step (P3.20)
                 -> cxf_simplex_step2 (P3.20)
                 -> cxf_simplex_step3 (P3.20)
                 -> cxf_simplex_phase_end (P3.21)
                 -> cxf_simplex_perturbation (P3.21)
               -> cxf_solution_extract
-              -> cxf_simplex_cleanup (P3.22)
+              -> cxf_simplex_postsolve (P3.22)
 ```
 
 cxf_solver_dispatch handles the branching point where the solve flow splits by algorithm type (simplex vs. barrier vs. concurrent vs. PDHG). cxf_solve_lp handles the LP-specific pipeline after the algorithm has been selected.
@@ -16452,7 +16449,7 @@ The Cleanup Utilities module contains functions responsible for restoring solver
 
 Despite the module's name, its most algorithmically significant member is the bound propagation function (also known as the cleanup helper), which implements Feasibility-Based Bound Tightening (FBBT) -- a standard preprocessing technique described by Savelsbergh (1994) and Brearley, Mitra, and Williams (1975). This function derives tighter variable bounds from constraint activity analysis and detects hidden infeasibilities. The remaining functions handle resource cleanup for coefficient change tracking structures and signal handler restoration.
 
-Two of the four function names in this module -- cxf_cleanup_helper and cxf_propagate_bounds -- refer to the same underlying function. cxf_propagate_bounds is the algorithmically descriptive name; cxf_cleanup_helper reflects its calling context (invoked during the simplex cleanup phase). Both names are documented here, with cxf_propagate_bounds as the primary specification and cxf_cleanup_helper as an alias.
+Two of the four function names in this module -- cxf_propagate_bounds and cxf_propagate_bounds -- refer to the same underlying function. cxf_propagate_bounds is the algorithmically descriptive name; cxf_propagate_bounds reflects its calling context (invoked during the simplex cleanup phase). Both names are documented here, with cxf_propagate_bounds as the primary specification and cxf_propagate_bounds as an alias.
 
 ## Functions
 
@@ -16549,7 +16546,7 @@ This function is the cleanup counterpart to a setup function that is called befo
 
 **Purpose:** Perform iterative constraint-based bound tightening using a worklist-driven propagation algorithm, deriving tighter variable bounds from constraint activity analysis and detecting infeasibilities.
 
-**Aliases:** cxf_cleanup_helper (reflects the calling context: invoked during the simplex cleanup phase)
+**Aliases:** cxf_propagate_bounds (reflects the calling context: invoked during the simplex cleanup phase)
 
 **Signature:**
 - Input: `environment` : pointer-to-Environment -- The environment providing memory allocation services
@@ -16647,11 +16644,11 @@ The algorithm proceeds in the following phases:
 
 ---
 
-### cxf_cleanup_helper
+### cxf_propagate_bounds
 
 **Purpose:** Alias for cxf_propagate_bounds. See cxf_propagate_bounds for the complete behavioral specification.
 
-**Note on naming:** The name "cleanup_helper" reflects the calling context: this function is invoked during the simplex cleanup phase by cxf_simplex_cleanup. Despite its name suggesting a simple utility, it performs the most algorithmically complex operation in this module -- iterative constraint-based bound tightening. The name cxf_propagate_bounds more accurately describes the function's behavior.
+**Naming history:** Formerly `cxf_cleanup_helper`; renamed to `cxf_propagate_bounds` to better reflect its actual behavior of performing iterative constraint-based bound tightening.
 
 **Signature:** Identical to cxf_propagate_bounds.
 
@@ -16669,11 +16666,11 @@ The four functions in this module serve three distinct purposes:
 |----------|----------|------------|-------------|
 | cxf_cleanup_coeff_change | Resource cleanup | Simple (leaf function) | Model destruction, model update, pending buffer cleanup |
 | cxf_cleanup_optimization | Signal restoration | Simple (leaf function) | Optimization dispatch (after optimization completes) |
-| cxf_propagate_bounds / cxf_cleanup_helper | Bound tightening algorithm | Complex (iterative, allocates working memory) | Simplex cleanup phase |
+| cxf_propagate_bounds / cxf_propagate_bounds | Bound tightening algorithm | Complex (iterative, allocates working memory) | Simplex cleanup phase |
 
 ### Naming Convention
 
-Two of the four listed function names -- cxf_cleanup_helper and cxf_propagate_bounds -- are aliases for the same underlying function. The name cxf_cleanup_helper was assigned during early analysis based on its call site (the simplex cleanup function). The name cxf_propagate_bounds was assigned during deeper analysis when the function's algorithm was understood. Both names appear in the function map for traceability. In this specification, cxf_propagate_bounds is the primary name and cxf_cleanup_helper is documented as an alias.
+Two of the four listed function names -- cxf_propagate_bounds and cxf_propagate_bounds -- are aliases for the same underlying function. The name cxf_propagate_bounds was assigned during early analysis based on its call site (the simplex cleanup function). The name cxf_propagate_bounds was assigned during deeper analysis when the function's algorithm was understood. Both names appear in the function map for traceability. In this specification, cxf_propagate_bounds is the primary name and cxf_propagate_bounds is documented as an alias.
 
 ### Common Patterns
 
@@ -17351,14 +17348,14 @@ This is the core of the LP solver. The two-level structure prevents cycling whil
 ```
 OUTER LOOP (round control, max ~5/10/100 rounds depending on mode)
   |
-  +-- Take outer basis snapshot (cxf_basis_snapshot, P3.16)
+  +-- Take outer basis snapshot (cxf_progress_snapshot, P3.16)
   |
   +-- INNER LOOP (basis stabilization)
   |     |
-  |     +--[1] cxf_basis_snapshot (P3.16)
+  |     +--[1] cxf_progress_snapshot (P3.16)
   |     |       Capture current basis state
   |     |
-  |     +--[2] cxf_simplex_iterate (P3.20)
+  |     +--[2] cxf_log_iteration_progress (P3.20)
   |     |       Progress logging and callback notification
   |     |       (Naming misnomer: does NOT perform iterations)
   |     |
@@ -17419,7 +17416,7 @@ cxf_simplex_final (P3.22)
     Complementary slackness analysis
     |
     v
-cxf_simplex_cleanup (P3.22)
+cxf_simplex_postsolve (P3.22)
     Implied bound propagation (FBBT)
     -> Delegates to cxf_propagate_bounds (P3.34)
     Convert tight inequality constraints to equalities
@@ -18295,7 +18292,7 @@ The solver's error propagation design follows three governing principles:
 |-----------|--------|---------------------------|
 | **Input Validation** | P3.07 | Generates validation errors at API entry points (null pointer, invalid sentinel, NaN detection) |
 | **Data Validation** | P3.08 | Generates data content errors (NaN in arrays, invalid variable types, infeasible solutions) |
-| **Logging** | P3.10 | Contains cxf_errorlog, which sets predefined error messages; also provides log output for error diagnostics |
+| **Logging** | P3.10 | Contains cxf_set_error_string, which sets predefined error messages; also provides log output for error diagnostics |
 | **Solve LP Core** | P3.25 | Generates solver errors (numeric, out-of-memory) and propagates them through the solve chain |
 | **Solve Barrier & Concurrent** | P3.26 | Generates Q-not-PSD errors and propagates solver errors |
 | **Model Lifecycle** | P3.31 | Generates modification errors (a model-update error message) during lazy update flush |
@@ -18332,7 +18329,7 @@ Error messages reach the error buffer through a 2x2 matrix of functions organize
                     +------------------------+------------------------+
 ```
 
-Additionally, cxf_errorlog (P3.10) is behaviorally identical to cxf_set_error_message, despite its placement in the Logging module.
+Additionally, cxf_set_error_string (P3.10) is behaviorally identical to cxf_set_error_message, despite its placement in the Logging module.
 
 **Custom message functions** accept a printf-style format string and variadic arguments, producing context-specific messages that include runtime values (e.g., "Variable index out of range: 5000"). These are used by internal functions that have detailed knowledge of the error context.
 
@@ -18414,7 +18411,7 @@ The error buffer transitions through a well-defined lifecycle during each API ca
                +--------------------+--------------------+
                |                                         |
     Error cascades upward                     Optimization begins
-    (inner error preserved)                   (cxf_pre_optimize_callback)
+    (inner error preserved)                   (cxf_pre_optimize_hook)
                |                                         |
                v                                         v
     +-------------------+                     +-------------------+
@@ -18423,7 +18420,7 @@ The error buffer transitions through a well-defined lifecycle during each API ca
     +-------------------+                     +-------------------+
                |                                         |
                |                                Optimization ends
-               |                                (cxf_post_optimize_callback)
+               |                                (cxf_post_optimize_hook)
                |                                         |
                |                                         v
                |                              +-------------------+
@@ -18508,9 +18505,9 @@ cxf_optimize (public API)
     |       +-- returns OOM code
     |
     +-- receives OOM code
-    +-- cxf_pre_optimize_callback (locks buffer -- but too late, msg already set)
+    +-- cxf_pre_optimize_hook (locks buffer -- but too late, msg already set)
     +-- an out-of-memory error message may be set with overwrite=0
-    +-- cxf_post_optimize_callback (unlocks buffer)
+    +-- cxf_post_optimize_hook (unlocks buffer)
     +-- clears modification-blocked flag
     +-- releases locale safety state
     +-- returns OOM code to user
@@ -18524,7 +18521,7 @@ Three mechanisms work together to preserve the root-cause error message:
 
 1. **Empty-buffer check.** The custom message functions (cxf_error_env, cxf_error_model) check whether the error buffer is empty before writing. When called with `overwrite=0`, they only write to an empty buffer. Since the innermost error reporter writes first, its message persists.
 
-2. **Buffer lock flag.** The error buffer lock (managed by cxf_pre_optimize_callback and cxf_post_optimize_callback) provides an explicit lock that prevents overwrites even when `overwrite=1` is specified. This is used during optimization to protect error messages set before the solve loop from being overwritten by cascading errors during the solve.
+2. **Buffer lock flag.** The error buffer lock (managed by cxf_pre_optimize_hook and cxf_post_optimize_hook) provides an explicit lock that prevents overwrites even when `overwrite=1` is specified. This is used during optimization to protect error messages set before the solve loop from being overwritten by cascading errors during the solve.
 
 3. **Out-of-memory override.** The predefined message functions always write the out-of-memory message regardless of buffer state. This override exists because memory exhaustion is frequently the root cause of cascading failures -- an allocation failure deep in the solver may trigger a chain of secondary failures (cleanup failures, logging failures), and the original OOM message is the most important diagnostic.
 
@@ -18590,7 +18587,7 @@ This distinction reflects usage patterns:
 
 ### D5: Buffer Lock via Lifecycle Hooks (Not via Error Functions)
 
-The error buffer lock is managed by the optimization lifecycle hooks (cxf_pre_optimize_callback / cxf_post_optimize_callback from P3.13), not by the error reporting functions themselves. This separates concerns:
+The error buffer lock is managed by the optimization lifecycle hooks (cxf_pre_optimize_hook / cxf_post_optimize_hook from P3.13), not by the error reporting functions themselves. This separates concerns:
 
 - Error reporting functions are simple, stateless operations that check the lock but never set it.
 - The lock lifecycle is managed by the optimization entry point, which has the context to decide when locking is appropriate.
@@ -18697,7 +18694,7 @@ cxf_optimize
     |
     v
 cxf_optimize receives Q_NOT_PSD
-    +-- cxf_post_optimize_callback (unlocks error buffer)
+    +-- cxf_post_optimize_hook (unlocks error buffer)
     +-- clears modification-blocked flag
     +-- releases locale safety
     +-- returns Q_NOT_PSD to user
@@ -19004,9 +19001,9 @@ cxf_optimize_internal
 
 Before and after optimization, the system invokes lifecycle hooks that share the "callback" name but are NOT user callbacks:
 
-1. **cxf_pre_optimize_callback (P3.13):** Called at the start of cxf_optimize. Sets the error buffer lock on the environment to preserve the first error message throughout the solve. Does not interact with CallbackState or invoke user code.
+1. **cxf_pre_optimize_hook (P3.13):** Called at the start of cxf_optimize. Sets the error buffer lock on the environment to preserve the first error message throughout the solve. Does not interact with CallbackState or invoke user code.
 
-2. **cxf_post_optimize_callback (P3.13):** Called at the end of cxf_optimize, on all exit paths. Clears the error buffer lock, restoring normal error reporting. Does not interact with CallbackState or invoke user code.
+2. **cxf_post_optimize_hook (P3.13):** Called at the end of cxf_optimize, on all exit paths. Clears the error buffer lock, restoring normal error reporting. Does not interact with CallbackState or invoke user code.
 
 These hooks implement a first-error preservation pattern: in cascading error scenarios, the user sees the root cause rather than a secondary symptom.
 
@@ -19033,13 +19030,13 @@ The following table maps each callback event type to the module and function tha
 |------------|-------------------|----------------------|----------------|
 | POLLING | P3.25 (Solve LP Core) | cxf_solver_dispatch, cxf_solve_lp | Elapsed runtime |
 | PRESOLVE | P3.25 (Solve LP Core) | cxf_solver_dispatch (during presolve phase) | Rows removed, columns removed, elapsed time |
-| SIMPLEX | P3.20 (Simplex Iteration) | cxf_simplex_iterate | Iteration count, objective value, primal/dual infeasibility, elapsed time, simplex phase (primal/dual) |
+| SIMPLEX | P3.20 (Simplex Iteration) | cxf_log_iteration_progress | Iteration count, objective value, primal/dual infeasibility, elapsed time, simplex phase (primal/dual) |
 | BARRIER | P3.26 (Solve Barrier & Concurrent) | Barrier iteration loop (internal) | Iteration count, primal objective, dual objective, primal infeasibility, dual infeasibility, complementarity |
 | MESSAGE | P3.10 (Logging) | Log output functions | The log message string |
 
 **Detailed invocation context by solver phase:**
 
-**Simplex callbacks (SIMPLEX):** Invoked by cxf_simplex_iterate (P3.20) once per iteration batch. This function is called within the two-level iteration loop of cxf_solve_lp (P3.25) and reports progress regardless of whether console logging is enabled. The callback receives the current iteration count, objective value, and infeasibility measures. The callback is invoked even when console output is suppressed, ensuring that external monitoring systems (GUI progress bars, distributed managers) receive regular heartbeat notifications.
+**Simplex callbacks (SIMPLEX):** Invoked by cxf_log_iteration_progress (P3.20) once per iteration batch. This function is called within the two-level iteration loop of cxf_solve_lp (P3.25) and reports progress regardless of whether console logging is enabled. The callback receives the current iteration count, objective value, and infeasibility measures. The callback is invoked even when console output is suppressed, ensuring that external monitoring systems (GUI progress bars, distributed managers) receive regular heartbeat notifications.
 
 **Barrier callbacks (BARRIER):** Invoked during each iteration of the interior-point method. The callback receives the barrier iteration count, primal and dual objective values, and convergence measures (primal infeasibility, dual infeasibility, complementarity gap).
 
@@ -19165,7 +19162,7 @@ Errors during callback processing propagate through several layers:
 
 ### Error Buffer Locking
 
-The error buffer locking mechanism (cxf_pre_optimize_callback / cxf_post_optimize_callback, P3.13) ensures that during optimization, the first error message is preserved even when cascading errors occur. This is critical for callback-intensive solves where multiple callback invocations might generate error messages. The lock prevents secondary error messages from overwriting the root-cause message while still allowing error codes to be updated.
+The error buffer locking mechanism (cxf_pre_optimize_hook / cxf_post_optimize_hook, P3.13) ensures that during optimization, the first error message is preserved even when cascading errors occur. This is critical for callback-intensive solves where multiple callback invocations might generate error messages. The lock prevents secondary error messages from overwriting the root-cause message while still allowing error codes to be updated.
 
 ## Configuration
 
@@ -19604,7 +19601,7 @@ When multiple threads must access the same environment's error state (e.g., duri
 
 ### Error Buffer Lock (Not a Thread Lock)
 
-The error buffer locked flag (P3.13 lifecycle hooks) is a **single-thread cascading-error guard**, not a thread synchronization mechanism. It prevents inner functions from overwriting the root-cause error message during a cascading failure within a single API call. The lock is set by cxf_pre_optimize_callback at optimization start and cleared by cxf_post_optimize_callback at optimization end.
+The error buffer locked flag (P3.13 lifecycle hooks) is a **single-thread cascading-error guard**, not a thread synchronization mechanism. It prevents inner functions from overwriting the root-cause error message during a cascading failure within a single API call. The lock is set by cxf_pre_optimize_hook at optimization start and cleared by cxf_post_optimize_hook at optimization end.
 
 ### Errors in Concurrent Solver Instances
 
@@ -20547,7 +20544,7 @@ The guide references spec IDs throughout. Each ID maps to a specific file in the
 **What you build:**
 - `cxf_calloc`, `cxf_realloc`, `cxf_vector_free`, `cxf_model_alloc` -- the memory allocation layer with optional tracking, memory limits, and custom allocator support.
 - `cxf_error_env`, `cxf_error_model`, `cxf_set_error_message`, `cxf_env_set_status` -- the error reporting system with first-error preservation and locked-buffer semantics.
-- `cxf_log`, `cxf_errorlog`, `cxf_register_log_callback` -- logging output with configurable verbosity.
+- `cxf_log`, `cxf_set_error_string`, `cxf_register_log_callback` -- logging output with configurable verbosity.
 
 **What you gain:**
 Every subsequent module depends on being able to allocate memory, report errors, and produce log output. These three capabilities are the bedrock of the entire solver.
@@ -20596,7 +20593,7 @@ The ability to create an environment, create a model within it, populate the mod
 - P3.08 -- Data Validation (`data_validation.md`)
 
 **What you build:**
-- `cxf_matrix_setup`, `cxf_prepare_row_data`, `cxf_build_row_major`, `cxf_sort_indices` -- functions to construct and finalize the internal sparse matrix representation from user-provided data.
+- `cxf_matrix_setup`, `cxf_prepare_row_data`, `cxf_build_row_major`, `cxf_sort_by_values` -- functions to construct and finalize the internal sparse matrix representation from user-provided data.
 - `cxf_finalize_row_data` (6-part pipeline) -- the complete matrix finalization sequence.
 - Model type detection (`cxf_is_quadratic`, `cxf_is_socp`, etc.) and input/data validation functions.
 
@@ -20628,8 +20625,8 @@ The ability to take raw user input (variable bounds, constraint coefficients, ob
 - All three EtaVector variants (PIVOT, VARIABLE_FIX, WARM_START) with sparse storage.
 - The PFI algorithm for FTRAN and BTRAN operations.
 - `cxf_pivot_with_eta` -- the central function that creates an eta vector to record a basis pivot.
-- `cxf_basis_refactor` -- variable-fixing based on reduced cost analysis.
-- `cxf_basis_snapshot` and `cxf_basis_diff` -- for convergence detection in the iteration loop.
+- `cxf_fix_variables_at_bounds` -- variable-fixing based on reduced cost analysis.
+- `cxf_progress_snapshot` and `cxf_basis_diff` -- for convergence detection in the iteration loop.
 - `cxf_basis_warm` -- warm-start eta creation for reoptimization.
 - `cxf_alloc_eta`, `cxf_alloc_work_arrays`, `cxf_setup_resources` -- allocation helpers for the basis system and work arrays.
 
@@ -20721,7 +20718,7 @@ The ability to execute a complete simplex pivot: given an entering variable from
 
 **Specs to implement:**
 - P1.04 -- SolverState (`solver_state.md`)
-- P1.09 -- WorkArrays (`work_arrays.md`)
+- P1.09 -- SolutionData (`work_arrays.md`)
 - P2.1 -- Revised Simplex Method (`revised_simplex.md`)
 - P2.8 -- Bound Propagation (`bound_propagation.md`)
 - P3.20 -- Simplex Iteration (`simplex_iteration.md`)
@@ -20730,10 +20727,10 @@ The ability to execute a complete simplex pivot: given an entering variable from
 
 **What you build:**
 - The SolverState structure -- the central mutable state container for the simplex solver, holding problem dimensions, solve configuration, iteration control, basis tracking arrays, CSR/CSC matrix copies, working bounds, reduced costs, and all control parameters.
-- The WorkArrays structure for temporary computation buffers.
+- The SolutionData structure for temporary computation buffers.
 - The 10-step inner iteration loop described in the optimization pipeline integration spec (P4.1):
-  1. `cxf_basis_snapshot` -- capture current basis state
-  2. `cxf_simplex_iterate` -- progress logging and callback notification
+  1. `cxf_progress_snapshot` -- capture current basis state
+  2. `cxf_log_iteration_progress` -- progress logging and callback notification
   3. `cxf_simplex_phase_end` -- phase transition checks (first call)
   4. `cxf_simplex_perturbation` -- anti-cycling if stalling
   5. `cxf_simplex_step` -- primary simplex pivot (pricing + ratio test + basis update)
@@ -20742,8 +20739,8 @@ The ability to execute a complete simplex pivot: given an entering variable from
   8. `cxf_simplex_phase_end` -- post-pivot cleanup (second call)
   9. `cxf_basis_diff` -- convergence detection
   10. `cxf_simplex_post_iterate` -- stall detection, termination checks
-- State initialization (`cxf_init_solve_state`, `cxf_setup_basis`, `cxf_setup_work_arrays`) to create the SolverState from model data.
-- State cleanup (`cxf_cleanup_solve_state`, `cxf_free_solver_state`, `cxf_free_basis_state`) to tear down the SolverState.
+- State initialization (`cxf_init_solve_state`, `cxf_free_warmstart_basis`, `cxf_free_work_arrays`) to create the SolverState from model data.
+- State cleanup (`cxf_cleanup_solve_state`, `cxf_free_attribute_table`, `cxf_free_basis_state`) to tear down the SolverState.
 
 **What you gain:**
 A complete simplex iteration engine that can solve LP problems. This is the first stage where you have an end-to-end solver: given a prepared SolverState with an initial basis, the iteration loop will execute simplex pivots until optimality, infeasibility, unboundedness, or an iteration limit is reached.
@@ -20783,8 +20780,8 @@ A complete simplex iteration engine that can solve LP problems. This is the firs
 - `cxf_simplex_phase_end` -- phase transition handling (Phase I to Phase II transition when feasibility is achieved).
 - `cxf_simplex_refine` -- post-solve refinement (fix non-basic variables at bounds based on reduced costs, recover basic variables near upper bounds).
 - `cxf_simplex_final` -- final result processing (dual-feasibility-based variable fixing, complementary slackness analysis).
-- `cxf_simplex_cleanup` -- implied bound propagation (FBBT) via `cxf_propagate_bounds`, constraint tightening, working array deallocation.
-- `cxf_cleanup_helper`, `cxf_cleanup_coeff_change`, `cxf_cleanup_optimization`, `cxf_propagate_bounds` -- cleanup utilities.
+- `cxf_simplex_postsolve` -- implied bound propagation (FBBT) via `cxf_propagate_bounds`, constraint tightening, working array deallocation.
+- `cxf_propagate_bounds`, `cxf_cleanup_coeff_change`, `cxf_cleanup_optimization`, `cxf_propagate_bounds` -- cleanup utilities.
 
 **What you gain:**
 The complete simplex lifecycle from initialization through crash basis, iteration, post-processing, and cleanup. The crash basis dramatically reduces Phase I iteration counts on practical problems. The anti-cycling perturbation ensures convergence on degenerate problems. The post-solve refinement and cleanup produce polished solutions.
@@ -20862,7 +20859,7 @@ A complete LP solver pipeline that handles the full flow: parameter management, 
 - Model lifecycle: `cxf_model_create_internal`, `cxf_env_model_cleanup`, `cxf_update_model_manager`, `cxf_model_apply_modifications` (lazy update flush).
 - Environment lifecycle: `cxf_env_create_internal`, `cxf_env_free_internal`, `cxf_env_finalize` (8-part licensing pipeline), `cxf_env_load_logfile`, `cxf_env_update_active_model`.
 - Optimization preparation: signal handler installation, remote solver delegation.
-- Callbacks: `cxf_init_callback_struct`, `cxf_callback_terminate`, `cxf_pre_optimize_callback`, `cxf_post_optimize_callback`, `cxf_getconstrs_callback`, `cxf_copy_env_callbacks`.
+- Callbacks: `cxf_init_callback_struct`, `cxf_callback_terminate`, `cxf_pre_optimize_hook`, `cxf_post_optimize_hook`, `cxf_getconstrs_callback`, `cxf_copy_env_callbacks`.
 - Threading: locale safety, solve lock acquisition/release, CPU detection, thread count management.
 
 **What you gain:**

@@ -287,14 +287,14 @@ This is the core of the LP solver. The two-level structure prevents cycling whil
 ```
 OUTER LOOP (round control, max ~5/10/100 rounds depending on mode)
   |
-  +-- Take outer basis snapshot (cxf_basis_snapshot, P3.16)
+  +-- Take outer basis snapshot (cxf_progress_snapshot, P3.16)
   |
   +-- INNER LOOP (basis stabilization)
   |     |
-  |     +--[1] cxf_basis_snapshot (P3.16)
+  |     +--[1] cxf_progress_snapshot (P3.16)
   |     |       Capture current basis state
   |     |
-  |     +--[2] cxf_simplex_iterate (P3.20)
+  |     +--[2] cxf_log_iteration_progress (P3.20)
   |     |       Progress logging and callback notification
   |     |       (Naming misnomer: does NOT perform iterations)
   |     |
@@ -355,7 +355,7 @@ cxf_simplex_final (P3.22)
     Complementary slackness analysis
     |
     v
-cxf_simplex_cleanup (P3.22)
+cxf_simplex_postsolve (P3.22)
     Implied bound propagation (FBBT)
     -> Delegates to cxf_propagate_bounds (P3.34)
     Convert tight inequality constraints to equalities

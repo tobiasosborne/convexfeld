@@ -32,7 +32,7 @@ The guide references spec IDs throughout. Each ID maps to a specific file in the
 **What you build:**
 - `cxf_calloc`, `cxf_realloc`, `cxf_vector_free`, `cxf_model_alloc` -- the memory allocation layer with optional tracking, memory limits, and custom allocator support.
 - `cxf_error_env`, `cxf_error_model`, `cxf_set_error_message`, `cxf_env_set_status` -- the error reporting system with first-error preservation and locked-buffer semantics.
-- `cxf_log`, `cxf_errorlog`, `cxf_register_log_callback` -- logging output with configurable verbosity.
+- `cxf_log`, `cxf_set_error_string`, `cxf_register_log_callback` -- logging output with configurable verbosity.
 
 **What you gain:**
 Every subsequent module depends on being able to allocate memory, report errors, and produce log output. These three capabilities are the bedrock of the entire solver.
@@ -81,7 +81,7 @@ The ability to create an environment, create a model within it, populate the mod
 - P3.08 -- Data Validation (`data_validation.md`)
 
 **What you build:**
-- `cxf_matrix_setup`, `cxf_prepare_row_data`, `cxf_build_row_major`, `cxf_sort_indices` -- functions to construct and finalize the internal sparse matrix representation from user-provided data.
+- `cxf_matrix_setup`, `cxf_prepare_row_data`, `cxf_build_row_major`, `cxf_sort_by_values` -- functions to construct and finalize the internal sparse matrix representation from user-provided data.
 - `cxf_finalize_row_data` (6-part pipeline) -- the complete matrix finalization sequence.
 - Model type detection (`cxf_is_quadratic`, `cxf_is_socp`, etc.) and input/data validation functions.
 
@@ -113,8 +113,8 @@ The ability to take raw user input (variable bounds, constraint coefficients, ob
 - All three EtaVector variants (PIVOT, VARIABLE_FIX, WARM_START) with sparse storage.
 - The PFI algorithm for FTRAN and BTRAN operations.
 - `cxf_pivot_with_eta` -- the central function that creates an eta vector to record a basis pivot.
-- `cxf_basis_refactor` -- variable-fixing based on reduced cost analysis.
-- `cxf_basis_snapshot` and `cxf_basis_diff` -- for convergence detection in the iteration loop.
+- `cxf_fix_variables_at_bounds` -- variable-fixing based on reduced cost analysis.
+- `cxf_progress_snapshot` and `cxf_basis_diff` -- for convergence detection in the iteration loop.
 - `cxf_basis_warm` -- warm-start eta creation for reoptimization.
 - `cxf_alloc_eta`, `cxf_alloc_work_arrays`, `cxf_setup_resources` -- allocation helpers for the basis system and work arrays.
 
@@ -206,7 +206,7 @@ The ability to execute a complete simplex pivot: given an entering variable from
 
 **Specs to implement:**
 - P1.04 -- SolverState (`solver_state.md`)
-- P1.09 -- WorkArrays (`work_arrays.md`)
+- P1.09 -- SolutionData (`work_arrays.md`)
 - P2.1 -- Revised Simplex Method (`revised_simplex.md`)
 - P2.8 -- Bound Propagation (`bound_propagation.md`)
 - P3.20 -- Simplex Iteration (`simplex_iteration.md`)
@@ -215,10 +215,10 @@ The ability to execute a complete simplex pivot: given an entering variable from
 
 **What you build:**
 - The SolverState structure -- the central mutable state container for the simplex solver, holding problem dimensions, solve configuration, iteration control, basis tracking arrays, CSR/CSC matrix copies, working bounds, reduced costs, and all control parameters.
-- The WorkArrays structure for temporary computation buffers.
+- The SolutionData structure for temporary computation buffers.
 - The 10-step inner iteration loop described in the optimization pipeline integration spec (P4.1):
-  1. `cxf_basis_snapshot` -- capture current basis state
-  2. `cxf_simplex_iterate` -- progress logging and callback notification
+  1. `cxf_progress_snapshot` -- capture current basis state
+  2. `cxf_log_iteration_progress` -- progress logging and callback notification
   3. `cxf_simplex_phase_end` -- phase transition checks (first call)
   4. `cxf_simplex_perturbation` -- anti-cycling if stalling
   5. `cxf_simplex_step` -- primary simplex pivot (pricing + ratio test + basis update)
@@ -227,8 +227,8 @@ The ability to execute a complete simplex pivot: given an entering variable from
   8. `cxf_simplex_phase_end` -- post-pivot cleanup (second call)
   9. `cxf_basis_diff` -- convergence detection
   10. `cxf_simplex_post_iterate` -- stall detection, termination checks
-- State initialization (`cxf_init_solve_state`, `cxf_setup_basis`, `cxf_setup_work_arrays`) to create the SolverState from model data.
-- State cleanup (`cxf_cleanup_solve_state`, `cxf_free_solver_state`, `cxf_free_basis_state`) to tear down the SolverState.
+- State initialization (`cxf_init_solve_state`, `cxf_free_warmstart_basis`, `cxf_free_work_arrays`) to create the SolverState from model data.
+- State cleanup (`cxf_cleanup_solve_state`, `cxf_free_attribute_table`, `cxf_free_basis_state`) to tear down the SolverState.
 
 **What you gain:**
 A complete simplex iteration engine that can solve LP problems. This is the first stage where you have an end-to-end solver: given a prepared SolverState with an initial basis, the iteration loop will execute simplex pivots until optimality, infeasibility, unboundedness, or an iteration limit is reached.
@@ -268,8 +268,8 @@ A complete simplex iteration engine that can solve LP problems. This is the firs
 - `cxf_simplex_phase_end` -- phase transition handling (Phase I to Phase II transition when feasibility is achieved).
 - `cxf_simplex_refine` -- post-solve refinement (fix non-basic variables at bounds based on reduced costs, recover basic variables near upper bounds).
 - `cxf_simplex_final` -- final result processing (dual-feasibility-based variable fixing, complementary slackness analysis).
-- `cxf_simplex_cleanup` -- implied bound propagation (FBBT) via `cxf_propagate_bounds`, constraint tightening, working array deallocation.
-- `cxf_cleanup_helper`, `cxf_cleanup_coeff_change`, `cxf_cleanup_optimization`, `cxf_propagate_bounds` -- cleanup utilities.
+- `cxf_simplex_postsolve` -- implied bound propagation (FBBT) via `cxf_propagate_bounds`, constraint tightening, working array deallocation.
+- `cxf_propagate_bounds`, `cxf_cleanup_coeff_change`, `cxf_cleanup_optimization`, `cxf_propagate_bounds` -- cleanup utilities.
 
 **What you gain:**
 The complete simplex lifecycle from initialization through crash basis, iteration, post-processing, and cleanup. The crash basis dramatically reduces Phase I iteration counts on practical problems. The anti-cycling perturbation ensures convergence on degenerate problems. The post-solve refinement and cleanup produce polished solutions.
@@ -347,7 +347,7 @@ A complete LP solver pipeline that handles the full flow: parameter management, 
 - Model lifecycle: `cxf_model_create_internal`, `cxf_env_model_cleanup`, `cxf_update_model_manager`, `cxf_model_apply_modifications` (lazy update flush).
 - Environment lifecycle: `cxf_env_create_internal`, `cxf_env_free_internal`, `cxf_env_finalize` (8-part licensing pipeline), `cxf_env_load_logfile`, `cxf_env_update_active_model`.
 - Optimization preparation: signal handler installation, remote solver delegation.
-- Callbacks: `cxf_init_callback_struct`, `cxf_callback_terminate`, `cxf_pre_optimize_callback`, `cxf_post_optimize_callback`, `cxf_getconstrs_callback`, `cxf_copy_env_callbacks`.
+- Callbacks: `cxf_init_callback_struct`, `cxf_callback_terminate`, `cxf_pre_optimize_hook`, `cxf_post_optimize_hook`, `cxf_getconstrs_callback`, `cxf_copy_env_callbacks`.
 - Threading: locale safety, solve lock acquisition/release, CPU detection, thread count management.
 
 **What you gain:**

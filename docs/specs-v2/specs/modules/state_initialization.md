@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This module provides the functions that prepare model-level state at the beginning of an optimization call. It encompasses three concerns: initializing the solver's runtime environment (clearing flags, recording timestamps, adjusting tolerances), freeing stale warm-start basis data when a reset has been requested, and tearing down the solution output container (WorkArrays) to prepare for fresh results. Despite the "setup" naming convention in some of these functions, two of the three actually perform cleanup operations that establish a clean slate for the next optimization attempt. This reflects the solver's lifecycle pattern: "initialization" at the optimization boundary often means "clear previous results."
+This module provides the functions that prepare model-level state at the beginning of an optimization call. It encompasses three concerns: initializing the solver's runtime environment (clearing flags, recording timestamps, adjusting tolerances), freeing stale warm-start basis data when a reset has been requested, and tearing down the solution output container (SolutionData) to prepare for fresh results. Despite the "setup" naming convention in some of these functions, two of the three actually perform cleanup operations that establish a clean slate for the next optimization attempt. This reflects the solver's lifecycle pattern: "initialization" at the optimization boundary often means "clear previous results."
 
 ## Functions
 
@@ -50,11 +50,11 @@ cxf_init_solve_state is called once at the top of each optimization invocation t
 
 ---
 
-### cxf_setup_basis
+### cxf_free_warmstart_basis
 
 **Purpose:** Free the warm-start basis data structure associated with the model, deallocating all owned arrays and nested sub-structures.
 
-**Note:** Despite its name suggesting initialization, this function is a destructor. Analysis of the implementation confirms it performs only deallocation operations (no allocations, no field initialization to non-zero values). The name is a historical misnomer; the function is functionally identical to cxf_free_warmstart_basis.
+**Naming history:** Formerly `cxf_setup_basis`; renamed to better reflect its actual behavior as a destructor rather than an initialization function.
 
 **Signature:**
 - Input: env : pointer-to-Environment - The environment for memory tracking during deallocation
@@ -82,7 +82,7 @@ cxf_init_solve_state is called once at the top of each optimization invocation t
 - None. This function does not return an error code. Null pointer inputs are handled gracefully.
 
 **Behavioral Description:**
-cxf_setup_basis (which is functionally cxf_free_warmstart_basis) performs an inside-out deallocation of the WarmStartData structure. It first frees the leaf-level arrays (variable basis status, primal/dual values, constraint basis status), then frees the nested factorization cache sub-structure (its index array, its value array, then the sub-structure itself), then frees the main WarmStartData structure, and finally nulls the caller's reference pointer. Each pointer is null-checked before freeing, and each pointer is set to null after freeing, following the solver's standard defensive memory management pattern.
+cxf_free_warmstart_basis (which is functionally cxf_free_warmstart_basis) performs an inside-out deallocation of the WarmStartData structure. It first frees the leaf-level arrays (variable basis status, primal/dual values, constraint basis status), then frees the nested factorization cache sub-structure (its index array, its value array, then the sub-structure itself), then frees the main WarmStartData structure, and finally nulls the caller's reference pointer. Each pointer is null-checked before freeing, and each pointer is set to null after freeing, following the solver's standard defensive memory management pattern.
 
 **Deallocation Order:**
 1. Variable basis status array (within WarmStartData)
@@ -101,51 +101,51 @@ cxf_setup_basis (which is functionally cxf_free_warmstart_basis) performs an ins
 
 ---
 
-### cxf_setup_work_arrays
+### cxf_free_work_arrays
 
-**Purpose:** Free the WorkArrays (solution output container) structure from the model, invalidating cached attributes and deallocating all owned arrays before removing the structure.
+**Purpose:** Free the SolutionData (solution output container) structure from the model, invalidating cached attributes and deallocating all owned arrays before removing the structure.
 
-**Note:** Despite its name suggesting initialization, this function is a destructor/reset function. It frees the existing WorkArrays structure and all its owned allocations, preparing the model for either a fresh optimization attempt or final cleanup.
+**Naming history:** Formerly `cxf_setup_work_arrays`; renamed to better reflect its actual behavior as a destructor/reset function rather than an initialization function.
 
 **Signature:**
-- Input: model : pointer-to-Model - The model whose WorkArrays structure should be freed
+- Input: model : pointer-to-Model - The model whose SolutionData structure should be freed
 - Output: void
 
 **Preconditions:**
 - The model may be null; if so, the function returns immediately.
-- If the model is non-null but has no WorkArrays structure, the function returns immediately.
+- If the model is non-null but has no SolutionData structure, the function returns immediately.
 
 **Postconditions:**
-- The model's attribute cache has been invalidated, breaking any wired pointers from the attribute table into WorkArrays fields.
-- All owned arrays within the WorkArrays structure have been freed (primal solution array, dual solution array).
+- The model's attribute cache has been invalidated, breaking any wired pointers from the attribute table into SolutionData fields.
+- All owned arrays within the SolutionData structure have been freed (primal solution array, dual solution array).
 - Borrowed pointers within the structure (e.g., range dual and SOS dual aliases into the dual array) have been cleared without being independently freed.
 - Any unrecoverable error state associated with the model has been cleaned up.
-- The WorkArrays structure itself has been freed.
-- The model's reference to the WorkArrays structure has been set to null.
+- The SolutionData structure itself has been freed.
+- The model's reference to the SolutionData structure has been set to null.
 
 **Side Effects:**
 - Invalidates the model's attribute cache (must occur first, before any field deallocation, to prevent dangling pointers in the attribute table).
 - Deallocates memory through the environment's memory management system.
 - Clears borrowed pointer fields without freeing them (these alias into other allocations).
 - Invokes the unrecoverable state cleanup helper.
-- Nulls the model's WorkArrays pointer.
+- Nulls the model's SolutionData pointer.
 
 **Error Conditions:**
-- None. This function does not return an error code. Null model and null WorkArrays cases are handled gracefully.
+- None. This function does not return an error code. Null model and null SolutionData cases are handled gracefully.
 
 **Behavioral Description:**
-cxf_setup_work_arrays performs a controlled teardown of the model's solution output container. The first action is attribute cache invalidation, which must precede any deallocation because the attribute table may hold direct pointers into WorkArrays fields. After invalidation, the function frees the two owned arrays (solution index array and solution value array), clears two borrowed pointer fields without freeing them (these are aliases into allocations owned by other structures), invokes the unrecoverable state cleanup helper to handle any orphaned allocations, and finally frees the WorkArrays structure itself and nulls the model's reference.
+cxf_free_work_arrays performs a controlled teardown of the model's solution output container. The first action is attribute cache invalidation, which must precede any deallocation because the attribute table may hold direct pointers into SolutionData fields. After invalidation, the function frees the two owned arrays (solution index array and solution value array), clears two borrowed pointer fields without freeing them (these are aliases into allocations owned by other structures), invokes the unrecoverable state cleanup helper to handle any orphaned allocations, and finally frees the SolutionData structure itself and nulls the model's reference.
 
 **Deallocation Order:**
 1. Attribute cache invalidation (must be first)
-2. Owned solution index array (within WorkArrays)
-3. Owned solution value array (within WorkArrays)
+2. Owned solution index array (within SolutionData)
+3. Owned solution value array (within SolutionData)
 4. Borrowed pointers cleared (not freed)
 5. Unrecoverable state cleanup
-6. WorkArrays structure itself
-7. Model's WorkArrays reference set to null
+6. SolutionData structure itself
+7. Model's SolutionData reference set to null
 
-**Thread Safety:** unsafe -- Assumes single-threaded access to the model and its WorkArrays.
+**Thread Safety:** unsafe -- Assumes single-threaded access to the model and its SolutionData.
 
 **Dependencies:**
 - cxf_clear_attr_cache (attribute module) -- invalidates the attribute table's cached pointers
@@ -156,24 +156,24 @@ cxf_setup_work_arrays performs a controlled teardown of the model's solution out
 
 ## Module-Level Notes
 
-### Naming Misnomers
+### Naming History
 
-Two of the three functions in this module have names that suggest initialization but actually perform cleanup:
+Two of the three functions in this module have been renamed to correct historical misnomers:
 
-| Audit Name | Actual Behavior | Canonical Name |
-|------------|-----------------|----------------|
-| cxf_setup_basis | Frees warm-start basis data | cxf_free_warmstart_basis |
-| cxf_setup_work_arrays | Frees WorkArrays structure | cxf_free_work_arrays |
+| Current Name | Former Name | Reason for Rename |
+|--------------|-------------|-------------------|
+| cxf_free_warmstart_basis | cxf_setup_basis | Original name suggested initialization but function performs deallocation |
+| cxf_free_work_arrays | cxf_setup_work_arrays | Original name suggested initialization but function performs cleanup |
 
-These naming misnomers appear to reflect the perspective that "setting up" for a new optimization means "clearing out" the previous optimization's residual state. The behavioral contracts above describe the actual behavior regardless of the name.
+The original naming reflected the perspective that "setting up" for a new optimization means "clearing out" the previous optimization's residual state. The current names accurately describe the actual behavior.
 
 ### Calling Context
 
 These three functions are called early in the optimization pipeline:
 
 1. **cxf_init_solve_state** is called at the very beginning of the optimization entry point, after model validation but before solver dispatch.
-2. **cxf_setup_basis** is called conditionally when an environment parameter indicates that warm-start data should be cleared before re-optimization.
-3. **cxf_setup_work_arrays** is called on error recovery paths during optimization and during solution clearing operations.
+2. **cxf_free_warmstart_basis** is called conditionally when an environment parameter indicates that warm-start data should be cleared before re-optimization.
+3. **cxf_free_work_arrays** is called on error recovery paths during optimization and during solution clearing operations.
 
 ### Relationship to Cleanup Module (P3.04)
 

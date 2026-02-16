@@ -36,7 +36,7 @@ Messages that span multiple lines are split at newline characters and each line 
 
 ## Functions
 
-### cxf_errorlog
+### cxf_set_error_string
 
 **Purpose:** Set a predefined error message on the environment's error buffer based on a standard error code, accessed through a Model.
 
@@ -65,7 +65,7 @@ Messages that span multiple lines are split at newline characters and each line 
 **Behavioral Description:**
 This function maps standard solver error codes to predefined human-readable message strings and writes them to the environment's error buffer. It first validates the model structure. Then it extracts the environment and error buffer pointer. If the error code is zero, the buffer is cleared. For nonzero codes, it applies the first-error preservation rule: the out-of-memory error always overwrites (as memory exhaustion is typically the root cause of cascading failures), while all other errors write only to an empty buffer. The error code-to-message mapping covers approximately 30 standard error codes spanning memory errors, argument validation errors, attribute and parameter errors, I/O errors, numerical errors, model state errors, quadratic programming errors, network and server errors, and miscellaneous operational errors. One code in the standard range (10015) is reserved and has no mapping. Unrecognized codes receive a fallback message that includes the numeric value.
 
-Note: Despite its name suggesting "error log," this function writes to the error message buffer (the same buffer used by the Error Handling module's cxf_set_error_message), not to the log output system. The naming reflects that it "logs" an error state on the environment for later retrieval, rather than producing log file output.
+**Naming history:** Formerly `cxf_errorlog`; renamed to `cxf_set_error_string` to better reflect that it writes to the error message buffer, not to the log output system.
 
 **Thread Safety:** Unsafe. The caller is responsible for thread-safe access to the environment.
 
@@ -199,14 +199,14 @@ If a model reference is provided, the function inherits callback configuration f
 
 ### Naming Clarification
 
-The function named cxf_errorlog is somewhat confusingly placed in this Logging module. Despite its name, cxf_errorlog does not produce log file output; it sets a predefined error message on the environment's error buffer, which is the same operation performed by cxf_set_error_message and cxf_env_set_status in the Error Handling module. It is included in the Logging module per the project's function-to-module mapping. The function's "log" suffix reflects that it "logs" (records) an error state, not that it writes to the log output system.
+The function named cxf_set_error_string is somewhat confusingly placed in this Logging module. It sets a predefined error message on the environment's error buffer, which is the same operation performed by cxf_set_error_message and cxf_env_set_status in the Error Handling module. It is included in the Logging module per the project's function-to-module mapping.
 
 ### Relationship to Error Handling Module
 
 The Error Handling module (P3.09) and this Logging module share responsibility for the error message buffer:
 
 - **Error Handling** provides cxf_error_env and cxf_error_model (custom formatted messages) and cxf_set_error_message / cxf_env_set_status (predefined messages from codes).
-- **Logging** provides cxf_errorlog (predefined messages from codes, identical behavior to cxf_set_error_message) and cxf_log / cxf_register_log_callback (log output system, unrelated to the error buffer).
+- **Logging** provides cxf_set_error_string (predefined messages from codes, identical behavior to cxf_set_error_message) and cxf_log / cxf_register_log_callback (log output system, unrelated to the error buffer).
 
 The error message buffer and the log output system are entirely separate subsystems: the error buffer holds the most recent error for user retrieval via the API, while the log system produces ongoing progress and diagnostic output.
 
@@ -233,7 +233,7 @@ The environment maintains an internal log buffer that accumulates formatted text
 
 | Function | Thread Safety | Notes |
 |----------|---------------|-------|
-| cxf_errorlog | Unsafe | Caller must synchronize |
+| cxf_set_error_string | Unsafe | Caller must synchronize |
 | cxf_log | Conditional | Reentrancy-protected within one thread; caller must synchronize cross-thread |
 | cxf_register_log_callback | Conditional | Must not race with active callback invocations |
 

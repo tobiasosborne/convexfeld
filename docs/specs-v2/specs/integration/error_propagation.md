@@ -29,7 +29,7 @@ The solver's error propagation design follows three governing principles:
 |-----------|--------|---------------------------|
 | **Input Validation** | P3.07 | Generates validation errors at API entry points (null pointer, invalid sentinel, NaN detection) |
 | **Data Validation** | P3.08 | Generates data content errors (NaN in arrays, invalid variable types, infeasible solutions) |
-| **Logging** | P3.10 | Contains cxf_errorlog, which sets predefined error messages; also provides log output for error diagnostics |
+| **Logging** | P3.10 | Contains cxf_set_error_string, which sets predefined error messages; also provides log output for error diagnostics |
 | **Solve LP Core** | P3.25 | Generates solver errors (numeric, out-of-memory) and propagates them through the solve chain |
 | **Solve Barrier & Concurrent** | P3.26 | Generates Q-not-PSD errors and propagates solver errors |
 | **Model Lifecycle** | P3.31 | Generates modification errors (a model-update error message) during lazy update flush |
@@ -66,7 +66,7 @@ Error messages reach the error buffer through a 2x2 matrix of functions organize
                     +------------------------+------------------------+
 ```
 
-Additionally, cxf_errorlog (P3.10) is behaviorally identical to cxf_set_error_message, despite its placement in the Logging module.
+Additionally, cxf_set_error_string (P3.10) is behaviorally identical to cxf_set_error_message, despite its placement in the Logging module.
 
 **Custom message functions** accept a printf-style format string and variadic arguments, producing context-specific messages that include runtime values (e.g., "Variable index out of range: 5000"). These are used by internal functions that have detailed knowledge of the error context.
 
@@ -148,7 +148,7 @@ The error buffer transitions through a well-defined lifecycle during each API ca
                +--------------------+--------------------+
                |                                         |
     Error cascades upward                     Optimization begins
-    (inner error preserved)                   (cxf_pre_optimize_callback)
+    (inner error preserved)                   (cxf_pre_optimize_hook)
                |                                         |
                v                                         v
     +-------------------+                     +-------------------+
@@ -157,7 +157,7 @@ The error buffer transitions through a well-defined lifecycle during each API ca
     +-------------------+                     +-------------------+
                |                                         |
                |                                Optimization ends
-               |                                (cxf_post_optimize_callback)
+               |                                (cxf_post_optimize_hook)
                |                                         |
                |                                         v
                |                              +-------------------+
@@ -242,9 +242,9 @@ cxf_optimize (public API)
     |       +-- returns OOM code
     |
     +-- receives OOM code
-    +-- cxf_pre_optimize_callback (locks buffer -- but too late, msg already set)
+    +-- cxf_pre_optimize_hook (locks buffer -- but too late, msg already set)
     +-- an out-of-memory error message may be set with overwrite=0
-    +-- cxf_post_optimize_callback (unlocks buffer)
+    +-- cxf_post_optimize_hook (unlocks buffer)
     +-- clears modification-blocked flag
     +-- releases locale safety state
     +-- returns OOM code to user
@@ -258,7 +258,7 @@ Three mechanisms work together to preserve the root-cause error message:
 
 1. **Empty-buffer check.** The custom message functions (cxf_error_env, cxf_error_model) check whether the error buffer is empty before writing. When called with `overwrite=0`, they only write to an empty buffer. Since the innermost error reporter writes first, its message persists.
 
-2. **Buffer lock flag.** The error buffer lock (managed by cxf_pre_optimize_callback and cxf_post_optimize_callback) provides an explicit lock that prevents overwrites even when `overwrite=1` is specified. This is used during optimization to protect error messages set before the solve loop from being overwritten by cascading errors during the solve.
+2. **Buffer lock flag.** The error buffer lock (managed by cxf_pre_optimize_hook and cxf_post_optimize_hook) provides an explicit lock that prevents overwrites even when `overwrite=1` is specified. This is used during optimization to protect error messages set before the solve loop from being overwritten by cascading errors during the solve.
 
 3. **Out-of-memory override.** The predefined message functions always write the out-of-memory message regardless of buffer state. This override exists because memory exhaustion is frequently the root cause of cascading failures -- an allocation failure deep in the solver may trigger a chain of secondary failures (cleanup failures, logging failures), and the original OOM message is the most important diagnostic.
 
@@ -324,7 +324,7 @@ This distinction reflects usage patterns:
 
 ### D5: Buffer Lock via Lifecycle Hooks (Not via Error Functions)
 
-The error buffer lock is managed by the optimization lifecycle hooks (cxf_pre_optimize_callback / cxf_post_optimize_callback from P3.13), not by the error reporting functions themselves. This separates concerns:
+The error buffer lock is managed by the optimization lifecycle hooks (cxf_pre_optimize_hook / cxf_post_optimize_hook from P3.13), not by the error reporting functions themselves. This separates concerns:
 
 - Error reporting functions are simple, stateless operations that check the lock but never set it.
 - The lock lifecycle is managed by the optimization entry point, which has the context to decide when locking is appropriate.
@@ -431,7 +431,7 @@ cxf_optimize
     |
     v
 cxf_optimize receives Q_NOT_PSD
-    +-- cxf_post_optimize_callback (unlocks error buffer)
+    +-- cxf_post_optimize_hook (unlocks error buffer)
     +-- clears modification-blocked flag
     +-- releases locale safety
     +-- returns Q_NOT_PSD to user

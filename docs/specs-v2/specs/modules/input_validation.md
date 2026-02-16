@@ -96,7 +96,7 @@ The function tests for finiteness using a branchless arithmetic technique on the
 
 ---
 
-### cxf_check_nan_or_inf
+### cxf_is_finite
 
 **Purpose:** Determine whether a double-precision floating-point value is finite (neither NaN nor infinity) per the IEEE 754 standard.
 
@@ -117,7 +117,9 @@ The function tests for finiteness using a branchless arithmetic technique on the
 - None. The function is total.
 
 **Behavioral Description:**
-This function is identical in behavior to cxf_check_is_finite. Both names refer to the same underlying operation. Despite the name suggesting it returns true for NaN/infinity values, the function actually returns true for finite values and false for non-finite values (inverted semantics relative to the name). The name is a historical misnomer preserved for backward compatibility. An implementor should treat this as an alias for cxf_check_is_finite. The implementation uses the same branchless IEEE 754 bit-manipulation technique described in that function's specification.
+This function is identical in behavior to cxf_check_is_finite. Both names refer to the same underlying operation. The implementation uses the same branchless IEEE 754 bit-manipulation technique described in that function's specification.
+
+**Naming history:** Formerly `cxf_check_nan_or_inf`; renamed to better reflect that it returns true for finite values and false for non-finite values (NaN or infinity).
 
 **Thread Safety:** safe (pure function, no shared state)
 

@@ -145,7 +145,7 @@ This function performs a lightweight preprocessing pass that reduces the effecti
 
 **Step 1: Candidate identification.** The function scans all variables and collects those whose bound range (upper bound minus lower bound) is below a tightness threshold. The threshold is a multiple of the feasibility tolerance. A minimum candidate count is enforced to prevent degenerate preprocessing on very small problems.
 
-**Step 2: Candidate sorting.** The candidates are sorted by bound width (tightest first) using cxf_sort_indices (P3.14). This ordering ensures that the most constrained variables are fixed first, maximizing the chance that each fixing remains feasible.
+**Step 2: Candidate sorting.** The candidates are sorted by bound width (tightest first) using cxf_sort_by_values (P3.14). This ordering ensures that the most constrained variables are fixed first, maximizing the chance that each fixing remains feasible.
 
 **Step 3: Activity initialization.** The constraint activity arrays are cleared (or initialized from current activity bounds) to provide a clean baseline for tracking the cumulative effect of variable fixings.
 
@@ -165,7 +165,7 @@ This function performs a lightweight preprocessing pass that reduces the effecti
 
 **Dependencies:**
 - P3.02 (Allocation Helpers) - cxf_alloc_eta for eta vector allocation
-- P3.14 (Matrix Core) - cxf_sort_indices for candidate sorting
+- P3.14 (Matrix Core) - cxf_sort_by_values for candidate sorting
 - P1.04 (SolverState) - reads bounds, constraint matrix; modifies activity arrays, objective, eta chain
 - P1.05 (BasisState) - eta chain management for fixing records
 
@@ -288,7 +288,7 @@ The two-phase simplex method (Dantzig, 1963; Chvatal, 1983) separates feasibilit
 
 4. **Constraint cleanup.** Inactive constraints identified during Phase I processing (those whose activity bounds indicate they are not binding at the current solution) are removed from the active set. This cleanup, performed by the sparse removal mechanism described above, reduces the effective problem size entering Phase II.
 
-5. **Basis preservation.** The basis itself (the set of basic variables and their positions) is carried forward from Phase I to Phase II unchanged. The Phase I solution is a basic feasible solution, and Phase II begins from this vertex of the feasible polyhedron. The basis factorization may be refreshed (via cxf_basis_refactor, P3.16) to ensure numerical accuracy for Phase II iterations, since the objective change can affect the conditioning of subsequent operations.
+5. **Basis preservation.** The basis itself (the set of basic variables and their positions) is carried forward from Phase I to Phase II unchanged. The Phase I solution is a basic feasible solution, and Phase II begins from this vertex of the feasible polyhedron. The basis factorization may be refreshed (via cxf_fix_variables_at_bounds, P3.16) to ensure numerical accuracy for Phase II iterations, since the objective change can affect the conditioning of subsequent operations.
 
 6. **Tolerance adjustment.** The optimality tolerance used for Phase II termination may differ from the feasibility tolerance used for Phase I. Phase I uses the primal feasibility tolerance to determine when constraint violations are acceptable; Phase II uses the dual feasibility (optimality) tolerance to determine when reduced costs are small enough to declare optimality. These are typically configured as separate environment parameters.
 
@@ -380,10 +380,10 @@ The six functions in this module bracket and condition the main simplex iteratio
 2. **cxf_simplex_crash** (this module) — construct initial basis
 3. **cxf_simplex_preprocess** (this module) — fix near-bound variables
 4. **cxf_simplex_setup** (this module) — compute activity bounds
-5. cxf_basis_refactor (P3.16) — initial basis factorization
+5. cxf_fix_variables_at_bounds (P3.16) — initial basis factorization
 
 **Within the iteration loop:**
-6. cxf_simplex_iterate (P3.20) — progress logging
+6. cxf_log_iteration_progress (P3.20) — progress logging
 7. **cxf_simplex_phase_end** (this module) — phase transition and constraint cleanup
 8. **cxf_simplex_perturbation** (this module) — anti-cycling when stalling detected
 9. cxf_simplex_step/step2/step3 (P3.20) — main pivot and bound propagation
@@ -393,7 +393,7 @@ The six functions in this module bracket and condition the main simplex iteratio
 **Post-iteration cleanup:**
 12. **cxf_simplex_refine** (this module) — solution refinement
 13. cxf_simplex_final (P3.22) — solution extraction
-14. cxf_simplex_cleanup (P3.22) — resource deallocation
+14. cxf_simplex_postsolve (P3.22) — resource deallocation
 
 ### Relationship to Algorithm Specifications
 

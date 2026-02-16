@@ -75,8 +75,8 @@ This crossover procedure converts the interior-point solution to a basic feasibl
 
 *Inner loop:* Within each outer round, the function executes the following sequence repeatedly until the basis stabilizes:
 
-1. **Basis snapshot** (cxf_basis_snapshot, P3.16): Capture the current basis state for later comparison.
-2. **Simplex iterate** (cxf_simplex_iterate, P3.20): Execute progress logging and bookkeeping for the current iteration batch.
+1. **Basis snapshot** (cxf_progress_snapshot, P3.16): Capture the current basis state for later comparison.
+2. **Simplex iterate** (cxf_log_iteration_progress, P3.20): Execute progress logging and bookkeeping for the current iteration batch.
 3. **Iterate variant**: Execute a post-iteration variant for additional processing (phase transition checks).
 4. **Perturbation** (cxf_simplex_perturbation, P3.21): On early iterations only, apply anti-cycling perturbation if the EXPAND procedure (Gill, Murray, Saunders, and Wright, 1989) determines that the solver is stalling.
 5. **Step** (cxf_simplex_step, P3.20): Execute the primary simplex pivot operation (pricing, ratio test, basis update).
@@ -126,11 +126,11 @@ The PWL coefficient updates use a batch processing approach for efficiency, proc
 **Thread Safety:** Not thread-safe. Each concurrent solve must use an independent model with its own solver state. Thread safety for concurrent LP solving is achieved at the model level (P3.24, P3.25 cxf_solver_dispatch concurrent dispatch).
 
 **Dependencies:**
-- P3.22 (Simplex Lifecycle) - cxf_simplex_init for state allocation, cxf_simplex_cleanup for bound tightening and deallocation, cxf_solver_state_cleanup for state deallocation
+- P3.22 (Simplex Lifecycle) - cxf_simplex_init for state allocation, cxf_simplex_postsolve for bound tightening and deallocation, cxf_solver_state_cleanup for state deallocation
 - P3.21 (Simplex Phases) - cxf_simplex_crash for crash basis, cxf_simplex_perturbation for anti-cycling, cxf_simplex_phase_end for phase transition processing
-- P3.20 (Simplex Iteration) - cxf_simplex_iterate for logging, cxf_simplex_step/step2/step3 for pivoting and bound propagation, cxf_simplex_post_iterate for stall detection
+- P3.20 (Simplex Iteration) - cxf_log_iteration_progress for logging, cxf_simplex_step/step2/step3 for pivoting and bound propagation, cxf_simplex_post_iterate for stall detection
 - P3.23 (Crossover) - cxf_crossover and cxf_crossover_bounds for barrier-to-simplex crossover
-- P3.16 (Basis Factorization) - cxf_basis_refactor for LU factorization, cxf_basis_snapshot and cxf_basis_diff for convergence detection
+- P3.16 (Basis Factorization) - cxf_fix_variables_at_bounds for LU factorization, cxf_progress_snapshot and cxf_basis_diff for convergence detection
 - P1.02 (Model) - model structure access for matrix data, environment, solution data
 - P1.04 (SolverState) - solver state structure for all working data
 - P1.01 (Environment) - parameter access for solver configuration
@@ -265,14 +265,14 @@ cxf_optimize (P3.24, public API)
               -> cxf_simplex_crash (P3.21) -- crash basis
               -> cxf_crossover (P3.23) -- barrier crossover
               -> [iteration loop]:
-                -> cxf_simplex_iterate (P3.20)
+                -> cxf_log_iteration_progress (P3.20)
                 -> cxf_simplex_step (P3.20)
                 -> cxf_simplex_step2 (P3.20)
                 -> cxf_simplex_step3 (P3.20)
                 -> cxf_simplex_phase_end (P3.21)
                 -> cxf_simplex_perturbation (P3.21)
               -> cxf_solution_extract
-              -> cxf_simplex_cleanup (P3.22)
+              -> cxf_simplex_postsolve (P3.22)
 ```
 
 cxf_solver_dispatch handles the branching point where the solve flow splits by algorithm type (simplex vs. barrier vs. concurrent vs. PDHG). cxf_solve_lp handles the LP-specific pipeline after the algorithm has been selected.
