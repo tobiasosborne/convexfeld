@@ -4,54 +4,111 @@
 
 ---
 
-## STATUS: Full V2 Spec Audit Complete + Remediation Plan Created
+## STATUS: P0 Tolerance Fix In Progress — All Data Gathered, Ready to Execute
 
 ### Session Summary
 
-Ran 20 parallel Sonnet audit agents comparing entire codebase against v2 specs (ground truth). Created remediation plan and 26 beads issues with dependencies.
-
-#### Key Result: ~25-30% overall spec compliance
-
-#### Deliverables Created:
-1. **20 audit reports** — `docs/audit/01_*.md` through `docs/audit/20_*.md` (512KB total)
-2. **Remediation plan** — `docs/audit/REMEDIATION_PLAN.md` (8 phases, 45-67 days estimated)
-3. **26 new beads issues** with dependency graph
-
-#### Top 5 Findings:
-1. Tolerances off by orders of magnitude (perturbation 10,000x wrong)
-2. Core simplex algorithm only ~40% complete (missing BTRAN, Phase I/II, steepest edge)
-3. Pricing is completely different architecture (0% compliance)
-4. solve_lp.c is 1262-line monolith with 10 hallucinated functions
-5. Variable status encoding fundamentally wrong (breaks simplex)
-
-#### What Works (keep these):
-- Basis/LU math (~70% compliant, best module)
-- CSC/CSR sparse matrix format + SpMV
-- Callback basics (~70%)
-- MPS parser, test framework, build system
+1. **Full V2 spec audit** — 20 parallel Sonnet agents, 20 reports (512KB) at `docs/audit/01-20_*.md`
+2. **Remediation plan** — 8 phases, 45-67 days, ~10K LOC at `docs/audit/REMEDIATION_PLAN.md`
+3. **Beads cleanup** — Closed 33 stale/duplicate/superseded issues, created 29 new issues with dependencies
+4. **Started P0 tolerance fix** — `convexfeld-nso9` is `in_progress`, all data gathered below
 
 ---
 
-## Next Steps
+## NEXT STEP: Execute Tolerance Fix (convexfeld-nso9)
 
-### Immediate (Phase 0 — do first)
-1. **Fix tolerance values** — `convexfeld-nso9` (P0) — perturbation, pivot, Markowitz constants
-2. **Fix variable status encoding** — `convexfeld-clow` (P0) — enum → row indices + negative codes
+**All research is done. Just apply the changes below.**
 
-### Then (Phase 1 — mechanical renames)
-3. **Apply 16 function/struct renames** — `convexfeld-b7ow` (P1)
-4. **Rename core structures** — `convexfeld-dv0k` (P1)
+### Tolerance Values to Fix
 
-### Then (Phase 2-3 — structural)
-5. **Decompose solve_lp.c** — `convexfeld-23p6` (blocked by renames)
-6. **Align data structures** — multiple P2 issues (blocked by renames)
+Read the spec first: `docs/specs-v2/specs/reference/tolerances_constants.md`
 
-### Full dependency chain:
+#### File 1: `include/convexfeld/cxf_types.h`
+| Line | Current | Spec Value | Change |
+|------|---------|-----------|--------|
+| 122 | `#define CXF_PIVOT_TOL 1e-10` | Harris pivot tolerance = 1e-9 | Change to `1e-9` |
+| 125 | `#define CXF_ZERO_TOL 1e-12` | Significant bound change = 1e-12 | **KEEP** (correct) |
+| 113 | `#define CXF_INFINITY 1e100` | 1e100 | **KEEP** (correct) |
+| 116 | `#define CXF_FEASIBILITY_TOL 1e-6` | 1e-6 | **KEEP** (correct) |
+| 119 | `#define CXF_OPTIMALITY_TOL 1e-6` | 1e-6 | **KEEP** (correct) |
+
+#### File 2: `src/basis/lu_factorize.c`
+| Line | Current | Spec Value | Change |
+|------|---------|-----------|--------|
+| 21 | `#define MARKOWITZ_THRESHOLD 0.1` | ~7.8e-3 (1/128) | Change to `0.0078125` |
+| 22 | `#define MIN_PIVOT 1e-12` | Minimum pivot threshold = 1e-13 | Change to `1e-13` |
+
+#### File 3: `src/simplex/perturbation.c`
+| Line | Current | Spec Value | Change |
+|------|---------|-----------|--------|
+| 17 | `#define PERTURB_BASE_SCALE 1e-6` | Perturbation floor = 1e-10 | Change to `1e-10` |
+| 20 | `#define PERTURB_MAX_SCALE 1e-3` | Perturbation ceiling = 1e-6 | Change to `1e-6` |
+| 23 | `#define MIN_OBJ_COEFF 1e-8` | Not in spec | Investigate or remove |
+
+#### File 4: `src/basis/refactor.c`
+| Line | Current | Spec Value | Change |
+|------|---------|-----------|--------|
+| 27 | `#define MIN_PIVOT_TOL 1e-10` | Harris pivot = 1e-9 | Change to `1e-9` |
+
+#### File 5: `src/simplex/pivot_primal.c`
+| Line | Current | Spec Value | Change |
+|------|---------|-----------|--------|
+| 31 | `#define TINY_THRESHOLD 1e-8` | Not directly in spec | Investigate — may be Harris pivot (1e-9) or numerical zero (1e-10) |
+
+#### File 6: `src/simplex/pivot_special.c`
+| Line | Current | Spec Value | Change |
+|------|---------|-----------|--------|
+| 25 | `#define THRESHOLD 1e-10` | Numerical zero (tight) = 1e-10 | **KEEP** (correct) |
+
+#### File 7: `src/error/pivot_check.c`
+| Line | Current | Spec Value | Change |
+|------|---------|-----------|--------|
+| 23 | `#define NEG_INFINITY_THRESHOLD (-1e99)` | Spec uses -1e100 | Change to `(-1e100)` or use `-CXF_INFINITY` |
+| 24 | `#define POS_INFINITY_THRESHOLD (1e99)` | Spec uses 1e100 | Change to `(1e100)` or use `CXF_INFINITY` |
+
+#### File 8: `src/simplex/refine.c`
+| Line | Current | Spec Value | Change |
+|------|---------|-----------|--------|
+| 13 | `#define NEAR_ZERO_TOL 1e-12` | Significant bound change = 1e-12 | **KEEP** (correct) |
+
+### Missing Constants to ADD (to `cxf_types.h` or appropriate header)
+```c
+#define CXF_HARRIS_PIVOT_TOL    1e-9    /* Harris ratio test pivot threshold */
+#define CXF_MIN_PIVOT           1e-13   /* Absolute floor on pivot magnitude */
+#define CXF_MARKOWITZ_TOL       0.0078125  /* 1/128, Markowitz pivot tolerance */
+#define CXF_BOUND_EQUALITY_TOL  1e-10   /* Bound gap below which var is fixed */
+#define CXF_PERTURB_FLOOR       1e-10   /* Minimum perturbation magnitude */
+#define CXF_PERTURB_CEILING     1e-6    /* Maximum perturbation magnitude */
+#define CXF_LARGE_BOUND_MARKER  1e20    /* Effectively infinite bound threshold */
 ```
-P0 tolerances + var status → P1 renames → P2 structs → P3 decompose solve_lp → P4 algorithms + pricing → P5 infrastructure → P6 modules → P7 signatures
+
+### After Tolerance Fix
+- Run `make test` to verify nothing breaks
+- Close `convexfeld-nso9`
+- Move to `convexfeld-clow` (variable status encoding fix — P0)
+
+---
+
+## After P0: Critical Path
+
+```
+P0 tolerances (convexfeld-nso9) ← YOU ARE HERE
+  → P0 var status (convexfeld-clow)
+    → P1 16 function renames (convexfeld-b7ow) — unblocks 2
+      → P1 4 struct renames (convexfeld-dv0k) — unblocks 5
+        → P2 decompose solve_lp (convexfeld-23p6) — unblocks 5
+          → P2 algorithm work (kyns, mpo9, ypf9, f1k1, 1azn)
 ```
 
-Run `bd ready` to see unblocked work.
+Run `bd ready` to see all unblocked work.
+
+---
+
+## Beads State
+- **55 open issues** (was 85+, cleaned 33 stale/duplicate)
+- **14 blocked** (dependency chain above)
+- **41 ready** (unblocked)
+- **0 in_progress** (except nso9)
 
 ---
 
@@ -62,5 +119,6 @@ Run `bd ready` to see unblocked work.
 | Audit reports (20) | `docs/audit/01_*.md` through `20_*.md` |
 | Remediation plan | `docs/audit/REMEDIATION_PLAN.md` |
 | V2 specs (ground truth) | `docs/specs-v2/specs/` |
-| V1 specs (archived, hallucinated) | `docs/specs-v1/` |
+| Tolerance spec | `docs/specs-v2/specs/reference/tolerances_constants.md` |
 | FUNCTION_MAP | `docs/specs-v2/FUNCTION_MAP.md` |
+| Learnings | `docs/learnings/` |
