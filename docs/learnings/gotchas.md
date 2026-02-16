@@ -373,6 +373,30 @@ Created dependency chain of P0 issues:
 
 ---
 
+## Spec Cleanup Learnings (2026-02-16)
+
+### "remote remote solver" Doubled-Word Artifact
+**Issue:** Previous agent's find-and-replace of "compute server" created "remote remote solver" across 13+ files. Simple string replacement can introduce new artifacts when the replacement text overlaps with existing text.
+
+**Lesson:** After bulk find-and-replace, always grep for the replacement text doubled or adjacent to similar words.
+
+### SPECIFICATION.md Must Be Regenerated, Not Edited
+**Issue:** `output/SPECIFICATION.md` is a 22K-line consolidated file assembled from 62 source specs. Editing it directly is futile — it gets overwritten on regeneration.
+
+**Lesson:** Always edit the source specs under `specs/`, then run `assemble_spec.py` to regenerate. Never edit SPECIFICATION.md directly.
+
+### Python Scripts Beat Subagents for Bulk Renames
+**Issue:** 16 function renames across 62+ files = 285 replacements. Subagents would have race conditions and context bloat.
+
+**Lesson:** For mechanical find-and-replace across many files, write a Python script. Use subagents only for the non-mechanical part (updating prose commentary). This avoids race conditions entirely.
+
+### Misnomer Commentary Needs Updating After Rename
+**Issue:** After renaming `cxf_simplex_iterate` to `cxf_log_iteration_progress`, the spec still said "Despite its name suggesting iteration logic..." — now nonsensical since the name is correct.
+
+**Lesson:** When renaming misnomers, there are TWO tasks: (1) global find-and-replace of the identifier, and (2) updating the "despite its name" commentary to "naming history" notes. Don't forget step 2.
+
+---
+
 ## Things That Didn't Work
 
 1. **Writing implementation plan in Rust when spec says C99** - Major failure

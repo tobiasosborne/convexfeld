@@ -4,65 +4,71 @@
 
 ---
 
-## STATUS: V2 Spec Migration — Phase 1 Complete, Phase 2 Needed
+## STATUS: V2 Specs Fully Cleaned and Renamed
 
 ### Session Summary
 
-Migrated v2 cleanroom specs to ConvexFeld. **Phase 1 (naming) is 100% complete. Phase 2 (deep content cleanup) remains.**
+Completed full v2 spec cleanup: MIP/license/compute-server content removal, misnomer renaming, and SPECIFICATION.md regeneration.
+
+#### Commits this session:
+1. **`ed8270e`** — Deep cleanup: removed MIP, license server, compute server content from 46 source specs (-1,043 net lines)
+2. **`ec86025`** — Regenerated SPECIFICATION.md (v2.1, 22,222 lines) + added `assemble_spec.py`
+3. **`381f192`** — Renamed 16 misnomer functions/structures across 23 files (285 replacements), updated commentary, regenerated SPECIFICATION.md
 
 #### What was done:
-1. **Archived v1 specs** to `docs/specs-v1/` (preserves all original v1 content)
-2. **Copied 66 v2 spec files** to `docs/specs-v2/` (62 individual specs + SPECIFICATION.md + 5 supporting files)
-3. **Excluded 2 MIP-only files**: `solve_mip.md`, `solve_multiobj.md`
-4. **Naming transform: 100% CLEAN** — zero traces of upstream naming remain anywhere in specs-v2
-5. **Transformation script**: stored in the upstream project (can be re-run)
 
-#### What remains (Phase 2):
+**Phase 2: Deep content cleanup (complete)**
+- Removed all MIP content: callback events (MIP_SOLUTION/MIP_NODE), MIPGap, integrality checks, MIP var types, MIP dispatch paths, MIP parameter sections
+- Removed all license infrastructure: WLS/ISV/token server fields, license acquisition pipeline, license thread limits, license error codes
+- Removed all compute server content: communication model, callback protocol, job termination, lock hierarchy, error codes, environment fields
+- Fixed "remote remote solver" doubled-word artifact across 13+ files
+- Bibliography citations to MIP papers intentionally retained
 
-**A. License-server content removal (~370 hits across ~24 files)**
+**Misnomer renames (complete)**
+16 functions/structures renamed to match actual behavior:
 
-The initial transform replaced simple patterns (`license validation` → `initialization validation`, etc.) but missed deeply embedded license infrastructure: WLS, ISV, token servers, compute servers, license acquisition pipelines, license thread limits, license error codes.
+| Old Name | New Name | Reason |
+|----------|----------|--------|
+| `cxf_simplex_iterate` | `cxf_log_iteration_progress` | Logs progress, doesn't iterate |
+| `cxf_simplex_cleanup` | `cxf_simplex_postsolve` | Post-solve analysis, not just cleanup |
+| `cxf_basis_refactor` | `cxf_fix_variables_at_bounds` | Variable fixing, not LU refactor |
+| `cxf_basis_snapshot` | `cxf_progress_snapshot` | Scalar counters, not full basis |
+| `cxf_sort_indices` | `cxf_sort_by_values` | Sorts by values, not indices |
+| `cxf_check_nan_or_inf` | `cxf_is_finite` | Returns true for finite (inverted) |
+| `cxf_cleanup_helper` | `cxf_propagate_bounds` | Constraint-based bound tightening |
+| `cxf_setup_basis` | `cxf_free_warmstart_basis` | Destructor, not setup |
+| `cxf_setup_work_arrays` | `cxf_free_work_arrays` | Destructor, not setup |
+| `cxf_free_solver_state` | `cxf_free_attribute_table` | Frees attr table specifically |
+| `cxf_errorlog` | `cxf_set_error_string` | Writes error buffer, not log |
+| `cxf_pre_optimize_callback` | `cxf_pre_optimize_hook` | Lifecycle hook, not user callback |
+| `cxf_post_optimize_callback` | `cxf_post_optimize_hook` | Lifecycle hook, not user callback |
+| `cxf_acquire_solve_lock` | `cxf_save_locale_state` | Saves locale, no mutex |
+| `cxf_set_thread_count` | `cxf_validate_thread_count` | Validates, doesn't set |
+| `WorkArrays` | `SolutionData` | Solution output, not scratch buffers |
 
-**Heaviest files needing cleanup:**
-- `specs/modules/environment_lifecycle.md` — ~50+ hits, entire license acquisition pipeline
-- `specs/data-model/environment.md` — ~39 hits, license fields/WLS/ISV/license type enum
-- `specs/modules/allocation_helpers.md` — license validation in cxf_setup_resources
-- `specs/reference/parameters_defaults.md` — WLS/TokenServer/ComputeServer parameter sections
-- `specs/integration/parameter_system.md` — license thread limits, Layer 2 license overrides
-- `specs/integration/threading_model.md` — license thread limits
-- `specs/modules/solve_barrier_concurrent.md` — distributed license locks
-- `specs/reference/error_status_codes.md` — NO_LICENSE, license error codes
-- ~16 more files with lighter license references
-
-**B. MIP reference cleanup (~559 hits across ~30 files)**
-
-MIP references are pervasive (parameter tables, callback events, function cross-refs, dispatch paths). Key cleanup:
-- Remove MIP parameter sections from `parameters_defaults.md`
-- Remove MIP dispatch paths from `solve_entry.md`, `solve_lp_core.md`
-- Remove MIP callback events from `callback_protocol.md`
-- Clean dangling cross-refs to excluded `solve_mip.md` and `solve_multiobj.md`
-- Remove MIP functions from `FUNCTION_MAP.md` and `PLAN.md`
-- Strip MIP-specific sections from `solution_processing.md`, `model_type_checking.md`
-
-**C. Regenerate `output/SPECIFICATION.md`** after A+B are done (it mirrors all source specs)
+**Tools created:**
+- `docs/specs-v2/assemble_spec.py` — Regenerates SPECIFICATION.md from source specs
+- `docs/specs-v2/rename_misnomers.py` — Reference for the rename mappings
 
 ---
 
-## Recommended Approach for Phase 2
+## Next Steps
 
-1. **Write a second-pass Python cleanup script** that handles:
-   - Whole-section removal (sections with "License" headings)
-   - MIP parameter table removal
-   - Dangling cross-reference cleanup
+### Immediate (spec-related)
+1. **Rename misnomers in code** — The specs now use new names; implementation code still uses old names. Apply same renames to `src/` and `tests/`.
+2. **Verify SPECIFICATION.md quality** — Spot-check TOC anchors work, section ordering is correct
 
-2. **Use parallel subagents** — one per file, NO race conditions:
-   - Group A: Heavy license files (environment_lifecycle.md, environment.md, allocation_helpers.md, parameters_defaults.md)
-   - Group B: Moderate license + MIP files (solve_entry.md, threading_model.md, etc.)
-   - Group C: Light cleanup (1-2 line fixes across ~16 files)
+### Implementation priorities (from v2 spec gap analysis, 2026-02-15)
+- **P0:** Fix perturbation (stubs override real impl in context.c)
+- **P1:** Matrix scaling
+- **P2:** BFRT ratio test
+- **P3:** Phase I→II transitions
+- **P4:** Pricing system rewrite (~2,000 LOC)
+- **P5:** Bound propagation rewrite (~1,500 LOC)
 
-3. **Re-run SPECIFICATION.md assembly** after all source specs are clean
-
-4. **Final verification** — grep for `license`, `License`, `MIP`, `compute.server`, `single.use`, `WLS`, `ISV`, `token.server`
+### Quality gates
+- 35/36 tests pass, build clean
+- Netlib: 11/27 pass
 
 ---
 
@@ -70,24 +76,10 @@ MIP references are pervasive (parameter tables, callback events, function cross-
 
 | Item | Path |
 |------|------|
-| V2 specs (target) | `~/Projects/convexfeld/docs/specs-v2/` |
-| V1 specs (archived) | `~/Projects/convexfeld/docs/specs-v1/` |
-| Transform script | stored in upstream project |
-| Original v2 specs | stored in upstream project |
-| Consolidated output | `~/Projects/convexfeld/docs/specs-v2/output/SPECIFICATION.md` |
-
----
-
-## Previous Handoff (V2 Spec Gap Analysis)
-
-The v2 spec gap analysis from 2026-02-15 identified these rework areas for ConvexFeld implementation:
-
-- **RED** (rewrite): Pricing system (~2,000 LOC), Bound propagation (~1,500 LOC), Perturbation
-- **YELLOW** (significant rework): Data structures, BFRT ratio test, Phase I→II, Matrix scaling, Method selection
-- **GREEN** (mostly correct): Basis operations, Support modules, Simplex core
-
-Priority order: P0 Fix perturbation → P1 Matrix scaling → P2 BFRT → P3 Phase transitions → P4 Pricing → P5 Bound propagation
-
-Quality gates: 35/36 tests pass, build clean, Netlib 11/27 pass.
-
-Full v2 spec: `docs/specs-v2/output/SPECIFICATION.md` (24,070 lines, now with cxf_ naming)
+| V2 specs (clean) | `docs/specs-v2/specs/` (62 source files) |
+| V1 specs (archived) | `docs/specs-v1/` |
+| Consolidated spec | `docs/specs-v2/output/SPECIFICATION.md` (22,219 lines) |
+| Assembly script | `docs/specs-v2/assemble_spec.py` |
+| Rename reference | `docs/specs-v2/rename_misnomers.py` |
+| FUNCTION_MAP | `docs/specs-v2/FUNCTION_MAP.md` |
+| PLAN | `docs/specs-v2/PLAN.md` |
