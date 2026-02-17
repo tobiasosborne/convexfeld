@@ -758,3 +758,44 @@ extraction, any change requires refactorization. The eta+diag approach encodes
 B₀ implicitly — changing diag_coeff changes B₀ retroactively, breaking all
 existing eta factors.
 
+---
+
+### Phase I/II Architecture Gap vs V2 Spec (2026-02-17)
+
+**FAILURE:** Attempted to fix false INFEASIBLE (40/56 Netlib) by patching
+`phase_loop.c` with tighter Phase I pricing tolerance and stall recovery.
+Changes improved some problems but regressed ship04l. More importantly,
+the patches were band-aids that did NOT align with v2 spec architecture.
+
+**What's wrong (current architecture):**
+- Two separate loops (`cxf_run_phase_one` / `cxf_run_phase_two`)
+- Perturbation called ONCE upfront (v2: on stall detection within loop)
+- No crash basis (trivial all-slack → many artificial variables)
+- No activity bounds / preprocessing
+- No `cxf_simplex_phase_end` (v2: manages transition inline in single loop)
+- No `cxf_simplex_post_iterate` (v2: stall detection via basis snapshots)
+- Wolfe perturbation (v2: EXPAND method, Gill 1989)
+
+**V2 spec solve flow** (from `docs/specs-v2/specs/modules/simplex_phases.md`):
+```
+Pre: crash → preprocess → setup (activity bounds)
+Loop: iterate → phase_end → perturbation(on stall) → step → phase_end → post_iterate
+Post: refine → final
+```
+
+**Root cause of 40/56 false INFEASIBLE:**
+1. Dual degeneracy in Phase I (many RCs cluster at 0)
+2. Pricing at tolerance 1e-6 skips variables with RC ≈ -1e-8
+3. Phase I declares "no improving direction" → INFEASIBLE
+4. But problem IS feasible (reference solver confirms)
+
+**What would fix it (in v2 order):**
+1. `cxf_simplex_crash` — start with better basis, fewer artificials
+2. `cxf_simplex_perturbation` (EXPAND) — break degeneracy on stall
+3. `cxf_simplex_phase_end` — proper transition with activity bounds
+4. Single unified loop with stall detection
+
+**Lesson:** Don't patch around architectural gaps. Implement v2 components
+in the right order. The false INFEASIBLE is a SYMPTOM of missing v2
+infrastructure, not a bug to fix in isolation.
+

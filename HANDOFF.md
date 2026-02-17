@@ -4,7 +4,7 @@
 
 ---
 
-## STATUS: 6 issues completed this session
+## STATUS: 6 issues completed, 1 investigated but NOT changed
 
 ### Session Summary
 
@@ -18,21 +18,18 @@
    - Filed 3 bottleneck issues: convexfeld-uxae (LU), convexfeld-cgjf (Netlib), convexfeld-y1ro (presolve)
 
 3. **Closed convexfeld-8vat (refactorization) — already resolved**
-   - REFACTOR_INTERVAL was already 100, profiling confirms LU runs regularly
 
 4. **FTRAN/BTRAN inner loop optimization (convexfeld-7ahj) — CLOSED**
-   - Removed redundant bounds checks from hot inner loops
-   - FTRAN -40%, BTRAN -52% instruction count, -4.3% total on beaconfd
-   - 37/37 tests pass
 
 5. **Steepest edge sqrt removal (convexfeld-z31) — CLOSED**
-   - Changed `abs_rc / sqrt(weight)` to `(abs_rc * abs_rc) / weight`
-   - Avoids sqrt in hot pricing loop, equivalent comparison via squared ratios
 
 6. **Code quality cleanup (convexfeld-b6l, convexfeld-8kg) — CLOSED**
-   - Removed unused `INSERTION_THRESHOLD` define from `src/matrix/sort.c`
-   - Deleted no-op `cxf_finalize_row_data` from `src/matrix/row_major.c`
-   - Updated tests to remove calls to deleted function
+
+7. **Phase I/II investigation (convexfeld-ypf9) — NOT CHANGED, returned to open**
+   - Investigated false INFEASIBLE root cause thoroughly (see gotchas.md)
+   - Attempted tolerance/stall-recovery patch: improved some, regressed ship04l
+   - **Reverted** — patches don't align with v2 spec architecture
+   - See "Architecture Gap" section below for full analysis
 
 ### Previous sessions (all CLOSED):
    - P1 constraint satisfaction tests + >= solver bug fix
@@ -40,17 +37,55 @@
 
 ---
 
-## NEXT STEPS
+## CRITICAL: Architecture Gap — Current vs V2
 
-Critical path to Netlib correctness:
+The 40/56 Netlib failures are caused by missing v2 infrastructure, not individual bugs.
+
+### Current Architecture (broken for degenerate problems)
 ```
-4gfy (diag_coeff) → uxae (LU perf)  ────────────────┐
-ypf9 (Phase I/II logic)                              ├→ cgjf (40/56 Netlib)
-1azn (EXPAND degeneracy)                             │
-snwu (crash basis)                                  ─┘
+solve_lp.c:
+  setup_phase_one()          ← trivial all-slack basis
+  perturbation()             ← Wolfe, called ONCE upfront
+  run_phase_one()            ← SEPARATE loop
+  transition_to_phase_two()  ← SEPARATE function
+  run_phase_two()            ← SEPARATE loop
 ```
 
-Run `bd ready` for available work.
+### V2 Target Architecture (from simplex_phases.md)
+```
+solve_lp.c:
+  cxf_simplex_crash          ← triangularity-based initial basis
+  cxf_simplex_preprocess     ← fix near-bound variables
+  cxf_simplex_setup          ← compute activity bounds
+  SINGLE iteration loop:
+    cxf_log_iteration_progress
+    cxf_simplex_phase_end    ← manages Phase I→II transition inline
+    cxf_simplex_perturbation ← EXPAND method, on stall detection
+    cxf_simplex_step
+    cxf_simplex_phase_end    ← post-pivot cleanup
+    cxf_simplex_post_iterate ← stall detection (basis snapshot diff)
+  cxf_simplex_refine
+```
+
+### Root Cause of False INFEASIBLE
+1. Dual degeneracy in Phase I → many RCs cluster at 0
+2. Pricing at tolerance 1e-6 skips variables with RC ≈ -1e-8
+3. Phase I declares "no improving direction" → false INFEASIBLE
+4. Missing crash basis means MORE artificials → MORE degeneracy
+5. Missing EXPAND perturbation means no degeneracy recovery
+
+### Recommended Issue Order (v2-aligned)
+```
+snwu (crash basis)     ← Fewer artificials, less Phase I degeneracy
+  ↓
+1azn (EXPAND method)   ← Replace Wolfe with EXPAND, stall-triggered
+  ↓
+ypf9 (Phase I/II)     ← Unify loops, implement cxf_simplex_phase_end
+  ↓
+4gfy (diag_coeff)      ← Needs activity bounds from setup
+  ↓
+cgjf (Netlib sweep)    ← Validate all above
+```
 
 ---
 
@@ -58,12 +93,15 @@ Run `bd ready` for available work.
 
 | Item | Path |
 |------|------|
+| V2 simplex phases spec | `docs/specs-v2/specs/modules/simplex_phases.md` |
+| Current Phase I/II | `src/simplex/phase_loop.c`, `src/simplex/phase_one.c` |
+| Solve orchestrator | `src/simplex/solve_lp.c` |
+| Core iteration | `src/simplex/iterate.c` |
+| Perturbation (Wolfe) | `src/simplex/perturbation.c` |
+| Context/lifecycle | `src/simplex/context.c` |
+| False INFEASIBLE analysis | `docs/learnings/gotchas.md` (bottom) |
 | Incremental RC update | `src/simplex/iterate.c` (Steps 5-9) |
-| FTRAN (optimized) | `src/basis/ftran.c` |
-| BTRAN (optimized) | `src/basis/btran.c` |
-| Eta creation | `src/basis/pivot_eta.c` |
+| FTRAN/BTRAN | `src/basis/ftran.c`, `src/basis/btran.c` |
 | LU factorization | `src/basis/lu_factorize.c` |
-| Phase I loop | `src/simplex/phase_loop.c` |
 | Callgrind profiles | `callgrind_*.out` |
 | V2 specs | `docs/specs-v2/specs/` |
-| Learnings | `docs/learnings/` |
