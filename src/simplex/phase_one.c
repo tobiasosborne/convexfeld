@@ -11,8 +11,11 @@
 #include "convexfeld/cxf_basis.h"
 #include "convexfeld/cxf_matrix.h"
 #include "convexfeld/cxf_types.h"
+#include "convexfeld/cxf_env.h"
 #include <math.h>
 #include <stdio.h>
+
+extern int cxf_solver_refactor(SolverState *ctx, CxfEnv *env);
 
 /**
  * @brief Set up Phase I with slack/artificial variables.
@@ -141,14 +144,28 @@ int cxf_transition_to_phase_two(SolverState *state, CxfModel *model) {
     for (int j = 0; j < n; j++)
         state->work_obj[j] = model->obj_coeffs[j];
 
-    /* Set auxiliary objective to 0; fix artificials for = constraints */
+    /* Set auxiliary objective to 0; fix artificials for = constraints;
+     * flip >= artificials to surplus (diag +1 → -1) so Phase II
+     * maintains the >= direction instead of allowing violation. */
+    BasisState *basis = state->basis;
+    int flipped_any = 0;
     for (int i = 0; i < m; i++) {
         int var_idx = n + i;
         state->work_obj[var_idx] = 0.0;
         char sense = (mat != NULL && mat->sense != NULL) ? mat->sense[i] : '<';
-        if (sense == '=' || sense == 'E')
+        if (sense == '=' || sense == 'E') {
             state->work_ub[var_idx] = 0.0;
+        } else if ((sense == '>' || sense == 'G') &&
+                   basis->diag_coeff != NULL && basis->diag_coeff[i] > 0.0) {
+            basis->diag_coeff[i] = -1.0;
+            flipped_any = 1;
+        }
     }
+    /* Refactor after flipping: the eta+diag representation uses diag_coeff
+     * in BTRAN, so changing it invalidates the basis factors. A fresh LU
+     * factorization of the current basis avoids this inconsistency. */
+    if (flipped_any)
+        cxf_solver_refactor(state, model->env);
 
     /* Recompute objective value with original objective */
     state->obj_value = 0.0;

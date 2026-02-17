@@ -728,3 +728,33 @@ Perturbation has NEVER been applied. Removing stubs requires fixing perturbation
 
 **Lesson:** Check for duplicate function definitions before assuming a function works.
 
+---
+
+## >= Constraint diag_coeff Not Flipped at Phase I→II Transition (2026-02-17)
+
+### RESOLVED: >= constraints violated in Phase II
+
+**Symptoms:** `min x+y, s.t. x+y>=5, x>=2` returned obj=0 (constraints violated).
+The bug only manifested when the objective pushed AGAINST the >= direction.
+Tests where the objective aligned with >= (e.g., maximize x with x>=2) passed.
+
+**Root Cause:** `diag_coeff` serves dual purposes:
+1. Defines the auxiliary column coefficient (used in column extraction + reduced costs)
+2. Defines the initial basis B₀ (used in BTRAN via `apply_diag_btran`)
+
+For violated >= constraints, Phase I sets `diag_coeff=+1` (artificial direction).
+At the Phase I→II transition, this was never flipped to `-1` (surplus direction).
+BTRAN applies `B₀^(-T) = diag(diag_coeff)` as the LAST step. With stale +1,
+dual prices had wrong sign → wrong reduced costs → Phase II entered surplus
+variables in the constraint-violating direction.
+
+**Fix:** In `cxf_transition_to_phase_two()`:
+1. Flip `diag_coeff[i]` from +1 to -1 for all >= constraints
+2. Force `cxf_solver_refactor()` to rebuild LU factors (since the eta+diag
+   representation uses diag_coeff in BTRAN, changing it invalidates the factors)
+
+**Lesson:** When `diag_coeff` is shared between basis representation and column
+extraction, any change requires refactorization. The eta+diag approach encodes
+B₀ implicitly — changing diag_coeff changes B₀ retroactively, breaking all
+existing eta factors.
+

@@ -165,3 +165,6 @@ add_cxf_test(test_tracer_bullet integration/test_tracer_bullet.c)
 
 # Constrained LP integration test
 add_cxf_test(test_constrained_lp integration/test_constrained_lp.c)
+
+# Constraint satisfaction verification (mixed senses, multi-constraint)
+add_cxf_test(test_constraint_satisfaction integration/test_constraint_satisfaction.c)
