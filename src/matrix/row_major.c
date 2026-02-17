@@ -2,10 +2,9 @@
  * @file row_major.c
  * @brief CSR (row-major) format construction (M4.1.5)
  *
- * Implements the 3-stage row-major conversion pipeline:
+ * Implements the row-major conversion pipeline:
  * 1. cxf_prepare_row_data - Validate CSC and allocate CSR arrays
  * 2. cxf_build_row_major - Fill CSR arrays via transpose
- * 3. cxf_finalize_row_data - Mark conversion complete
  *
  * Spec: docs/specs/functions/matrix/cxf_build_row_major.md
  */
@@ -139,29 +138,3 @@ int cxf_build_row_major(MatrixData *mat) {
     return CXF_OK;
 }
 
-/*============================================================================
- * Stage 3: Finalize Row Data
- *===========================================================================*/
-
-/**
- * @brief Finalize row-major conversion.
- *
- * Marks the CSR format as complete and valid.
- * Currently a no-op since state is implicit (row_ptr != NULL).
- *
- * @param mat Matrix with built CSR format
- * @return CXF_OK on success, error code on failure
- */
-int cxf_finalize_row_data(MatrixData *mat) {
-    if (mat == NULL) {
-        return CXF_ERROR_NULL_ARGUMENT;
-    }
-
-    /* Verify CSR was built */
-    if (mat->row_ptr == NULL) {
-        return CXF_ERROR_INVALID_ARGUMENT;
-    }
-
-    /* Currently a no-op - could add validation or state flags in future */
-    return CXF_OK;
-}

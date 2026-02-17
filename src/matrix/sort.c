@@ -3,16 +3,13 @@
  * @brief Sort sparse matrix indices (M4.1.6)
  *
  * Sorts arrays of integer indices with optional value synchronization.
- * Uses insertion sort for small arrays, qsort-based approach for larger.
+ * Uses insertion sort (optimal for the small arrays typical in sparse matrices).
  *
  * Spec: docs/specs/functions/matrix/cxf_sort_by_values.md
  */
 
 #include <stdlib.h>
 #include "convexfeld/cxf_types.h"
-
-/* Threshold for insertion sort vs qsort */
-#define INSERTION_THRESHOLD 16
 
 /*============================================================================
  * Helper: Insertion sort (optimal for small arrays)

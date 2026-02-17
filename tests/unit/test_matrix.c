@@ -36,7 +36,6 @@ double cxf_vector_norm(const double *x, int n, int norm_type);
 /* Functions to be implemented in M4.1.5 */
 int cxf_prepare_row_data(MatrixData *mat);
 int cxf_build_row_major(MatrixData *mat);
-int cxf_finalize_row_data(MatrixData *mat);
 
 /* Functions to be implemented in M4.1.6 */
 void cxf_sort_by_values(int *indices, int n);
@@ -280,8 +279,6 @@ void test_row_major_full_pipeline(void) {
 
     TEST_ASSERT_EQUAL_INT(CXF_OK, cxf_build_row_major(mat));
 
-    TEST_ASSERT_EQUAL_INT(CXF_OK, cxf_finalize_row_data(mat));
-
     /* Verify CSR: row 0 has [1,2] at cols [0,1], row 1 has [3,4] at cols [0,2] */
     TEST_ASSERT_EQUAL_INT64(0, mat->row_ptr[0]);
     TEST_ASSERT_EQUAL_INT64(2, mat->row_ptr[1]);
@@ -325,7 +322,6 @@ void test_row_major_empty_matrix(void) {
 
     TEST_ASSERT_EQUAL_INT(CXF_OK, cxf_prepare_row_data(mat));
     TEST_ASSERT_EQUAL_INT(CXF_OK, cxf_build_row_major(mat));
-    TEST_ASSERT_EQUAL_INT(CXF_OK, cxf_finalize_row_data(mat));
 
     /* All row pointers should be 0 */
     for (int i = 0; i <= 3; i++) {

@@ -98,8 +98,9 @@ int cxf_pricing_steepest(PricingState *ctx, const double *reduced_costs,
                 weight = 1.0;  /* Default weight assumption */
             }
 
-            /* Compute SE ratio: |reduced_cost| / sqrt(weight) */
-            double ratio = abs_rc / sqrt(weight);
+            /* Compute SE ratio squared: |rc|^2 / weight.
+             * Equivalent to comparing |rc|/sqrt(weight) but avoids sqrt. */
+            double ratio = (abs_rc * abs_rc) / weight;
 
             if (ratio > best_ratio) {
                 best_ratio = ratio;

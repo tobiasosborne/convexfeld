@@ -4,7 +4,7 @@
 
 ---
 
-## STATUS: 3 issues completed this session
+## STATUS: 6 issues completed this session
 
 ### Session Summary
 
@@ -24,6 +24,15 @@
    - Removed redundant bounds checks from hot inner loops
    - FTRAN -40%, BTRAN -52% instruction count, -4.3% total on beaconfd
    - 37/37 tests pass
+
+5. **Steepest edge sqrt removal (convexfeld-z31) — CLOSED**
+   - Changed `abs_rc / sqrt(weight)` to `(abs_rc * abs_rc) / weight`
+   - Avoids sqrt in hot pricing loop, equivalent comparison via squared ratios
+
+6. **Code quality cleanup (convexfeld-b6l, convexfeld-8kg) — CLOSED**
+   - Removed unused `INSERTION_THRESHOLD` define from `src/matrix/sort.c`
+   - Deleted no-op `cxf_finalize_row_data` from `src/matrix/row_major.c`
+   - Updated tests to remove calls to deleted function
 
 ### Previous sessions (all CLOSED):
    - P1 constraint satisfaction tests + >= solver bug fix
