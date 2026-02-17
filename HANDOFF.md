@@ -4,49 +4,44 @@
 
 ---
 
-## STATUS: Profiling + bottleneck issues filed
+## STATUS: 3 issues completed this session
 
 ### Session Summary
 
 1. **BTRAN + incremental reduced cost update (convexfeld-mpo9) — CLOSED**
-   - Replaced O(n*m) full reduced cost recomputation with O(nnz) incremental BTRAN-based update
-   - In `src/simplex/iterate.c`: BTRAN before pivot, incremental update after
+   - Replaced O(n*m) full RC recomputation with O(nnz) incremental BTRAN-based update
+   - `src/simplex/iterate.c`: BTRAN before pivot, incremental update after
+
+2. **Profiling & stress testing**
+   - Callgrind on sc105, share2b, beaconfd — LU factorize is 47-65% of runtime
+   - Netlib sweep: 16/56 pass, 40 fail (mostly false INFEASIBLE)
+   - Filed 3 bottleneck issues: convexfeld-uxae (LU), convexfeld-cgjf (Netlib), convexfeld-y1ro (presolve)
+
+3. **Closed convexfeld-8vat (refactorization) — already resolved**
+   - REFACTOR_INTERVAL was already 100, profiling confirms LU runs regularly
+
+4. **FTRAN/BTRAN inner loop optimization (convexfeld-7ahj) — CLOSED**
+   - Removed redundant bounds checks from hot inner loops
+   - FTRAN -40%, BTRAN -52% instruction count, -4.3% total on beaconfd
    - 37/37 tests pass
-
-2. **Profiling & stress testing (callgrind on sc105, share2b, beaconfd)**
-   - #1 bottleneck: `cxf_lu_factorize` at 47-65% of runtime
-   - #2: `cxf_ftran` 5-12%, `cxf_btran` 4-10% (expected)
-   - #3: Phase I overhead (`compute_true_infeasibility`) 4-9%
-   - #4: Presolve scanning (`cxf_check_obvious_infeasibility`) 6-8% on small problems
-
-3. **Netlib correctness sweep (114 problems)**
-   - Pass: 16, Fail: 40, Skipped: 58 (>500KB or timeout)
-   - Main failure mode: false INFEASIBLE on feasible problems
-
-4. **Filed 3 bottleneck issues with dependency chains**
-   - convexfeld-uxae (P1): LU factorization 47-65% → depends on 8vat, 4gfy
-   - convexfeld-cgjf (P1): 40/56 Netlib fail → depends on uxae, ypf9, 1azn, snwu
-   - convexfeld-y1ro (P2): Presolve 6-8% → depends on qrs9
 
 ### Previous sessions (all CLOSED):
    - P1 constraint satisfaction tests + >= solver bug fix
-   - P2 decompose solve_lp (convexfeld-23p6)
-   - P1 struct/function renames (convexfeld-dv0k, convexfeld-b7ow)
-   - P0 variable status encoding, tolerance fix
+   - P2 decompose solve_lp, P1 struct/function renames, P0 fixes
 
 ---
 
 ## NEXT STEPS
 
-The critical path to Netlib correctness is:
+Critical path to Netlib correctness:
 ```
-8vat (refactorization) + 4gfy (diag_coeff) → uxae (LU perf)  ─┐
-ypf9 (Phase I/II logic)                                        ├→ cgjf (Netlib pass)
-1azn (EXPAND degeneracy)                                       │
-snwu (crash basis)                                            ─┘
+4gfy (diag_coeff) → uxae (LU perf)  ────────────────┐
+ypf9 (Phase I/II logic)                              ├→ cgjf (40/56 Netlib)
+1azn (EXPAND degeneracy)                             │
+snwu (crash basis)                                  ─┘
 ```
 
-Run `bd ready` — many P2 issues are unblocked and ready to work.
+Run `bd ready` for available work.
 
 ---
 
@@ -55,10 +50,11 @@ Run `bd ready` — many P2 issues are unblocked and ready to work.
 | Item | Path |
 |------|------|
 | Incremental RC update | `src/simplex/iterate.c` (Steps 5-9) |
+| FTRAN (optimized) | `src/basis/ftran.c` |
+| BTRAN (optimized) | `src/basis/btran.c` |
+| Eta creation | `src/basis/pivot_eta.c` |
 | LU factorization | `src/basis/lu_factorize.c` |
-| BTRAN/FTRAN | `src/basis/btran.c`, `src/basis/ftran.c` |
 | Phase I loop | `src/simplex/phase_loop.c` |
-| Presolve | `src/simplex/presolve.c` |
-| Callgrind profiles | `callgrind_incr.out`, `callgrind_beaconfd.out`, `callgrind_share2b.out` |
+| Callgrind profiles | `callgrind_*.out` |
 | V2 specs | `docs/specs-v2/specs/` |
 | Learnings | `docs/learnings/` |

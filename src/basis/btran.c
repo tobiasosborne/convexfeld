@@ -179,13 +179,12 @@ int cxf_btran(BasisState *basis, int row, double *result) {
                 return CXF_ERROR_INVALID_ARGUMENT;
             }
 
-            /* Compute dot product of off-diagonal entries with result */
+            /* Compute dot product of off-diagonal entries with result.
+             * Invariant: indices are in [0,m) and != pivot_row
+             * (guaranteed by cxf_pivot_with_eta construction). */
             double temp = 0.0;
             for (int k = 0; k < eta->nnz; k++) {
-                int j = eta->indices[k];
-                if (j >= 0 && j < m && j != pivot_row) {
-                    temp += eta->values[k] * result[j];
-                }
+                temp += eta->values[k] * result[eta->indices[k]];
             }
 
             /* Update pivot position */
@@ -284,13 +283,12 @@ int cxf_btran_vec(BasisState *basis, const double *input, double *result) {
                 return CXF_ERROR_INVALID_ARGUMENT;
             }
 
-            /* Compute dot product of off-diagonal entries with result */
+            /* Compute dot product of off-diagonal entries with result.
+             * Invariant: indices are in [0,m) and != pivot_row
+             * (guaranteed by cxf_pivot_with_eta construction). */
             double temp = 0.0;
             for (int k = 0; k < eta->nnz; k++) {
-                int j = eta->indices[k];
-                if (j >= 0 && j < m && j != pivot_row) {
-                    temp += eta->values[k] * result[j];
-                }
+                temp += eta->values[k] * result[eta->indices[k]];
             }
 
             /* Update pivot position */

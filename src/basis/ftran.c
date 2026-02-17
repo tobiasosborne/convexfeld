@@ -173,12 +173,11 @@ int cxf_ftran(BasisState *basis, const double *column, double *result) {
         double factor = result[pivot_row] / pivot_elem;
         result[pivot_row] = factor;
 
-        /* Apply off-diagonal entries */
+        /* Apply off-diagonal entries.
+         * Invariant: indices are in [0,m) and != pivot_row
+         * (guaranteed by cxf_pivot_with_eta construction). */
         for (int k = 0; k < eta->nnz; k++) {
-            int j = eta->indices[k];
-            if (j >= 0 && j < m && j != pivot_row) {
-                result[j] -= eta->values[k] * factor;
-            }
+            result[eta->indices[k]] -= eta->values[k] * factor;
         }
     }
 
