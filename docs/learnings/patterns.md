@@ -519,6 +519,30 @@ for each coefficient (row, col, val):
 - After: mps_build_model 0.10% (direct CSC construction)
 - **15.8% total runtime reduction**
 
+### Incremental Reduced Cost Update (BTRAN-based)
+Replace full O(n*m) recomputation with O(nnz) incremental update:
+
+```c
+/* BEFORE pivot: compute leaving row of basis inverse */
+cxf_btran(basis, leavingRow, rho);  /* ρ = B^(-T) e_r */
+double d_entering = work_dj[entering];
+
+/* AFTER pivot: update reduced costs incrementally */
+double step_dual = d_entering / pivotElement;
+work_dj[entering] = 0.0;           /* now basic */
+work_dj[leaving] = -step_dual;     /* ρ^T a_leaving = 1 */
+for (j in non_basic) {
+    work_dj[j] -= step_dual * dot(rho, column_j);
+}
+```
+
+**Critical timing**: BTRAN must use OLD basis (before pivot adds eta vector).
+
+**Numerical stability**: Full recomputation at refactorization intervals corrects drift.
+
+**Math**: π_new = π_old + (d_q/α_qr)·ρ, so d_j' = d_j - (d_q/α_qr)·ρ^T a_j.
+For leaving variable p at row r: ρ^T a_p = 1 (by definition of basis).
+
 ### Preallocate Iteration Work Arrays
 Avoid malloc/free per iteration by preallocating in context:
 

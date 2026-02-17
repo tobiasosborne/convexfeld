@@ -34,12 +34,14 @@ extern int cxf_pricing_candidates(PricingState *ctx, const double *reduced_costs
                                   const int *var_status, int num_vars, double tolerance,
                                   int *candidates, int max_candidates);
 extern int cxf_ftran(BasisState *basis, const double *column, double *result);
+extern int cxf_btran(BasisState *basis, int row, double *result);
 extern int cxf_ratio_test(SolverState *state, CxfEnv *env, int enteringVar,
                           const double *pivotColumn, int columnNZ,
                           int *leavingRow_out, double *pivotElement_out);
 extern int cxf_simplex_step(SolverState *state, int entering, int leavingRow,
                             const double *pivotCol, double stepSize);
 extern int cxf_solver_refactor(SolverState *ctx, CxfEnv *env);
+extern void cxf_compute_reduced_costs(SolverState *state);
 
 /**
  * @brief Get the coefficient for slack/surplus/artificial variable.
@@ -370,7 +372,20 @@ int cxf_log_iteration_progress(SolverState *state, CxfEnv *env) {
     }
 
     /*=========================================================================
-     * Step 5: Pivot - update basis and solution
+     * Step 5: BTRAN for leaving row (OLD basis, before pivot)
+     * Computes ρ = B^(-T) * e_{leavingRow} for incremental RC update.
+     * Must happen before pivot modifies the basis representation.
+     *=========================================================================*/
+    int leaving = basis->basic_vars[leavingRow];
+    double d_entering = state->work_dj[entering];
+
+    /* BTRAN: compute leaving row of basis inverse using OLD basis */
+    double *rho = state->work_cB;  /* Reuse preallocated m-sized array */
+    int btran_ok = (rho != NULL &&
+                    cxf_btran(basis, leavingRow, rho) == CXF_OK);
+
+    /*=========================================================================
+     * Step 6: Pivot - update basis and solution
      *=========================================================================*/
     rc = cxf_simplex_step(state, entering, leavingRow, pivotCol, stepSize);
     if (rc != CXF_OK) {
@@ -378,77 +393,63 @@ int cxf_log_iteration_progress(SolverState *state, CxfEnv *env) {
     }
 
     /*=========================================================================
-     * Step 6: Update objective value
+     * Step 7: Update objective value
      *=========================================================================*/
-    double rc_entering = state->work_dj[entering];
-    state->obj_value += rc_entering * stepSize;
+    state->obj_value += d_entering * stepSize;
 
     /*=========================================================================
-     * Step 7: Update reduced costs
-     * Recompute all reduced costs after pivot for correctness.
-     * Use BTRAN to properly compute dual prices: π = B^(-T) * c_B
+     * Step 8: Incremental reduced cost update
+     * Formula: d_j' = d_j - (d_q / α_qr) * ρ^T a_j
+     * where ρ = B_old^(-T) e_r (leaving row of old basis inverse).
+     * Falls back to full recomputation if BTRAN failed.
      *=========================================================================*/
-    {
-        /* Build c_B vector using preallocated work array */
-        double *cB = state->work_cB;
-        for (int i = 0; i < m; i++) {
-            int basic_var = basis->basic_vars[i];
-            if (basic_var >= 0 && basic_var < total_vars) {
-                cB[i] = state->work_obj[basic_var];
-            } else {
-                cB[i] = 0.0;
-            }
-        }
+    if (btran_ok) {
+        double step_dual = d_entering / pivotElement;
 
-        /* Compute π = B^(-T) * c_B using BTRAN */
-        extern int cxf_btran_vec(BasisState *basis, const double *input, double *result);
-        int btran_rc = cxf_btran_vec(basis, cB, state->work_pi);
-        if (btran_rc != CXF_OK) {
-            /* Fallback to simple approximation if BTRAN fails */
-            for (int i = 0; i < m; i++) {
-                state->work_pi[i] = cB[i];
-            }
-        }
+        /* Entering variable is now basic: reduced cost = 0 */
+        state->work_dj[entering] = 0.0;
 
-        /* Compute reduced costs for all variables */
+        /* Leaving variable: ρ^T a_p = 1 (p was basic at row r) */
+        state->work_dj[leaving] = -step_dual;
+
+        /* Update remaining non-basic variables */
         for (int j = 0; j < total_vars; j++) {
-            if (basis->var_status[j] >= 0) {
-                /* Basic variable: reduced cost = 0 */
-                state->work_dj[j] = 0.0;
-            } else {
-                /* Nonbasic variable: dj = cj - pi^T * Aj */
-                double dj = state->work_obj[j];
+            if (j == entering || j == leaving) continue;
+            if (basis->var_status[j] >= 0) continue;  /* basic stays 0 */
 
-                if (j < n && model->matrix != NULL) {
-                    /* Original variable: subtract pi^T * column_j */
-                    int64_t start = model->matrix->col_ptr[j];
-                    int64_t end = model->matrix->col_ptr[j + 1];
-                    for (int64_t k = start; k < end; k++) {
-                        int row = model->matrix->row_idx[k];
-                        dj -= state->work_pi[row] * model->matrix->values[k];
-                    }
-                } else if (j >= n) {
-                    /* Auxiliary variable j corresponds to row (j - n) */
-                    int row = j - n;
-                    if (row >= 0 && row < m) {
-                        /* Use diag_coeff from basis if available */
-                        double coeff = (basis->diag_coeff != NULL) ?
-                            basis->diag_coeff[row] :
-                            get_auxiliary_coeff_fallback(model->matrix, row);
-                        dj -= state->work_pi[row] * coeff;
-                    }
+            double rho_aj = 0.0;
+            if (j < n && model->matrix != NULL) {
+                int64_t start = model->matrix->col_ptr[j];
+                int64_t end = model->matrix->col_ptr[j + 1];
+                for (int64_t k = start; k < end; k++) {
+                    rho_aj += rho[model->matrix->row_idx[k]]
+                            * model->matrix->values[k];
                 }
-
-                state->work_dj[j] = dj;
+            } else if (j >= n) {
+                int row = j - n;
+                if (row >= 0 && row < m) {
+                    double coeff = (basis->diag_coeff != NULL) ?
+                        basis->diag_coeff[row] :
+                        get_auxiliary_coeff_fallback(model->matrix, row);
+                    rho_aj = rho[row] * coeff;
+                }
             }
+
+            state->work_dj[j] -= step_dual * rho_aj;
         }
+    } else {
+        /* BTRAN failed: fall back to full recomputation */
+        cxf_compute_reduced_costs(state);
     }
 
     /*=========================================================================
-     * Step 8: Check refactorization
+     * Step 9: Refactorization + full RC recomputation
+     * Periodic full recomputation corrects numerical drift from
+     * accumulated incremental updates.
      *=========================================================================*/
     if (basis->pivots_since_refactor >= REFACTOR_INTERVAL) {
         cxf_solver_refactor(state, env);
+        cxf_compute_reduced_costs(state);
     }
 
     state->iteration++;
