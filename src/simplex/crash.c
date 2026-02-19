@@ -1,151 +1,130 @@
 /**
  * @file crash.c
- * @brief Initial crash basis construction (M7.1.7)
+ * @brief Crash basis construction (v2 — P2.5)
  *
- * Implements cxf_simplex_crash which constructs an initial feasible basis
- * by heuristically selecting basic variables. For inequality constraints,
- * slack variables are preferred as they provide numerical stability with
- * unit coefficients. The crash procedure significantly reduces simplex
- * iterations compared to starting with all slacks basic.
+ * Implements cxf_simplex_crash: a single-pass row-scanning crash procedure
+ * that classifies constraints for initial basis construction. Detects
+ * trivial infeasibility early and removes sparse candidate rows from
+ * the active constraint set.
  *
- * Spec: docs/specs/functions/simplex/cxf_simplex_crash.md
+ * Algorithm: Gould & Reid (1989), row-scanning variant.
+ * Spec: docs/specs-v2/specs/algorithms/crash_basis.md
  */
 
 #include "convexfeld/cxf_solver.h"
+#include "convexfeld/cxf_model.h"
 #include "convexfeld/cxf_basis.h"
+#include "convexfeld/cxf_matrix.h"
 #include "convexfeld/cxf_env.h"
 #include "convexfeld/cxf_types.h"
-#include <stdlib.h>
 #include <math.h>
 
+/* Work accounting scale factors */
+#define WORK_SCALE_ROW    1.0
+#define WORK_SCALE_COLUMN 1.0
+
 /**
- * @brief Construct initial crash basis.
+ * @brief Construct initial crash basis via row-scanning (P2.5).
  *
- * Selects which variables should be basic vs nonbasic using heuristic
- * scoring. For inequality constraints, slacks are preferred. For equality
- * constraints, structural variables are selected based on coefficient
- * magnitude, bound range, and objective cost.
+ * Single-pass scan of all constraints:
+ * - Unassigned rows (status=0): feasibility check, assign BASIC_LOWER
+ * - Candidate rows (status>0): conditional removal, assign BASIC_UPPER
  *
- * The function allocates var_status array (size n+m) to track status of
- * all structural variables and slacks, and populates basis_header (using
- * existing basic_vars array) to identify which variable is basic in each row.
- *
- * @param state Solver context (must have valid dimensions and bounds)
- * @param env Environment (currently unused, reserved for future parameters)
- * @return CXF_OK on success, CXF_ERROR_OUT_OF_MEMORY on allocation failure
+ * @param state Solver state with row_status, col_nz_count, and matrix
+ * @param env   Environment with feasibility tolerance
+ * @return CXF_OK on success, CXF_INFEASIBLE if a constraint fails
  */
 int cxf_simplex_crash(SolverState *state, CxfEnv *env) {
-    int n, m;
-    int *var_status;
-    int *basis_header;
-    double *work_lb;
-    double *work_ub;
-
     if (state == NULL || env == NULL) {
         return CXF_ERROR_NULL_ARGUMENT;
     }
 
-    if (state->basis == NULL) {
-        return CXF_ERROR_NULL_ARGUMENT;
-    }
-
-    /* Extract dimensions */
-    n = state->num_vars;
-    m = state->num_constrs;
+    int m = state->num_constrs;
 
     /* Edge case: no constraints */
     if (m == 0) {
-        state->phase = 2;
         return CXF_OK;
     }
 
-    /* Free existing var_status if allocated (was size n, need size n+m) */
-    if (state->basis->var_status != NULL) {
-        free(state->basis->var_status);
-        state->basis->var_status = NULL;
-    }
-
-    /* Allocate var_status array for all variables and slacks */
-    var_status = (int *)malloc((size_t)(n + m) * sizeof(int));
-    if (var_status == NULL) {
-        return CXF_ERROR_OUT_OF_MEMORY;
-    }
-
-    /* Use existing basic_vars array as basis_header */
-    basis_header = state->basis->basic_vars;
-    if (basis_header == NULL && m > 0) {
-        free(var_status);
+    /* Require crash arrays */
+    if (state->row_status == NULL) {
         return CXF_ERROR_NULL_ARGUMENT;
     }
 
-    /* Get bounds arrays */
-    work_lb = state->work_lb;
-    work_ub = state->work_ub;
+    MatrixData *mat = state->model_ref ? state->model_ref->matrix : NULL;
+    double epsilon_feas = env->feasibility_tol;
+    double epsilon_tiny = CXF_ZERO_TOL;  /* Much smaller than epsilon_feas */
 
-    /*
-     * Initialize all structural variables as nonbasic.
-     * Status convention: -1 = at lower bound, -2 = at upper bound
-     */
-    for (int j = 0; j < n; j++) {
-        if (work_lb != NULL && work_ub != NULL) {
-            if (work_lb[j] > -CXF_INFINITY) {
-                var_status[j] = -1;  /* At lower bound */
-            } else if (work_ub[j] < CXF_INFINITY) {
-                var_status[j] = -2;  /* At upper bound */
+    int basic_count = 0;
+
+    for (int i = 0; i < m; i++) {
+
+        if (state->row_status[i] == CXF_ROW_UNASSIGNED) {
+            /* --- Unassigned row: feasibility check --- */
+            double rhs = (mat && mat->rhs) ? mat->rhs[i] : 0.0;
+            char sense = (mat && mat->sense) ? mat->sense[i] : '<';
+
+            if (sense == '=' || sense == 'E') {
+                /* Equality: |rhs| must be small */
+                if (fabs(rhs) >= epsilon_feas) {
+                    state->problem_row_index = i;
+                    state->num_basic += basic_count;
+                    return CXF_INFEASIBLE;
+                }
             } else {
-                var_status[j] = -1;  /* Free variable, default to lower */
+                /* Inequality: rhs must not be too negative */
+                if (rhs < -epsilon_feas) {
+                    state->problem_row_index = i;
+                    state->num_basic += basic_count;
+                    return CXF_INFEASIBLE;
+                }
             }
-        } else {
-            var_status[j] = -1;  /* Default: at lower bound */
+
+            /* Row is feasible: assign slack to basis at lower bound */
+            state->row_status[i] = CXF_ROW_BASIC_LOWER;
+            basic_count++;
+
+        } else if (state->row_status[i] > 0) {
+            /* --- Candidate row: conditional removal --- */
+            char sense = (mat && mat->sense) ? mat->sense[i] : '<';
+            double rhs = (mat && mat->rhs) ? mat->rhs[i] : 0.0;
+
+            if (sense != '=' && sense != 'E' && rhs >= epsilon_tiny) {
+                /* Remove all column entries in this row via CSR */
+                if (mat && mat->row_ptr && mat->col_idx) {
+                    int64_t start = mat->row_ptr[i];
+                    int64_t end = mat->row_ptr[i + 1];
+
+                    for (int64_t k = start; k < end; k++) {
+                        int col = mat->col_idx[k];
+                        if (col >= 0) {
+                            if (state->col_nz_count) {
+                                state->col_nz_count[col]--;
+                            }
+                            mat->col_idx[k] = -1;  /* Mark inactive */
+                        }
+                    }
+
+                    /* Track computational work */
+                    if (state->work_counter) {
+                        *state->work_counter += (double)(end - start)
+                                                * WORK_SCALE_COLUMN;
+                    }
+                }
+
+                state->row_status[i] = CXF_ROW_BASIC_UPPER;
+                basic_count++;
+            }
+            /* Else: candidate doesn't meet criteria; skip */
         }
+        /* Else: row has other status (already processed); skip */
     }
 
-    /* Initialize all slack variables as nonbasic (at lower bound) */
-    for (int i = 0; i < m; i++) {
-        var_status[n + i] = -1;
+    /* Account for per-row overhead */
+    if (state->work_counter) {
+        *state->work_counter += (double)m * WORK_SCALE_ROW;
     }
 
-    /* Initialize basis_header to all invalid */
-    for (int i = 0; i < m; i++) {
-        basis_header[i] = -1;
-    }
-
-    /*
-     * Select basic variables for each constraint row.
-     *
-     * Simplified initial implementation: use slack variable for each row.
-     * This is always feasible for inequality constraints and provides
-     * numerical stability with unit coefficients.
-     *
-     * Future enhancement: For equality constraints or to improve starting
-     * point, score structural variables based on:
-     * - Coefficient magnitude (larger is better)
-     * - Bound range (tighter is better)
-     * - Objective coefficient (lower cost is better)
-     * - Whether zero is in bounds (helps feasibility)
-     */
-    for (int i = 0; i < m; i++) {
-        /* Select slack variable as basic for this row */
-        int slack_idx = n + i;
-
-        basis_header[i] = slack_idx;
-        var_status[slack_idx] = i;  /* Status = row index means basic */
-    }
-
-    /* Assign the allocated var_status to state */
-    state->basis->var_status = var_status;
-
-    /*
-     * Determine initial phase.
-     *
-     * Phase 2: All slacks can be set to zero (for <= and >= constraints)
-     *          or positive values, making the basis immediately feasible.
-     *
-     * Phase 1: Would be needed if we had equality constraints that couldn't
-     *          find good structural basic variables, requiring artificial
-     *          variables. For the all-slack basis, we start in Phase 2.
-     */
-    state->phase = 2;
-
+    state->num_basic += basic_count;
     return CXF_OK;
 }

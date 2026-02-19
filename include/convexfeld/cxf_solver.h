@@ -68,6 +68,17 @@ struct SolverState {
     /* Anti-cycling */
     int use_bland;            /**< If nonzero, use Bland's rule for pricing */
     int degenerate_count;     /**< Consecutive degenerate pivots (stepSize=0) */
+
+    /* Perturbation state (v2 — P2.6 EXPAND) */
+    int perturb_count;        /**< Cumulative count of variables perturbed/removed */
+
+    /* Crash basis state (v2 simplex phases — P2.5) */
+    int *row_status;          /**< Per-row crash status [num_constrs]:
+                                   0 = unassigned, >0 = candidate,
+                                   -1 = BASIC_LOWER, -2 = BASIC_UPPER */
+    int *col_nz_count;        /**< Active column nonzero counts [num_vars + num_constrs] */
+    int num_basic;            /**< Count of basic rows assigned by crash */
+    int problem_row_index;    /**< Diagnostic: constraint index causing infeasibility */
 };
 
 /*******************************************************************************

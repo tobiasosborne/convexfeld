@@ -1,200 +1,311 @@
 /**
  * @file perturbation.c
- * @brief Simplex perturbation for anti-cycling (M7.1.13)
+ * @brief EXPAND-family anti-cycling perturbation (v2 — P2.6)
  *
- * Implements Wolfe perturbation method to prevent simplex cycling in
- * degenerate LPs. Adds small deterministic perturbations to bounds.
+ * Implements cxf_simplex_perturbation using implied bound analysis
+ * (Gill, Murray, Saunders & Wright 1989). Replaces the classical
+ * Wolfe random perturbation with targeted removal of degenerate
+ * variables from the pricing candidate set.
+ *
+ * Spec: docs/specs-v2/specs/algorithms/perturbation.md
  */
 
 #include "convexfeld/cxf_solver.h"
-#include "convexfeld/cxf_env.h"
 #include "convexfeld/cxf_model.h"
+#include "convexfeld/cxf_basis.h"
+#include "convexfeld/cxf_matrix.h"
+#include "convexfeld/cxf_env.h"
 #include "convexfeld/cxf_types.h"
 #include <math.h>
 #include <string.h>
 
-/* Base perturbation scale (perturbation floor from spec) */
-#define PERTURB_BASE_SCALE CXF_PERTURB_FLOOR    /* 1e-10 */
+/* Implied bound gap clamping range */
+#define MIN_BOUND_RANGE  CXF_PERTURB_FLOOR    /* 1e-10 */
+#define MAX_PERTURBATION CXF_PERTURB_CEILING  /* 1e-6  */
 
-/* Maximum perturbation scale (perturbation ceiling from spec) */
-#define PERTURB_MAX_SCALE  CXF_PERTURB_CEILING  /* 1e-6 */
-
-/* Minimum objective coefficient magnitude for scaling */
-#define MIN_OBJ_COEFF 1e-8
-
-/* Global flag to track perturbation state (shared between functions) */
-static int g_perturbation_applied = 0;
+/* Work accounting */
+#define WORK_SCALE_CANDIDATE 1.0
 
 /**
- * @brief Generate deterministic pseudo-random value in [0, 1).
- *
- * Uses simple LCG-style hash based on variable index for determinism.
- *
- * @param index Variable index (seed)
- * @return Pseudo-random value in [0, 1)
+ * @brief Clamp value to [lo, hi].
  */
-static double pseudo_random(int index) {
-    /* Simple deterministic pseudo-random using multiplicative hash */
-    unsigned int x = (unsigned int)index;
-    x = x * 2654435761U;  /* Golden ratio prime */
-    x ^= (x >> 16);
-    x *= 0x85ebca6bU;
-    x ^= (x >> 13);
-    x *= 0xc2b2ae35U;
-    x ^= (x >> 16);
-
-    /* Convert to [0, 1) */
-    return (double)x / 4294967296.0;
+static double clamp(double val, double lo, double hi) {
+    if (val < lo) return lo;
+    if (val > hi) return hi;
+    return val;
 }
 
 /**
- * @brief Apply anti-cycling perturbation to bounds.
+ * @brief Get saved (original) lower bound for variable j.
  *
- * Implements the Wolfe perturbation method to break degeneracy and
- * prevent cycling in the simplex algorithm. Adds small deterministic
- * perturbations to variable bounds.
+ * Structural variables use model->lb. Slack/artificial variables
+ * have saved lower bound of 0.
+ */
+static double saved_lb(const CxfModel *model, int j, int n) {
+    if (j < n && model->lb) return model->lb[j];
+    return 0.0;
+}
+
+/**
+ * @brief Get saved (original) upper bound for variable j.
  *
- * Algorithm:
- * 1. Skip if already applied
- * 2. Calculate base perturbation scale from feasibility tolerance
- * 3. For each variable:
- *    - Skip unbounded variables
- *    - Scale based on objective coefficient
- *    - Generate deterministic perturbation
- *    - Apply to bounds (lb increases, ub decreases)
- *    - Handle bound crossing with midpoint
+ * Structural variables use model->ub. Slack/artificial variables
+ * have saved upper bound of INFINITY.
+ */
+static double saved_ub(const CxfModel *model, int j, int n) {
+    if (j < n && model->ub) return model->ub[j];
+    return CXF_INFINITY;
+}
+
+/**
+ * @brief Process a basic variable via implied bound analysis.
  *
- * @param state Solver context with working bounds
- * @param env Environment with tolerances
- * @return 0 on success, CXF_ERROR_OUT_OF_MEMORY on allocation failure
+ * For basic variable x_j in constraint row r, compute the implied
+ * bounds from saved bounds of other variables in the row.
+ *
+ * @param state   Solver state
+ * @param mat     Constraint matrix with CSR
+ * @param model   Model with saved bounds
+ * @param row     Constraint row index
+ * @param bvar    Basic variable index
+ * @param n       Number of structural variables
+ * @param feas_tol Feasibility tolerance
+ * @return 1 if degenerate (should remove), 0 otherwise, -1 if infeasible
+ */
+static int analyze_basic_variable(
+    const SolverState *state, const MatrixData *mat,
+    const CxfModel *model, int row, int bvar, int n, double feas_tol)
+{
+    if (!mat->row_ptr || !mat->col_idx || !mat->row_values) {
+        return 0;  /* No CSR data, can't analyze */
+    }
+
+    int64_t rstart = mat->row_ptr[row];
+    int64_t rend = mat->row_ptr[row + 1];
+
+    double impl_lower = 0.0;
+    double impl_upper = 0.0;
+    int count_lower_unbounded = 0;
+    int count_upper_unbounded = 0;
+
+    for (int64_t k = rstart; k < rend; k++) {
+        int col = mat->col_idx[k];
+        if (col < 0) continue;       /* Inactive entry */
+        if (col == bvar) continue;    /* Skip the basic variable itself */
+
+        double coeff = mat->row_values[k];
+        double s_lb = saved_lb(model, col, n);
+        double s_ub = saved_ub(model, col, n);
+
+        if (coeff > 0.0) {
+            /* Implied lower uses ub, implied upper uses lb */
+            if (s_ub < CXF_INFINITY) {
+                impl_lower += coeff * s_ub;
+            } else {
+                count_lower_unbounded++;
+            }
+            if (s_lb > -CXF_INFINITY) {
+                impl_upper += coeff * s_lb;
+            } else {
+                count_upper_unbounded++;
+            }
+        } else if (coeff < 0.0) {
+            /* Implied lower uses lb, implied upper uses ub */
+            if (s_lb > -CXF_INFINITY) {
+                impl_lower += coeff * s_lb;
+            } else {
+                count_lower_unbounded++;
+            }
+            if (s_ub < CXF_INFINITY) {
+                impl_upper += coeff * s_ub;
+            } else {
+                count_upper_unbounded++;
+            }
+        }
+    }
+
+    double gap = impl_lower - impl_upper;
+    double pmag = clamp(gap, MIN_BOUND_RANGE, MAX_PERTURBATION);
+
+    /* Check constraint sense */
+    char sense = (mat->sense) ? mat->sense[row] : '<';
+
+    /* Infeasibility check for equality constraints */
+    if ((sense == '=' || sense == 'E') &&
+        impl_upper > pmag * feas_tol &&
+        count_upper_unbounded == 0) {
+        return -1;  /* Infeasible */
+    }
+
+    /* Degeneracy check for inequality constraints */
+    if (impl_lower < -feas_tol * pmag && count_lower_unbounded == 0) {
+        return 1;  /* Degenerate — should remove */
+    }
+
+    return 0;  /* Not degenerate */
+}
+
+/**
+ * @brief Apply EXPAND anti-cycling perturbation (P2.6).
+ *
+ * Analyzes pricing candidates and basic variables for degeneracy
+ * using implied bound analysis. Degenerate nonbasic variables are
+ * marked as fixed (removed from pricing). Degenerate basic variables
+ * are tracked via the perturbation counter.
+ *
+ * @param state Solver state with basis, bounds, reduced costs
+ * @param env   Environment with tolerances
+ * @return CXF_OK on success, CXF_INFEASIBLE on bound violation
  */
 int cxf_simplex_perturbation(SolverState *state, CxfEnv *env) {
-    /* Validate inputs */
     if (state == NULL || env == NULL) {
         return CXF_ERROR_NULL_ARGUMENT;
     }
 
-    /* Check if already applied */
-    if (g_perturbation_applied) {
-        return CXF_OK;
-    }
-
     int n = state->num_vars;
-    if (n == 0) {
-        g_perturbation_applied = 1;
+    int m = state->num_constrs;
+    if (n == 0 || m == 0) {
         return CXF_OK;
     }
 
-    /* Extract parameters */
+    CxfModel *model = state->model_ref;
+    if (model == NULL) {
+        return CXF_ERROR_NULL_ARGUMENT;
+    }
+
+    /* EXPAND is stall-triggered (P2.6 Phase 1): only operate during
+     * active iteration. Before the first iteration, reduced costs are
+     * all zero, and analyzing them would falsely mark every nonbasic
+     * variable as degenerate. The caller (unified loop, ypf9) will
+     * invoke this when stalling is actually detected. */
+    if (state->iteration == 0) {
+        return CXF_OK;
+    }
+
+    BasisState *basis = state->basis;
+    if (basis == NULL || basis->var_status == NULL) {
+        return CXF_OK;  /* No basis yet, nothing to perturb */
+    }
+
+    MatrixData *mat = model->matrix;
     double feas_tol = env->feasibility_tol;
-    if (feas_tol <= 0.0) {
-        feas_tol = CXF_FEASIBILITY_TOL;
-    }
-    double infinity = env->infinity;
-    if (infinity <= 0.0) {
-        infinity = CXF_INFINITY;
-    }
+    if (feas_tol <= 0.0) feas_tol = CXF_FEASIBILITY_TOL;
 
-    /* Perturbation floor/ceiling are absolute magnitudes per spec */
-    double base_scale = PERTURB_BASE_SCALE;
-    double max_scale = PERTURB_MAX_SCALE;
-    (void)feas_tol;  /* Used for infinity default above */
+    int *var_status = basis->var_status;
+    double *dj = state->work_dj;
+    int total_vars = n + m;
+    int perturbed = 0;
 
-    double *lb = state->work_lb;
-    double *ub = state->work_ub;
-    double *obj = state->work_obj;
+    /*
+     * Case A: Nonbasic variables at lower bound.
+     * Remove degenerate candidates with near-zero or contradictory
+     * reduced costs from future pricing consideration.
+     */
+    if (dj != NULL) {
+        for (int j = 0; j < total_vars; j++) {
+            if (var_status[j] != CXF_VAR_AT_LOWER) continue;
 
-    /* Apply perturbations to each variable */
-    for (int j = 0; j < n; j++) {
-        /* Skip unbounded variables */
-        if (lb[j] <= -infinity && ub[j] >= infinity) {
-            continue;
-        }
+            double rc = dj[j];
 
-        /* Compute variable-specific scale based on objective coefficient */
-        double scale;
-        double abs_obj = fabs(obj[j]);
-        if (abs_obj > MIN_OBJ_COEFF) {
-            scale = base_scale / abs_obj;
-        } else {
-            scale = base_scale;
-        }
-
-        /* Clamp scale to maximum */
-        if (scale > max_scale) {
-            scale = max_scale;
-        }
-
-        /* Generate deterministic perturbations using index as seed */
-        double rand1 = pseudo_random(j);
-        double rand2 = pseudo_random(j + n);  /* Different seed for ub */
-
-        double eps_lb = rand1 * scale;
-        double eps_ub = rand2 * scale;
-
-        /* Store original bounds for bound crossing check */
-        double orig_lb = lb[j];
-        double orig_ub = ub[j];
-
-        /* Apply perturbations (conservative: shrink feasible region) */
-        if (lb[j] > -infinity) {
-            lb[j] += eps_lb;
-        }
-        if (ub[j] < infinity) {
-            ub[j] -= eps_ub;
-        }
-
-        /* Handle bound crossing: use midpoint */
-        if (lb[j] > ub[j]) {
-            double mid = (orig_lb + orig_ub) * 0.5;
-            lb[j] = mid - eps_lb * 0.5;
-            ub[j] = mid + eps_ub * 0.5;
+            if (rc < -feas_tol) {
+                /* Severely negative RC at lower bound — contradictory.
+                 * For equality constraints: potential infeasibility. */
+                char sense = '?';
+                if (mat && mat->sense) {
+                    /* Find which constraint this variable appears in.
+                     * For slack variables, index i = j - n. */
+                    if (j >= n && (j - n) < m) {
+                        sense = mat->sense[j - n];
+                    }
+                }
+                if (sense == '=' || sense == 'E') {
+                    state->problem_row_index = (j >= n) ? j - n : -1;
+                    state->perturb_count += perturbed;
+                    return CXF_INFEASIBLE;
+                }
+                /* Mark as fixed to remove from pricing */
+                var_status[j] = CXF_VAR_FIXED;
+                perturbed++;
+            } else if (fabs(rc) <= feas_tol) {
+                /* Near-zero RC at lower bound — degenerate.
+                 * Pivoting this variable gives zero progress. */
+                var_status[j] = CXF_VAR_FIXED;
+                perturbed++;
+            }
         }
     }
 
-    /* Set flag to indicate perturbation has been applied */
-    g_perturbation_applied = 1;
+    /*
+     * Case B: Basic variables — implied bound analysis.
+     * For each basic structural variable, compute implied bounds
+     * from the constraint row using saved (original) bounds.
+     */
+    if (basis->basic_vars != NULL && mat != NULL &&
+        mat->row_ptr != NULL) {
+        for (int i = 0; i < m; i++) {
+            int bvar = basis->basic_vars[i];
+            if (bvar < 0 || bvar >= n) continue;  /* Skip slacks */
 
+            int result = analyze_basic_variable(
+                state, mat, model, i, bvar, n, feas_tol);
+
+            if (result == -1) {
+                /* Infeasible */
+                state->problem_row_index = i;
+                state->perturb_count += perturbed;
+                return CXF_INFEASIBLE;
+            }
+            if (result == 1) {
+                /* Degenerate basic variable tracked */
+                perturbed++;
+            }
+        }
+    }
+
+    /* Update work counter */
+    if (state->work_counter) {
+        *state->work_counter += (double)total_vars * WORK_SCALE_CANDIDATE;
+    }
+
+    state->perturb_count += perturbed;
     return CXF_OK;
 }
 
 /**
- * @brief Remove perturbations and restore original bounds.
+ * @brief Remove perturbations and restore original bounds (P2.6).
  *
- * Restores working bounds from the original model bounds, undoing
- * the perturbations applied by cxf_simplex_perturbation.
+ * Restores working bounds from saved (model) bounds, undoing
+ * any status changes from perturbation. Basic variable recovery
+ * is deferred to cxf_simplex_refine.
  *
- * @param state Solver context
- * @param env Environment (unused but required by signature)
- * @return 0 on success, 1 if no perturbation was applied
+ * @param state Solver state
+ * @param env   Environment
+ * @return CXF_OK on success, 1 if nothing to restore
  */
 int cxf_simplex_unperturb(SolverState *state, CxfEnv *env) {
-    /* Validate inputs */
     if (state == NULL || env == NULL) {
         return CXF_ERROR_NULL_ARGUMENT;
     }
 
-    /* Check if perturbation was applied */
-    if (!g_perturbation_applied) {
-        return 1;  /* Nothing to remove */
+    /* Nothing to undo if no perturbation was applied */
+    if (state->perturb_count == 0) {
+        return 1;
     }
 
     /* Restore original bounds from model */
     int n = state->num_vars;
     if (n > 0 && state->model_ref != NULL) {
         CxfModel *model = state->model_ref;
-
-        /* Copy original bounds back to working bounds */
-        if (state->work_lb != NULL && model->lb != NULL) {
+        if (state->work_lb && model->lb) {
             memcpy(state->work_lb, model->lb, (size_t)n * sizeof(double));
         }
-        if (state->work_ub != NULL && model->ub != NULL) {
+        if (state->work_ub && model->ub) {
             memcpy(state->work_ub, model->ub, (size_t)n * sizeof(double));
         }
     }
 
-    /* Clear perturbation flag */
-    g_perturbation_applied = 0;
+    /* Reset perturbation counter */
+    state->perturb_count = 0;
 
     return CXF_OK;
 }

@@ -122,6 +122,25 @@ typedef enum {
 #define CXF_VAR_IS_BASIC(status) ((status) >= 0)
 
 /*******************************************************************************
+ * Row Status Encoding (v2 Crash Basis — P2.5)
+ *
+ * Row status tracks crash basis classification:
+ *   0    : UNASSIGNED — not yet classified
+ *   > 0  : CANDIDATE — pre-classified for potential removal
+ *   -1   : BASIC_LOWER — slack assigned to basis at lower bound
+ *   -2   : BASIC_UPPER — slack assigned to basis at upper bound (removed row)
+ ******************************************************************************/
+
+/** @brief Row not yet classified by crash */
+#define CXF_ROW_UNASSIGNED   0
+
+/** @brief Row's slack assigned to basis at lower bound (feasible) */
+#define CXF_ROW_BASIC_LOWER  (-1)
+
+/** @brief Row's slack assigned to basis at upper bound (removed candidate) */
+#define CXF_ROW_BASIC_UPPER  (-2)
+
+/*******************************************************************************
  * Numerical Constants
  ******************************************************************************/
 

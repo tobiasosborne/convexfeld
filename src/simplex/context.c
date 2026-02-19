@@ -8,6 +8,7 @@
 #include "convexfeld/cxf_solver.h"
 #include "convexfeld/cxf_model.h"
 #include "convexfeld/cxf_basis.h"
+#include "convexfeld/cxf_matrix.h"
 #include "convexfeld/cxf_pricing.h"
 #include "convexfeld/cxf_types.h"
 #include "convexfeld/cxf_env.h"
@@ -118,6 +119,35 @@ int cxf_simplex_init(CxfModel *model, SolverState **stateP) {
         }
     }
 
+    /* Crash basis arrays (v2 — P2.5) */
+    ctx->num_basic = 0;
+    ctx->problem_row_index = -1;
+    if (m > 0) {
+        ctx->row_status = (int *)calloc((size_t)m, sizeof(int));
+        if (ctx->row_status == NULL) {
+            cxf_simplex_final(ctx);
+            return CXF_ERROR_OUT_OF_MEMORY;
+        }
+    }
+    if (total_vars > 0) {
+        ctx->col_nz_count = (int *)calloc((size_t)total_vars, sizeof(int));
+        if (ctx->col_nz_count == NULL) {
+            cxf_simplex_final(ctx);
+            return CXF_ERROR_OUT_OF_MEMORY;
+        }
+        /* Compute initial column nonzero counts from CSC matrix */
+        if (model->matrix != NULL && model->matrix->col_ptr != NULL) {
+            for (int j = 0; j < n && j < model->matrix->num_cols; j++) {
+                ctx->col_nz_count[j] = (int)(model->matrix->col_ptr[j + 1]
+                                              - model->matrix->col_ptr[j]);
+            }
+        }
+        /* Each slack variable column has exactly 1 nonzero (the diagonal) */
+        for (int i = 0; i < m; i++) {
+            ctx->col_nz_count[n + i] = 1;
+        }
+    }
+
     /* Create basis state with space for artificial variables */
     ctx->basis = cxf_basis_create(m, total_vars);
     if (ctx->basis == NULL && (m > 0 || total_vars > 0)) {
@@ -159,6 +189,10 @@ void cxf_simplex_final(SolverState *state) {
     free(state->work_counter);
     free(state->work_column);
     free(state->work_cB);
+
+    /* Free crash basis arrays (v2) */
+    free(state->row_status);
+    free(state->col_nz_count);
 
     /* Free basis */
     cxf_basis_free(state->basis);

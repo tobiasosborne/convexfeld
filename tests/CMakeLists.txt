@@ -146,6 +146,14 @@ add_cxf_test(test_info_api unit/test_info_api.c)
 # M7.1.17: Quadratic adjustment tests
 add_cxf_test(test_quadratic unit/test_quadratic.c)
 
+# M7.1.7: Crash basis tests (v2 — P2.5)
+add_cxf_test(test_crash unit/test_crash.c)
+target_link_libraries(test_crash PRIVATE m)
+
+# M7.1.13: Perturbation tests (v2 — P2.6 EXPAND)
+add_cxf_test(test_perturbation unit/test_perturbation.c)
+target_link_libraries(test_perturbation PRIVATE m)
+
 # MPS Parser tests
 add_cxf_test(test_mps_parser unit/test_mps_parser.c)
 target_link_libraries(test_mps_parser PRIVATE m)
