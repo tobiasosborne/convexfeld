@@ -1,91 +1,76 @@
 # Agent Handoff
 
-*Last updated: 2026-02-17*
+*Last updated: 2026-02-19*
 
 ---
 
-## STATUS: 6 issues completed, 1 investigated but NOT changed
+## STATUS: 3 v2 spec issues completed (snwu, 1azn, ypf9)
 
 ### Session Summary
 
-1. **BTRAN + incremental reduced cost update (convexfeld-mpo9) — CLOSED**
-   - Replaced O(n*m) full RC recomputation with O(nnz) incremental BTRAN-based update
-   - `src/simplex/iterate.c`: BTRAN before pivot, incremental update after
+1. **Crash basis — convexfeld-snwu — CLOSED**
+   - Rewrote `src/simplex/crash.c` with P2.5 row-scanning algorithm
+   - Added `row_status`, `col_nz_count`, `num_basic`, `problem_row_index` to SolverState
+   - Added `CXF_ROW_BASIC_LOWER/UPPER` status constants to cxf_types.h
+   - 11 tests in `tests/unit/test_crash.c`
+   - 130 LOC, v2-compliant, not yet called from main solve flow
 
-2. **Profiling & stress testing**
-   - Callgrind on sc105, share2b, beaconfd — LU factorize is 47-65% of runtime
-   - Netlib sweep: 16/56 pass, 40 fail (mostly false INFEASIBLE)
-   - Filed 3 bottleneck issues: convexfeld-uxae (LU), convexfeld-cgjf (Netlib), convexfeld-y1ro (presolve)
+2. **EXPAND perturbation — convexfeld-1azn — CLOSED**
+   - Rewrote `src/simplex/perturbation.c` with P2.6 implied-bound analysis
+   - Replaced Wolfe random perturbation with targeted degeneracy removal
+   - Added `perturb_count` to SolverState (replaced global flag)
+   - Iteration guard: no-op at iteration 0 (stall-triggered per spec)
+   - 9 tests in `tests/unit/test_perturbation.c`
+   - Updated `test_simplex_edge.c` for new EXPAND semantics
 
-3. **Closed convexfeld-8vat (refactorization) — already resolved**
+3. **Phase I/II unification — convexfeld-ypf9 — CLOSED**
+   - Rewrote `src/simplex/solve_lp.c` with single unified iteration loop
+   - Integrated crash basis call before Phase I setup
+   - Phase transition managed inline via `cxf_check_phase_one_end`
+   - EXPAND perturbation called when `degenerate_count > 50`
+   - Added `cxf_check_phase_one_end()` to `phase_loop.c`
+   - Old `cxf_run_phase_one/phase_two` now dead code (cleanup issue filed)
 
-4. **FTRAN/BTRAN inner loop optimization (convexfeld-7ahj) — CLOSED**
-
-5. **Steepest edge sqrt removal (convexfeld-z31) — CLOSED**
-
-6. **Code quality cleanup (convexfeld-b6l, convexfeld-8kg) — CLOSED**
-
-7. **Phase I/II investigation (convexfeld-ypf9) — NOT CHANGED, returned to open**
-   - Investigated false INFEASIBLE root cause thoroughly (see gotchas.md)
-   - Attempted tolerance/stall-recovery patch: improved some, regressed ship04l
-   - **Reverted** — patches don't align with v2 spec architecture
-   - See "Architecture Gap" section below for full analysis
-
-### Previous sessions (all CLOSED):
-   - P1 constraint satisfaction tests + >= solver bug fix
-   - P2 decompose solve_lp, P1 struct/function renames, P0 fixes
+### All 39/39 tests pass. No regressions.
 
 ---
 
-## CRITICAL: Architecture Gap — Current vs V2
+## V2 Architecture — Current State
 
-The 40/56 Netlib failures are caused by missing v2 infrastructure, not individual bugs.
-
-### Current Architecture (broken for degenerate problems)
 ```
-solve_lp.c:
-  setup_phase_one()          ← trivial all-slack basis
-  perturbation()             ← Wolfe, called ONCE upfront
-  run_phase_one()            ← SEPARATE loop
-  transition_to_phase_two()  ← SEPARATE function
-  run_phase_two()            ← SEPARATE loop
-```
-
-### V2 Target Architecture (from simplex_phases.md)
-```
-solve_lp.c:
-  cxf_simplex_crash          ← triangularity-based initial basis
-  cxf_simplex_preprocess     ← fix near-bound variables
-  cxf_simplex_setup          ← compute activity bounds
-  SINGLE iteration loop:
-    cxf_log_iteration_progress
-    cxf_simplex_phase_end    ← manages Phase I→II transition inline
-    cxf_simplex_perturbation ← EXPAND method, on stall detection
-    cxf_simplex_step
-    cxf_simplex_phase_end    ← post-pivot cleanup
-    cxf_simplex_post_iterate ← stall detection (basis snapshot diff)
-  cxf_simplex_refine
+solve_lp.c (v2):
+  cxf_simplex_init()
+  cxf_simplex_crash()            ✅ P2.5 (implemented, called)
+  cxf_setup_phase_one()          (still needed: sets up artificials)
+  cxf_compute_reduced_costs()
+  UNIFIED LOOP:                  ✅ P3.25
+    cxf_log_iteration_progress()   (single iteration)
+    [Phase I optimal?]
+      cxf_check_phase_one_end()    ✅ inline transition
+    cxf_simplex_perturbation()     ✅ P2.6 EXPAND (stall-triggered)
+  cxf_simplex_unperturb()
+  cxf_simplex_refine()
+  cxf_extract_solution()
 ```
 
-### Root Cause of False INFEASIBLE
-1. Dual degeneracy in Phase I → many RCs cluster at 0
-2. Pricing at tolerance 1e-6 skips variables with RC ≈ -1e-8
-3. Phase I declares "no improving direction" → false INFEASIBLE
-4. Missing crash basis means MORE artificials → MORE degeneracy
-5. Missing EXPAND perturbation means no degeneracy recovery
+---
 
-### Recommended Issue Order (v2-aligned)
+## V2 Dependency Chain Status
+
 ```
-snwu (crash basis)     ← Fewer artificials, less Phase I degeneracy
-  ↓
-1azn (EXPAND method)   ← Replace Wolfe with EXPAND, stall-triggered
-  ↓
-ypf9 (Phase I/II)     ← Unify loops, implement cxf_simplex_phase_end
-  ↓
-4gfy (diag_coeff)      ← Needs activity bounds from setup
-  ↓
-cgjf (Netlib sweep)    ← Validate all above
+snwu (crash basis)     ✅ DONE
+1azn (EXPAND method)   ✅ DONE
+ypf9 (Phase I/II)      ✅ DONE
+4gfy (diag_coeff)      ← NEXT (needs activity bounds from setup)
+cgjf (Netlib sweep)    ← validate all above
 ```
+
+---
+
+## Open Cleanup Issues
+
+- `convexfeld-h343`: Refactor perturbation.c to < 200 LOC (currently 311)
+- `convexfeld-c0cy`: Remove dead code cxf_run_phase_one/phase_two from phase_loop.c
 
 ---
 
@@ -93,15 +78,11 @@ cgjf (Netlib sweep)    ← Validate all above
 
 | Item | Path |
 |------|------|
-| V2 simplex phases spec | `docs/specs-v2/specs/modules/simplex_phases.md` |
-| Current Phase I/II | `src/simplex/phase_loop.c`, `src/simplex/phase_one.c` |
-| Solve orchestrator | `src/simplex/solve_lp.c` |
-| Core iteration | `src/simplex/iterate.c` |
-| Perturbation (Wolfe) | `src/simplex/perturbation.c` |
-| Context/lifecycle | `src/simplex/context.c` |
-| False INFEASIBLE analysis | `docs/learnings/gotchas.md` (bottom) |
-| Incremental RC update | `src/simplex/iterate.c` (Steps 5-9) |
-| FTRAN/BTRAN | `src/basis/ftran.c`, `src/basis/btran.c` |
-| LU factorization | `src/basis/lu_factorize.c` |
-| Callgrind profiles | `callgrind_*.out` |
+| V2 orchestrator (unified loop) | `src/simplex/solve_lp.c` |
+| Crash basis (P2.5) | `src/simplex/crash.c` |
+| EXPAND perturbation (P2.6) | `src/simplex/perturbation.c` |
+| Phase I setup + transition | `src/simplex/phase_one.c` |
+| Phase I helpers (check_phase_one_end) | `src/simplex/phase_loop.c` |
 | V2 specs | `docs/specs-v2/specs/` |
+| Crash tests | `tests/unit/test_crash.c` |
+| Perturbation tests | `tests/unit/test_perturbation.c` |

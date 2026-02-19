@@ -147,6 +147,38 @@ static int has_improving_direction(SolverState *state, CxfEnv *env) {
     return 0;
 }
 
+/**
+ * @brief Check Phase I termination and handle transition to Phase II.
+ *
+ * Called from the unified loop when iteration returns OPTIMAL during Phase I.
+ * Corrects basic variables, checks true infeasibility, and transitions
+ * to Phase II if feasible.
+ *
+ * @return CXF_OK if transitioned to Phase II,
+ *         CXF_INFEASIBLE if truly infeasible,
+ *         1 if has improving direction (continue Phase I)
+ */
+int cxf_check_phase_one_end(SolverState *state, CxfModel *model, CxfEnv *env) {
+    double infeas = correct_basic_variables(state, model);
+    state->obj_value = infeas;
+    double tol = fmax(env->feasibility_tol, 0.01);
+
+    if (infeas <= tol) {
+        /* Feasible: transition to Phase II */
+        extern int cxf_transition_to_phase_two(SolverState *, CxfModel *);
+        int rc = cxf_transition_to_phase_two(state, model);
+        if (rc != CXF_OK) return rc;
+        cxf_compute_reduced_costs(state);
+        return CXF_OK;
+    }
+
+    /* Not yet feasible — check for improving direction */
+    cxf_compute_reduced_costs(state);
+    if (has_improving_direction(state, env)) return 1;
+
+    return CXF_INFEASIBLE;
+}
+
 int cxf_run_phase_one(SolverState *state, CxfModel *model, CxfEnv *env) {
     int max_iter = state->max_iterations;
     int start_iter = state->iteration;
