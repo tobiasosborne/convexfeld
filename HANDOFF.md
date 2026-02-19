@@ -4,117 +4,114 @@
 
 ---
 
-## STATUS: 3 v2 spec issues completed + Phase II regression fix
+## STATUS: V2 spec gap audit complete — 18 implementation issues created with dependency chain
 
 ### Session Summary
 
-1. **Crash basis — convexfeld-snwu — CLOSED**
-   - Rewrote `src/simplex/crash.c` with P2.5 row-scanning algorithm
-   - Added `row_status`, `col_nz_count`, `num_basic`, `problem_row_index` to SolverState
-   - Added `CXF_ROW_BASIC_LOWER/UPPER` status constants to cxf_types.h
-   - 11 tests in `tests/unit/test_crash.c`, 130 LOC
+**Research-only session.** No code changes. Conducted deep audit of current codebase against v2 specs across three parallel threads:
+1. iterate.c vs v2 simplex_iteration.md
+2. SolverState struct vs v2 state requirements
+3. Basis operations, pricing, and pivot specs vs current implementation
 
-2. **EXPAND perturbation — convexfeld-1azn — CLOSED**
-   - Rewrote `src/simplex/perturbation.c` with P2.6 implied-bound analysis
-   - Replaced Wolfe random perturbation with targeted degeneracy removal
-   - Added `perturb_count` to SolverState (replaced global flag)
-   - Iteration guard: no-op at iteration 0 (stall-triggered per spec)
-   - 9 tests in `tests/unit/test_perturbation.c`
+### Key Findings
 
-3. **Phase I/II unification — convexfeld-ypf9 — CLOSED**
-   - Rewrote `src/simplex/solve_lp.c` with single unified iteration loop
-   - Integrated crash basis call before Phase I setup
-   - Phase transition managed inline via `cxf_check_phase_one_end`
-   - EXPAND perturbation called when `degenerate_count > 50`
-   - Added `cxf_check_phase_one_end()` to `phase_loop.c`
+**The core iteration engine is architecturally inverted:**
+- `cxf_log_iteration_progress()` in iterate.c (458 lines) IS the iteration engine (pricing, FTRAN, ratio test, pivot, RC update)
+- V2 spec says it should be logging-only; actual iteration belongs in `cxf_simplex_step()`
+- Our `cxf_simplex_step()` in step.c is a minimal post-pivot helper, not the full engine
+- `cxf_simplex_step2()` and `cxf_simplex_step3()` are completely wrong algorithms (extended primal pivot and dual simplex pivot, not bound propagation)
 
-4. **Phase II regression fix**
-   - EXPAND marked variables CXF_VAR_FIXED during Phase I stalling
-   - These persisted into Phase II, starving pricing of candidates → obj=0
-   - Fixed: reset FIXED→AT_LOWER in `cxf_transition_to_phase_two`
-
-### Test Results: 39/39 unit tests pass
+**Missing v2 infrastructure:**
+- SolverState: ~15 field groups missing (saved bounds, activity bounds, progress counters, snapshot buffer)
+- Pricing subsystem: 11 of 13 v2 functions missing (only cxf_pricing_candidates exists)
+- Pivot operations: 4 of 5 functions missing
+- Basis snapshot/diff: wrong algorithm (captures var status instead of counters)
 
 ---
 
-## Netlib Benchmark Results (2026-02-19)
+## V2 Implementation Roadmap — 18 Chained Issues
 
-**19/29 tested problems pass (66%), up from 16/56 (29%) pre-session.**
+### Phase A: Iteration Engine Refactor (critical path, P1)
 
-### Passing (19):
-afiro, sc50a, sc50b, sc105, sc205, adlittle, stocfor1, share2b,
-kb2, blend, scagr7, lotfi, beaconfd, agg, agg2, agg3, sctap1,
-ship04s, ship04l
+| ID | Title | Deps | Status |
+|----|-------|------|--------|
+| `h0wk` | A1: Move iteration engine from iterate.c into cxf_simplex_step() | none | **READY** |
+| `qh9y` | A2: Make cxf_log_iteration_progress() logging-only | A1 | blocked |
+| `6869` | A3: Update solve_lp.c loop to call step/step2/step3/phase_end | A2 | blocked |
 
-### New passes this session (4):
-kb2, blend, sc205, scagr7
+### Phase B: SolverState Alignment (parallel with A)
 
-### Still failing (10/29 tested):
-| Problem | Status | Notes |
-|---------|--------|-------|
-| recipe | INFEASIBLE | False infeasible |
-| share1b | INFEASIBLE | False infeasible |
-| bandm | INFEASIBLE | False infeasible |
-| boeing2 | INFEASIBLE | False infeasible |
-| brandy | INFEASIBLE | False infeasible |
-| scorpion | INFEASIBLE | False infeasible |
-| capri | INFEASIBLE | False infeasible |
-| e226 | INFEASIBLE | False infeasible |
-| bore3d | UNBOUNDED | Wrong status |
-| israel | OPTIMAL (9.4% err) | Numerical drift |
+| ID | Title | Deps | Status |
+|----|-------|------|--------|
+| `aivf` | B1: Add saved_lb/saved_ub to SolverState | none | **READY** |
+| `0hzf` | B2: Add activity_lb/activity_ub arrays | none | **READY** |
+| `kztb` | B3: Add progress counters + snapshot buffer | none | **READY** |
 
-### Remaining false INFEASIBLE root causes (hypothesis):
-- Phase I degeneracy still present for problems with many equality constraints
-- Missing initial LU factorization before first iteration (BTRAN relies on eta+diag fallback)
-- Accumulated numerical error in incremental RC updates
+### Phase C: Activity Bounds + Preprocessing
 
----
+| ID | Title | Deps | Status |
+|----|-------|------|--------|
+| `7lbz` | C1: Implement cxf_simplex_setup (activity bounds) | B2 | blocked |
+| `nnpw` | C2: Implement cxf_simplex_preprocess | C1 | blocked |
+| `wkmv` | C3: Wire setup + preprocess into solve_lp.c | C2, A3 | blocked |
 
-## V2 Architecture — Current State
+### Phase D: In-Loop Components
 
-```
-solve_lp.c (v2 unified loop):
-  cxf_simplex_init()
-  cxf_simplex_crash()            ✅ P2.5
-  cxf_setup_phase_one()
-  cxf_compute_reduced_costs()
-  UNIFIED LOOP:                  ✅ P3.25
-    cxf_log_iteration_progress()
-    [Phase I optimal → cxf_check_phase_one_end()]
-    [stalling → cxf_simplex_perturbation()]  ✅ P2.6 EXPAND
-  cxf_simplex_unperturb()
-  cxf_simplex_refine()
-  cxf_extract_solution()
-```
+| ID | Title | Deps | Status |
+|----|-------|------|--------|
+| `l8d1` | D1: Implement cxf_simplex_phase_end | A3 | blocked |
+| `id19` | D2: Implement cxf_simplex_post_iterate | A3, B3 | blocked |
+| `beg0` | D3: Fix cxf_progress_snapshot + cxf_basis_diff | B3 | blocked |
 
----
+### Phase E: Two-Level Loop + Bound Propagation
 
-## V2 Dependency Chain Status
+| ID | Title | Deps | Status |
+|----|-------|------|--------|
+| `a5hy` | E1: Implement two-level iteration loop | D1, D2 | blocked |
+| `reb8` | E2: Implement cxf_simplex_step2 (variable-side) | E1, F1 | blocked |
+| `dz1w` | E3: Implement cxf_simplex_step3 (constraint-side) | E1, F1 | blocked |
+
+### Phase F: Pricing + Pivot Rebuild
+
+| ID | Title | Deps | Status |
+|----|-------|------|--------|
+| `6er4` | F1: Pricing queue architecture | A3 | blocked |
+| `rurr` | F2: Pivot operations (check, bound, update, special) | F1 | blocked |
+| `uet6` | F3: Harris two-pass ratio test with BFRT | F2 | blocked |
+
+### Dependency Graph
 
 ```
-snwu (crash basis)     ✅ DONE
-1azn (EXPAND method)   ✅ DONE
-ypf9 (Phase I/II)      ✅ DONE
-4gfy (diag_coeff)      ⏸ DEFERRED — LU factorize needs ±1 coefficients
-cgjf (Netlib sweep)    🔲 OPEN — blocked by uxae (LU performance)
+READY NOW:
+  h0wk (A1)  aivf (B1)  0hzf (B2)  kztb (B3)
+
+A chain:  h0wk → qh9y → 6869
+B→C:      0hzf → 7lbz → nnpw → wkmv (also needs 6869)
+B→D:      kztb → beg0, id19 (also needs 6869)
+          6869 → l8d1
+D→E:      l8d1 + id19 → a5hy → reb8, dz1w (also need 6er4)
+F chain:  6869 → 6er4 → rurr → uet6
 ```
 
 ---
 
-## Open Issues (prioritized)
+## Next Session: Start with A1
 
-### High priority (correctness):
-- `convexfeld-cgjf`: 10/29 Netlib failures remain (mostly false INFEASIBLE)
-- `convexfeld-4gfy`: Remove diag_coeff — deferred, needs careful analysis
+**Pick up `convexfeld-h0wk` (A1):** Move the core iteration logic (pricing, FTRAN, ratio test, step-size computation, BTRAN, pivot, incremental RC update, periodic refactorization) from `cxf_log_iteration_progress()` in iterate.c into a proper `cxf_simplex_step()` in step.c. This is a code-move refactor — keep the existing algorithm intact. All 39 tests must still pass after the move.
 
-### Medium priority (cleanup):
-- `convexfeld-h343`: Refactor perturbation.c to < 200 LOC (currently 311)
-- `convexfeld-c0cy`: Remove dead code cxf_run_phase_one/phase_two from phase_loop.c
+B1/B2/B3 are independent struct additions that can be done in parallel with or after A1.
 
-### Suggested next steps for Netlib correctness:
-1. Add initial LU factorization after Phase I setup (v2 spec step 5)
-2. Investigate false INFEASIBLE on equality-heavy problems (recipe, e226)
-3. Consider adding refactorization at Phase I→II transition boundary
+---
+
+## Previous Session Results (preserved)
+
+### Completed v2 items:
+- Crash basis (P2.5) — `src/simplex/crash.c`
+- EXPAND perturbation (P2.6) — `src/simplex/perturbation.c`
+- Phase I/II unification (P3.25) — `src/simplex/solve_lp.c`
+
+### Netlib: 19/29 pass (66%)
+Still failing: recipe, share1b, bandm, boeing2, brandy, scorpion, capri, e226 (false INFEASIBLE), bore3d (UNBOUNDED), israel (9.4% error). Root cause: v1 iteration engine architecture, not individual bugs.
 
 ---
 
@@ -125,12 +122,13 @@ cgjf (Netlib sweep)    🔲 OPEN — blocked by uxae (LU performance)
 | V2 orchestrator (unified loop) | `src/simplex/solve_lp.c` |
 | Crash basis (P2.5) | `src/simplex/crash.c` |
 | EXPAND perturbation (P2.6) | `src/simplex/perturbation.c` |
+| **Iteration engine (TO REFACTOR)** | `src/simplex/iterate.c` |
+| Step helper (TO REWRITE) | `src/simplex/step.c` |
+| Phase steps (TO REWRITE) | `src/simplex/phase_steps.c` |
+| Post-iterate (TO REWRITE) | `src/simplex/post.c` |
 | Phase I setup + transition | `src/simplex/phase_one.c` |
 | Phase I helpers | `src/simplex/phase_loop.c` |
-| Core iteration | `src/simplex/iterate.c` |
 | Reduced costs | `src/simplex/reduced_costs.c` |
-| V2 specs | `docs/specs-v2/specs/` |
-| Crash tests | `tests/unit/test_crash.c` |
-| Perturbation tests | `tests/unit/test_perturbation.c` |
-| Netlib problems | `benchmarks/netlib/feasible/` |
-| Netlib reference | `benchmarks/netlib/feasible_reference_1e-8.csv` |
+| SolverState header | `include/convexfeld/cxf_solver.h` |
+| V2 specs | `docs/specs-v2/specs/modules/` |
+| Key v2 specs | `simplex_iteration.md`, `simplex_phases.md`, `solve_lp_core.md` |
