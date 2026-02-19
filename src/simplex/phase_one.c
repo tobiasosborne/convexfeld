@@ -176,5 +176,14 @@ int cxf_transition_to_phase_two(SolverState *state, CxfModel *model) {
     state->use_bland = 0;
     state->degenerate_count = 0;
 
+    /* Reset FIXED variables to AT_LOWER for Phase II pricing.
+     * EXPAND perturbation (P2.6) may have marked nonbasic variables as
+     * FIXED during Phase I stalling. These must be eligible for Phase II. */
+    for (int j = 0; j < n + m; j++) {
+        if (basis->var_status[j] == CXF_VAR_FIXED) {
+            basis->var_status[j] = CXF_VAR_AT_LOWER;
+        }
+    }
+
     return CXF_OK;
 }
