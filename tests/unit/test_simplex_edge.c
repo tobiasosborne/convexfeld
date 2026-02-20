@@ -52,7 +52,7 @@ void test_perturbation_basic(void) {
     cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x");
     SolverState *state = NULL;
     cxf_simplex_init(model, &state);
-    cxf_simplex_setup(state, env);
+    cxf_simplex_setup(state, env, 0, NULL);
     TEST_ASSERT_EQUAL_INT(CXF_OK, cxf_simplex_perturbation(state, env));
     /* Idempotent - calling again should also return OK */
     TEST_ASSERT_EQUAL_INT(CXF_OK, cxf_simplex_perturbation(state, env));
@@ -69,7 +69,7 @@ void test_unperturb_sequence(void) {
     cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x");
     SolverState *state = NULL;
     cxf_simplex_init(model, &state);
-    cxf_simplex_setup(state, env);
+    cxf_simplex_setup(state, env, 0, NULL);
     /* Without perturbation: returns 1 (nothing to undo) */
     TEST_ASSERT_EQUAL_INT(1, cxf_simplex_unperturb(state, env));
     /* EXPAND perturbation is a no-op at iteration 0 (stall-triggered).

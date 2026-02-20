@@ -107,6 +107,12 @@ int cxf_solve_lp(CxfModel *model) {
     if (rc != CXF_OK) { model->status = rc; cxf_simplex_final(state); return rc; }
     cxf_compute_reduced_costs(state);
 
+    /* Compute activity bounds (v2 P3.21 — cxf_simplex_setup) */
+    cxf_simplex_setup(state, env, 0, NULL);
+
+    /* Preprocess: fix near-bound variables (v2 P3.21) */
+    cxf_simplex_preprocess(state, env, 0);
+
     /* ===== Two-level iteration loop (v2 P3.25 Phase 6) ===== */
     int terminated = 0;
     int stall = 0;

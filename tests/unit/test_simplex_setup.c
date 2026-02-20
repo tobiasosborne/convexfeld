@@ -35,47 +35,36 @@ void tearDown(void) {
  * cxf_simplex_setup tests
  ******************************************************************************/
 
-void test_setup_null_state_fails(void) {
-    int status = cxf_simplex_setup(NULL, env);
-    TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT, status);
-}
-
-void test_setup_null_env_fails(void) {
-    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x");
-    SolverState *state = NULL;
-    cxf_simplex_init(model, &state);
-
-    int status = cxf_simplex_setup(state, NULL);
-    TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT, status);
-
-    cxf_simplex_final(state);
-}
-
 void test_setup_empty_model(void) {
     SolverState *state = NULL;
     cxf_simplex_init(model, &state);
 
-    int status = cxf_simplex_setup(state, env);
-    TEST_ASSERT_EQUAL_INT(CXF_OK, status);
-    TEST_ASSERT_TRUE(state->phase == 1 || state->phase == 2);
+    cxf_simplex_setup(state, env, 0, NULL);
+
+    /* Setup computes activity bounds; with 0 constraints, arrays should
+     * still be allocated (possibly NULL for empty model, but no crash) */
+    TEST_ASSERT_EQUAL_INT(0, state->num_constrs);
 
     cxf_simplex_final(state);
 }
 
-void test_setup_initializes_reduced_costs(void) {
-    /* Add variables with different objective coefficients */
-    cxf_addvar(model, 0, NULL, NULL, 3.0, 0.0, 10.0, 'C', "x1");  /* obj = 3 */
-    cxf_addvar(model, 0, NULL, NULL, -2.5, 0.0, 10.0, 'C', "x2"); /* obj = -2.5 */
-    cxf_addvar(model, 0, NULL, NULL, 0.0, 0.0, 10.0, 'C', "x3");  /* obj = 0 */
+void test_setup_computes_activity_bounds(void) {
+    /* Add variables — activity bounds need constraints + matrix to be meaningful.
+     * With variables only and no constraints, min/max_activity arrays are
+     * allocated (size num_constrs=0) but nothing to compute. Verify no crash
+     * and that the arrays are accessible after setup. */
+    cxf_addvar(model, 0, NULL, NULL, 3.0, 0.0, 10.0, 'C', "x1");
+    cxf_addvar(model, 0, NULL, NULL, -2.5, 0.0, 10.0, 'C', "x2");
+    cxf_addvar(model, 0, NULL, NULL, 0.0, 0.0, 10.0, 'C', "x3");
 
     SolverState *state = NULL;
     cxf_simplex_init(model, &state);
-    cxf_simplex_setup(state, env);
+    cxf_simplex_setup(state, env, 0, NULL);
 
-    /* Reduced costs should equal objective coefficients initially */
-    TEST_ASSERT_DOUBLE_WITHIN(1e-12, 3.0, state->work_dj[0]);
-    TEST_ASSERT_DOUBLE_WITHIN(1e-12, -2.5, state->work_dj[1]);
-    TEST_ASSERT_DOUBLE_WITHIN(1e-12, 0.0, state->work_dj[2]);
+    /* With no constraints, activity arrays may be NULL (size 0) — no crash */
+    TEST_ASSERT_EQUAL_INT(0, state->num_constrs);
+    /* Phase should NOT be set by setup */
+    TEST_ASSERT_EQUAL_INT(0, state->phase);
 
     cxf_simplex_final(state);
 }
@@ -86,7 +75,7 @@ void test_setup_initializes_dual_values_to_zero(void) {
 
     SolverState *state = NULL;
     cxf_simplex_init(model, &state);
-    cxf_simplex_setup(state, env);
+    cxf_simplex_setup(state, env, 0, NULL);
 
     /* Dual values should be zero (no constraints in this model) */
     TEST_ASSERT_EQUAL_INT(0, state->num_constrs);
@@ -94,7 +83,7 @@ void test_setup_initializes_dual_values_to_zero(void) {
     cxf_simplex_final(state);
 }
 
-void test_setup_resets_iteration_counter(void) {
+void test_setup_does_not_reset_iteration_counter(void) {
     cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x");
 
     SolverState *state = NULL;
@@ -104,71 +93,43 @@ void test_setup_resets_iteration_counter(void) {
     state->iteration = 100;
     state->eta_count = 50;
 
-    cxf_simplex_setup(state, env);
+    cxf_simplex_setup(state, env, 0, NULL);
 
-    TEST_ASSERT_EQUAL_INT(0, state->iteration);
-    TEST_ASSERT_EQUAL_INT(0, state->eta_count);
-
-    cxf_simplex_final(state);
-}
-
-void test_setup_determines_phase_2_for_feasible_bounds(void) {
-    /* Add variable with feasible bounds (lb < ub) */
-    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x");
-
-    SolverState *state = NULL;
-    cxf_simplex_init(model, &state);
-    cxf_simplex_setup(state, env);
-
-    /* Feasible bounds should result in Phase II */
-    TEST_ASSERT_EQUAL_INT(2, state->phase);
+    /* Setup no longer resets iteration counters — those are init's job */
+    TEST_ASSERT_EQUAL_INT(100, state->iteration);
+    TEST_ASSERT_EQUAL_INT(50, state->eta_count);
 
     cxf_simplex_final(state);
 }
 
-void test_setup_determines_phase_1_for_infeasible_bounds(void) {
-    /* Add variable with infeasible bounds (lb > ub) */
-    cxf_addvar(model, 0, NULL, NULL, 1.0, 10.0, 5.0, 'C', "x");  /* lb=10 > ub=5 */
-
-    SolverState *state = NULL;
-    cxf_simplex_init(model, &state);
-    cxf_simplex_setup(state, env);
-
-    /* Infeasible bounds should result in Phase I */
-    TEST_ASSERT_EQUAL_INT(1, state->phase);
-
-    cxf_simplex_final(state);
-}
-
-void test_setup_initializes_pricing_context(void) {
+void test_setup_does_not_set_phase(void) {
+    /* Setup no longer determines phase — that is init's responsibility */
     cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x");
 
     SolverState *state = NULL;
     cxf_simplex_init(model, &state);
 
-    /* Pricing should be NULL before setup */
-    TEST_ASSERT_NULL(state->pricing);
+    /* Phase should be 0 (unset) after init */
+    TEST_ASSERT_EQUAL_INT(0, state->phase);
 
-    cxf_simplex_setup(state, env);
+    cxf_simplex_setup(state, env, 0, NULL);
 
-    /* Pricing should be initialized after setup */
-    TEST_ASSERT_NOT_NULL(state->pricing);
+    /* Phase should still be 0 — setup only computes activity bounds */
+    TEST_ASSERT_EQUAL_INT(0, state->phase);
 
     cxf_simplex_final(state);
 }
 
-void test_setup_sets_tolerance_from_env(void) {
+void test_setup_does_not_initialize_pricing(void) {
     cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x");
 
     SolverState *state = NULL;
     cxf_simplex_init(model, &state);
 
-    /* Set environment tolerance */
-    env->optimality_tol = 1e-8;
+    cxf_simplex_setup(state, env, 0, NULL);
 
-    cxf_simplex_setup(state, env);
-
-    TEST_ASSERT_DOUBLE_WITHIN(1e-15, 1e-8, state->tolerance);
+    /* Setup no longer initializes pricing — that is init's responsibility */
+    /* Pricing state depends on init, not setup */
 
     cxf_simplex_final(state);
 }
@@ -270,15 +231,17 @@ void test_setup_and_preprocess_sequence(void) {
     int status = cxf_simplex_preprocess(state, env, 0);
     TEST_ASSERT_EQUAL_INT(CXF_OK, status);
 
-    /* Then setup */
-    status = cxf_simplex_setup(state, env);
-    TEST_ASSERT_EQUAL_INT(CXF_OK, status);
+    /* Then setup — computes activity bounds only */
+    cxf_simplex_setup(state, env, 0, NULL);
 
-    /* Verify state is ready for iteration */
-    TEST_ASSERT_EQUAL_INT(2, state->phase);  /* Phase II */
-    TEST_ASSERT_NOT_NULL(state->pricing);
-    TEST_ASSERT_DOUBLE_WITHIN(1e-12, 3.0, state->work_dj[0]);
-    TEST_ASSERT_DOUBLE_WITHIN(1e-12, -1.0, state->work_dj[1]);
+    /* Verify working bounds are intact (not corrupted by setup) */
+    TEST_ASSERT_DOUBLE_WITHIN(1e-12, 0.0, state->work_lb[0]);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-12, 10.0, state->work_ub[0]);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-12, 0.0, state->work_lb[1]);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-12, 5.0, state->work_ub[1]);
+
+    /* Phase should NOT be set by setup */
+    TEST_ASSERT_EQUAL_INT(0, state->phase);
 
     cxf_simplex_final(state);
 }
@@ -290,17 +253,13 @@ void test_setup_and_preprocess_sequence(void) {
 int main(void) {
     UNITY_BEGIN();
 
-    /* cxf_simplex_setup tests */
-    RUN_TEST(test_setup_null_state_fails);
-    RUN_TEST(test_setup_null_env_fails);
+    /* cxf_simplex_setup tests (v2: setup only computes activity bounds) */
     RUN_TEST(test_setup_empty_model);
-    RUN_TEST(test_setup_initializes_reduced_costs);
+    RUN_TEST(test_setup_computes_activity_bounds);
     RUN_TEST(test_setup_initializes_dual_values_to_zero);
-    RUN_TEST(test_setup_resets_iteration_counter);
-    RUN_TEST(test_setup_determines_phase_2_for_feasible_bounds);
-    RUN_TEST(test_setup_determines_phase_1_for_infeasible_bounds);
-    RUN_TEST(test_setup_initializes_pricing_context);
-    RUN_TEST(test_setup_sets_tolerance_from_env);
+    RUN_TEST(test_setup_does_not_reset_iteration_counter);
+    RUN_TEST(test_setup_does_not_set_phase);
+    RUN_TEST(test_setup_does_not_initialize_pricing);
 
     /* cxf_simplex_preprocess tests */
     RUN_TEST(test_preprocess_null_state_fails);

@@ -16,9 +16,6 @@
  * External function declarations (to be implemented in M7.1.4-5)
  ******************************************************************************/
 
-/* Setup - to be implemented in M7.1.6 */
-int cxf_simplex_setup(SolverState *state, CxfEnv *env);
-
 /* Status queries - to be implemented */
 int cxf_simplex_get_status(SolverState *state);
 int cxf_simplex_get_iteration(SolverState *state);
@@ -149,28 +146,13 @@ void test_simplex_setup_basic(void) {
     SolverState *state = NULL;
     cxf_simplex_init(model, &state);
 
-    int status = cxf_simplex_setup(state, env);
-    TEST_ASSERT_EQUAL_INT(CXF_OK, status);
+    cxf_simplex_setup(state, env, 0, NULL);
 
-    /* After setup, phase should be 1 or 2 */
-    TEST_ASSERT_TRUE(state->phase == 1 || state->phase == 2);
-
-    cxf_simplex_final(state);
-}
-
-void test_simplex_setup_null_state_fails(void) {
-    int status = cxf_simplex_setup(NULL, env);
-    TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT, status);
-}
-
-void test_simplex_setup_null_env_fails(void) {
-    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x");
-
-    SolverState *state = NULL;
-    cxf_simplex_init(model, &state);
-
-    int status = cxf_simplex_setup(state, NULL);
-    TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT, status);
+    /* Setup only computes activity bounds; phase is NOT set by setup */
+    TEST_ASSERT_EQUAL_INT(0, state->phase);
+    /* Working arrays should exist after init+setup */
+    TEST_ASSERT_NOT_NULL(state->work_lb);
+    TEST_ASSERT_NOT_NULL(state->work_ub);
 
     cxf_simplex_final(state);
 }
@@ -219,10 +201,11 @@ void test_simplex_get_phase_after_setup(void) {
 
     SolverState *state = NULL;
     cxf_simplex_init(model, &state);
-    cxf_simplex_setup(state, env);
+    cxf_simplex_setup(state, env, 0, NULL);
 
     int phase = cxf_simplex_get_phase(state);
-    TEST_ASSERT_TRUE(phase == 1 || phase == 2);
+    /* Setup no longer sets phase — phase remains 0 (unset) */
+    TEST_ASSERT_EQUAL_INT(0, phase);
 
     cxf_simplex_final(state);
 }
@@ -253,8 +236,6 @@ int main(void) {
 
     /* Setup tests */
     RUN_TEST(test_simplex_setup_basic);
-    RUN_TEST(test_simplex_setup_null_state_fails);
-    RUN_TEST(test_simplex_setup_null_env_fails);
 
     /* State query tests */
     RUN_TEST(test_simplex_get_status_initial);

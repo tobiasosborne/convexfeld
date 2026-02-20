@@ -19,91 +19,7 @@
 #include <math.h>
 
 /* Default parameters */
-#define DEFAULT_MAX_ITERATIONS 10000000
 #define DEFAULT_FEASIBILITY_TOL 1e-6
-#define DEFAULT_OPTIMALITY_TOL 1e-6
-#define MAX_PREPROCESS_PASSES 10
-#define SCALE_CLAMP_MIN 1e-6
-#define SCALE_CLAMP_MAX 1e6
-
-/* Forward declarations */
-extern PricingState *cxf_pricing_create(int num_vars, int max_levels);
-extern int cxf_pricing_init(PricingState *ctx, int num_vars, int strategy);
-extern int cxf_pricing_init_constrs(PricingState *ctx, int num_constrs);
-
-/**
- * @brief Clamp a value to [min, max].
- */
-static double clamp(double val, double min_val, double max_val) {
-    if (val < min_val) return min_val;
-    if (val > max_val) return max_val;
-    return val;
-}
-
-/**
- * @brief Check if any bounds are infeasible (lb > ub).
- */
-static int has_bound_violation(const double *lb, const double *ub,
-                               int n, double tol) {
-    for (int j = 0; j < n; j++) {
-        if (lb[j] > ub[j] + tol) {
-            return 1;
-        }
-    }
-    return 0;
-}
-
-/**
- * @brief Initialize reduced costs from objective coefficients.
- */
-static void init_reduced_costs(SolverState *state) {
-    int n = state->num_vars;
-    if (n > 0 && state->work_dj != NULL && state->work_obj != NULL) {
-        memcpy(state->work_dj, state->work_obj, (size_t)n * sizeof(double));
-    }
-}
-
-/**
- * @brief Zero-initialize dual values.
- */
-static void init_dual_values(SolverState *state) {
-    int m = state->num_constrs;
-    if (m > 0 && state->work_pi != NULL) {
-        memset(state->work_pi, 0, (size_t)m * sizeof(double));
-    }
-}
-
-/**
- * @brief Initialize pricing context.
- */
-static int init_pricing(SolverState *state) {
-    int n = state->num_vars;
-
-    if (n == 0) {
-        state->pricing = NULL;
-        return CXF_OK;
-    }
-
-    /* Create pricing context with 3 levels */
-    state->pricing = cxf_pricing_create(n, 3);
-    if (state->pricing == NULL) {
-        return CXF_ERROR_OUT_OF_MEMORY;
-    }
-
-    /* Initialize with auto strategy (0) */
-    int status = cxf_pricing_init(state->pricing, n, 0);
-    if (status != CXF_OK) {
-        return status;
-    }
-
-    /* V2: Initialize constraint queues (F1) */
-    status = cxf_pricing_init_constrs(state->pricing, state->num_constrs);
-    if (status != CXF_OK) {
-        return status;
-    }
-
-    return CXF_OK;
-}
 
 /**
  * @brief Compute per-constraint activity bounds (v2 P3.21).
@@ -223,67 +139,26 @@ void cxf_compute_activity_bounds(SolverState *state, int count,
 }
 
 /**
- * @brief Set up solver context for iteration.
+ * @brief Compute constraint activity bounds (v2 P3.21).
  *
- * Initializes reduced costs, dual values, pricing, and determines
- * initial phase based on bound feasibility.
+ * V2 spec: cxf_simplex_setup computes min/max activity bounds for
+ * each constraint based on variable bounds and matrix coefficients.
+ * Supports selective recomputation via count/indices parameters.
  *
- * @param state Solver context (must be initialized via cxf_simplex_init)
- * @param env Environment containing solver parameters
- * @return CXF_OK on success, error code otherwise
+ * This function ONLY computes activity bounds. State initialization
+ * (reduced costs, pricing, phase detection) is handled by
+ * cxf_simplex_init and cxf_setup_phase_one.
+ *
+ * @param state   Solver state with CSC matrix and bounds
+ * @param env     Environment with tolerances
+ * @param count   Number of constraints to update (0 = all)
+ * @param indices Constraint indices to update (NULL = all)
  */
-int cxf_simplex_setup(SolverState *state, CxfEnv *env) {
-    if (state == NULL || env == NULL) {
-        return CXF_ERROR_NULL_ARGUMENT;
-    }
-
-    int n = state->num_vars;
-
-    /* Read parameters from environment */
-    double feas_tol = env->feasibility_tol;
-    double opt_tol = env->optimality_tol;
-
-    if (feas_tol <= 0.0) feas_tol = DEFAULT_FEASIBILITY_TOL;
-    if (opt_tol <= 0.0) opt_tol = DEFAULT_OPTIMALITY_TOL;
-
-    /* Store parameters in state */
-    state->tolerance = opt_tol;
-    /* max_iterations is already set by cxf_simplex_init */
-
-    /* Initialize reduced costs from objective coefficients */
-    init_reduced_costs(state);
-
-    /* Zero-initialize dual values */
-    init_dual_values(state);
-
-    /* Initialize pricing context if not already done */
-    if (state->pricing == NULL && n > 0) {
-        int status = init_pricing(state);
-        if (status != CXF_OK) {
-            return status;
-        }
-    }
-
-    /* Compute initial activity bounds (v2 C1) */
-    cxf_compute_activity_bounds(state, 0, NULL);
-
-    /* Reset eta tracking */
-    state->eta_count = 0;
-    state->eta_memory = 0;
-
-    /* Reset iteration tracking */
-    state->iteration = 0;
-    state->last_refactor_iter = 0;
-    state->obj_value = 0.0;
-
-    /* Determine initial phase based on bound feasibility */
-    if (has_bound_violation(state->work_lb, state->work_ub, n, feas_tol)) {
-        state->phase = 1;  /* Phase I needed */
-    } else {
-        state->phase = 2;  /* Go directly to Phase II */
-    }
-
-    return CXF_OK;
+void cxf_simplex_setup(SolverState *state, CxfEnv *env,
+                       int count, int *indices) {
+    (void)env;  /* Tolerances used internally by compute_activity_bounds */
+    if (state == NULL) return;
+    cxf_compute_activity_bounds(state, count, indices);
 }
 
 /**

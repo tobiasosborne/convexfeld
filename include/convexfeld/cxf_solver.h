@@ -123,11 +123,13 @@ void cxf_simplex_final(SolverState *state);
  * Initializes reduced costs, dual values, pricing, and determines
  * initial phase based on bound feasibility.
  *
- * @param state Solver context (must be initialized via cxf_simplex_init)
- * @param env Environment containing solver parameters
- * @return CXF_OK on success, error code otherwise
+ * @param state   Solver state with CSC matrix and bounds
+ * @param env     Environment with tolerances
+ * @param count   Number of constraints to update (0 = all)
+ * @param indices Constraint indices to update (NULL = all)
  */
-int cxf_simplex_setup(SolverState *state, CxfEnv *env);
+void cxf_simplex_setup(SolverState *state, CxfEnv *env,
+                       int count, int *indices);
 
 /**
  * @brief Preprocess the LP problem.

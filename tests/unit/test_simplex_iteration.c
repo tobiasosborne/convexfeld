@@ -42,7 +42,7 @@ void test_simplex_iterate_null_args_fail(void) {
     cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x");
     SolverState *state = NULL;
     cxf_simplex_init(model, &state);
-    cxf_simplex_setup(state, env);
+    cxf_simplex_setup(state, env, 0, NULL);
     TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT, cxf_simplex_step(state, NULL));
     cxf_simplex_final(state);
 }
@@ -51,7 +51,7 @@ void test_simplex_iterate_returns_valid_status(void) {
     cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x");
     SolverState *state = NULL;
     cxf_simplex_init(model, &state);
-    cxf_simplex_setup(state, env);
+    cxf_simplex_setup(state, env, 0, NULL);
 
     int status = cxf_simplex_step(state, env);
     /* Valid returns: 0=continue, 1=optimal, 2=infeasible, 3=unbounded, 12=error */
@@ -65,7 +65,7 @@ void test_simplex_iterate_increments_iteration(void) {
     cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x");
     SolverState *state = NULL;
     cxf_simplex_init(model, &state);
-    cxf_simplex_setup(state, env);
+    cxf_simplex_setup(state, env, 0, NULL);
 
     int iter_before = state->iteration;
     cxf_simplex_step(state, env);
@@ -81,7 +81,7 @@ void test_phase_end_null_args_fail(void) {
     cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x");
     SolverState *state = NULL;
     cxf_simplex_init(model, &state);
-    cxf_simplex_setup(state, env);
+    cxf_simplex_setup(state, env, 0, NULL);
     state->phase = 1;
     TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT,
                           cxf_simplex_phase_end(state, NULL, 0));
@@ -95,7 +95,7 @@ void test_phase_end_transitions_to_phase2(void) {
     cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x");
     SolverState *state = NULL;
     cxf_simplex_init(model, &state);
-    cxf_simplex_setup(state, env);
+    cxf_simplex_setup(state, env, 0, NULL);
     state->phase = 1;
     state->obj_value = 0.0;
 
@@ -110,7 +110,7 @@ void test_phase_end_infeasible_returns_error(void) {
     cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x");
     SolverState *state = NULL;
     cxf_simplex_init(model, &state);
-    cxf_simplex_setup(state, env);
+    cxf_simplex_setup(state, env, 0, NULL);
     state->phase = 1;
     state->obj_value = 1.0;  /* Positive = still infeasible */
 
@@ -133,7 +133,7 @@ void test_post_iterate_returns_continue_or_refactor(void) {
     cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x");
     SolverState *state = NULL;
     cxf_simplex_init(model, &state);
-    cxf_simplex_setup(state, env);
+    cxf_simplex_setup(state, env, 0, NULL);
 
     int stall = 0;
     int status = cxf_simplex_post_iterate(state, env, &stall);
@@ -151,7 +151,7 @@ void test_get_objval_returns_current_objective(void) {
     cxf_addvar(model, 0, NULL, NULL, 5.0, 0.0, 10.0, 'C', "x");  /* obj coeff = 5 */
     SolverState *state = NULL;
     cxf_simplex_init(model, &state);
-    cxf_simplex_setup(state, env);
+    cxf_simplex_setup(state, env, 0, NULL);
     state->obj_value = 42.0;
 
     double val = cxf_simplex_get_objval(state);
