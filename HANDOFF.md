@@ -4,80 +4,76 @@
 
 ---
 
-## STATUS: 9 commits — all core v2 iteration functions at 65-90% compliance
+## STATUS: Strict v2 spec audit — removed bandaids, registered 6 spec-gap issues
 
 ### Session Summary
 
-**V2 spec compliance overhaul.** Upgraded beads to v0.55.1 (Dolt). Full v2 audit of all simplex modules. Rewrote 8 core functions across 10 files. Fixed BFRT bug. Net ~-300 LOC.
+**Deep research round + strict v2 audit.** Investigated the 7 false INFEASIBLE Netlib failures. Attempted multiple fix approaches (recovery loops, direct bound perturbation, proactive perturbation, tolerance tightening) — all were bandaids that don't match the spec. Reverted everything non-compliant. Applied only 2 spec-compliant fixes. Registered 6 issues for the real spec gaps that cause the failures.
 
-### Commits This Session
+### Key Insight
 
-| # | Hash | Description |
-|---|---|---|
-| 1 | `fbc6ccb` | BFRT + pricing cascade in step.c |
-| 2 | `0d6ba33` | step2/step3 bound propagation (Savelsbergh 1994) |
-| 3 | `50b8267` | phase_end + post_iterate + loop ordering |
-| 4 | `c74937d` | v2-compliant setup + enable activity bounds + preprocess |
-| 5 | `2367eaa` | v2-compliant perturbation with saved bounds + AT_UPPER |
-| 6 | `7a48cdc` | Fix BFRT undo-last-flip (eliminates false UNBOUNDED) |
-| 7 | `3813a08` | v2-compliant refine with RC-based cleanup + basic recovery |
-| 8 | `828a3ba` | Pricing tolerance tiers in step |
+The 7 false INFEASIBLE failures are NOT caused by bugs in perturbation.c or solve_lp.c. Those functions are mostly correct per spec. The failures are caused by **multiple missing spec components working together**: inadequate crash basis, missing proactive perturbation, no pricing tolerance escalation, phase_end not participating in Phase I, and inaccurate LU factorization. Fixing any one component alone won't help — the v2 defense layers must ALL be present.
 
-### V2 Compliance Status
+### Changes This Session
 
-| Function | Before | After |
-|---|---|---|
-| `cxf_simplex_step` | 40% | **80%** |
-| `cxf_simplex_step2` | 0% | **70%** |
-| `cxf_simplex_step3` | 0% | **70%** |
-| `cxf_simplex_phase_end` | 15% | **65%** |
-| `cxf_simplex_post_iterate` | 70% | **85%** |
-| `cxf_simplex_setup` | 50% | **90%** |
-| `cxf_simplex_perturbation` | 50% | **75%** |
-| `cxf_simplex_refine` | 60% | **85%** |
-| `cxf_pricing_cascade_update` | 0% | **90%** |
-| `solve_lp.c` orchestration | 80% | **90%** |
+| File | Change | Spec Basis |
+|------|--------|------------|
+| `phase_loop.c` | Remove 0.01 tolerance floor in Phase I check | P3.21: use feasibility_tol |
+| `perturbation.c` | Mark degenerate basic vars dirty in pricing | P2.6 Case B: remove from pricing |
+
+### Issues Created
+
+| ID | Priority | Title |
+|----|----------|-------|
+| `a5vp` | P2 | P2.6: perturbation Phase 2 should retrieve candidates from pricing subsystem |
+| `9yi2` | P2 | P2.6: perturbation Phase 3 bound restoration before analysis |
+| `x5dj` | P1 | P3.21: correct_basic_variables should use basis factorization not manual iteration |
+| `zr5l` | P1 | P2.6: proactive perturbation in early iterations not implemented |
+| `fiyt` | P2 | P3.21: phase_end not participating in Phase I transition detection |
+| `d1th` | P1 | P2.3: multi-level pricing tolerance escalation incomplete |
 
 ### Test Results
 
 - **39/39 unit tests pass**
-- **14/22 extended Netlib pass** (afiro, sc50a, blend, adlittle, share2b, sc105, sc205, scagr7, stocfor1, beaconfd, lotfi, agg, sctap1, ship04s)
-- **8 Netlib failures**: 7 false INFEASIBLE (kb2, recipe, bandm, bore3d, brandy, share1b, scorpion) + 1 wrong obj (israel)
-- **False UNBOUNDED eliminated** by BFRT undo-last-flip fix
+- Netlib status unchanged (the 2 changes are correctness fixes, not behavior changes for the failing problems)
 
 ---
 
-## Next Steps (Priority Order)
+## Next Steps (Strict V2 Order)
 
-### 1. Fix remaining false INFEASIBLE (7 problems)
-All 7 share the same root cause: Phase I degeneracy. The solver reaches a point where all reduced costs are near-zero for nonbasic variables at lower bound, so no improving direction is found. Options:
+### Critical Path for 7 False INFEASIBLE
 
-- **Bound perturbation (careful)**: Attempted this session but perturbation magnitude was too aggressive — blend and sc205 regressed. Need: (a) perturb only basic variables at bounds (not all nonbasics), (b) much smaller ε (1e-10 scale not 1e-6), (c) perturbation only during Phase I
-- **Better crash basis**: Current crash is basic — more sophisticated crash (Maros Ch 9, scoring by sparsity/magnitude) would start Phase I closer to feasibility
-- **Dual simplex**: Avoids Phase I entirely — the v2 spec supports it but it's a major new implementation
+The failures need multiple spec components implemented together. Recommended order based on spec dependencies:
 
-### 2. Remaining v2 compliance gaps
-- **step**: Tight bound handling via `cxf_pivot_bound`, free variable handling (~5% gap)
-- **step2/step3**: Eta records for bound changes, two-stage infeasibility detection (~10% gap each)
-- **phase_end**: Could handle Phase I→II transition inline per spec (~10% gap)
-- **perturbation**: Actual EXPAND bound perturbation (carefully tuned) (~10% gap)
-- **log_iteration_progress**: Needs logging infrastructure (deferred)
+1. **`d1th` — Pricing tolerance escalation (P2.3)** — When step() finds 0 candidates at level 0 (loose), try level 1 (standard), then level 2+ (tight). Currently returns ITERATE_OPTIMAL immediately. This alone could unblock some Phase I problems where improving RCs exist but are below the loose tolerance.
 
-### 3. israel wrong objective
-israel returns OPTIMAL with obj=-9.81e5 (ref=-8.97e5, 9.4% error). This is a numerical accuracy issue, not Phase I degeneracy. Likely needs: refactorization frequency tuning, or reduced cost recomputation after many pivots.
+2. **`zr5l` — Proactive perturbation (P2.6)** — Apply perturbation in first 1-2 inner iterations of round 0. Challenge: Mechanism B (nonbasic flipping) must not flip all original variables before meaningful RCs exist. May need to split perturbation into basic-only (proactive) and full (reactive).
+
+3. **`fiyt` — phase_end in Phase I (P3.21)** — Currently phase_end only runs during Phase II. Spec says it runs both phases. Its constraint activity analysis could detect Phase I→II transition earlier.
+
+4. **`x5dj` — LU accuracy (P3.21)** — The correct_basic_variables hack exists because LU gives inaccurate x_B. Better LU (already tracked as `uxae`) would eliminate this workaround and give accurate infeasibility measurement.
+
+### Already Tracked
+
+- `snwu` — Crash basis (P2.5) — better initial basis reduces Phase I iterations
+- `1azn` — EXPAND perturbation — tracked separately
+- `uxae` — LU factorization performance/accuracy
 
 ---
 
 ## Lessons Learned This Session
 
-### BFRT undo-last-flip bug
-When BFRT loop flips a variable and find_next_blocker returns -1, leavingRow still points to the flipped row. Must undo the last flip so the flipped variable becomes the true leaving variable. (gotchas.md updated)
+### Don't bandaid the orchestrator — fix the components
 
-### Bound perturbation magnitude
-Naive EXPAND (perturb all nonbasic bounds by feas_tol * factor) is too aggressive. It changes the feasible region enough to find different optimal vertices. Proper EXPAND needs: (a) perturb only variables involved in degenerate pivots, (b) use much smaller ε (~1e-10 to 1e-12), (c) scale by variable magnitude.
+Spent significant time adding "recovery loops" to solve_lp.c (refactorize → perturbation → Bland → tolerance tightening). None of it is in the spec. The spec says: if Phase I reaches optimality with infeasibility > 0, it's INFEASIBLE. The real issue is that Phase I shouldn't be reaching false optimality in the first place — that's caused by missing components (pricing escalation, proactive perturbation, phase_end participation).
 
-### Phase I→II transition ownership
-phase_end should NOT do Phase I→II transition — that's handled by cxf_check_phase_one_end in the orchestrator. Putting it in phase_end caused a regression on the mixed-senses constraint test (obj=-12 instead of -15).
+### The spec's perturbation is candidate removal, not bound modification
+
+P2.6 explicitly says: "Instead of perturbing bounds globally, the algorithm removes individual degenerate candidates from the pricing set. This is equivalent to perturbation." Direct bound modification (the "Mechanism A" I tried) is NOT in the spec and caused test regressions.
+
+### The 0.01 tolerance floor was hiding real issues
+
+`fmax(env->feasibility_tol, 0.01)` let problems with residual infeasibility up to 0.01 transition to Phase II. Some currently-passing problems may rely on this. Removing it is correct per spec — the tolerance should be `env->feasibility_tol`.
 
 ---
 
@@ -85,13 +81,12 @@ phase_end should NOT do Phase I→II transition — that's handled by cxf_check_
 
 | Item | Path |
 |---|---|
-| step.c (BFRT engine + tolerance tiers) | `src/simplex/step.c` |
-| phase_steps.c (step2/step3) | `src/simplex/phase_steps.c` |
-| post.c (phase_end + post_iterate) | `src/simplex/post.c` |
-| setup.c (activity bounds only) | `src/simplex/setup.c` |
-| perturbation.c (EXPAND) | `src/simplex/perturbation.c` |
-| refine.c (RC cleanup + basic recovery) | `src/simplex/refine.c` |
-| queue.c (cascade + dirty marking) | `src/pricing/queue.c` |
+| perturbation.c (EXPAND, P2.6) | `src/simplex/perturbation.c` |
+| phase_loop.c (Phase I/II loops) | `src/simplex/phase_loop.c` |
 | solve_lp.c (v2 orchestrator) | `src/simplex/solve_lp.c` |
+| step.c (pricing + BFRT) | `src/simplex/step.c` |
+| candidates.c (pricing candidates) | `src/pricing/candidates.c` |
+| queue.c (pricing levels) | `src/pricing/queue.c` |
+| reduced_costs.c (RC computation) | `src/simplex/reduced_costs.c` |
 | V2 specs | `docs/specs-v2/specs/modules/` |
-| Learnings | `docs/learnings/gotchas.md` |
+| V2 algorithm specs | `docs/specs-v2/specs/algorithms/` |

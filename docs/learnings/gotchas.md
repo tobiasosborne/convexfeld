@@ -841,3 +841,46 @@ dirty. This is 15 lines of code but enables the entire bound propagation pipelin
 **Lesson:** Small infrastructure fixes can unblock large feature areas. The cascade
 was the missing link between pivots and bound propagation.
 
+---
+
+### V2 Perturbation is Candidate Removal, NOT Bound Modification
+
+**Date:** 2026-02-20
+
+**Context:** Tried to fix 7 false INFEASIBLE Netlib problems by adding direct working
+bound perturbation (shifting work_lb/work_ub by 1e-12 for basic variables at bounds).
+This caused test regressions and is NOT what the v2 spec says.
+
+**Spec says (P2.6):** "Instead of perturbing bounds globally, the algorithm removes
+individual degenerate candidates from the pricing set. This is equivalent to
+perturbation from the simplex algorithm's perspective, but avoids modifying the bound
+arrays explicitly."
+
+**Lesson:** Read the spec EXACTLY. The word "perturbation" in the function name does
+not mean "modify bounds." It means "remove degenerate candidates." The MODULE spec
+(P3.21) mentions "modifies working bounds" in side effects, but this refers to the
+AT_LOWER→AT_UPPER status flip (which changes work_x), not lb/ub modification.
+
+---
+
+### Don't Bandaid the Orchestrator — Fix the Components
+
+**Date:** 2026-02-20
+
+**Context:** Spent a session adding "recovery loops" to solve_lp.c Phase I handling:
+refactorize → perturbation → Bland → tolerance tightening. None of it is in the spec.
+The spec says: Phase I optimality with infeasibility > 0 = INFEASIBLE. Period.
+
+**Root cause of 7 failures:** Multiple missing spec components:
+1. **Pricing tolerance escalation (P2.3)** — step.c returns ITERATE_OPTIMAL without
+   trying tighter tolerance levels. Near-zero RC candidates are rejected.
+2. **Proactive perturbation (P2.6)** — should apply in first 1-2 iterations, not
+   just on stall detection after 50 degenerate pivots.
+3. **phase_end in Phase I (P3.21)** — currently only runs during Phase II. Should
+   participate in Phase I transition detection.
+4. **LU accuracy** — correct_basic_variables hack exists because B^{-1}b is inaccurate.
+
+**Lesson:** When tests fail, the temptation is to add recovery code to the caller.
+But if the spec doesn't have recovery code, the real fix is in the callees. Fix the
+components so the orchestrator doesn't need workarounds.
+

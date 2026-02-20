@@ -161,7 +161,7 @@ static int has_improving_direction(SolverState *state, CxfEnv *env) {
 int cxf_check_phase_one_end(SolverState *state, CxfModel *model, CxfEnv *env) {
     double infeas = correct_basic_variables(state, model);
     state->obj_value = infeas;
-    double tol = fmax(env->feasibility_tol, 0.01);
+    double tol = env->feasibility_tol;
 
     if (infeas <= tol) {
         /* Feasible: transition to Phase II */
@@ -193,7 +193,7 @@ int cxf_run_phase_one(SolverState *state, CxfModel *model, CxfEnv *env) {
         if (status == ITERATE_OPTIMAL) {
             double infeas = correct_basic_variables(state, model);
             state->obj_value = infeas;
-            double tol = fmax(env->feasibility_tol, 0.01);
+            double tol = env->feasibility_tol;
 #ifdef DEBUG_PHASE1
             fprintf(stderr, "[Phase I] iter=%d, infeas=%.6e, tol=%.6e\n",
                     state->iteration, infeas, tol);

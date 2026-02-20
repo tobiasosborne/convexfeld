@@ -187,8 +187,14 @@ int cxf_simplex_perturbation(SolverState *state, CxfEnv *env) {
                 state->perturb_count += perturbed;
                 return CXF_INFEASIBLE;
             }
-            if (result == 1)
+            if (result == 1) {
+                /* P2.6 Case B: degenerate basic variable —
+                 * mark dirty in pricing to exclude from
+                 * next candidate retrieval */
+                if (state->pricing)
+                    cxf_pricing_mark_dirty(state->pricing, bvar);
                 perturbed++;
+            }
         }
     }
 
