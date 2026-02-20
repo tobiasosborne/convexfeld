@@ -146,12 +146,20 @@ int cxf_simplex_get_iteration(SolverState *state);
 int cxf_simplex_get_phase(SolverState *state);
 
 /**
- * @brief Perform one simplex iteration (stub - to be implemented in M7.1.2).
+ * @brief Execute one simplex iteration (v2 P3.20).
+ * Pricing, FTRAN, ratio test, pivot, reduced cost update.
  * @param state Solver context
  * @param env Environment
- * @return CXF_OK on success, error code otherwise
+ * @return ITERATE_CONTINUE, ITERATE_OPTIMAL, ITERATE_UNBOUNDED, or error
  */
-int cxf_log_iteration_progress(SolverState *state, CxfEnv *env);
+int cxf_simplex_step(SolverState *state, CxfEnv *env);
+
+/**
+ * @brief Report iteration progress (v2 P3.20 — logging only).
+ * @param model Model with logging config
+ * @param state Solver state with timing data
+ */
+void cxf_log_iteration_progress(CxfModel *model, SolverState *state);
 
 /**
  * @brief Handle phase end transition (stub - to be implemented in M7.1.2).

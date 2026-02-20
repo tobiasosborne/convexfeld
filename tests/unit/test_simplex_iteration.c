@@ -12,8 +12,8 @@
 #include "convexfeld/cxf_solver.h"
 #include "convexfeld/cxf_types.h"
 
-/* External declarations - to be implemented in M7.1.x */
-int cxf_log_iteration_progress(SolverState *state, CxfEnv *env);
+/* External declarations */
+int cxf_simplex_step(SolverState *state, CxfEnv *env);
 int cxf_simplex_phase_end(SolverState *state, CxfEnv *env);
 int cxf_simplex_post_iterate(SolverState *state, CxfEnv *env);
 double cxf_simplex_get_objval(SolverState *state);
@@ -40,12 +40,12 @@ void tearDown(void) {
 
 /* Iteration loop tests */
 void test_simplex_iterate_null_args_fail(void) {
-    TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT, cxf_log_iteration_progress(NULL, env));
+    TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT, cxf_simplex_step(NULL, env));
     cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x");
     SolverState *state = NULL;
     cxf_simplex_init(model, &state);
     cxf_simplex_setup(state, env);
-    TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT, cxf_log_iteration_progress(state, NULL));
+    TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT, cxf_simplex_step(state, NULL));
     cxf_simplex_final(state);
 }
 
@@ -55,7 +55,7 @@ void test_simplex_iterate_returns_valid_status(void) {
     cxf_simplex_init(model, &state);
     cxf_simplex_setup(state, env);
 
-    int status = cxf_log_iteration_progress(state, env);
+    int status = cxf_simplex_step(state, env);
     /* Valid returns: 0=continue, 1=optimal, 2=infeasible, 3=unbounded, 12=error */
     TEST_ASSERT_TRUE(status == 0 || status == 1 || status == 2 ||
                      status == 3 || status == 12);
@@ -70,7 +70,7 @@ void test_simplex_iterate_increments_iteration(void) {
     cxf_simplex_setup(state, env);
 
     int iter_before = state->iteration;
-    cxf_log_iteration_progress(state, env);
+    cxf_simplex_step(state, env);
     TEST_ASSERT_EQUAL_INT(iter_before + 1, state->iteration);
 
     cxf_simplex_final(state);

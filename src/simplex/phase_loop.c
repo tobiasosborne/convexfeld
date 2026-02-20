@@ -21,7 +21,7 @@
 #define ITERATE_INFEASIBLE 2
 #define ITERATE_UNBOUNDED  3
 
-extern int cxf_log_iteration_progress(SolverState *state, CxfEnv *env);
+extern int cxf_simplex_step(SolverState *state, CxfEnv *env);
 extern void cxf_compute_reduced_costs(SolverState *state);
 
 /** @brief Compute total constraint violation (true infeasibility). */
@@ -188,7 +188,7 @@ int cxf_run_phase_one(SolverState *state, CxfModel *model, CxfEnv *env) {
         if (!state->use_bland && phase_iters > 3 * state->num_constrs)
             state->use_bland = 1;
 
-        int status = cxf_log_iteration_progress(state, env);
+        int status = cxf_simplex_step(state, env);
 
         if (status == ITERATE_OPTIMAL) {
             double infeas = correct_basic_variables(state, model);
@@ -229,7 +229,7 @@ int cxf_run_phase_two(SolverState *state, CxfModel *model, CxfEnv *env) {
         if (!state->use_bland && phase_iters > 3 * state->num_constrs)
             state->use_bland = 1;
 
-        int status = cxf_log_iteration_progress(state, env);
+        int status = cxf_simplex_step(state, env);
 
         if (status == ITERATE_OPTIMAL) { model->status = CXF_OPTIMAL; break; }
         else if (status == ITERATE_UNBOUNDED) { model->status = CXF_UNBOUNDED; break; }

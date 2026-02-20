@@ -46,7 +46,7 @@ extern int cxf_transition_to_phase_two(SolverState *state, CxfModel *model);
 extern void cxf_compute_reduced_costs(SolverState *state);
 
 /* External declarations — iteration + Phase I helpers (phase_loop.c) */
-extern int cxf_log_iteration_progress(SolverState *state, CxfEnv *env);
+extern int cxf_simplex_step(SolverState *state, CxfEnv *env);
 extern int cxf_check_phase_one_end(SolverState *state, CxfModel *model,
                                    CxfEnv *env);
 
@@ -100,7 +100,7 @@ int cxf_solve_lp(CxfModel *model) {
             state->use_bland = 1;
 
         /* Single iteration step (pricing + FTRAN + ratio test + pivot) */
-        int status = cxf_log_iteration_progress(state, env);
+        int status = cxf_simplex_step(state, env);
 
         if (status == ITERATE_OPTIMAL) {
             if (state->phase == 1) {

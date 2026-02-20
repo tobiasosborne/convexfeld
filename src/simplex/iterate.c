@@ -1,27 +1,37 @@
 /**
  * @file iterate.c
- * @brief Iteration progress logging (v2 P3.20 — thin wrapper)
+ * @brief Iteration progress logging (v2 P3.20)
  *
- * Currently delegates to cxf_simplex_step() in step.c.
- * A2 (convexfeld-qh9y) will convert this to logging-only.
+ * Reports presolve/iteration progress to the log and invokes
+ * the external monitoring callback. No iteration logic — that
+ * lives in cxf_simplex_step() in step.c.
  *
  * Spec: docs/specs-v2/specs/modules/simplex_iteration.md
  */
 
 #include "convexfeld/cxf_solver.h"
-#include "convexfeld/cxf_env.h"
+#include "convexfeld/cxf_model.h"
 #include "convexfeld/cxf_types.h"
 
-/* The real iteration engine is now in step.c */
-extern int cxf_simplex_step(SolverState *state, CxfEnv *env);
-
 /**
- * @brief Perform one simplex iteration (thin wrapper).
+ * @brief Report iteration progress (v2 logging-only).
  *
- * All iteration logic has been moved to cxf_simplex_step() in step.c.
- * This wrapper preserves the existing call interface for callers
- * (solve_lp.c, phase_loop.c) until A2 converts them.
+ * V2 spec signature: (CxfModel *model, SolverState *state) -> void.
+ * Steps:
+ *   1. If logging disabled on model, skip to step 4.
+ *   2. Time throttle: at most one message per normalized second.
+ *   3. Format and emit progress message.
+ *   4. Invoke external monitoring callback unconditionally.
+ *
+ * Currently a no-op stub. Full implementation requires:
+ *   - Logging infrastructure (convexfeld-1lkf)
+ *   - Callback system wiring
+ *
+ * @param model  Model with logging config and thread count
+ * @param state  Solver state with timing and progress data
  */
-int cxf_log_iteration_progress(SolverState *state, CxfEnv *env) {
-    return cxf_simplex_step(state, env);
+void cxf_log_iteration_progress(CxfModel *model, SolverState *state) {
+    (void)model;
+    (void)state;
+    /* TODO: Implement when logging infrastructure (convexfeld-1lkf) lands */
 }
