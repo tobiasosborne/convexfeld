@@ -12,8 +12,8 @@
 #include <math.h>
 
 /* External declarations */
-extern int cxf_simplex_step(SolverState *state, int entering, int leavingRow,
-                            const double *pivotCol, double stepSize);
+extern int cxf_apply_pivot(SolverState *state, int entering, int leavingRow,
+                           const double *pivotCol, double stepSize);
 extern int cxf_pivot_with_eta(BasisState *basis, int pivotRow,
                               const double *pivotCol, int enteringVar,
                               int leavingVar);
@@ -91,7 +91,7 @@ int cxf_simplex_step2(SolverState *state, int entering, int leavingRow,
     }
 
     /* No bound flip: perform standard pivot */
-    result = cxf_simplex_step(state, entering, leavingRow, pivotCol, stepSize);
+    result = cxf_apply_pivot(state, entering, leavingRow, pivotCol, stepSize);
     if (result != CXF_OK) {
         return result;
     }
