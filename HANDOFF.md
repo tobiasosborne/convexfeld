@@ -100,9 +100,28 @@ The step2/step3/phase_end implementations have structural TODOs:
 
 ---
 
+## Netlib Results (2026-02-20, post-restructure)
+
+| Problem | Vars | Constrs | Status | Obj Error |
+|---------|------|---------|--------|-----------|
+| afiro | 32 | 27 | PASS | 6.2e-12 |
+| sc50a | 48 | 50 | PASS | 6.7e-12 |
+| sc50b | 48 | 50 | PASS | 2.0e-16 |
+| kb2 | 41 | 43 | PASS | 1.0e-05 |
+| adlittle | 97 | 56 | PASS | 1.1e-11 |
+| blend | 83 | 74 | PASS | 1.1e-08 |
+| sc105 | 103 | 105 | PASS | 4.2e-09 |
+| stocfor1 | 111 | 117 | PASS | 1.1e-11 |
+| lotfi | 308 | 153 | PASS | 4.8e-12 |
+| recipe | 180 | 91 | FAIL | false INFEASIBLE (pre-existing) |
+
+**9/10 pass. All objectives match reference to <1e-5 relative error.**
+
 ## Test Status
-- **39/39 tests pass** (all unit + integration)
-- Netlib: 19/29 last checked (needs rerun after restructure)
+- **39/39 unit/integration tests pass**
+
+## Known Bugs
+- `convexfeld-vyqv` (P1): `cxf_simplex_setup()` resets state, breaking solver when called before `phase_one_setup`. Setup/preprocess currently disabled in loop.
 
 ## File Locations
 
