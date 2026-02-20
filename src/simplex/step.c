@@ -277,7 +277,17 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env) {
     double *column = state->work_column;
     if (!pivotCol || !column) return CXF_ERROR_OUT_OF_MEMORY;
 
-    /*--- Phase 1: Pricing — select entering variable ---*/
+    /*--- Phase 1: Tolerance selection (v2 P3.20 multi-tier) ---*/
+    double pricing_tol = env->optimality_tol;
+    if (state->pricing) {
+        int level = state->pricing->current_level;
+        if (level == 0)
+            pricing_tol = env->optimality_tol * 10.0;  /* Loose: fast */
+        else if (level >= 2)
+            pricing_tol = env->optimality_tol * 0.1;   /* Tight: precise */
+    }
+
+    /*--- Phase 2: Pricing — select entering variable ---*/
     int candidates[MAX_CANDIDATES];
     int num_cand = 0;
 
@@ -288,16 +298,16 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env) {
                 continue;
             double rc = state->work_dj[j];
             if (basis->var_status[j] == CXF_VAR_AT_LOWER &&
-                rc < -env->optimality_tol)
+                rc < -pricing_tol)
                 candidates[num_cand++] = j;
             else if (basis->var_status[j] == CXF_VAR_AT_UPPER &&
-                     rc > env->optimality_tol)
+                     rc > pricing_tol)
                 candidates[num_cand++] = j;
         }
     } else if (state->pricing) {
         num_cand = cxf_pricing_candidates(
             state->pricing, state->work_dj, basis->var_status,
-            total, env->optimality_tol, candidates, MAX_CANDIDATES);
+            total, pricing_tol, candidates, MAX_CANDIDATES);
         /* Filter FIXED variables */
         int k2 = 0;
         for (int k = 0; k < num_cand; k++) {
@@ -307,7 +317,7 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env) {
         }
         num_cand = k2;
     } else {
-        double best = -env->optimality_tol;
+        double best = -pricing_tol;
         for (int j = 0; j < total; j++) {
             if (basis->var_status[j] >= 0) continue;
             if (state->work_ub[j] <= state->work_lb[j] + CXF_FEASIBILITY_TOL)
