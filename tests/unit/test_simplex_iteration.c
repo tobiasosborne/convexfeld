@@ -14,8 +14,6 @@
 
 /* External declarations */
 int cxf_simplex_step(SolverState *state, CxfEnv *env);
-int cxf_simplex_phase_end(SolverState *state, CxfEnv *env);
-int cxf_simplex_post_iterate(SolverState *state, CxfEnv *env);
 double cxf_simplex_get_objval(SolverState *state);
 int cxf_simplex_set_iteration_limit(SolverState *state, int limit);
 int cxf_simplex_get_iteration_limit(SolverState *state);
@@ -78,27 +76,32 @@ void test_simplex_iterate_increments_iteration(void) {
 
 /* Phase transition tests */
 void test_phase_end_null_args_fail(void) {
-    TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT, cxf_simplex_phase_end(NULL, env));
+    TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT,
+                          cxf_simplex_phase_end(NULL, env, 0));
     cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x");
     SolverState *state = NULL;
     cxf_simplex_init(model, &state);
     cxf_simplex_setup(state, env);
     state->phase = 1;
-    TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT, cxf_simplex_phase_end(state, NULL));
+    TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT,
+                          cxf_simplex_phase_end(state, NULL, 0));
     cxf_simplex_final(state);
 }
 
 void test_phase_end_transitions_to_phase2(void) {
+    /* Phase I→II transition is handled by cxf_check_phase_one_end
+     * in the orchestrator, not by phase_end. phase_end does constraint
+     * cleanup (Phase II only). Verify it's a no-op during Phase I. */
     cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x");
     SolverState *state = NULL;
     cxf_simplex_init(model, &state);
     cxf_simplex_setup(state, env);
     state->phase = 1;
-    state->obj_value = 0.0;  /* Feasible end of Phase I */
+    state->obj_value = 0.0;
 
-    int status = cxf_simplex_phase_end(state, env);
-    TEST_ASSERT_EQUAL_INT(0, status);  /* 0 = transition to Phase II */
-    TEST_ASSERT_EQUAL_INT(2, state->phase);
+    int status = cxf_simplex_phase_end(state, env, 0);
+    TEST_ASSERT_EQUAL_INT(CXF_OK, status);
+    TEST_ASSERT_EQUAL_INT(1, state->phase);  /* Still Phase I */
 
     cxf_simplex_final(state);
 }
@@ -109,17 +112,21 @@ void test_phase_end_infeasible_returns_error(void) {
     cxf_simplex_init(model, &state);
     cxf_simplex_setup(state, env);
     state->phase = 1;
-    state->obj_value = 1.0;  /* Positive infeasibility = no feasible solution */
+    state->obj_value = 1.0;  /* Positive = still infeasible */
 
-    int status = cxf_simplex_phase_end(state, env);
-    TEST_ASSERT_EQUAL_INT(2, status);  /* 2 = infeasible */
+    /* phase_end with Phase I obj > tol should NOT transition;
+     * infeasibility is detected by the orchestrator, not phase_end */
+    int status = cxf_simplex_phase_end(state, env, 0);
+    TEST_ASSERT_EQUAL_INT(CXF_OK, status);
+    TEST_ASSERT_EQUAL_INT(1, state->phase);  /* Still Phase I */
 
     cxf_simplex_final(state);
 }
 
 /* Termination condition tests */
 void test_post_iterate_null_state_fails(void) {
-    TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT, cxf_simplex_post_iterate(NULL, env));
+    TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT,
+                          cxf_simplex_post_iterate(NULL, env, NULL));
 }
 
 void test_post_iterate_returns_continue_or_refactor(void) {
@@ -128,8 +135,8 @@ void test_post_iterate_returns_continue_or_refactor(void) {
     cxf_simplex_init(model, &state);
     cxf_simplex_setup(state, env);
 
-    int status = cxf_simplex_post_iterate(state, env);
-    /* 0 = continue, 1 = refactor triggered */
+    int stall = 0;
+    int status = cxf_simplex_post_iterate(state, env, &stall);
     TEST_ASSERT_TRUE(status == 0 || status == 1);
 
     cxf_simplex_final(state);

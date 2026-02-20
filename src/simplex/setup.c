@@ -118,8 +118,8 @@ static int init_pricing(SolverState *state) {
  * @param count  Number of constraint indices to update (0 = all)
  * @param indices  Constraint indices to update (NULL = all)
  */
-static void compute_activity_bounds(SolverState *state, int count,
-                                    const int *indices) {
+void cxf_compute_activity_bounds(SolverState *state, int count,
+                                 const int *indices) {
     CxfModel *model = state->model_ref;
     if (model == NULL || model->matrix == NULL) return;
     if (state->min_activity == NULL || state->max_activity == NULL) return;
@@ -265,7 +265,7 @@ int cxf_simplex_setup(SolverState *state, CxfEnv *env) {
     }
 
     /* Compute initial activity bounds (v2 C1) */
-    compute_activity_bounds(state, 0, NULL);
+    cxf_compute_activity_bounds(state, 0, NULL);
 
     /* Reset eta tracking */
     state->eta_count = 0;
@@ -338,7 +338,7 @@ int cxf_simplex_preprocess(SolverState *state, CxfEnv *env, int flags) {
 
     /* Recompute activity bounds after fixing */
     if (state->cols_eliminated > 0) {
-        compute_activity_bounds(state, 0, NULL);
+        cxf_compute_activity_bounds(state, 0, NULL);
     }
 
     return CXF_OK;

@@ -180,20 +180,23 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env);
 void cxf_log_iteration_progress(CxfModel *model, SolverState *state);
 
 /**
- * @brief Handle phase end transition (stub - to be implemented in M7.1.2).
- * @param state Solver context
- * @param env Environment
- * @return CXF_OK on success, error code otherwise
+ * @brief Phase-end processing: constraint cleanup + Phase I→II (v2 P3.21).
+ * @param state   Solver context
+ * @param env     Environment with tolerances
+ * @param doScan  Enable small-contribution variable scanning
+ * @return CXF_OK on success, CXF_INFEASIBLE on dual infeasibility
  */
-int cxf_simplex_phase_end(SolverState *state, CxfEnv *env);
+int cxf_simplex_phase_end(SolverState *state, CxfEnv *env, int doScan);
 
 /**
- * @brief Post-iteration processing (stub - to be implemented in M7.1.2).
- * @param state Solver context
- * @param env Environment
- * @return CXF_OK on success, error code otherwise
+ * @brief Post-iteration monitoring: stall, stagnation, limits (v2 P3.20).
+ * @param state    Solver context
+ * @param env      Environment
+ * @param outStall Output: 1 if stalling detected, 0 otherwise (may be NULL)
+ * @return 0 to continue, termination code to stop
  */
-int cxf_simplex_post_iterate(SolverState *state, CxfEnv *env);
+int cxf_simplex_post_iterate(SolverState *state, CxfEnv *env,
+                             int *outStall);
 
 /**
  * @brief Get current objective value (stub - to be implemented).
