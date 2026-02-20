@@ -6,7 +6,7 @@
  * handling both Phase I (feasibility) and Phase II (optimality).
  * Phase transition is managed inline via feasibility checking.
  *
- * V2 flow: init → crash → phase_one_setup → unified loop → refine
+ * V2 flow: init → crash → setup → preprocess → phase_one_setup → loop → refine
  *
  * Spec: docs/specs-v2/specs/modules/simplex_phases.md
  */
@@ -92,6 +92,11 @@ int cxf_solve_lp(CxfModel *model) {
 
     /* V2: Crash basis (P2.5) */
     cxf_simplex_crash(state, env);
+
+    /* V2: Setup activity bounds (C1) + preprocess near-bound vars (C2) */
+    cxf_simplex_setup(state, env);
+    rc = cxf_simplex_preprocess(state, env, 0);
+    if (rc != CXF_OK) { model->status = rc; cxf_simplex_final(state); return rc; }
 
     /* Phase I setup: artificial variables + surrogate objective */
     rc = cxf_setup_phase_one(state);

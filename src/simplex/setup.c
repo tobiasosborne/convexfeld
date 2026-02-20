@@ -8,6 +8,7 @@
  */
 
 #include "convexfeld/cxf_solver.h"
+#include "convexfeld/cxf_basis.h"
 #include "convexfeld/cxf_env.h"
 #include "convexfeld/cxf_model.h"
 #include "convexfeld/cxf_matrix.h"
@@ -279,57 +280,59 @@ int cxf_simplex_setup(SolverState *state, CxfEnv *env) {
 }
 
 /**
- * @brief Preprocess the LP problem.
+ * @brief Preprocess: fix near-bound variables (v2 P3.21).
  *
- * Performs preprocessing reductions:
- * - Fixed variable elimination (lb = ub)
- * - Bound propagation (if matrix available)
- * - Geometric mean scaling
+ * Scans variables with tight bound range (ub - lb < threshold).
+ * Fixes them at the closest bound, updates activity bounds.
  *
  * @param state Solver context
- * @param env Environment
+ * @param env   Environment with feasibility_tol
  * @param flags Control flags (bit 0: skip if set)
- * @return CXF_OK on success, 3=infeasible
+ * @return 0 on success, CXF_INFEASIBLE if lb > ub
  */
 int cxf_simplex_preprocess(SolverState *state, CxfEnv *env, int flags) {
     if (state == NULL || env == NULL) {
         return CXF_ERROR_NULL_ARGUMENT;
     }
 
-    /* Check if preprocessing disabled via flags */
-    if (flags & 1) {
-        return CXF_OK;
-    }
+    if (flags & 1) return CXF_OK;
 
     int n = state->num_vars;
     double feas_tol = env->feasibility_tol;
     if (feas_tol <= 0.0) feas_tol = DEFAULT_FEASIBILITY_TOL;
+    double tightness = 10.0 * feas_tol;
 
     double *lb = state->work_lb;
     double *ub = state->work_ub;
+    if (n == 0 || lb == NULL || ub == NULL) return CXF_OK;
 
-    if (n == 0 || lb == NULL || ub == NULL) {
-        return CXF_OK;
-    }
-
-    /* Fixed variable handling: check for infeasibility */
     for (int j = 0; j < n; j++) {
+        /* Infeasibility check */
         if (lb[j] > ub[j] + feas_tol) {
-            return 3;  /* Infeasible */
+            return CXF_INFEASIBLE;
+        }
+
+        /* Skip non-tight variables */
+        double range = ub[j] - lb[j];
+        if (range > tightness) continue;
+
+        /* Fix at closest bound */
+        if (state->basis != NULL && state->basis->var_status != NULL &&
+            state->basis->var_status[j] < 0) {
+            double x_j = (state->work_x != NULL) ? state->work_x[j] : lb[j];
+            double target = (fabs(x_j - lb[j]) <= fabs(x_j - ub[j])) ?
+                            lb[j] : ub[j];
+            if (state->work_x != NULL) state->work_x[j] = target;
+            lb[j] = target;
+            ub[j] = target;
+            state->cols_eliminated++;
         }
     }
 
-    /*
-     * Note: Full preprocessing (singleton elimination, bound propagation)
-     * requires constraint matrix access. The current codebase has stub
-     * constraint handling. For now, we do minimal preprocessing.
-     *
-     * Future implementation should:
-     * 1. Eliminate fixed variables (lb = ub within tolerance)
-     * 2. Process singleton rows
-     * 3. Propagate bounds iteratively
-     * 4. Apply geometric mean scaling
-     */
+    /* Recompute activity bounds after fixing */
+    if (state->cols_eliminated > 0) {
+        compute_activity_bounds(state, 0, NULL);
+    }
 
     return CXF_OK;
 }

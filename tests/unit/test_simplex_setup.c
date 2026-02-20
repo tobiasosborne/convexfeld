@@ -236,7 +236,7 @@ void test_preprocess_detects_infeasible_bounds(void) {
     cxf_simplex_init(model, &state);
 
     int status = cxf_simplex_preprocess(state, env, 0);
-    TEST_ASSERT_EQUAL_INT(3, status);  /* 3 = infeasible */
+    TEST_ASSERT_EQUAL_INT(CXF_INFEASIBLE, status);
 
     cxf_simplex_final(state);
 }
@@ -250,7 +250,7 @@ void test_preprocess_multiple_vars_one_infeasible(void) {
     cxf_simplex_init(model, &state);
 
     int status = cxf_simplex_preprocess(state, env, 0);
-    TEST_ASSERT_EQUAL_INT(3, status);  /* Should detect infeasibility */
+    TEST_ASSERT_EQUAL_INT(CXF_INFEASIBLE, status);
 
     cxf_simplex_final(state);
 }
