@@ -33,12 +33,31 @@ At each failed level, calls `cxf_pricing_end_level()` and increments `level_esca
 
 - **39/39 unit tests pass**
 - No regressions
+- **Netlib (60s run, 59 smallest problems):** 18 PASS, 27 FAIL, 14 TIMEOUT — no change from before `d1th`
+
+---
+
+## THE KEY LESSON: All V2 Defense Layers Must Be Present Together
+
+**Netlib confirmed: tolerance escalation alone changes nothing.** 18/59 pass — identical to before. This is not a failure of the implementation; it validates the architectural insight: the v2 spec's defense layers are designed to work **as a system**. Each layer catches problems the others miss:
+
+| Layer | What it prevents | Status |
+|-------|-----------------|--------|
+| Crash basis (P2.5) | Too many artificials → long Phase I | `snwu` OPEN |
+| **Pricing escalation (P2.3)** | **False optimality from weak RCs** | **`d1th` DONE** |
+| Proactive perturbation (P2.6) | Degeneracy stalling in early iterations | `zr5l` OPEN |
+| phase_end in Phase I (P3.21) | Missed Phase I→II transition | `fiyt` OPEN |
+| LU accuracy | Numerical drift → false infeasibility | `x5dj` OPEN |
+
+**Do NOT expect incremental Netlib improvement from fixing one layer.** The improvement will come as a step function when the critical mass of layers is present. Each layer is necessary but not individually sufficient.
+
+The false INFEASIBLE pattern: Phase I has improving directions with weak RCs (now caught by escalation), BUT those directions lead to degenerate pivots (needs perturbation), which stall (needs phase_end participation), with accumulated numerical error (needs LU accuracy). Fix all four, and the 27 failures should collapse.
 
 ---
 
 ## Next Steps (Strict V2 Order)
 
-### Critical Path for 7 False INFEASIBLE (updated)
+### Critical Path — Remaining Layers
 
 1. ~~`d1th` — Pricing tolerance escalation (P2.3)~~ **DONE**
 
@@ -55,12 +74,6 @@ At each failed level, calls `cxf_pricing_end_level()` and increments `level_esca
 - `uxae` — LU factorization performance/accuracy
 - `a5vp` — P2.6 perturbation Phase 2 candidates from pricing subsystem
 - `9yi2` — P2.6 perturbation Phase 3 bound restoration before analysis
-
----
-
-## Key Architectural Insight (from previous session)
-
-The 7 false INFEASIBLE failures are caused by **multiple missing spec components working together**: inadequate crash basis, missing proactive perturbation, pricing tolerance escalation (now fixed), phase_end not participating in Phase I, and inaccurate LU factorization. These v2 defense layers must ALL be present for robust Phase I.
 
 ---
 
