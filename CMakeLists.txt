@@ -116,6 +116,7 @@ target_sources(convexfeld PRIVATE
     src/simplex/cleanup.c
     src/simplex/quadratic.c
     src/simplex/pivot_special.c
+    src/simplex/pivot_update.c
     src/simplex/presolve.c
     src/simplex/phase_one.c
     src/simplex/reduced_costs.c
