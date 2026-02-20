@@ -45,8 +45,14 @@ extern int cxf_setup_phase_one(SolverState *state);
 extern int cxf_transition_to_phase_two(SolverState *state, CxfModel *model);
 extern void cxf_compute_reduced_costs(SolverState *state);
 
-/* External declarations — iteration + Phase I helpers (phase_loop.c) */
+/* External declarations — v2 iteration loop (P3.20) */
 extern int cxf_simplex_step(SolverState *state, CxfEnv *env);
+extern int cxf_simplex_step2(SolverState *state, CxfEnv *env);
+extern int cxf_simplex_step3(SolverState *state, CxfEnv *env);
+extern void cxf_log_iteration_progress(CxfModel *model, SolverState *state);
+extern int cxf_simplex_post_iterate(SolverState *state, CxfEnv *env);
+
+/* External declarations — Phase I helpers (phase_loop.c) */
 extern int cxf_check_phase_one_end(SolverState *state, CxfModel *model,
                                    CxfEnv *env);
 
@@ -92,22 +98,28 @@ int cxf_solve_lp(CxfModel *model) {
     if (rc != CXF_OK) { model->status = rc; cxf_simplex_final(state); return rc; }
     cxf_compute_reduced_costs(state);
 
-    /* ===== Unified iteration loop (v2 — P3.25) ===== */
+    /* ===== Unified iteration loop (v2 — P3.25 Phase 6) ===== */
     while (state->iteration < state->max_iterations) {
         /* Anti-cycling: Bland's rule fallback */
         if (!state->use_bland &&
             state->iteration > 3 * state->num_constrs)
             state->use_bland = 1;
 
-        /* Single iteration step (pricing + FTRAN + ratio test + pivot) */
+        /* (1) Progress logging + callback */
+        cxf_log_iteration_progress(model, state);
+
+        /* (2) Stall-triggered perturbation (P2.6 EXPAND) */
+        if (state->degenerate_count > STALL_THRESHOLD)
+            cxf_simplex_perturbation(state, env);
+
+        /* (3) Main simplex pivot */
         int status = cxf_simplex_step(state, env);
 
         if (status == ITERATE_OPTIMAL) {
             if (state->phase == 1) {
-                /* Phase I optimal → check feasibility, maybe transition */
                 rc = cxf_check_phase_one_end(state, model, env);
-                if (rc == CXF_OK) continue;    /* → Phase II, keep going */
-                if (rc == 1) continue;          /* Improving dir exists */
+                if (rc == CXF_OK) continue;
+                if (rc == 1) continue;
                 model->status = CXF_INFEASIBLE;
                 break;
             }
@@ -124,9 +136,17 @@ int cxf_solve_lp(CxfModel *model) {
             model->status = status; break;
         }
 
-        /* V2: Stall-triggered perturbation (P2.6 EXPAND) */
-        if (state->degenerate_count > STALL_THRESHOLD)
-            cxf_simplex_perturbation(state, env);
+        /* (4) Variable-side bound propagation */
+        status = cxf_simplex_step2(state, env);
+        if (status != 0) { model->status = status; break; }
+
+        /* (5) Constraint-side bound propagation (LP only) */
+        status = cxf_simplex_step3(state, env);
+        if (status != 0) { model->status = status; break; }
+
+        /* (6) Post-iterate: stall detection, termination checks */
+        status = cxf_simplex_post_iterate(state, env);
+        if (status < 0) { model->status = status; break; }
     }
 
     if (state->iteration >= state->max_iterations)
