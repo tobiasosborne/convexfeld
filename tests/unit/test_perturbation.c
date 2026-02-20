@@ -124,8 +124,8 @@ void test_perturb_removes_degenerate_nonbasic(void) {
     int rc = cxf_simplex_perturbation(state, env);
 
     TEST_ASSERT_EQUAL_INT(CXF_OK, rc);
-    /* x0 should be FIXED (near-zero RC, degenerate) */
-    TEST_ASSERT_EQUAL_INT(CXF_VAR_FIXED, basis->var_status[0]);
+    /* x0 should be AT_UPPER (v2: degenerate vars flipped, not FIXED) */
+    TEST_ASSERT_EQUAL_INT(CXF_VAR_AT_UPPER, basis->var_status[0]);
     /* x1 stays AT_LOWER (large positive RC, not near-zero, not negative) */
     TEST_ASSERT_EQUAL_INT(CXF_VAR_AT_LOWER, basis->var_status[1]);
     TEST_ASSERT_TRUE(state->perturb_count >= 1);
