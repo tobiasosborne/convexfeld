@@ -277,58 +277,82 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env) {
     double *column = state->work_column;
     if (!pivotCol || !column) return CXF_ERROR_OUT_OF_MEMORY;
 
-    /*--- Phase 1: Tolerance selection (v2 P3.20 multi-tier) ---*/
-    double pricing_tol = env->optimality_tol;
-    if (state->pricing) {
-        int level = state->pricing->current_level;
-        if (level == 0)
-            pricing_tol = env->optimality_tol * 10.0;  /* Loose: fast */
-        else if (level >= 2)
-            pricing_tol = env->optimality_tol * 0.1;   /* Tight: precise */
-    }
-
-    /*--- Phase 2: Pricing — select entering variable ---*/
+    /*--- Phase 1+2: Multi-level pricing with tolerance escalation ---
+     * v2 P2.3 Phase 5 + P3.20 Phase 1-2
+     *
+     * Level 0 (loose):    optimality_tol * 10 — fast, only strong RCs
+     * Level 1 (standard): optimality_tol      — moderate
+     * Level 2 (tight):    optimality_tol * 0.1 — catches weak RCs
+     *
+     * Only declare ITERATE_OPTIMAL when ALL levels return 0 candidates.
+     *-------------------------------------------------------------------*/
     int candidates[MAX_CANDIDATES];
     int num_cand = 0;
 
-    if (state->use_bland) {
-        for (int j = 0; j < total && num_cand < MAX_CANDIDATES; j++) {
-            if (basis->var_status[j] >= 0) continue;
-            if (state->work_ub[j] <= state->work_lb[j] + CXF_FEASIBILITY_TOL)
-                continue;
-            double rc = state->work_dj[j];
-            if (basis->var_status[j] == CXF_VAR_AT_LOWER &&
-                rc < -pricing_tol)
-                candidates[num_cand++] = j;
-            else if (basis->var_status[j] == CXF_VAR_AT_UPPER &&
-                     rc > pricing_tol)
-                candidates[num_cand++] = j;
-        }
-    } else if (state->pricing) {
-        num_cand = cxf_pricing_candidates(
-            state->pricing, state->work_dj, basis->var_status,
-            total, pricing_tol, candidates, MAX_CANDIDATES);
-        /* Filter FIXED variables */
-        int k2 = 0;
-        for (int k = 0; k < num_cand; k++) {
-            int j = candidates[k];
-            if (state->work_ub[j] > state->work_lb[j] + CXF_FEASIBILITY_TOL)
-                candidates[k2++] = j;
-        }
-        num_cand = k2;
-    } else {
-        double best = -pricing_tol;
-        for (int j = 0; j < total; j++) {
-            if (basis->var_status[j] >= 0) continue;
-            if (state->work_ub[j] <= state->work_lb[j] + CXF_FEASIBILITY_TOL)
-                continue;
-            double rc = state->work_dj[j];
-            if (basis->var_status[j] == CXF_VAR_AT_LOWER && rc < best) {
-                best = rc; candidates[0] = j; num_cand = 1;
-            } else if (basis->var_status[j] == CXF_VAR_AT_UPPER &&
-                       -rc < best) {
-                best = -rc; candidates[0] = j; num_cand = 1;
+    for (int level = 0; level <= 2; level++) {
+        if (state->pricing)
+            cxf_pricing_set_level(state->pricing, level);
+
+        /* Tolerance selection per level (v2 P3.20 Phase 1) */
+        double pricing_tol;
+        if (level == 0)
+            pricing_tol = env->optimality_tol * 10.0;
+        else if (level == 1)
+            pricing_tol = env->optimality_tol;
+        else
+            pricing_tol = env->optimality_tol * 0.1;
+
+        num_cand = 0;
+        if (state->use_bland) {
+            for (int j = 0; j < total && num_cand < MAX_CANDIDATES; j++) {
+                if (basis->var_status[j] >= 0) continue;
+                if (state->work_ub[j] <=
+                    state->work_lb[j] + CXF_FEASIBILITY_TOL)
+                    continue;
+                double rc = state->work_dj[j];
+                if (basis->var_status[j] == CXF_VAR_AT_LOWER &&
+                    rc < -pricing_tol)
+                    candidates[num_cand++] = j;
+                else if (basis->var_status[j] == CXF_VAR_AT_UPPER &&
+                         rc > pricing_tol)
+                    candidates[num_cand++] = j;
             }
+        } else if (state->pricing) {
+            num_cand = cxf_pricing_candidates(
+                state->pricing, state->work_dj, basis->var_status,
+                total, pricing_tol, candidates, MAX_CANDIDATES);
+            int k2 = 0;
+            for (int k = 0; k < num_cand; k++) {
+                int j = candidates[k];
+                if (state->work_ub[j] >
+                    state->work_lb[j] + CXF_FEASIBILITY_TOL)
+                    candidates[k2++] = j;
+            }
+            num_cand = k2;
+        } else {
+            double best = -pricing_tol;
+            for (int j = 0; j < total; j++) {
+                if (basis->var_status[j] >= 0) continue;
+                if (state->work_ub[j] <=
+                    state->work_lb[j] + CXF_FEASIBILITY_TOL)
+                    continue;
+                double rc = state->work_dj[j];
+                if (basis->var_status[j] == CXF_VAR_AT_LOWER &&
+                    rc < best) {
+                    best = rc; candidates[0] = j; num_cand = 1;
+                } else if (basis->var_status[j] == CXF_VAR_AT_UPPER &&
+                           -rc < best) {
+                    best = -rc; candidates[0] = j; num_cand = 1;
+                }
+            }
+        }
+
+        if (num_cand > 0) break;
+
+        /* End this level before escalating (v2 P2.3 Phase 5) */
+        if (state->pricing) {
+            cxf_pricing_end_level(state->pricing);
+            state->pricing->level_escalations++;
         }
     }
 

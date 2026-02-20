@@ -4,48 +4,43 @@
 
 ---
 
-## STATUS: Strict v2 spec audit — removed bandaids, registered 6 spec-gap issues
+## STATUS: `d1th` DONE — pricing tolerance escalation implemented per v2 P2.3/P3.20
 
 ### Session Summary
 
-**Deep research round + strict v2 audit.** Investigated the 7 false INFEASIBLE Netlib failures. Attempted multiple fix approaches (recovery loops, direct bound perturbation, proactive perturbation, tolerance tightening) — all were bandaids that don't match the spec. Reverted everything non-compliant. Applied only 2 spec-compliant fixes. Registered 6 issues for the real spec gaps that cause the failures.
-
-### Key Insight
-
-The 7 false INFEASIBLE failures are NOT caused by bugs in perturbation.c or solve_lp.c. Those functions are mostly correct per spec. The failures are caused by **multiple missing spec components working together**: inadequate crash basis, missing proactive perturbation, no pricing tolerance escalation, phase_end not participating in Phase I, and inaccurate LU factorization. Fixing any one component alone won't help — the v2 defense layers must ALL be present.
+**Implemented multi-level pricing tolerance escalation** in `cxf_simplex_step()`. This was the #1 item in the critical path for 7 false INFEASIBLE Netlib failures. Previously, when pricing found 0 candidates at the loose tolerance (level 0), the function immediately returned ITERATE_OPTIMAL. Now it escalates through 3 tolerance tiers before declaring optimality.
 
 ### Changes This Session
 
 | File | Change | Spec Basis |
 |------|--------|------------|
-| `phase_loop.c` | Remove 0.01 tolerance floor in Phase I check | P3.21: use feasibility_tol |
-| `perturbation.c` | Mark degenerate basic vars dirty in pricing | P2.6 Case B: remove from pricing |
+| `step.c` lines 280-359 | Wrap pricing Phases 1+2 in level escalation loop (0→1→2) | P2.3 Phase 5 + P3.20 Phase 1-2 |
 
-### Issues Created
+**Detail:** The pricing scan in `cxf_simplex_step` now loops over 3 levels with decreasing tolerance thresholds:
+- Level 0 (loose): `optimality_tol * 10` — only strongly attractive RCs
+- Level 1 (standard): `optimality_tol` — moderately attractive RCs
+- Level 2 (tight): `optimality_tol * 0.1` — catches weak RCs near zero
 
-| ID | Priority | Title |
-|----|----------|-------|
-| `a5vp` | P2 | P2.6: perturbation Phase 2 should retrieve candidates from pricing subsystem |
-| `9yi2` | P2 | P2.6: perturbation Phase 3 bound restoration before analysis |
-| `x5dj` | P1 | P3.21: correct_basic_variables should use basis factorization not manual iteration |
-| `zr5l` | P1 | P2.6: proactive perturbation in early iterations not implemented |
-| `fiyt` | P2 | P3.21: phase_end not participating in Phase I transition detection |
-| `d1th` | P1 | P2.3: multi-level pricing tolerance escalation incomplete |
+At each failed level, calls `cxf_pricing_end_level()` and increments `level_escalations` counter. Only declares ITERATE_OPTIMAL when ALL 3 levels return 0 candidates. All 3 pricing paths (Bland, pricing subsystem, fallback scan) benefit from escalation.
+
+### Issues Closed
+
+| ID | Title |
+|----|-------|
+| `d1th` | P2.3: multi-level pricing tolerance escalation incomplete |
 
 ### Test Results
 
 - **39/39 unit tests pass**
-- Netlib status unchanged (the 2 changes are correctness fixes, not behavior changes for the failing problems)
+- No regressions
 
 ---
 
 ## Next Steps (Strict V2 Order)
 
-### Critical Path for 7 False INFEASIBLE
+### Critical Path for 7 False INFEASIBLE (updated)
 
-The failures need multiple spec components implemented together. Recommended order based on spec dependencies:
-
-1. **`d1th` — Pricing tolerance escalation (P2.3)** — When step() finds 0 candidates at level 0 (loose), try level 1 (standard), then level 2+ (tight). Currently returns ITERATE_OPTIMAL immediately. This alone could unblock some Phase I problems where improving RCs exist but are below the loose tolerance.
+1. ~~`d1th` — Pricing tolerance escalation (P2.3)~~ **DONE**
 
 2. **`zr5l` — Proactive perturbation (P2.6)** — Apply perturbation in first 1-2 inner iterations of round 0. Challenge: Mechanism B (nonbasic flipping) must not flip all original variables before meaningful RCs exist. May need to split perturbation into basic-only (proactive) and full (reactive).
 
@@ -58,22 +53,14 @@ The failures need multiple spec components implemented together. Recommended ord
 - `snwu` — Crash basis (P2.5) — better initial basis reduces Phase I iterations
 - `1azn` — EXPAND perturbation — tracked separately
 - `uxae` — LU factorization performance/accuracy
+- `a5vp` — P2.6 perturbation Phase 2 candidates from pricing subsystem
+- `9yi2` — P2.6 perturbation Phase 3 bound restoration before analysis
 
 ---
 
-## Lessons Learned This Session
+## Key Architectural Insight (from previous session)
 
-### Don't bandaid the orchestrator — fix the components
-
-Spent significant time adding "recovery loops" to solve_lp.c (refactorize → perturbation → Bland → tolerance tightening). None of it is in the spec. The spec says: if Phase I reaches optimality with infeasibility > 0, it's INFEASIBLE. The real issue is that Phase I shouldn't be reaching false optimality in the first place — that's caused by missing components (pricing escalation, proactive perturbation, phase_end participation).
-
-### The spec's perturbation is candidate removal, not bound modification
-
-P2.6 explicitly says: "Instead of perturbing bounds globally, the algorithm removes individual degenerate candidates from the pricing set. This is equivalent to perturbation." Direct bound modification (the "Mechanism A" I tried) is NOT in the spec and caused test regressions.
-
-### The 0.01 tolerance floor was hiding real issues
-
-`fmax(env->feasibility_tol, 0.01)` let problems with residual infeasibility up to 0.01 transition to Phase II. Some currently-passing problems may rely on this. Removing it is correct per spec — the tolerance should be `env->feasibility_tol`.
+The 7 false INFEASIBLE failures are caused by **multiple missing spec components working together**: inadequate crash basis, missing proactive perturbation, pricing tolerance escalation (now fixed), phase_end not participating in Phase I, and inaccurate LU factorization. These v2 defense layers must ALL be present for robust Phase I.
 
 ---
 
@@ -81,10 +68,10 @@ P2.6 explicitly says: "Instead of perturbing bounds globally, the algorithm remo
 
 | Item | Path |
 |---|---|
+| step.c (pricing + BFRT + **escalation**) | `src/simplex/step.c` |
 | perturbation.c (EXPAND, P2.6) | `src/simplex/perturbation.c` |
 | phase_loop.c (Phase I/II loops) | `src/simplex/phase_loop.c` |
 | solve_lp.c (v2 orchestrator) | `src/simplex/solve_lp.c` |
-| step.c (pricing + BFRT) | `src/simplex/step.c` |
 | candidates.c (pricing candidates) | `src/pricing/candidates.c` |
 | queue.c (pricing levels) | `src/pricing/queue.c` |
 | reduced_costs.c (RC computation) | `src/simplex/reduced_costs.c` |
