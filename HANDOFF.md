@@ -19,6 +19,8 @@
 | 3 | `50b8267` | phase_end + post_iterate + loop ordering |
 | 4 | `c74937d` | v2-compliant setup + enable activity bounds + preprocess |
 | 5 | `2367eaa` | v2-compliant perturbation with saved bounds + AT_UPPER |
+| 6 | `7a48cdc` | Fix BFRT undo-last-flip (eliminates false UNBOUNDED) |
+| 7 | `3813a08` | v2-compliant refine with RC-based cleanup + basic recovery |
 
 ### V2 Compliance Status
 
@@ -31,6 +33,7 @@
 | `cxf_simplex_post_iterate` | 70% | **85%** |
 | `cxf_simplex_setup` | 50% | **90%** |
 | `cxf_simplex_perturbation` | 50% | **75%** |
+| `cxf_simplex_refine` | 60% | **85%** |
 | `cxf_pricing_cascade_update` | 0% | **90%** |
 | `solve_lp.c` orchestration | 80% | **90%** |
 
@@ -38,7 +41,7 @@
 
 - **39/39 unit tests pass**
 - **14/22 extended Netlib pass** (afiro, sc50a, blend, adlittle, share2b, sc105, sc205, scagr7, stocfor1, beaconfd, lotfi, agg, sctap1, ship04s)
-- **8 Netlib failures**: kb2/bore3d (UNBOUNDED), bandm/brandy/share1b/scorpion/recipe (INFEASIBLE), israel (wrong obj)
+- **8 Netlib failures**: all INFEASIBLE except israel (wrong obj). False UNBOUNDED eliminated by BFRT fix.
 
 ---
 
