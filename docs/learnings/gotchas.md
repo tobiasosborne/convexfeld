@@ -799,3 +799,45 @@ Post: refine → final
 in the right order. The false INFEASIBLE is a SYMPTOM of missing v2
 infrastructure, not a bug to fix in isolation.
 
+---
+
+## BFRT Implementation (2026-02-20)
+
+### BFRT Flipped Variable Clamping
+
+**Context:** Implementing bound-flipping ratio test (P2.4 Stage 3) in step.c.
+
+**Key insight:** After the BFRT loop, basic variable values are updated with the
+total step: `x_B[i] -= totalStep * pivotCol[i]`. But flipped variables have values
+past their bounds (they went through a bound and came out the other side). They
+must be clamped to their opposite bound after the total step update.
+
+```c
+// 1. Apply total step to ALL basic vars
+for (i = 0; i < m; i++) work_x[basic[i]] -= totalStep * pivotCol[i];
+
+// 2. Clamp flipped vars to their opposite bound
+for (f = 0; f < num_flips; f++) {
+    bv = basic_vars[flipped_rows[f]];
+    if (pivotCol[flipped_rows[f]] > 0)  // Was heading toward lower, flip to upper
+        work_x[bv] = work_ub[bv];
+    else
+        work_x[bv] = work_lb[bv];
+}
+```
+
+**Lesson:** BFRT uses original x values for ratio computation (ratios don't change
+during flips). The total step is applied once at the end, then flipped variables
+are fixed at their correct bounds.
+
+### Pricing Cascade Feeds Step2/Step3
+
+**Context:** `cxf_pricing_cascade_update()` was a stub that only marked the variable
+dirty. Step2/step3 had no candidates to process.
+
+**Fix:** Traverse CSC column for the changed variable, mark all affected constraints
+dirty. This is 15 lines of code but enables the entire bound propagation pipeline.
+
+**Lesson:** Small infrastructure fixes can unblock large feature areas. The cascade
+was the missing link between pivots and bound propagation.
+

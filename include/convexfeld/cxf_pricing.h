@@ -63,8 +63,10 @@ void cxf_pricing_mark_dirty(PricingState *ctx, int var_idx);
 /** Mark a constraint as needing propagation evaluation. */
 void cxf_pricing_mark_constr_dirty(PricingState *ctx, int constr_idx);
 
-/** Cascade dirty marks along a column (after pivot/bound change). */
-void cxf_pricing_cascade_update(PricingState *ctx, int var_idx);
+/** Cascade dirty marks along a column (after pivot/bound change).
+ *  Marks the variable dirty and all constraints in its CSC column. */
+void cxf_pricing_cascade_update(PricingState *ctx,
+                                struct SolverState *state, int var_idx);
 
 /** Complete current pricing level (promote/demote candidates). */
 void cxf_pricing_end_level(PricingState *ctx);

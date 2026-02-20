@@ -8,6 +8,9 @@
  */
 
 #include "convexfeld/cxf_pricing.h"
+#include "convexfeld/cxf_solver.h"
+#include "convexfeld/cxf_model.h"
+#include "convexfeld/cxf_matrix.h"
 #include "convexfeld/cxf_types.h"
 #include <stdlib.h>
 #include <string.h>
@@ -37,15 +40,28 @@ void cxf_pricing_mark_constr_dirty(PricingState *ctx, int constr_idx) {
 }
 
 /**
- * @brief Cascade dirty marks after a variable change.
+ * @brief Cascade dirty marks after a variable change (v2 P3.18).
  *
- * Marks the variable itself and all constraints it appears in as dirty.
- * Full implementation will traverse CSC column; stub marks variable only.
+ * Marks the variable dirty and traverses its CSC column to mark
+ * all structurally adjacent constraints as dirty. This feeds
+ * step2/step3 bound propagation with their candidate queues.
  */
-void cxf_pricing_cascade_update(PricingState *ctx, int var_idx) {
-    if (ctx == NULL || var_idx < 0) return;
+void cxf_pricing_cascade_update(PricingState *ctx, SolverState *state,
+                                int var_idx) {
+    if (ctx == NULL || state == NULL || var_idx < 0) return;
     cxf_pricing_mark_dirty(ctx, var_idx);
-    /* TODO: traverse CSC column to mark affected constraints */
+
+    /* Traverse CSC column to mark affected constraints */
+    CxfModel *model = state->model_ref;
+    if (model == NULL || model->matrix == NULL) return;
+    MatrixData *mat = model->matrix;
+    if (mat->col_ptr == NULL || var_idx >= state->num_vars) return;
+
+    int64_t start = mat->col_ptr[var_idx];
+    int64_t end = mat->col_ptr[var_idx + 1];
+    for (int64_t k = start; k < end; k++) {
+        cxf_pricing_mark_constr_dirty(ctx, mat->row_idx[k]);
+    }
 }
 
 /**
