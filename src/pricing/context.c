@@ -67,6 +67,15 @@ PricingState *cxf_pricing_create(int num_vars, int max_levels) {
     ctx->total_candidates_scanned = 0;
     ctx->level_escalations = 0;
 
+    /* V2: Dirty flags and constraint queues (F1) — allocated lazily in init */
+    ctx->var_dirty = NULL;
+    ctx->num_dirty = 0;
+    ctx->num_constrs = 0;
+    ctx->constr_dirty = NULL;
+    ctx->num_constr_dirty = 0;
+    ctx->constr_candidates = NULL;
+    ctx->num_constr_candidates = 0;
+
     return ctx;
 }
 
@@ -100,6 +109,12 @@ void cxf_pricing_free(PricingState *ctx) {
     free(ctx->candidate_counts);
     free(ctx->candidate_sizes);
     free(ctx->cached_counts);
+
+    /* V2: Free dirty flags and constraint queues */
+    free(ctx->var_dirty);
+    free(ctx->constr_dirty);
+    free(ctx->constr_candidates);
+
     free(ctx);
 }
 

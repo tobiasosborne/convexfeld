@@ -40,6 +40,40 @@ struct PricingState {
     int last_pivot_iteration; /**< Iteration of last pivot */
     int64_t total_candidates_scanned; /**< Cumulative candidates evaluated */
     int level_escalations;    /**< Count of level increases */
+
+    /* V2: Dirty flags for incremental pricing (F1) */
+    int *var_dirty;           /**< Per-variable dirty flag [num_vars] */
+    int num_dirty;            /**< Count of dirty variables */
+
+    /* V2: Constraint queues (F1) */
+    int num_constrs;          /**< Number of constraints */
+    int *constr_dirty;        /**< Per-constraint dirty flag [num_constrs] */
+    int num_constr_dirty;     /**< Count of dirty constraints */
+    int *constr_candidates;   /**< Constraint candidate list [num_constrs] */
+    int num_constr_candidates;/**< Count of constraint candidates */
 };
+
+/*******************************************************************************
+ * V2 Pricing Queue API (F1)
+ ******************************************************************************/
+
+/** Mark a variable as needing repricing after bound/status change. */
+void cxf_pricing_mark_dirty(PricingState *ctx, int var_idx);
+
+/** Mark a constraint as needing propagation evaluation. */
+void cxf_pricing_mark_constr_dirty(PricingState *ctx, int constr_idx);
+
+/** Cascade dirty marks along a column (after pivot/bound change). */
+void cxf_pricing_cascade_update(PricingState *ctx, int var_idx);
+
+/** Complete current pricing level (promote/demote candidates). */
+void cxf_pricing_end_level(PricingState *ctx);
+
+/** Set active pricing level. */
+void cxf_pricing_set_level(PricingState *ctx, int level);
+
+/** Get constraint candidates for phase_end/step3 processing. */
+int cxf_pricing_get_constr_candidates(PricingState *ctx, int *out,
+                                      int max_out);
 
 #endif /* CXF_PRICING_H */

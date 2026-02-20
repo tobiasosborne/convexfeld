@@ -29,6 +29,7 @@
 /* Forward declarations */
 extern PricingState *cxf_pricing_create(int num_vars, int max_levels);
 extern int cxf_pricing_init(PricingState *ctx, int num_vars, int strategy);
+extern int cxf_pricing_init_constrs(PricingState *ctx, int num_constrs);
 
 /**
  * @brief Clamp a value to [min, max].
@@ -91,6 +92,12 @@ static int init_pricing(SolverState *state) {
 
     /* Initialize with auto strategy (0) */
     int status = cxf_pricing_init(state->pricing, n, 0);
+    if (status != CXF_OK) {
+        return status;
+    }
+
+    /* V2: Initialize constraint queues (F1) */
+    status = cxf_pricing_init_constrs(state->pricing, state->num_constrs);
     if (status != CXF_OK) {
         return status;
     }

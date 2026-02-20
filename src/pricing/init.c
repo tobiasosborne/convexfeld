@@ -175,5 +175,14 @@ int cxf_pricing_init(PricingState *ctx, int num_vars, int strategy) {
         }
     }
 
+    /* V2: Allocate dirty flags (F1) */
+    free(ctx->var_dirty);
+    ctx->var_dirty = NULL;
+    ctx->num_dirty = 0;
+    if (num_vars > 0) {
+        ctx->var_dirty = (int *)calloc((size_t)num_vars, sizeof(int));
+        if (ctx->var_dirty == NULL) return CXF_ERROR_OUT_OF_MEMORY;
+    }
+
     return CXF_OK;
 }
