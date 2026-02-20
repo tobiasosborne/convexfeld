@@ -14,15 +14,20 @@
 
 extern int cxf_fix_variables_at_bounds(BasisState *basis);
 
+/* Default stall detection parameters (v2 P3.20) */
+#define STALL_ALPHA 0.5
+#define STALL_BETA  3
+
 /**
- * Post-iteration housekeeping
+ * @brief Post-iteration monitoring (v2 P3.20).
  *
- * Updates work counter and triggers basis refactorization when needed.
+ * Four checks:
+ *   1. Stall detection (dimension-scaled progress thresholds)
+ *   2. Solve status (iteration limit, time limit)
+ *   3. Objective stagnation (delta < optimality_tol at refactor boundary)
+ *   4. User interrupt (placeholder)
  *
- * @param state Solver state
- * @param env Environment with refactor_interval
- * @return 0 if continue normally, 1 if refactor triggered,
- *         CXF_ERROR_NULL_ARGUMENT if NULL pointers
+ * @return 0 to continue, >0 termination code, <0 error
  */
 int cxf_simplex_post_iterate(SolverState *state, CxfEnv *env) {
     if (state == NULL || env == NULL) {
@@ -34,41 +39,76 @@ int cxf_simplex_post_iterate(SolverState *state, CxfEnv *env) {
         *state->work_counter += 1.0;
     }
 
-    /* Check if refactorization is needed */
-    if (state->eta_count >= env->refactor_interval) {
-        int status = cxf_fix_variables_at_bounds(state->basis);
-        if (status != CXF_OK) {
-            return status;
+    /* Check 1: Stall detection — only at refactor boundaries */
+    if (state->basis != NULL &&
+        state->eta_count >= env->refactor_interval) {
+        int n = state->num_vars;
+        int m = state->num_constrs;
+
+        /* Column progress: cols_eliminated <= alpha*n + beta */
+        int col_threshold = (int)(STALL_ALPHA * n + STALL_BETA);
+        int col_stall = (state->cols_eliminated > col_threshold);
+
+        /* Row progress: rows_eliminated <= beta + alpha*M_eff */
+        int m_eff = m + state->bounds_propagated;
+        int row_threshold = (int)(STALL_BETA + STALL_ALPHA * m_eff);
+        int row_stall = (state->rows_eliminated > row_threshold);
+
+        if (col_stall || row_stall) {
+            state->iteration_mode = 1;  /* Signal stagnation */
         }
+
+        /* Check 3: Objective stagnation at refactor boundary */
+        double delta_z = state->obj_value - state->obj_at_last_refactor;
+        if (delta_z < env->optimality_tol && delta_z != env->optimality_tol) {
+            state->iteration_mode = 1;  /* Stagnation */
+        }
+
+        /* Record current objective for next refactor interval */
+        state->obj_at_last_refactor = state->obj_value;
+
+        /* Trigger refactorization */
+        int status = cxf_fix_variables_at_bounds(state->basis);
+        if (status != CXF_OK) return status;
         state->eta_count = 0;
-        return 1; /* Refactor triggered */
+
+        /* Reset per-interval progress counters */
+        state->rows_eliminated = 0;
+        state->cols_eliminated = 0;
     }
 
-    return 0; /* Continue normally */
+    /* Check 2: Iteration limit */
+    if (state->iteration >= state->max_iterations) {
+        return CXF_ITERATION_LIMIT;
+    }
+
+    /* Check 4: User interrupt (placeholder — no signal handling yet) */
+
+    return 0;
 }
 
 /**
- * Phase I to Phase II transition
+ * @brief Phase-end processing (v2 P3.21).
  *
- * Checks feasibility, restores original objective, and transitions to Phase II.
+ * Called twice per iteration (pre-pivot and post-pivot).
+ * Phase 1: constraint candidate processing (stub — needs pricing queue)
+ * Phase 2: activity bound recomputation (stub — needs cxf_simplex_setup)
+ * Also handles Phase I→II transition.
  *
  * @param state Solver state
- * @param env Environment with feasibility_tol
- * @return CXF_OK if transition successful,
- *         CXF_INFEASIBLE if Phase I failed to find feasible solution,
- *         CXF_ERROR_NULL_ARGUMENT if NULL pointers
+ * @param env   Environment with tolerances
+ * @return 0 on success, CXF_INFEASIBLE on dual infeasibility
  */
 int cxf_simplex_phase_end(SolverState *state, CxfEnv *env) {
     if (state == NULL || env == NULL) {
         return CXF_ERROR_NULL_ARGUMENT;
     }
 
-    /* Only process if we're ending Phase I */
+    /* Phase I→II transition: check feasibility */
     if (state->phase != 1) {
         return CXF_OK;
     }
 
-    /* Check feasibility: Phase I objective should be ~0 */
     if (state->obj_value > env->feasibility_tol) {
         return CXF_INFEASIBLE;
     }
@@ -94,6 +134,9 @@ int cxf_simplex_phase_end(SolverState *state, CxfEnv *env) {
 
     /* Transition to Phase II */
     state->phase = 2;
+
+    /* TODO (D1): constraint candidate processing via pricing queue
+     * TODO (D1): activity bound recomputation for modified constraints */
 
     return CXF_OK;
 }

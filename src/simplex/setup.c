@@ -10,6 +10,7 @@
 #include "convexfeld/cxf_solver.h"
 #include "convexfeld/cxf_env.h"
 #include "convexfeld/cxf_model.h"
+#include "convexfeld/cxf_matrix.h"
 #include "convexfeld/cxf_pricing.h"
 #include "convexfeld/cxf_types.h"
 #include <stdlib.h>
@@ -97,6 +98,123 @@ static int init_pricing(SolverState *state) {
 }
 
 /**
+ * @brief Compute per-constraint activity bounds (v2 P3.21).
+ *
+ * For each constraint i, compute:
+ *   min_activity[i] = sum over j of min(a_ij*lb_j, a_ij*ub_j)
+ *   max_activity[i] = sum over j of max(a_ij*lb_j, a_ij*ub_j)
+ * Handles infinite bounds: any infinite contribution sets activity to +/-inf.
+ * Applies rounding correction when min/max are very close.
+ *
+ * @param state  Solver state with CSC matrix and bounds
+ * @param count  Number of constraint indices to update (0 = all)
+ * @param indices  Constraint indices to update (NULL = all)
+ */
+static void compute_activity_bounds(SolverState *state, int count,
+                                    const int *indices) {
+    CxfModel *model = state->model_ref;
+    if (model == NULL || model->matrix == NULL) return;
+    if (state->min_activity == NULL || state->max_activity == NULL) return;
+
+    MatrixData *mat = model->matrix;
+    int m = state->num_constrs;
+    int n = state->num_vars;
+
+    /* Determine which constraints to compute */
+    int do_all = (count == 0 || indices == NULL);
+    if (do_all) {
+        memset(state->min_activity, 0, (size_t)m * sizeof(double));
+        memset(state->max_activity, 0, (size_t)m * sizeof(double));
+    } else {
+        for (int k = 0; k < count; k++) {
+            int i = indices[k];
+            if (i >= 0 && i < m) {
+                state->min_activity[i] = 0.0;
+                state->max_activity[i] = 0.0;
+            }
+        }
+    }
+
+    /* Accumulate contributions from each variable column (CSC) */
+    if (mat->col_ptr == NULL || mat->row_idx == NULL || mat->values == NULL)
+        return;
+
+    for (int j = 0; j < n; j++) {
+        double lb_j = state->work_lb[j];
+        double ub_j = state->work_ub[j];
+        int64_t start = mat->col_ptr[j];
+        int64_t end = mat->col_ptr[j + 1];
+
+        for (int64_t k = start; k < end; k++) {
+            int row = mat->row_idx[k];
+            double a = mat->values[k];
+
+            /* Skip if not in the target set */
+            if (!do_all) {
+                int found = 0;
+                for (int c = 0; c < count; c++) {
+                    if (indices[c] == row) { found = 1; break; }
+                }
+                if (!found) continue;
+            }
+
+            /* Compute min/max contribution */
+            double prod_lb = a * lb_j;
+            double prod_ub = a * ub_j;
+
+            if (lb_j <= -CXF_INFINITY || ub_j >= CXF_INFINITY) {
+                /* Infinite bound: set activity to infinity */
+                if (a > 0) {
+                    if (lb_j <= -CXF_INFINITY)
+                        state->min_activity[row] = -CXF_INFINITY;
+                    if (ub_j >= CXF_INFINITY)
+                        state->max_activity[row] = CXF_INFINITY;
+                    if (lb_j > -CXF_INFINITY)
+                        state->min_activity[row] += prod_lb;
+                    if (ub_j < CXF_INFINITY)
+                        state->max_activity[row] += prod_ub;
+                } else {
+                    if (ub_j >= CXF_INFINITY)
+                        state->min_activity[row] = -CXF_INFINITY;
+                    if (lb_j <= -CXF_INFINITY)
+                        state->max_activity[row] = CXF_INFINITY;
+                    if (ub_j < CXF_INFINITY)
+                        state->min_activity[row] += prod_ub;
+                    if (lb_j > -CXF_INFINITY)
+                        state->max_activity[row] += prod_lb;
+                }
+            } else {
+                /* Finite bounds */
+                if (prod_lb < prod_ub) {
+                    state->min_activity[row] += prod_lb;
+                    state->max_activity[row] += prod_ub;
+                } else {
+                    state->min_activity[row] += prod_ub;
+                    state->max_activity[row] += prod_lb;
+                }
+            }
+        }
+    }
+
+    /* Rounding correction: when min ≈ max, snap to prevent false infeasibility */
+    for (int i = 0; i < m; i++) {
+        if (!do_all) {
+            int found = 0;
+            for (int c = 0; c < count; c++) {
+                if (indices[c] == i) { found = 1; break; }
+            }
+            if (!found) continue;
+        }
+        double gap = state->max_activity[i] - state->min_activity[i];
+        if (gap > 0 && gap < CXF_FEASIBILITY_TOL) {
+            double mid = 0.5 * (state->min_activity[i] + state->max_activity[i]);
+            state->min_activity[i] = mid;
+            state->max_activity[i] = mid;
+        }
+    }
+}
+
+/**
  * @brief Set up solver context for iteration.
  *
  * Initializes reduced costs, dual values, pricing, and determines
@@ -137,6 +255,9 @@ int cxf_simplex_setup(SolverState *state, CxfEnv *env) {
             return status;
         }
     }
+
+    /* Compute initial activity bounds (v2 C1) */
+    compute_activity_bounds(state, 0, NULL);
 
     /* Reset eta tracking */
     state->eta_count = 0;

@@ -8,6 +8,7 @@
  */
 
 #include "convexfeld/cxf_basis.h"
+#include "convexfeld/cxf_solver.h"
 #include "convexfeld/cxf_types.h"
 #include <stdlib.h>
 #include <string.h>
@@ -38,59 +39,39 @@
  ******************************************************************************/
 
 /**
- * @brief Create a snapshot of the current basis.
- * @note Full implementation in M5.1.7
+ * @brief Capture progress counters into snapshot buffer (v2 P3.16).
+ *
+ * Lightweight: copies scalar counters, no loops over problem data.
+ * Snapshot stored in state->progress_snapshot[CXF_SNAPSHOT_SIZE].
  */
-int *cxf_progress_snapshot(BasisState *basis) {
-    if (basis == NULL || basis->m == 0) {
-        return NULL;
-    }
-
-    int *snapshot = (int *)malloc((size_t)basis->m * sizeof(int));
-    if (snapshot == NULL) {
-        return NULL;
-    }
-
-    memcpy(snapshot, basis->basic_vars, (size_t)basis->m * sizeof(int));
-    return snapshot;
+void cxf_progress_snapshot(SolverState *state) {
+    if (state == NULL) return;
+    state->progress_snapshot[0] = state->iteration;
+    state->progress_snapshot[1] = (state->basis != NULL) ?
+        state->basis->pivots_since_refactor : 0;
+    state->progress_snapshot[2] = 0;  /* pricing_ops placeholder */
+    state->progress_snapshot[3] = state->rows_eliminated;
+    state->progress_snapshot[4] = state->cols_eliminated;
+    state->progress_snapshot[5] = state->bounds_propagated;
+    state->progress_snapshot[6] = state->flip_count;
+    state->progress_snapshot[7] = state->phase;
 }
 
 /**
- * @brief Compute difference between two basis snapshots.
- * @note Full implementation in M5.1.7
+ * @brief Compare current counters against last snapshot (v2 P3.16).
+ *
+ * Returns weighted progress score (0.0 = no progress, higher = more).
+ * Dimension-scaled: score = (delta_iterations + delta_elims) / max(n,m,1).
  */
-int cxf_basis_diff(const int *snap1, const int *snap2, int m) {
-    if (snap1 == NULL || snap2 == NULL) {
-        return -1;
-    }
-
-    int diff = 0;
-    for (int i = 0; i < m; i++) {
-        if (snap1[i] != snap2[i]) {
-            diff++;
-        }
-    }
-    return diff;
-}
-
-/**
- * @brief Check if basis equals a snapshot.
- * @note Full implementation in M5.1.7
- */
-int cxf_basis_equal(BasisState *basis, const int *snapshot, int m) {
-    if (basis == NULL || snapshot == NULL) {
-        return 0;
-    }
-    if (basis->m != m) {
-        return 0;
-    }
-
-    for (int i = 0; i < m; i++) {
-        if (basis->basic_vars[i] != snapshot[i]) {
-            return 0;
-        }
-    }
-    return 1;
+double cxf_basis_diff(SolverState *state) {
+    if (state == NULL) return 0.0;
+    int delta_iter = state->iteration - state->progress_snapshot[0];
+    int delta_rows = state->rows_eliminated - state->progress_snapshot[3];
+    int delta_cols = state->cols_eliminated - state->progress_snapshot[4];
+    int dim = state->num_vars > state->num_constrs ?
+              state->num_vars : state->num_constrs;
+    if (dim < 1) dim = 1;
+    return (double)(delta_iter + delta_rows + delta_cols) / (double)dim;
 }
 
 /*******************************************************************************

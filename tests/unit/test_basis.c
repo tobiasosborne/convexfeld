@@ -8,8 +8,10 @@
 
 #include "unity.h"
 #include "convexfeld/cxf_basis.h"
+#include "convexfeld/cxf_solver.h"
 #include "convexfeld/cxf_types.h"
 #include <stdlib.h>
+#include <string.h>
 #include <math.h>
 
 /*******************************************************************************
@@ -33,10 +35,9 @@ int cxf_btran_vec(BasisState *basis, const double *input, double *result);
 /* Refactorization - to be implemented in M5.1.6 */
 int cxf_fix_variables_at_bounds(BasisState *basis);
 
-/* Basis snapshot/comparison - legacy API (still in basis_stub.c) */
-int *cxf_progress_snapshot(BasisState *basis);
-int cxf_basis_diff(const int *snap1, const int *snap2, int m);
-int cxf_basis_equal(BasisState *basis, const int *snapshot, int m);
+/* Basis snapshot/comparison - v2 API (basis_stub.c) */
+void cxf_progress_snapshot(SolverState *state);
+double cxf_basis_diff(SolverState *state);
 
 /* BasisSnapshot API - implemented in snapshot.c (M5.1.7) */
 int cxf_progress_snapshot_create(BasisState *basis, BasisSnapshot *snapshot,
@@ -382,77 +383,82 @@ void test_basis_refactor_null_arg(void) {
  * Basis snapshot/comparison tests
  ******************************************************************************/
 
-void test_basis_snapshot_returns_copy(void) {
-    BasisState *basis = cxf_basis_create(3, 5);
+void test_basis_snapshot_captures_counters(void) {
+    /* Create minimal SolverState with progress counters */
+    SolverState state;
+    memset(&state, 0, sizeof(state));
+    state.iteration = 42;
+    state.rows_eliminated = 5;
+    state.cols_eliminated = 3;
+    state.bounds_propagated = 7;
+    state.flip_count = 2;
+    state.phase = 2;
+    state.num_vars = 10;
+    state.num_constrs = 5;
 
-    basis->basic_vars[0] = 2;
-    basis->basic_vars[1] = 4;
-    basis->basic_vars[2] = 0;
+    cxf_progress_snapshot(&state);
 
-    int *snapshot = cxf_progress_snapshot(basis);
-    TEST_ASSERT_NOT_NULL(snapshot);
-    TEST_ASSERT_EQUAL_INT(2, snapshot[0]);
-    TEST_ASSERT_EQUAL_INT(4, snapshot[1]);
-    TEST_ASSERT_EQUAL_INT(0, snapshot[2]);
-
-    /* Modifying basis shouldn't affect snapshot */
-    basis->basic_vars[0] = 99;
-    TEST_ASSERT_EQUAL_INT(2, snapshot[0]);
-
-    free(snapshot);
-    cxf_basis_free(basis);
+    TEST_ASSERT_EQUAL_INT(42, state.progress_snapshot[0]);  /* iteration */
+    TEST_ASSERT_EQUAL_INT(5, state.progress_snapshot[3]);   /* rows_eliminated */
+    TEST_ASSERT_EQUAL_INT(3, state.progress_snapshot[4]);   /* cols_eliminated */
+    TEST_ASSERT_EQUAL_INT(7, state.progress_snapshot[5]);   /* bounds_propagated */
+    TEST_ASSERT_EQUAL_INT(2, state.progress_snapshot[6]);   /* flip_count */
+    TEST_ASSERT_EQUAL_INT(2, state.progress_snapshot[7]);   /* phase */
 }
 
-void test_basis_diff_identical(void) {
-    int snap1[] = {1, 2, 3};
-    int snap2[] = {1, 2, 3};
+void test_basis_diff_no_progress(void) {
+    SolverState state;
+    memset(&state, 0, sizeof(state));
+    state.iteration = 10;
+    state.num_vars = 10;
+    state.num_constrs = 5;
 
-    int diff = cxf_basis_diff(snap1, snap2, 3);
-    TEST_ASSERT_EQUAL_INT(0, diff);  /* No differences */
+    /* Snapshot at iteration 10, then check diff with no progress */
+    cxf_progress_snapshot(&state);
+    double diff = cxf_basis_diff(&state);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-10, 0.0, diff);  /* No progress */
 }
 
-void test_basis_diff_one_change(void) {
-    int snap1[] = {1, 2, 3};
-    int snap2[] = {1, 5, 3};  /* Position 1 differs */
+void test_basis_diff_with_progress(void) {
+    SolverState state;
+    memset(&state, 0, sizeof(state));
+    state.num_vars = 10;
+    state.num_constrs = 5;
+    state.iteration = 10;
 
-    int diff = cxf_basis_diff(snap1, snap2, 3);
-    TEST_ASSERT_EQUAL_INT(1, diff);  /* One difference */
+    cxf_progress_snapshot(&state);
+
+    /* Advance counters */
+    state.iteration = 20;
+    state.cols_eliminated = 3;
+
+    double diff = cxf_basis_diff(&state);
+    /* (10 + 0 + 3) / 10 = 1.3 */
+    TEST_ASSERT_DOUBLE_WITHIN(1e-10, 1.3, diff);
 }
 
-void test_basis_diff_all_different(void) {
-    int snap1[] = {1, 2, 3};
-    int snap2[] = {4, 5, 6};
-
-    int diff = cxf_basis_diff(snap1, snap2, 3);
-    TEST_ASSERT_EQUAL_INT(3, diff);  /* All different */
+void test_basis_diff_null_returns_zero(void) {
+    double diff = cxf_basis_diff(NULL);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-10, 0.0, diff);
 }
 
-void test_basis_equal_true(void) {
-    BasisState *basis = cxf_basis_create(3, 5);
-    basis->basic_vars[0] = 1;
-    basis->basic_vars[1] = 3;
-    basis->basic_vars[2] = 4;
-
-    int snapshot[] = {1, 3, 4};
-
-    int equal = cxf_basis_equal(basis, snapshot, 3);
-    TEST_ASSERT_EQUAL_INT(1, equal);  /* Equal */
-
-    cxf_basis_free(basis);
+void test_basis_snapshot_null_safe(void) {
+    cxf_progress_snapshot(NULL);  /* Should not crash */
 }
 
-void test_basis_equal_false(void) {
-    BasisState *basis = cxf_basis_create(3, 5);
-    basis->basic_vars[0] = 1;
-    basis->basic_vars[1] = 3;
-    basis->basic_vars[2] = 4;
+void test_basis_snapshot_preserves_on_update(void) {
+    SolverState state;
+    memset(&state, 0, sizeof(state));
+    state.iteration = 5;
+    state.num_vars = 4;
+    state.num_constrs = 2;
 
-    int snapshot[] = {1, 2, 4};  /* Position 1 differs */
+    cxf_progress_snapshot(&state);
+    TEST_ASSERT_EQUAL_INT(5, state.progress_snapshot[0]);
 
-    int equal = cxf_basis_equal(basis, snapshot, 3);
-    TEST_ASSERT_EQUAL_INT(0, equal);  /* Not equal */
-
-    cxf_basis_free(basis);
+    /* Update iteration — snapshot should still show old value */
+    state.iteration = 15;
+    TEST_ASSERT_EQUAL_INT(5, state.progress_snapshot[0]);
 }
 
 /*******************************************************************************
@@ -992,12 +998,12 @@ int main(void) {
     RUN_TEST(test_basis_refactor_null_arg);
 
     /* Legacy snapshot/comparison tests */
-    RUN_TEST(test_basis_snapshot_returns_copy);
-    RUN_TEST(test_basis_diff_identical);
-    RUN_TEST(test_basis_diff_one_change);
-    RUN_TEST(test_basis_diff_all_different);
-    RUN_TEST(test_basis_equal_true);
-    RUN_TEST(test_basis_equal_false);
+    RUN_TEST(test_basis_snapshot_captures_counters);
+    RUN_TEST(test_basis_diff_no_progress);
+    RUN_TEST(test_basis_diff_with_progress);
+    RUN_TEST(test_basis_diff_null_returns_zero);
+    RUN_TEST(test_basis_snapshot_null_safe);
+    RUN_TEST(test_basis_snapshot_preserves_on_update);
 
     /* BasisSnapshot API tests (M5.1.7) */
     RUN_TEST(test_snapshot_create_copies_data);
