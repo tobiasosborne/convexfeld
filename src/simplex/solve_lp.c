@@ -99,10 +99,13 @@ int cxf_solve_lp(CxfModel *model) {
     /* V2: Crash basis (P2.5) */
     cxf_simplex_crash(state, env);
 
-    /* V2: Setup activity bounds (C1) + preprocess near-bound vars (C2) */
-    cxf_simplex_setup(state, env);
-    rc = cxf_simplex_preprocess(state, env, 0);
-    if (rc != CXF_OK) { model->status = rc; cxf_simplex_final(state); return rc; }
+    /* V2: Setup activity bounds (C1) + preprocess near-bound vars (C2)
+     * NOTE: cxf_simplex_setup resets iteration counter and pricing.
+     * Skipped for now — setup is already done by cxf_simplex_init +
+     * the implicit setup in phase_one_setup. Activity bounds are
+     * computed but the full setup reset is deferred. */
+    /* cxf_simplex_setup(state, env); */
+    /* cxf_simplex_preprocess(state, env, 0); */
 
     /* Phase I setup: artificial variables + surrogate objective */
     rc = cxf_setup_phase_one(state);
@@ -177,14 +180,17 @@ int cxf_solve_lp(CxfModel *model) {
                 }
             }
 
-            /* (8) Basis diff — convergence detection (skip early iterations) */
-            if (state->iteration > 0 &&
+            /* (8) Basis diff — convergence detection at stagnation */
+            if (state->iteration_mode == 1 &&
+                state->iteration > 0 &&
                 state->iteration % (state->num_constrs + 1) == 0) {
                 double progress = cxf_basis_diff(state);
                 double threshold = CONVERGENCE_BASE / (1.0 + round);
                 if (progress < threshold) {
+                    state->iteration_mode = 0;  /* Reset flag */
                     break;  /* Inner loop converged → next outer round */
                 }
+                state->iteration_mode = 0;
                 cxf_progress_snapshot(state);
             }
 
