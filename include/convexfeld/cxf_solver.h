@@ -69,8 +69,26 @@ struct SolverState {
     int use_bland;            /**< If nonzero, use Bland's rule for pricing */
     int degenerate_count;     /**< Consecutive degenerate pivots (stepSize=0) */
 
+    /* B1: Saved (unperturbed) bounds (v2 — P2.6 EXPAND) */
+    double *saved_lb;         /**< Original lower bounds [num_vars + num_constrs] */
+    double *saved_ub;         /**< Original upper bounds [num_vars + num_constrs] */
+
     /* Perturbation state (v2 — P2.6 EXPAND) */
     int perturb_count;        /**< Cumulative count of variables perturbed/removed */
+
+    /* B2: Activity bounds (v2 — P3.21 cxf_simplex_setup) */
+    double *min_activity;     /**< Per-constraint min activity [num_constrs] */
+    double *max_activity;     /**< Per-constraint max activity [num_constrs] */
+
+    /* B3: Progress tracking (v2 — P3.20, P3.16, P3.25) */
+#define CXF_SNAPSHOT_SIZE 8
+    int progress_snapshot[CXF_SNAPSHOT_SIZE]; /**< Snapshot buffer for basis diff */
+    double obj_at_last_refactor; /**< Objective at last refactor (stagnation) */
+    int iteration_mode;       /**< Strategy flag (0=normal, 1=stagnation) */
+    int rows_eliminated;      /**< Row elimination counter */
+    int cols_eliminated;      /**< Column elimination counter */
+    int bounds_propagated;    /**< Bounds propagation counter */
+    int flip_count;           /**< Bound flip counter */
 
     /* Crash basis state (v2 simplex phases — P2.5) */
     int *row_status;          /**< Per-row crash status [num_constrs]:

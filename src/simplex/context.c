@@ -119,6 +119,37 @@ int cxf_simplex_init(CxfModel *model, SolverState **stateP) {
         }
     }
 
+    /* B1: Saved bounds (copy of initial bounds for EXPAND perturbation) */
+    if (total_vars > 0) {
+        ctx->saved_lb = (double *)malloc((size_t)total_vars * sizeof(double));
+        ctx->saved_ub = (double *)malloc((size_t)total_vars * sizeof(double));
+        if (ctx->saved_lb == NULL || ctx->saved_ub == NULL) {
+            cxf_simplex_final(ctx);
+            return CXF_ERROR_OUT_OF_MEMORY;
+        }
+        memcpy(ctx->saved_lb, ctx->work_lb, (size_t)total_vars * sizeof(double));
+        memcpy(ctx->saved_ub, ctx->work_ub, (size_t)total_vars * sizeof(double));
+    }
+
+    /* B2: Activity bounds (per-constraint min/max LHS values) */
+    if (m > 0) {
+        ctx->min_activity = (double *)calloc((size_t)m, sizeof(double));
+        ctx->max_activity = (double *)calloc((size_t)m, sizeof(double));
+        if (ctx->min_activity == NULL || ctx->max_activity == NULL) {
+            cxf_simplex_final(ctx);
+            return CXF_ERROR_OUT_OF_MEMORY;
+        }
+    }
+
+    /* B3: Progress counters (zero-initialized by calloc) */
+    ctx->obj_at_last_refactor = 0.0;
+    ctx->iteration_mode = 0;
+    ctx->rows_eliminated = 0;
+    ctx->cols_eliminated = 0;
+    ctx->bounds_propagated = 0;
+    ctx->flip_count = 0;
+    memset(ctx->progress_snapshot, 0, sizeof(ctx->progress_snapshot));
+
     /* Crash basis arrays (v2 — P2.5) */
     ctx->num_basic = 0;
     ctx->problem_row_index = -1;
@@ -189,6 +220,14 @@ void cxf_simplex_final(SolverState *state) {
     free(state->work_counter);
     free(state->work_column);
     free(state->work_cB);
+
+    /* Free saved bounds (B1) */
+    free(state->saved_lb);
+    free(state->saved_ub);
+
+    /* Free activity bounds (B2) */
+    free(state->min_activity);
+    free(state->max_activity);
 
     /* Free crash basis arrays (v2) */
     free(state->row_status);
