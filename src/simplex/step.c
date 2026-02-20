@@ -388,7 +388,13 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env) {
             int next_row = find_next_blocker(
                 state, pivotCol, flipped_rows, num_flips,
                 stepSize, &next_pivot);
-            if (next_row < 0) break;
+            if (next_row < 0) {
+                /* No more blockers — undo last flip, use it as
+                 * the true leaving variable instead */
+                num_flips--;
+                stepSize -= range / fabs(pivotCol[leavingRow]);
+                break;
+            }
 
             leavingRow = next_row;
             pivotElement = next_pivot;
