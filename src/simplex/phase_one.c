@@ -12,10 +12,21 @@
 #include "convexfeld/cxf_matrix.h"
 #include "convexfeld/cxf_types.h"
 #include "convexfeld/cxf_env.h"
+#include "convexfeld/cxf_pricing.h"
 #include <math.h>
+#include <string.h>
 #include <stdio.h>
 
 extern int cxf_solver_refactor(SolverState *ctx, CxfEnv *env);
+extern int cxf_ftran(BasisState *basis, const double *column, double *result);
+extern int cxf_pivot_with_eta(BasisState *basis, int pivotRow,
+                              const double *pivotCol, int enteringVar,
+                              int leavingVar);
+extern void cxf_pricing_invalidate(PricingState *ctx, int flags);
+extern void cxf_pricing_set_level(PricingState *ctx, int level);
+
+/* From update.c */
+#define CXF_INVALID_ALL 0xFF
 
 /**
  * @brief Set up Phase I with slack/artificial variables.
@@ -159,11 +170,58 @@ int cxf_transition_to_phase_two(SolverState *state, CxfModel *model) {
             basis->diag_coeff[i] = -1.0;
         }
     }
-    /* P1.3 (vopd): Force refactorization at Phase I→II transition.
-     * Spec numerical_stability.md §A.4 lists phase transition as an
-     * explicit refactorization trigger. Accumulated Phase I error is
-     * reset by a fresh LU of the current basis. */
+    /* P1.3: Force refactorization at Phase I→II transition. */
     cxf_solver_refactor(state, model->env);
+
+    /* P1.4 (85dt): Pivot out zero-value artificial basic variables.
+     * Artificials at zero are degenerate in the basis — they must be
+     * replaced by structural or slack variables for Phase II correctness.
+     * Spec: simplex_phases.md "Phase I to Phase II Transition". */
+    for (int i = 0; i < m; i++) {
+        int bv = basis->basic_vars[i];
+        if (bv < n) continue;  /* structural variable — keep */
+        int aux_row = bv - n;
+        if (aux_row < 0 || aux_row >= m) continue;
+
+        /* Only pivot out if artificial is at zero (degenerate) */
+        if (fabs(state->work_x[bv]) > CXF_FEASIBILITY_TOL) continue;
+
+        /* Find a nonbasic structural variable to enter this row.
+         * Scan the row for a column with a nonzero coefficient. */
+        int best_col = -1;
+        double best_abs = 0.0;
+        for (int j = 0; j < n; j++) {
+            if (basis->var_status[j] >= 0) continue;  /* skip basic */
+            /* Check if column j has a nonzero in row i */
+            int64_t cs = mat->col_ptr[j], ce = mat->col_ptr[j + 1];
+            for (int64_t k = cs; k < ce; k++) {
+                if (mat->row_idx[k] == i && fabs(mat->values[k]) > best_abs) {
+                    best_abs = fabs(mat->values[k]);
+                    best_col = j;
+                }
+            }
+        }
+        if (best_col < 0 || best_abs < CXF_PIVOT_TOL) continue;
+
+        /* FTRAN the entering column and do a degenerate pivot */
+        double *col_buf = state->work_column;
+        if (col_buf == NULL) continue;
+        memset(col_buf, 0, (size_t)m * sizeof(double));
+        int64_t cs = mat->col_ptr[best_col];
+        int64_t ce = mat->col_ptr[best_col + 1];
+        for (int64_t k = cs; k < ce; k++)
+            col_buf[mat->row_idx[k]] = mat->values[k];
+
+        double *ftran_buf = basis->work;
+        if (ftran_buf == NULL) continue;
+        if (cxf_ftran(basis, col_buf, ftran_buf) != CXF_OK) continue;
+        if (fabs(ftran_buf[i]) < CXF_PIVOT_TOL) continue;
+
+        /* Degenerate pivot: step size = 0, just swap basis */
+        cxf_pivot_with_eta(basis, i, ftran_buf, best_col, bv);
+        basis->var_status[bv] = CXF_VAR_AT_LOWER;
+        state->work_x[bv] = 0.0;
+    }
 
     /* Recompute objective value with original objective */
     state->obj_value = 0.0;
@@ -174,13 +232,18 @@ int cxf_transition_to_phase_two(SolverState *state, CxfModel *model) {
     state->use_bland = 0;
     state->degenerate_count = 0;
 
-    /* Reset FIXED variables to AT_LOWER for Phase II pricing.
-     * EXPAND perturbation (P2.6) may have marked nonbasic variables as
-     * FIXED during Phase I stalling. These must be eligible for Phase II. */
+    /* Reset FIXED variables to AT_LOWER for Phase II pricing. */
     for (int j = 0; j < n + m; j++) {
-        if (basis->var_status[j] == CXF_VAR_FIXED) {
+        if (basis->var_status[j] == CXF_VAR_FIXED)
             basis->var_status[j] = CXF_VAR_AT_LOWER;
-        }
+    }
+
+    /* P1.5 (ho9l): Reset pricing state at Phase I→II boundary.
+     * Candidate sets and tolerance levels from Phase I objective
+     * are invalid for Phase II. */
+    if (state->pricing) {
+        cxf_pricing_invalidate(state->pricing, CXF_INVALID_ALL);
+        cxf_pricing_set_level(state->pricing, 0);
     }
 
     return CXF_OK;
