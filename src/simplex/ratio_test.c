@@ -55,7 +55,9 @@ int cxf_ratio_test(SolverState *state, CxfEnv *env, int enteringVar,
     /* Extract tolerances from environment */
     feasTol = env->feasibility_tol;
     infinity = env->infinity;
-    relaxedTol = 10.0 * feasTol;
+    /* P0.6: Use CXF_PIVOT_TOL (1e-9) for element skip, not 10*feasTol (1e-5).
+     * Spec: tolerances_constants.md §3 — Harris pivot threshold ~1e-9 */
+    relaxedTol = CXF_PIVOT_TOL;
 
     /* Entering direction: +1 if entering from lower bound (increases),
      * -1 if entering from upper bound (decreases).

@@ -48,7 +48,7 @@ extern int cxf_check_obvious_infeasibility(CxfModel *model);
 extern int cxf_check_obvious_unboundedness(CxfModel *model);
 extern int cxf_solve_unconstrained(CxfModel *model);
 extern int cxf_setup_phase_one(SolverState *state);
-extern void cxf_compute_reduced_costs(SolverState *state);
+extern int cxf_compute_reduced_costs(SolverState *state);
 
 /* Iteration loop (P3.20) */
 extern int cxf_simplex_step(SolverState *state, CxfEnv *env);

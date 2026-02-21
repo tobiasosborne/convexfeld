@@ -22,7 +22,7 @@
 #define ITERATE_UNBOUNDED  3
 
 extern int cxf_simplex_step(SolverState *state, CxfEnv *env);
-extern void cxf_compute_reduced_costs(SolverState *state);
+extern int cxf_compute_reduced_costs(SolverState *state);
 
 /** @brief Compute total constraint violation (true infeasibility). */
 static double compute_true_infeasibility(SolverState *state, CxfModel *model) {

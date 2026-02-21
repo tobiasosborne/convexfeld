@@ -66,18 +66,11 @@ int cxf_fix_variables_at_bounds(BasisState *basis) {
     /* Clear existing eta list */
     clear_eta_list(basis);
 
-    /* Reset diag_coeff to identity.
-     * After refactorization, we treat the current basis as the new "initial"
-     * basis. Since we don't have proper LU factorization, we assume the
-     * current basis is identity-like (which is only correct if all basic
-     * vars are auxiliaries with coefficient +1).
-     *
-     * TODO: Implement proper LU factorization for non-trivial bases. */
-    if (basis->diag_coeff != NULL) {
-        for (int i = 0; i < basis->m; i++) {
-            basis->diag_coeff[i] = 1.0;
-        }
-    }
+    /* P0.10: Preserve existing diag_coeff values. These encode constraint
+     * sense (+1 for <=, -1 for >=) set during Phase I setup. Resetting
+     * all to +1 corrupts FTRAN for mixed-sense problems.
+     * diag_coeff is only updated when constraint sense changes (e.g.,
+     * Phase I → II transition flips >= coefficients). */
 
     return CXF_OK;
 }

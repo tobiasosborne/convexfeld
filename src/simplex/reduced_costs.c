@@ -33,7 +33,7 @@ static double get_auxiliary_coeff(const MatrixData *mat, int row) {
     return 1.0;
 }
 
-void cxf_compute_reduced_costs(SolverState *state) {
+int cxf_compute_reduced_costs(SolverState *state) {
     CxfModel *model = state->model_ref;
     MatrixData *mat = model->matrix;
     BasisState *basis = state->basis;
@@ -42,24 +42,19 @@ void cxf_compute_reduced_costs(SolverState *state) {
     int total_vars = n + m;
 
     /* Step 1: Compute dual prices pi = B^(-T) * c_B via BTRAN */
+    /* P0.5: propagate errors instead of silently substituting pi = c_B */
     double *cB = (double *)calloc((size_t)m, sizeof(double));
     if (cB == NULL) {
-        for (int i = 0; i < m; i++) {
-            int bv = basis->basic_vars[i];
-            state->work_pi[i] = (bv >= 0 && bv < total_vars) ?
-                state->work_obj[bv] : 0.0;
-        }
-    } else {
-        for (int i = 0; i < m; i++) {
-            int bv = basis->basic_vars[i];
-            cB[i] = (bv >= 0 && bv < total_vars) ? state->work_obj[bv] : 0.0;
-        }
-        int rc = cxf_btran_vec(basis, cB, state->work_pi);
-        if (rc != CXF_OK) {
-            for (int i = 0; i < m; i++)
-                state->work_pi[i] = cB[i];
-        }
-        free(cB);
+        return CXF_ERROR_OUT_OF_MEMORY;
+    }
+    for (int i = 0; i < m; i++) {
+        int bv = basis->basic_vars[i];
+        cB[i] = (bv >= 0 && bv < total_vars) ? state->work_obj[bv] : 0.0;
+    }
+    int rc = cxf_btran_vec(basis, cB, state->work_pi);
+    free(cB);
+    if (rc != CXF_OK) {
+        return rc;
     }
 
     /* Step 2: Compute reduced costs for all variables */
@@ -85,4 +80,5 @@ void cxf_compute_reduced_costs(SolverState *state) {
             state->work_dj[j] = dj;
         }
     }
+    return CXF_OK;
 }

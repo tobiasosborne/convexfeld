@@ -41,7 +41,7 @@ extern int cxf_ratio_test(SolverState *state, CxfEnv *env, int enteringVar,
                           const double *pivotColumn, int columnNZ,
                           int *leavingRow_out, double *pivotElement_out);
 extern int cxf_solver_refactor(SolverState *ctx, CxfEnv *env);
-extern void cxf_compute_reduced_costs(SolverState *state);
+extern int cxf_compute_reduced_costs(SolverState *state);
 
 /*---------------------------------------------------------------------------*/
 
@@ -49,7 +49,8 @@ static double get_auxiliary_coeff_fallback(const MatrixData *matrix, int row) {
     if (matrix == NULL || matrix->sense == NULL) return 1.0;
     char sense = matrix->sense[row];
     double rhs = (matrix->rhs != NULL) ? matrix->rhs[row] : 0.0;
-    if (sense == '>' || sense == 'G') return (rhs > 0) ? 1.0 : -1.0;
+    /* P0.4: unified with get_auxiliary_coeff in reduced_costs.c */
+    if (sense == '>' || sense == 'G') return -1.0;
     if (sense == '<' || sense == 'L') return (rhs < 0) ? -1.0 : 1.0;
     if (sense == '=')                 return (rhs < 0) ? -1.0 : 1.0;
     return 1.0;
@@ -106,11 +107,12 @@ int cxf_apply_pivot(SolverState *state, int entering, int leavingRow,
     int rc = cxf_pivot_with_eta(basis, leavingRow, pivotCol,
                                 entering, leaving);
 
-    /* Fix leaving variable at nearest bound */
+    /* Fix leaving variable at appropriate bound (P0.3) */
     if (rc == CXF_OK && leaving >= 0 && leaving < total) {
         double x = state->work_x[leaving];
         double lb = state->work_lb[leaving];
         double ub = state->work_ub[leaving];
+        basis->var_status[leaving] = CXF_VAR_AT_LOWER;
         if (fabs(x - ub) < fabs(x - lb) && ub < CXF_INFINITY)
             basis->var_status[leaving] = CXF_VAR_AT_UPPER;
     }
@@ -493,9 +495,10 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env) {
                                 entering, leaving);
         if (rc != CXF_OK) return rc;
 
-        /* Fix leaving variable at nearest bound */
+        /* Fix leaving variable at appropriate bound (P0.3) */
         if (leaving >= 0 && leaving < total) {
             double x = state->work_x[leaving];
+            basis->var_status[leaving] = CXF_VAR_AT_LOWER;
             if (fabs(x - state->work_ub[leaving]) <
                 fabs(x - state->work_lb[leaving]) &&
                 state->work_ub[leaving] < CXF_INFINITY)
@@ -525,12 +528,21 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env) {
     if (state->pricing) {
         cxf_pricing_cascade_update(state->pricing, state, entering);
         cxf_pricing_cascade_update(state->pricing, state, leaving);
+        /* P0.9: Also notify BFRT-flipped variables */
+        for (int f = 0; f < num_flips; f++) {
+            int bv = basis->basic_vars[flipped_rows[f]];
+            if (bv >= 0 && bv < total)
+                cxf_pricing_cascade_update(state->pricing, state, bv);
+        }
     }
 
-    /*--- Phase 9: Refactorization ---*/
-    if (basis->pivots_since_refactor >= REFACTOR_INTERVAL) {
-        cxf_solver_refactor(state, env);
-        cxf_compute_reduced_costs(state);
+    /*--- Phase 9: Refactorization (P0.7: use cxf_refactor_check) ---*/
+    {
+        extern int cxf_refactor_check(SolverState *, CxfEnv *);
+        if (cxf_refactor_check(state, env) > 0) {
+            cxf_solver_refactor(state, env);
+            cxf_compute_reduced_costs(state);
+        }
     }
 
     state->iteration++;

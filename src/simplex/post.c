@@ -21,7 +21,7 @@
 extern int cxf_fix_variables_at_bounds(BasisState *basis);
 extern void cxf_compute_activity_bounds(SolverState *state, int count,
                                         const int *indices);
-extern void cxf_compute_reduced_costs(SolverState *state);
+extern int cxf_compute_reduced_costs(SolverState *state);
 
 #define STALL_ALPHA 0.5
 #define STALL_BETA  3

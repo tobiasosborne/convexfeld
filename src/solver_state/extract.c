@@ -83,12 +83,9 @@ int cxf_extract_solution(SolverState *state, CxfModel *model) {
     /* Step 3: Set objective value */
     model->obj_val = state->obj_value;
 
-    /* Step 4: Set status based on solver phase */
-    /* If phase 2 completed, mark as optimal, otherwise keep current status */
-    if (state->phase == 2) {
-        model->status = CXF_OPTIMAL;
-    }
-    /* Note: caller may override status based on termination condition */
+    /* Step 4: Status is set by the caller (solve_lp.c), not here.
+     * P0.8: Removed unconditional CXF_OPTIMAL override — being in Phase II
+     * does not mean the solve terminated optimally (could be iter limit). */
 
     return CXF_OK;
 }
