@@ -105,7 +105,8 @@ int cxf_simplex_perturbation(SolverState *state, CxfEnv *env) {
     int n = state->num_vars;
     int m = state->num_constrs;
     if (n == 0 || m == 0) return CXF_OK;
-    if (state->iteration == 0) return CXF_OK;
+    /* P1.6 (zr5l): removed iteration==0 guard — proactive perturbation
+     * is now called in early iterations by solve_lp.c */
 
     BasisState *basis = state->basis;
     if (!basis || !basis->var_status) return CXF_OK;
@@ -127,7 +128,11 @@ int cxf_simplex_perturbation(SolverState *state, CxfEnv *env) {
                (size_t)total * sizeof(double));
     }
 
-    /*--- Phase 2: Nonbasic variables at bounds ---*/
+    /*--- Phase 2: Nonbasic variables at bounds ---
+     * P1.7 (a5vp): candidate removal, NOT bound modification.
+     * Spec P2.6: "removes degenerate candidates from pricing set...
+     * avoids modifying bound arrays." We mark degenerate variables
+     * dirty in pricing to exclude them, without touching work_x. */
     double *dj = state->work_dj;
     if (dj) {
         for (int j = 0; j < total; j++) {
@@ -141,17 +146,13 @@ int cxf_simplex_perturbation(SolverState *state, CxfEnv *env) {
             if (ub - lb < feas_tol) continue;
 
             if (fabs(rc) <= feas_tol) {
-                /* Near-zero RC at lower bound: degenerate.
-                 * Set to AT_UPPER (per spec) — still eligible as
-                 * ratio test blocker, just removed from pricing. */
-                if (ub < CXF_INFINITY) {
-                    basis->var_status[j] = CXF_VAR_AT_UPPER;
-                    state->work_x[j] = ub;
-                }
+                /* Near-zero RC at lower bound: degenerate candidate.
+                 * Mark dirty to remove from pricing set. */
+                if (state->pricing)
+                    cxf_pricing_mark_dirty(state->pricing, j);
                 perturbed++;
             } else if (rc < -feas_tol) {
-                /* Negative RC at lower bound: contradictory.
-                 * Check equality constraints for infeasibility. */
+                /* Negative RC at lower bound: check equality constraints */
                 if (j >= n && (j - n) < m && model->matrix &&
                     model->matrix->sense) {
                     char sense = model->matrix->sense[j - n];
@@ -161,16 +162,11 @@ int cxf_simplex_perturbation(SolverState *state, CxfEnv *env) {
                         return CXF_INFEASIBLE;
                     }
                 }
-                /* For inequalities: flip to upper bound */
-                if (ub < CXF_INFINITY) {
-                    basis->var_status[j] = CXF_VAR_AT_UPPER;
-                    state->work_x[j] = ub;
-                }
+                /* For inequalities: mark dirty to remove from pricing */
+                if (state->pricing)
+                    cxf_pricing_mark_dirty(state->pricing, j);
                 perturbed++;
             }
-
-            if (state->pricing)
-                cxf_pricing_mark_dirty(state->pricing, j);
         }
     }
 

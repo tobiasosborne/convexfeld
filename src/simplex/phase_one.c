@@ -148,7 +148,6 @@ int cxf_transition_to_phase_two(SolverState *state, CxfModel *model) {
      * flip >= artificials to surplus (diag +1 → -1) so Phase II
      * maintains the >= direction instead of allowing violation. */
     BasisState *basis = state->basis;
-    int flipped_any = 0;
     for (int i = 0; i < m; i++) {
         int var_idx = n + i;
         state->work_obj[var_idx] = 0.0;
@@ -158,14 +157,13 @@ int cxf_transition_to_phase_two(SolverState *state, CxfModel *model) {
         } else if ((sense == '>' || sense == 'G') &&
                    basis->diag_coeff != NULL && basis->diag_coeff[i] > 0.0) {
             basis->diag_coeff[i] = -1.0;
-            flipped_any = 1;
         }
     }
-    /* Refactor after flipping: the eta+diag representation uses diag_coeff
-     * in BTRAN, so changing it invalidates the basis factors. A fresh LU
-     * factorization of the current basis avoids this inconsistency. */
-    if (flipped_any)
-        cxf_solver_refactor(state, model->env);
+    /* P1.3 (vopd): Force refactorization at Phase I→II transition.
+     * Spec numerical_stability.md §A.4 lists phase transition as an
+     * explicit refactorization trigger. Accumulated Phase I error is
+     * reset by a fresh LU of the current basis. */
+    cxf_solver_refactor(state, model->env);
 
     /* Recompute objective value with original objective */
     state->obj_value = 0.0;

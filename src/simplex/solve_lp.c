@@ -130,18 +130,19 @@ int cxf_solve_lp(CxfModel *model) {
             /* (2) Progress logging + callback */
             cxf_log_iteration_progress(model, state);
 
-            /* (3) Pre-pivot phase_end — Phase II constraint cleanup only.
-             * During Phase I, transition is handled by check_phase_one_end. */
-            int status = 0;
-            if (state->phase == 2) {
-                status = cxf_simplex_phase_end(state, env, 0);
-                if (status == CXF_INFEASIBLE) {
-                    model->status = CXF_INFEASIBLE; terminated = 1; break;
-                }
+            /* (3) Pre-pivot phase_end — runs unconditionally per spec
+             * P1.2 (fiyt): removed phase==2 guard. Spec simplex_iteration.md
+             * item 7 calls phase_end in both phases. */
+            int status = cxf_simplex_phase_end(state, env, 0);
+            if (status == CXF_INFEASIBLE) {
+                model->status = CXF_INFEASIBLE; terminated = 1; break;
             }
 
-            /* (4) Perturbation (stall-triggered) */
-            if (stall || state->degenerate_count > STALL_THRESHOLD) {
+            /* (4) Perturbation — proactive in first 2 iters of round 0,
+             * then reactive on stall/degeneracy. P1.6 (zr5l). */
+            if (round == 0 && state->iteration <= 2) {
+                cxf_simplex_perturbation(state, env);
+            } else if (stall || state->degenerate_count > STALL_THRESHOLD) {
                 cxf_simplex_perturbation(state, env);
                 stall = 0;
             }

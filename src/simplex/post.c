@@ -120,9 +120,10 @@ int cxf_simplex_phase_end(SolverState *state, CxfEnv *env, int doScan) {
 
     /*--- Phase 1: Constraint candidate processing ---*/
 
-    /* 1a. Free variable dual feasibility check (Phase II only —
-     * during Phase I, reduced costs are relative to surrogate objective) */
-    if (state->phase == 2 && basis->var_status && state->work_dj)
+    /* 1a. Free variable dual feasibility check — both phases.
+     * P1.2 (fiyt): removed phase==2 guard. In Phase I, a free variable
+     * with nonzero RC in the surrogate objective certifies infeasibility. */
+    if (basis->var_status && state->work_dj)
     for (int j = 0; j < total; j++) {
         if (basis->var_status[j] != CXF_VAR_SUPERBASIC) continue;
 
@@ -135,9 +136,9 @@ int cxf_simplex_phase_end(SolverState *state, CxfEnv *env, int doScan) {
         }
     }
 
-    /* 1b. Inactive constraint removal (Phase II only — during Phase I,
-     * activity bounds reflect artificial variables, not reliable) */
-    if (state->phase == 2 && state->min_activity && state->max_activity) {
+    /* 1b. Inactive constraint removal — both phases.
+     * P1.2 (fiyt): removed phase==2 guard per spec. */
+    if (state->min_activity && state->max_activity) {
         for (int i = 0; i < m; i++) {
             /* Check if constraint is inactive: both activity bounds
              * are well within the constraint's slack range */
