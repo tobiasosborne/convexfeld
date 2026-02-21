@@ -4,62 +4,49 @@
 
 ---
 
-## STATUS: Phase 0 complete (10/10), Phase 1 complete (7/7), Phase 2 partial (3/6)
+## STATUS: Phase 0 done (10/10), Phase 1 done (7/7), Phase 2 mostly done (5/6)
 
 ### Session Summary
 
-**12-agent v2 spec compliance review** → `docs/v2_compliance_roadmap.md` (48 beads issues, 6 phases).
+- **12-agent v2 spec compliance review** → `docs/v2_compliance_roadmap.md`
+- **48 beads issues** created with full dependency chains
+- **22 issues closed** this session across Phases 0-2
+- 39/39 unit tests pass throughout
 
-**Phase 0 (10/10 closed):** All critical bug fixes — ratio test direction, objective sign, leaving var status, aux coefficient, BTRAN error propagation, pivot element filter, refactor check, extract solution status, BFRT cascade, diag_coeff preservation.
+### Closed This Session
 
-**Phase 1 (7/7 closed):** Removed `correct_basic_variables` hack, enabled `phase_end` in Phase I, forced refactorization at transition, artificial pivot-out, pricing reset, proactive perturbation, perturbation candidate-removal-not-bound-modification.
+| Phase | Issues Closed |
+|-------|---------------|
+| P0 | 10/10: ratio test direction, obj sign, leaving status, aux coeff, BTRAN error, pivot filter, refactor check, extract status, BFRT cascade, diag_coeff |
+| P1 | 7/7: removed correct_basic_variables, phase_end in Phase I, refactor at transition, artificial pivot-out, pricing reset, proactive perturbation, perturbation candidate-removal |
+| P2 | 5/6: sparse LU col_max optimization, FTRAN residual monitoring, hyper-sparse FTRAN/BTRAN, tolerance constants, (P0.5 covered error propagation) |
 
-**Phase 2 (3/6 closed):** Hyper-sparse FTRAN/BTRAN, unified tolerance constants, BTRAN error propagation (via P0.5). Remaining: P2.1 (sparse LU), P2.2 (FTRAN residual monitoring), P2.3 (eta memory pool), P2.4 (fix_variables_at_bounds).
+### Remaining Phase 2
 
-### Test Results
-
-- **39/39 unit tests pass** (no regressions)
-- **DO NOT run Netlib benchmarks** — expected to fail until Phase 2+ complete
+- `auj4` **P2.3**: Eta memory pool (bump allocator) — performance, not correctness
+- `uyfk` **P2.4**: Implement cxf_fix_variables_at_bounds — needs proper spec implementation
 
 ---
 
 ## Next Steps — Critical Path
 
-### P2.1 (uxae): Sparse Markowitz LU — MAJOR REWRITE
+The critical path now goes through **P3.1** (CSR/CSC working copies on SolverState), which is already **unblocked** and ready.
 
-This is the critical path bottleneck. Current dense O(m^4) LU in `lu_factorize.c` is 47-65% of runtime. Needs:
-- Compressed sparse column storage (replace dense m×m matrix)
-- Maintained column maxima (eliminate O(m) col_max scan per step)
-- Linked-list row/column count structures
-- Target: O(nnz * fill_in) per factorization
+```
+P3.1 (zirq) → P4.1 (706o) → P4.5 (v35i) → P5.1 (6wgv) → Phase 6
+```
 
-**This is a ~300 line rewrite.** The file is `src/basis/lu_factorize.c`.
+### Ready to work (`bd ready`):
+- `zirq` **P3.1**: CSR/CSC working copies (critical path)
+- `huah` P3.2: SolutionData struct
+- `dk0i` P3.3: Missing SolverState fields
+- `hyi2` P3.4: Missing BasisState fields
+- `auj4` P2.3: Eta memory pool
+- `uyfk` P2.4: fix_variables_at_bounds
 
-### After P2.1
-
-- `epf7` P2.2: FTRAN residual monitoring (add ||Bx-a|| check)
-- `auj4` P2.3: Eta memory pool (bump allocator)
-- `uyfk` P2.4: Implement cxf_fix_variables_at_bounds properly
-
-### Remaining Phase 1 items that are unblocked but lower priority
-
-None — Phase 1 is complete.
-
----
-
-## Issue Scoreboard
-
-| Phase | Total | Closed | Remaining |
-|-------|-------|--------|-----------|
-| P0 | 10 | 10 | 0 |
-| P1 | 7 | 7 | 0 |
-| P2 | 6 | 3 | 3 (P2.1, P2.2, P2.3, P2.4) |
-| P3 | 5 | 0 | 5 |
-| P4 | 9 | 0 | 9 |
-| P5 | 4 | 0 | 4 |
-| P6 | 7 | 0 | 7 |
-
-**Critical path:** P2.1 → P3.1 → P4.1 → P4.5 → P5.1
+### DO NOT
+- Run Netlib benchmarks — waste of time until more phases complete
+- Skip the dependency chain
 
 ---
 
@@ -68,8 +55,8 @@ None — Phase 1 is complete.
 | Item | Path |
 |---|---|
 | V2 compliance roadmap | `docs/v2_compliance_roadmap.md` |
-| LU factorize (needs rewrite) | `src/basis/lu_factorize.c` |
-| Phase I transition | `src/simplex/phase_one.c` |
-| Phase loop | `src/simplex/phase_loop.c` |
-| V2 specs | `docs/specs-v2/specs/modules/` |
+| LU factorize (refactored) | `src/basis/lu_factorize.c` |
+| Step (P0.1-P0.9 fixes) | `src/simplex/step.c` |
+| Phase I transition (P1.3-P1.5) | `src/simplex/phase_one.c` |
+| Phase loop (P1.1 hack removed) | `src/simplex/phase_loop.c` |
 | Beads issues | `bd ready` / `bd list --status=open -n 100` |
