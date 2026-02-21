@@ -10,7 +10,6 @@
 #include "convexfeld/cxf_solver.h"
 #include "convexfeld/cxf_basis.h"
 #include "convexfeld/cxf_env.h"
-#include "convexfeld/cxf_model.h"
 #include "convexfeld/cxf_matrix.h"
 #include "convexfeld/cxf_pricing.h"
 #include "convexfeld/cxf_types.h"
@@ -36,11 +35,9 @@
  */
 void cxf_compute_activity_bounds(SolverState *state, int count,
                                  const int *indices) {
-    CxfModel *model = state->model_ref;
-    if (model == NULL || model->matrix == NULL) return;
+    if (state->csc_col_ptr == NULL) return;
     if (state->min_activity == NULL || state->max_activity == NULL) return;
 
-    MatrixData *mat = model->matrix;
     int m = state->num_constrs;
     int n = state->num_vars;
 
@@ -60,18 +57,18 @@ void cxf_compute_activity_bounds(SolverState *state, int count,
     }
 
     /* Accumulate contributions from each variable column (CSC) */
-    if (mat->col_ptr == NULL || mat->row_idx == NULL || mat->values == NULL)
+    if (state->csc_row_idx == NULL || state->csc_values == NULL)
         return;
 
     for (int j = 0; j < n; j++) {
         double lb_j = state->work_lb[j];
         double ub_j = state->work_ub[j];
-        int64_t start = mat->col_ptr[j];
-        int64_t end = mat->col_ptr[j + 1];
+        int64_t start = state->csc_col_ptr[j];
+        int64_t end = state->csc_col_ptr[j + 1];
 
         for (int64_t k = start; k < end; k++) {
-            int row = mat->row_idx[k];
-            double a = mat->values[k];
+            int row = state->csc_row_idx[k];
+            double a = state->csc_values[k];
 
             /* Skip if not in the target set */
             if (!do_all) {

@@ -11,8 +11,6 @@
 #include "convexfeld/cxf_solver.h"
 #include "convexfeld/cxf_basis.h"
 #include "convexfeld/cxf_env.h"
-#include "convexfeld/cxf_model.h"
-#include "convexfeld/cxf_matrix.h"
 #include "convexfeld/cxf_pricing.h"
 #include "convexfeld/cxf_types.h"
 #include <math.h>
@@ -65,10 +63,7 @@ int cxf_simplex_step2(SolverState *state, CxfEnv *env) {
     if (!state->pricing || !state->pricing->var_dirty) return 0;
     if (!state->min_activity || !state->max_activity) return 0;
 
-    CxfModel *model = state->model_ref;
-    if (!model || !model->matrix) return 0;
-    MatrixData *mat = model->matrix;
-    if (!mat->col_ptr) return 0;
+    if (!state->csc_col_ptr) return 0;
 
     double tol = env->feasibility_tol;
     int n = state->num_vars;
@@ -88,19 +83,19 @@ int cxf_simplex_step2(SolverState *state, CxfEnv *env) {
 
         /* Scan CSC column: for each constraint this variable appears in,
          * compute implied bound from constraint activity */
-        int64_t cs = mat->col_ptr[j];
-        int64_t ce = mat->col_ptr[j + 1];
+        int64_t cs = state->csc_col_ptr[j];
+        int64_t ce = state->csc_col_ptr[j + 1];
 
         for (int64_t k = cs; k < ce; k++) {
-            int row = mat->row_idx[k];
-            double a = mat->values[k];
+            int row = state->csc_row_idx[k];
+            double a = state->csc_values[k];
             if (fabs(a) < CXF_PIVOT_TOL) continue;
 
             double min_act = state->min_activity[row];
             double max_act = state->max_activity[row];
             if (min_act <= -CXF_INFINITY || max_act >= CXF_INFINITY) continue;
 
-            char sense = (mat->sense) ? mat->sense[row] : '<';
+            char sense = (state->work_sense) ? state->work_sense[row] : '<';
 
             /* Implied bounds from constraint activity (Savelsbergh 1994):
              *
@@ -163,10 +158,8 @@ int cxf_simplex_step3(SolverState *state, CxfEnv *env) {
     if (!state->pricing) return 0;
     if (!state->min_activity || !state->max_activity) return 0;
 
-    CxfModel *model = state->model_ref;
-    if (!model || !model->matrix) return 0;
-    MatrixData *mat = model->matrix;
-    if (!mat->row_ptr || !mat->col_idx || !mat->row_values) return 0;
+    if (!state->csr_row_ptr || !state->csr_col_idx || !state->csr_values)
+        return 0;
 
     double tol = env->feasibility_tol;
     int m = state->num_constrs;
@@ -188,7 +181,7 @@ int cxf_simplex_step3(SolverState *state, CxfEnv *env) {
         double max_act = state->max_activity[row];
         if (min_act <= -CXF_INFINITY || max_act >= CXF_INFINITY) continue;
 
-        char sense = (mat->sense) ? mat->sense[row] : '<';
+        char sense = (state->work_sense) ? state->work_sense[row] : '<';
 
         /* Infeasibility check */
         if ((sense == '<' || sense == 'L') && min_act > tol)
@@ -201,11 +194,11 @@ int cxf_simplex_step3(SolverState *state, CxfEnv *env) {
         }
 
         /* Scan CSR row for implied bounds */
-        int64_t rs = mat->row_ptr[row];
-        int64_t re = mat->row_ptr[row + 1];
+        int64_t rs = state->csr_row_ptr[row];
+        int64_t re = state->csr_row_ptr[row + 1];
 
         for (int64_t k = rs; k < re; k++) {
-            int j = mat->col_idx[k];
+            int j = state->csr_col_idx[k];
             if (j < 0 || j >= n) continue;
 
             /* Skip basic or fixed variables */
@@ -214,7 +207,7 @@ int cxf_simplex_step3(SolverState *state, CxfEnv *env) {
             double ub = state->work_ub[j];
             if (ub - lb < tol) continue;
 
-            double a = mat->row_values[k];
+            double a = state->csr_values[k];
             if (fabs(a) < CXF_PIVOT_TOL) continue;
 
             /* Implied bounds from constraint activity:

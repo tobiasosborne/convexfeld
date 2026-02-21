@@ -14,7 +14,6 @@
 #include "convexfeld/cxf_solver.h"
 #include "convexfeld/cxf_model.h"
 #include "convexfeld/cxf_basis.h"
-#include "convexfeld/cxf_matrix.h"
 #include "convexfeld/cxf_pricing.h"
 #include "convexfeld/cxf_env.h"
 #include "convexfeld/cxf_types.h"
@@ -34,21 +33,22 @@ static double clamp(double v, double lo, double hi) {
  * Computes implied bounds from the constraint row using saved bounds
  * of other variables. Returns 1 if degenerate, -1 if infeasible, 0 ok.
  */
-static int analyze_basic(SolverState *state, const MatrixData *mat,
-                         int row, int bvar, double feas_tol) {
-    if (!mat->row_ptr || !mat->col_idx || !mat->row_values) return 0;
+static int analyze_basic(SolverState *state, int row, int bvar,
+                         double feas_tol) {
+    if (!state->csr_row_ptr || !state->csr_col_idx || !state->csr_values)
+        return 0;
 
     int n = state->num_vars;
-    int64_t rs = mat->row_ptr[row];
-    int64_t re = mat->row_ptr[row + 1];
+    int64_t rs = state->csr_row_ptr[row];
+    int64_t re = state->csr_row_ptr[row + 1];
 
     double impl_lo = 0.0, impl_hi = 0.0;
     int unbnd_lo = 0, unbnd_hi = 0;
 
     for (int64_t k = rs; k < re; k++) {
-        int col = mat->col_idx[k];
+        int col = state->csr_col_idx[k];
         if (col < 0 || col == bvar) continue;
-        double a = mat->row_values[k];
+        double a = state->csr_values[k];
 
         /* Use saved (original) bounds to avoid perturbation drift */
         double s_lb, s_ub;
@@ -77,7 +77,7 @@ static int analyze_basic(SolverState *state, const MatrixData *mat,
     }
 
     double gap = clamp(impl_lo - impl_hi, MIN_BOUND_RANGE, MAX_PERTURBATION);
-    char sense = (mat->sense) ? mat->sense[row] : '<';
+    char sense = (state->work_sense) ? state->work_sense[row] : '<';
 
     /* Equality constraint infeasibility */
     if ((sense == '=' || sense == 'E') &&
@@ -153,9 +153,8 @@ int cxf_simplex_perturbation(SolverState *state, CxfEnv *env) {
                 perturbed++;
             } else if (rc < -feas_tol) {
                 /* Negative RC at lower bound: check equality constraints */
-                if (j >= n && (j - n) < m && model->matrix &&
-                    model->matrix->sense) {
-                    char sense = model->matrix->sense[j - n];
+                if (j >= n && (j - n) < m && state->work_sense) {
+                    char sense = state->work_sense[j - n];
                     if (sense == '=' || sense == 'E') {
                         state->problem_row_index = j - n;
                         state->perturb_count += perturbed;
@@ -171,13 +170,12 @@ int cxf_simplex_perturbation(SolverState *state, CxfEnv *env) {
     }
 
     /*--- Phase 3: Basic variables — implied bound analysis ---*/
-    MatrixData *mat = model->matrix;
-    if (basis->basic_vars && mat && mat->row_ptr) {
+    if (basis->basic_vars && state->csr_row_ptr) {
         for (int i = 0; i < m; i++) {
             int bvar = basis->basic_vars[i];
             if (bvar < 0 || bvar >= n) continue;
 
-            int result = analyze_basic(state, mat, i, bvar, feas_tol);
+            int result = analyze_basic(state, i, bvar, feas_tol);
             if (result == -1) {
                 state->problem_row_index = i;
                 state->perturb_count += perturbed;

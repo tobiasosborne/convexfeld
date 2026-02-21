@@ -40,8 +40,6 @@ extern void cxf_pricing_set_level(PricingState *ctx, int level);
  */
 int cxf_setup_phase_one(SolverState *state) {
     BasisState *basis = state->basis;
-    CxfModel *model = state->model_ref;
-    MatrixData *mat = model->matrix;
     int m = state->num_constrs;
     int n = state->num_vars;
 
@@ -61,20 +59,24 @@ int cxf_setup_phase_one(SolverState *state) {
         basis->var_status[var_idx] = i;
 
         /* Compute slack value = RHS - sum(a_ij * x_j) */
-        double rhs = mat->rhs ? mat->rhs[i] : 0.0;
+        double rhs = state->work_rhs ? state->work_rhs[i] : 0.0;
         double row_sum = 0.0;
-        for (int j = 0; j < n; j++) {
-            double aij = 0.0;
-            int64_t start = mat->col_ptr[j];
-            int64_t end = mat->col_ptr[j + 1];
-            for (int64_t k = start; k < end; k++) {
-                if (mat->row_idx[k] == i) { aij = mat->values[k]; break; }
+        if (state->csc_col_ptr != NULL) {
+            for (int j = 0; j < n; j++) {
+                double aij = 0.0;
+                int64_t start = state->csc_col_ptr[j];
+                int64_t end = state->csc_col_ptr[j + 1];
+                for (int64_t k = start; k < end; k++) {
+                    if (state->csc_row_idx[k] == i) {
+                        aij = state->csc_values[k]; break;
+                    }
+                }
+                row_sum += aij * state->work_x[j];
             }
-            row_sum += aij * state->work_x[j];
         }
 
         double slack_val = rhs - row_sum;
-        char sense = mat->sense ? mat->sense[i] : '<';
+        char sense = state->work_sense ? state->work_sense[i] : '<';
         state->work_lb[var_idx] = 0.0;
         state->work_ub[var_idx] = CXF_INFINITY;
         double diag = 1.0;
@@ -149,7 +151,6 @@ int cxf_setup_phase_one(SolverState *state) {
 int cxf_transition_to_phase_two(SolverState *state, CxfModel *model) {
     int n = state->num_vars;
     int m = state->num_constrs;
-    MatrixData *mat = model->matrix;
 
     /* Restore original objective coefficients */
     for (int j = 0; j < n; j++)
@@ -162,7 +163,7 @@ int cxf_transition_to_phase_two(SolverState *state, CxfModel *model) {
     for (int i = 0; i < m; i++) {
         int var_idx = n + i;
         state->work_obj[var_idx] = 0.0;
-        char sense = (mat != NULL && mat->sense != NULL) ? mat->sense[i] : '<';
+        char sense = (state->work_sense != NULL) ? state->work_sense[i] : '<';
         if (sense == '=' || sense == 'E') {
             state->work_ub[var_idx] = 0.0;
         } else if ((sense == '>' || sense == 'G') &&
@@ -190,14 +191,17 @@ int cxf_transition_to_phase_two(SolverState *state, CxfModel *model) {
          * Scan the row for a column with a nonzero coefficient. */
         int best_col = -1;
         double best_abs = 0.0;
-        for (int j = 0; j < n; j++) {
-            if (basis->var_status[j] >= 0) continue;  /* skip basic */
-            /* Check if column j has a nonzero in row i */
-            int64_t cs = mat->col_ptr[j], ce = mat->col_ptr[j + 1];
-            for (int64_t k = cs; k < ce; k++) {
-                if (mat->row_idx[k] == i && fabs(mat->values[k]) > best_abs) {
-                    best_abs = fabs(mat->values[k]);
-                    best_col = j;
+        if (state->csc_col_ptr != NULL) {
+            for (int j = 0; j < n; j++) {
+                if (basis->var_status[j] >= 0) continue;  /* skip basic */
+                int64_t cs = state->csc_col_ptr[j];
+                int64_t ce = state->csc_col_ptr[j + 1];
+                for (int64_t k = cs; k < ce; k++) {
+                    if (state->csc_row_idx[k] == i &&
+                        fabs(state->csc_values[k]) > best_abs) {
+                        best_abs = fabs(state->csc_values[k]);
+                        best_col = j;
+                    }
                 }
             }
         }
@@ -207,10 +211,10 @@ int cxf_transition_to_phase_two(SolverState *state, CxfModel *model) {
         double *col_buf = state->work_column;
         if (col_buf == NULL) continue;
         memset(col_buf, 0, (size_t)m * sizeof(double));
-        int64_t cs = mat->col_ptr[best_col];
-        int64_t ce = mat->col_ptr[best_col + 1];
+        int64_t cs = state->csc_col_ptr[best_col];
+        int64_t ce = state->csc_col_ptr[best_col + 1];
         for (int64_t k = cs; k < ce; k++)
-            col_buf[mat->row_idx[k]] = mat->values[k];
+            col_buf[state->csc_row_idx[k]] = state->csc_values[k];
 
         double *ftran_buf = basis->work;
         if (ftran_buf == NULL) continue;

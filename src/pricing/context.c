@@ -67,7 +67,7 @@ PricingState *cxf_pricing_create(int num_vars, int max_levels) {
     ctx->total_candidates_scanned = 0;
     ctx->level_escalations = 0;
 
-    /* V2: Dirty flags and constraint queues (F1) — allocated lazily in init */
+    /* V1: Dirty flags and constraint queues — allocated lazily in init */
     ctx->var_dirty = NULL;
     ctx->num_dirty = 0;
     ctx->num_constrs = 0;
@@ -75,6 +75,18 @@ PricingState *cxf_pricing_create(int num_vars, int max_levels) {
     ctx->num_constr_dirty = 0;
     ctx->constr_candidates = NULL;
     ctx->num_constr_candidates = 0;
+
+    /* V2 (P4.1): Multi-level queue system — zero-initialized by calloc.
+     * Queue arrays and flag arrays allocated lazily in init/init_constrs.
+     * Cache slots initialized to -1 (invalid). */
+    for (int i = 0; i < CXF_MAX_PRICING_LEVELS; i++) {
+        ctx->cached_var_count[i] = -1;
+        ctx->cached_var_count2[i] = -1;
+        ctx->cached_var_count3[i] = -1;
+        ctx->cached_constr_count[i] = -1;
+        ctx->cached_constr_count2[i] = -1;
+        ctx->cached_constr_count3[i] = -1;
+    }
 
     return ctx;
 }
@@ -110,10 +122,20 @@ void cxf_pricing_free(PricingState *ctx) {
     free(ctx->candidate_sizes);
     free(ctx->cached_counts);
 
-    /* V2: Free dirty flags and constraint queues */
+    /* V1: Free dirty flags and constraint queues */
     free(ctx->var_dirty);
     free(ctx->constr_dirty);
     free(ctx->constr_candidates);
+
+    /* V2 (P4.1): Free multi-level queue system */
+    free(ctx->var_flags);
+    free(ctx->constr_flags);
+    for (int i = 0; i < CXF_MAX_PRICING_LEVELS; i++) {
+        free(ctx->var_queue[i]);
+        free(ctx->var_output_buf[i]);
+        free(ctx->constr_queue[i]);
+        free(ctx->constr_output_buf[i]);
+    }
 
     free(ctx);
 }

@@ -12,7 +12,6 @@
 #include "convexfeld/cxf_basis.h"
 #include "convexfeld/cxf_pricing.h"
 #include "convexfeld/cxf_env.h"
-#include "convexfeld/cxf_model.h"
 #include "convexfeld/cxf_matrix.h"
 #include "convexfeld/cxf_types.h"
 #include <stdlib.h>
@@ -45,10 +44,10 @@ extern int cxf_compute_reduced_costs(SolverState *state);
 
 /*---------------------------------------------------------------------------*/
 
-static double get_auxiliary_coeff_fallback(const MatrixData *matrix, int row) {
-    if (matrix == NULL || matrix->sense == NULL) return 1.0;
-    char sense = matrix->sense[row];
-    double rhs = (matrix->rhs != NULL) ? matrix->rhs[row] : 0.0;
+static double get_auxiliary_coeff_fallback(const SolverState *state, int row) {
+    if (state == NULL || state->work_sense == NULL) return 1.0;
+    char sense = state->work_sense[row];
+    double rhs = (state->work_rhs != NULL) ? state->work_rhs[row] : 0.0;
     /* P0.4: unified with get_auxiliary_coeff in reduced_costs.c */
     if (sense == '>' || sense == 'G') return -1.0;
     if (sense == '<' || sense == 'L') return (rhs < 0) ? -1.0 : 1.0;
@@ -56,24 +55,81 @@ static double get_auxiliary_coeff_fallback(const MatrixData *matrix, int row) {
     return 1.0;
 }
 
-static void extract_column_ext(const MatrixData *matrix, BasisState *basis,
-                               int col, int n, int m, double *dense) {
+static void extract_column_ext(const SolverState *state, int col,
+                               double *dense) {
+    int n = state->num_vars;
+    int m = state->num_constrs;
+    BasisState *basis = state->basis;
     memset(dense, 0, (size_t)m * sizeof(double));
     if (col < n) {
-        if (matrix == NULL) return;
-        int64_t start = matrix->col_ptr[col];
-        int64_t end = matrix->col_ptr[col + 1];
+        if (state->csc_col_ptr == NULL) return;
+        int64_t start = state->csc_col_ptr[col];
+        int64_t end = state->csc_col_ptr[col + 1];
         for (int64_t k = start; k < end; k++)
-            dense[matrix->row_idx[k]] = matrix->values[k];
+            dense[state->csc_row_idx[k]] = state->csc_values[k];
     } else {
         int row = col - n;
         if (row >= 0 && row < m) {
             double coeff = (basis && basis->diag_coeff) ?
                 basis->diag_coeff[row] :
-                get_auxiliary_coeff_fallback(matrix, row);
+                get_auxiliary_coeff_fallback(state, row);
             dense[row] = coeff;
         }
     }
+}
+
+/**
+ * @brief P3.5: Negate constraint row in working matrix copies.
+ *
+ * When a basic variable flips bounds during BFRT, the corresponding constraint
+ * row coefficients, RHS, and diagonal coefficient must be negated to maintain
+ * algebraic consistency for subsequent ratio tests and refactorizations.
+ * Spec: harris_ratio_test.md Stage 3 Step 6c.
+ */
+static void negate_constraint_row(SolverState *state, int row) {
+    int n = state->num_vars;
+
+    /* Negate CSR row (if available) and matching CSC entries */
+    if (state->csr_row_ptr != NULL && state->csr_col_idx != NULL &&
+        state->csr_values != NULL) {
+        int64_t rs = state->csr_row_ptr[row];
+        int64_t re = state->csr_row_ptr[row + 1];
+        for (int64_t k = rs; k < re; k++) {
+            state->csr_values[k] = -state->csr_values[k];
+            /* Find matching CSC entry and negate */
+            int col = state->csr_col_idx[k];
+            if (col >= 0 && col < n && state->csc_col_ptr != NULL) {
+                int64_t cs = state->csc_col_ptr[col];
+                int64_t ce = state->csc_col_ptr[col + 1];
+                for (int64_t kk = cs; kk < ce; kk++) {
+                    if (state->csc_row_idx[kk] == row) {
+                        state->csc_values[kk] = -state->csc_values[kk];
+                        break;
+                    }
+                }
+            }
+        }
+    } else if (state->csc_col_ptr != NULL) {
+        /* CSR not available — scan all CSC columns */
+        for (int j = 0; j < n; j++) {
+            int64_t cs = state->csc_col_ptr[j];
+            int64_t ce = state->csc_col_ptr[j + 1];
+            for (int64_t k = cs; k < ce; k++) {
+                if (state->csc_row_idx[k] == row) {
+                    state->csc_values[k] = -state->csc_values[k];
+                    break;
+                }
+            }
+        }
+    }
+
+    /* Negate RHS */
+    if (state->work_rhs != NULL)
+        state->work_rhs[row] = -state->work_rhs[row];
+
+    /* Negate diagonal coefficient (slack/surplus direction) */
+    if (state->basis != NULL && state->basis->diag_coeff != NULL)
+        state->basis->diag_coeff[row] = -state->basis->diag_coeff[row];
 }
 
 /*---------------------------------------------------------------------------*/
@@ -230,7 +286,6 @@ static void update_reduced_costs(SolverState *state, int entering,
     int m = state->num_constrs;
     int total = n + m;
     BasisState *basis = state->basis;
-    CxfModel *model = state->model_ref;
     double step_dual = d_entering / pivotElement;
 
     state->work_dj[entering] = 0.0;
@@ -241,18 +296,18 @@ static void update_reduced_costs(SolverState *state, int entering,
         if (basis->var_status[j] >= 0) continue;
 
         double rho_aj = 0.0;
-        if (j < n && model->matrix != NULL) {
-            int64_t s = model->matrix->col_ptr[j];
-            int64_t e = model->matrix->col_ptr[j + 1];
+        if (j < n && state->csc_col_ptr != NULL) {
+            int64_t s = state->csc_col_ptr[j];
+            int64_t e = state->csc_col_ptr[j + 1];
             for (int64_t k = s; k < e; k++)
-                rho_aj += rho[model->matrix->row_idx[k]]
-                        * model->matrix->values[k];
+                rho_aj += rho[state->csc_row_idx[k]]
+                        * state->csc_values[k];
         } else if (j >= n) {
             int row = j - n;
             if (row >= 0 && row < m) {
                 double coeff = (basis->diag_coeff) ?
                     basis->diag_coeff[row] :
-                    get_auxiliary_coeff_fallback(model->matrix, row);
+                    get_auxiliary_coeff_fallback(state, row);
                 rho_aj = rho[row] * coeff;
             }
         }
@@ -271,15 +326,14 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env) {
     if (state == NULL || env == NULL) return CXF_ERROR_NULL_ARGUMENT;
 
     BasisState *basis = state->basis;
-    CxfModel *model = state->model_ref;
-    if (model == NULL || basis == NULL || model->matrix == NULL)
-        return CXF_ERROR_NULL_ARGUMENT;
+    if (basis == NULL) return CXF_ERROR_NULL_ARGUMENT;
 
     int m = state->num_constrs;
     int n = state->num_vars;
     int total = n + m;
 
     if (m == 0) { state->iteration++; return ITERATE_OPTIMAL; }
+    if (state->csc_col_ptr == NULL) return CXF_ERROR_NULL_ARGUMENT;
 
     double *pivotCol = basis->work;
     double *column = state->work_column;
@@ -383,7 +437,7 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env) {
             return ITERATE_INFEASIBLE;
 
         /* FTRAN */
-        extract_column_ext(model->matrix, basis, entering, n, m, column);
+        extract_column_ext(state, entering, column);
         rc = cxf_ftran(basis, column, pivotCol);
         if (rc != CXF_OK) return rc;
 
@@ -402,7 +456,7 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env) {
                 cxf_solver_refactor(state, env);
                 cxf_compute_reduced_costs(state);
                 /* Re-FTRAN after refactorization */
-                extract_column_ext(model->matrix, basis, entering, n, m, column);
+                extract_column_ext(state, entering, column);
                 rc = cxf_ftran(basis, column, pivotCol);
                 if (rc != CXF_OK) return rc;
             }
@@ -468,6 +522,13 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env) {
         }
     }
     state->flip_count += num_flips;
+
+    /* P3.5: Negate constraint matrix rows for flipped variables.
+     * Maintains algebraic consistency when flipped variables reappear
+     * in subsequent ratio tests and refactorizations.
+     * Spec: harris_ratio_test.md Stage 3 Step 6c. */
+    for (int f = 0; f < num_flips; f++)
+        negate_constraint_row(state, flipped_rows[f]);
 
     /* Cycling detection */
     if (stepSize < 1e-8) {

@@ -166,16 +166,89 @@ int cxf_simplex_init(CxfModel *model, SolverState **stateP) {
             cxf_simplex_final(ctx);
             return CXF_ERROR_OUT_OF_MEMORY;
         }
-        /* Compute initial column nonzero counts from CSC matrix */
-        if (model->matrix != NULL && model->matrix->col_ptr != NULL) {
-            for (int j = 0; j < n && j < model->matrix->num_cols; j++) {
-                ctx->col_nz_count[j] = (int)(model->matrix->col_ptr[j + 1]
-                                              - model->matrix->col_ptr[j]);
+        /* Compute initial column nonzero counts from owned CSC copy */
+        if (ctx->csc_col_ptr != NULL) {
+            for (int j = 0; j < n; j++) {
+                ctx->col_nz_count[j] = (int)(ctx->csc_col_ptr[j + 1]
+                                              - ctx->csc_col_ptr[j]);
             }
         }
         /* Each slack variable column has exactly 1 nonzero (the diagonal) */
         for (int i = 0; i < m; i++) {
             ctx->col_nz_count[n + i] = 1;
+        }
+    }
+
+    /* P3.1: Copy constraint matrix into SolverState-owned arrays.
+     * This prevents BFRT row negation from corrupting the original model. */
+    if (model->matrix != NULL) {
+        MatrixData *mat = model->matrix;
+        int64_t nnz = mat->nnz;
+        ctx->num_nonzeros = nnz;
+
+        /* CSC (column-major) — always present */
+        if (mat->col_ptr != NULL && n > 0) {
+            ctx->csc_col_ptr = (int64_t *)malloc((size_t)(n + 1) * sizeof(int64_t));
+            if (ctx->csc_col_ptr == NULL) {
+                cxf_simplex_final(ctx); return CXF_ERROR_OUT_OF_MEMORY;
+            }
+            memcpy(ctx->csc_col_ptr, mat->col_ptr,
+                   (size_t)(n + 1) * sizeof(int64_t));
+        }
+        if (mat->row_idx != NULL && nnz > 0) {
+            ctx->csc_row_idx = (int *)malloc((size_t)nnz * sizeof(int));
+            if (ctx->csc_row_idx == NULL) {
+                cxf_simplex_final(ctx); return CXF_ERROR_OUT_OF_MEMORY;
+            }
+            memcpy(ctx->csc_row_idx, mat->row_idx, (size_t)nnz * sizeof(int));
+        }
+        if (mat->values != NULL && nnz > 0) {
+            ctx->csc_values = (double *)malloc((size_t)nnz * sizeof(double));
+            if (ctx->csc_values == NULL) {
+                cxf_simplex_final(ctx); return CXF_ERROR_OUT_OF_MEMORY;
+            }
+            memcpy(ctx->csc_values, mat->values, (size_t)nnz * sizeof(double));
+        }
+
+        /* CSR (row-major) — optional, may be NULL */
+        if (mat->row_ptr != NULL && m > 0) {
+            ctx->csr_row_ptr = (int64_t *)malloc((size_t)(m + 1) * sizeof(int64_t));
+            if (ctx->csr_row_ptr == NULL) {
+                cxf_simplex_final(ctx); return CXF_ERROR_OUT_OF_MEMORY;
+            }
+            memcpy(ctx->csr_row_ptr, mat->row_ptr,
+                   (size_t)(m + 1) * sizeof(int64_t));
+        }
+        if (mat->col_idx != NULL && nnz > 0) {
+            ctx->csr_col_idx = (int *)malloc((size_t)nnz * sizeof(int));
+            if (ctx->csr_col_idx == NULL) {
+                cxf_simplex_final(ctx); return CXF_ERROR_OUT_OF_MEMORY;
+            }
+            memcpy(ctx->csr_col_idx, mat->col_idx, (size_t)nnz * sizeof(int));
+        }
+        if (mat->row_values != NULL && nnz > 0) {
+            ctx->csr_values = (double *)malloc((size_t)nnz * sizeof(double));
+            if (ctx->csr_values == NULL) {
+                cxf_simplex_final(ctx); return CXF_ERROR_OUT_OF_MEMORY;
+            }
+            memcpy(ctx->csr_values, mat->row_values,
+                   (size_t)nnz * sizeof(double));
+        }
+
+        /* Constraint metadata */
+        if (mat->rhs != NULL && m > 0) {
+            ctx->work_rhs = (double *)malloc((size_t)m * sizeof(double));
+            if (ctx->work_rhs == NULL) {
+                cxf_simplex_final(ctx); return CXF_ERROR_OUT_OF_MEMORY;
+            }
+            memcpy(ctx->work_rhs, mat->rhs, (size_t)m * sizeof(double));
+        }
+        if (mat->sense != NULL && m > 0) {
+            ctx->work_sense = (char *)malloc((size_t)m * sizeof(char));
+            if (ctx->work_sense == NULL) {
+                cxf_simplex_final(ctx); return CXF_ERROR_OUT_OF_MEMORY;
+            }
+            memcpy(ctx->work_sense, mat->sense, (size_t)m * sizeof(char));
         }
     }
 
@@ -232,6 +305,16 @@ void cxf_simplex_final(SolverState *state) {
     /* Free crash basis arrays (v2) */
     free(state->row_status);
     free(state->col_nz_count);
+
+    /* Free P3.1 matrix working copies */
+    free(state->csc_col_ptr);
+    free(state->csc_row_idx);
+    free(state->csc_values);
+    free(state->csr_row_ptr);
+    free(state->csr_col_idx);
+    free(state->csr_values);
+    free(state->work_rhs);
+    free(state->work_sense);
 
     /* Free basis */
     cxf_basis_free(state->basis);

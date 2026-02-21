@@ -12,7 +12,6 @@
 #include "convexfeld/cxf_solver.h"
 #include "convexfeld/cxf_basis.h"
 #include "convexfeld/cxf_env.h"
-#include "convexfeld/cxf_model.h"
 #include "convexfeld/cxf_matrix.h"
 #include "convexfeld/cxf_pricing.h"
 #include "convexfeld/cxf_types.h"
@@ -105,8 +104,7 @@ int cxf_simplex_phase_end(SolverState *state, CxfEnv *env, int doScan) {
         return CXF_ERROR_NULL_ARGUMENT;
 
     BasisState *basis = state->basis;
-    CxfModel *model = state->model_ref;
-    if (!basis || !model) return CXF_OK;
+    if (!basis) return CXF_OK;
 
     double opt_tol = env->optimality_tol;
     double feas_tol = env->feasibility_tol;
@@ -161,12 +159,11 @@ int cxf_simplex_phase_end(SolverState *state, CxfEnv *env, int doScan) {
             }
 
             /* Mark constraint variables as dirty for repricing */
-            if (state->pricing && model->matrix && model->matrix->row_ptr) {
-                MatrixData *mat = model->matrix;
-                int64_t rs = mat->row_ptr[i];
-                int64_t re = mat->row_ptr[i + 1];
+            if (state->pricing && state->csr_row_ptr) {
+                int64_t rs = state->csr_row_ptr[i];
+                int64_t re = state->csr_row_ptr[i + 1];
                 for (int64_t k = rs; k < re; k++) {
-                    int col = mat->col_idx[k];
+                    int col = state->csr_col_idx[k];
                     if (col >= 0 && col < n)
                         cxf_pricing_mark_dirty(state->pricing, col);
                 }
@@ -180,19 +177,18 @@ int cxf_simplex_phase_end(SolverState *state, CxfEnv *env, int doScan) {
     }
 
     /* 1c. Small-contribution variable scan (if doScan enabled) */
-    if (doScan && model->matrix && model->matrix->row_ptr &&
+    if (doScan && state->csr_row_ptr &&
         state->work_ub && state->work_lb && state->work_x) {
-        MatrixData *mat = model->matrix;
         for (int i = 0; i < m && num_modified < 256; i++) {
-            int64_t rs = mat->row_ptr[i];
-            int64_t re = mat->row_ptr[i + 1];
+            int64_t rs = state->csr_row_ptr[i];
+            int64_t re = state->csr_row_ptr[i + 1];
 
             for (int64_t k = rs; k < re; k++) {
-                int col = mat->col_idx[k];
+                int col = state->csr_col_idx[k];
                 if (col < 0 || col >= n) continue;
                 if (basis->var_status[col] >= 0) continue;
 
-                double a = mat->row_values[k];
+                double a = state->csr_values[k];
                 double bound_range = state->work_ub[col] -
                                      state->work_lb[col];
 

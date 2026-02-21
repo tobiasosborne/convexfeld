@@ -7,8 +7,6 @@
 
 #include "convexfeld/cxf_solver.h"
 #include "convexfeld/cxf_basis.h"
-#include "convexfeld/cxf_model.h"
-#include "convexfeld/cxf_matrix.h"
 #include "convexfeld/cxf_types.h"
 #include <math.h>
 
@@ -27,18 +25,15 @@ void cxf_pivot_update(SolverState *state, int var, double delta, int is_lb) {
     if (state == NULL || fabs(delta) < 1e-15) return;
     if (state->min_activity == NULL || state->max_activity == NULL) return;
 
-    CxfModel *model = state->model_ref;
-    if (model == NULL || model->matrix == NULL) return;
+    if (state->csc_col_ptr == NULL || var < 0 || var >= state->num_vars)
+        return;
 
-    MatrixData *mat = model->matrix;
-    if (mat->col_ptr == NULL || var < 0 || var >= state->num_vars) return;
-
-    int64_t start = mat->col_ptr[var];
-    int64_t end = mat->col_ptr[var + 1];
+    int64_t start = state->csc_col_ptr[var];
+    int64_t end = state->csc_col_ptr[var + 1];
 
     for (int64_t k = start; k < end; k++) {
-        int row = mat->row_idx[k];
-        double a = mat->values[k];
+        int row = state->csc_row_idx[k];
+        double a = state->csc_values[k];
 
         if (is_lb) {
             /* Lower bound changed: affects min_activity if a>0, max if a<0 */

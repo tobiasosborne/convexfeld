@@ -11,6 +11,7 @@
  */
 
 #include <stdlib.h>
+#include <stdint.h>
 #include <math.h>
 #include "convexfeld/cxf_types.h"
 #include "convexfeld/cxf_pricing.h"
@@ -175,13 +176,44 @@ int cxf_pricing_init(PricingState *ctx, int num_vars, int strategy) {
         }
     }
 
-    /* V2: Allocate dirty flags (F1) */
+    /* V1: Allocate dirty flags (F1) */
     free(ctx->var_dirty);
     ctx->var_dirty = NULL;
     ctx->num_dirty = 0;
     if (num_vars > 0) {
         ctx->var_dirty = (int *)calloc((size_t)num_vars, sizeof(int));
         if (ctx->var_dirty == NULL) return CXF_ERROR_OUT_OF_MEMORY;
+    }
+
+    /* V2 (P4.1): Allocate variable-side queue system */
+    free(ctx->var_flags);
+    ctx->var_flags = NULL;
+    for (int i = 0; i < CXF_MAX_PRICING_LEVELS; i++) {
+        free(ctx->var_queue[i]);
+        free(ctx->var_output_buf[i]);
+        ctx->var_queue[i] = NULL;
+        ctx->var_output_buf[i] = NULL;
+        ctx->var_queue_cap[i] = 0;
+        ctx->var_q_committed[i] = 0;
+        ctx->var_q_total[i] = 0;
+        ctx->level_active[i] = 0;
+        ctx->cached_var_count[i] = -1;
+        ctx->cached_var_count2[i] = -1;
+        ctx->cached_var_count3[i] = -1;
+    }
+
+    if (num_vars > 0) {
+        ctx->var_flags = (uint8_t *)calloc((size_t)num_vars, sizeof(uint8_t));
+        if (ctx->var_flags == NULL) return CXF_ERROR_OUT_OF_MEMORY;
+
+        /* Allocate per-level variable queues (capacity = num_vars per level) */
+        for (int i = 0; i < CXF_MAX_PRICING_LEVELS; i++) {
+            ctx->var_queue[i] = (int *)calloc((size_t)num_vars, sizeof(int));
+            ctx->var_output_buf[i] = (int *)calloc((size_t)num_vars, sizeof(int));
+            if (ctx->var_queue[i] == NULL || ctx->var_output_buf[i] == NULL)
+                return CXF_ERROR_OUT_OF_MEMORY;
+            ctx->var_queue_cap[i] = num_vars;
+        }
     }
 
     return CXF_OK;

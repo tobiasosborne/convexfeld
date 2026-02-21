@@ -386,6 +386,21 @@ for (row in basic_rows) {
 }
 ```
 
+### Matrix Isolation Pattern (P3.1)
+Copy model matrix into solver-state-owned arrays to prevent iteration-time
+mutations (e.g. BFRT row negation) from corrupting the original model:
+
+```c
+/* In cxf_simplex_init: copy CSC + CSR + rhs + sense */
+ctx->csc_col_ptr = malloc(...); memcpy(ctx->csc_col_ptr, mat->col_ptr, ...);
+/* All solving code reads state->csc_* instead of model->matrix->* */
+```
+
+**Key**: presolve code that runs BEFORE init still uses `model->matrix` directly.
+Only code that runs DURING the solve loop uses the state-owned copies. The null
+check for `m == 0` must come BEFORE the `csc_col_ptr == NULL` check (0-constraint
+problems have no matrix but should still return OPTIMAL).
+
 ### Return Value Convention
 - `cxf_solve_lp`: Returns CXF_OK (0) on success, sets model->status to CXF_OPTIMAL
 - Callers check return for errors, check model->status for optimization outcome

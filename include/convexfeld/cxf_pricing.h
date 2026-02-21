@@ -10,22 +10,28 @@
 #define CXF_PRICING_H
 
 #include "cxf_types.h"
+#include <stdint.h>
+
+/** Maximum number of pricing levels (v2 spec: 3 = base + 2 neighborhoods) */
+#define CXF_MAX_PRICING_LEVELS 3
 
 /**
- * @brief Pricing context for partial pricing.
+ * @brief Pricing context for multi-level partial pricing (v2).
  *
- * Maintains a hierarchy of candidate subsets for efficient pricing.
- * Starts with small candidate sets and expands only when necessary.
+ * Maintains per-level variable and constraint queues with committed/pending
+ * split, 4-bit membership flags, and 3-slot caches per level.
+ * Spec: pricing_state.md
  */
 struct PricingState {
-    int current_level;        /**< Active pricing level (0=full) */
-    int max_levels;           /**< Number of levels (typically 3-5) */
+    int current_level;        /**< Active pricing level (0=base) */
+    int max_levels;           /**< Number of levels (typically 3) */
 
     /* Problem dimensions */
     int num_vars;             /**< Number of variables in the problem */
+    int num_constrs;          /**< Number of constraints */
     int strategy;             /**< Pricing strategy (0=auto, 1=partial, 2=SE, 3=Devex) */
 
-    /* Candidate arrays per level */
+    /* V1 candidate arrays (retained for backward compat until P4.5 rewrites) */
     int *candidate_counts;    /**< Candidates at each level [max_levels] */
     int **candidate_arrays;   /**< Variable indices per level [max_levels] */
     int *candidate_sizes;     /**< Allocated size per level [max_levels] */
@@ -33,7 +39,7 @@ struct PricingState {
     /* Steepest edge weights */
     double *weights;          /**< SE/Devex weights [num_vars], NULL if unused */
 
-    /* Cache */
+    /* V1 cache (retained until P4.5) */
     int *cached_counts;       /**< Cached result count (-1=invalid) [max_levels] */
 
     /* Statistics */
@@ -41,16 +47,40 @@ struct PricingState {
     int64_t total_candidates_scanned; /**< Cumulative candidates evaluated */
     int level_escalations;    /**< Count of level increases */
 
-    /* V2: Dirty flags for incremental pricing (F1) */
+    /* V1 dirty flags (retained until P4.7 rewrites mark_dirty) */
     int *var_dirty;           /**< Per-variable dirty flag [num_vars] */
     int num_dirty;            /**< Count of dirty variables */
-
-    /* V2: Constraint queues (F1) */
-    int num_constrs;          /**< Number of constraints */
     int *constr_dirty;        /**< Per-constraint dirty flag [num_constrs] */
     int num_constr_dirty;     /**< Count of dirty constraints */
     int *constr_candidates;   /**< Constraint candidate list [num_constrs] */
     int num_constr_candidates;/**< Count of constraint candidates */
+
+    /* ========== V2 multi-level queue system (P4.1) ========== */
+
+    /* Level management */
+    int level_active[CXF_MAX_PRICING_LEVELS]; /**< Per-level activation flag */
+
+    /* Variable queue system — 4-bit flags + per-level queues */
+    uint8_t *var_flags;       /**< 4-bit membership flags [num_vars] */
+    int var_q_committed[CXF_MAX_PRICING_LEVELS]; /**< Committed count per level */
+    int var_q_total[CXF_MAX_PRICING_LEVELS];     /**< Total count per level */
+    int *var_queue[CXF_MAX_PRICING_LEVELS];      /**< Queue arrays per level */
+    int var_queue_cap[CXF_MAX_PRICING_LEVELS];   /**< Allocated capacity per level */
+    int cached_var_count[CXF_MAX_PRICING_LEVELS];  /**< Primary cache slot */
+    int cached_var_count2[CXF_MAX_PRICING_LEVELS]; /**< Secondary cache slot */
+    int cached_var_count3[CXF_MAX_PRICING_LEVELS]; /**< Tertiary cache slot */
+    int *var_output_buf[CXF_MAX_PRICING_LEVELS];   /**< Output buffers per level */
+
+    /* Constraint queue system — 4-bit flags + per-level queues */
+    uint8_t *constr_flags;    /**< 4-bit membership flags [num_constrs] */
+    int constr_q_committed[CXF_MAX_PRICING_LEVELS]; /**< Committed count per level */
+    int constr_q_total[CXF_MAX_PRICING_LEVELS];     /**< Total count per level */
+    int *constr_queue[CXF_MAX_PRICING_LEVELS];       /**< Queue arrays per level */
+    int constr_queue_cap[CXF_MAX_PRICING_LEVELS];    /**< Allocated capacity */
+    int cached_constr_count[CXF_MAX_PRICING_LEVELS];  /**< Primary cache slot */
+    int cached_constr_count2[CXF_MAX_PRICING_LEVELS]; /**< Secondary cache slot */
+    int cached_constr_count3[CXF_MAX_PRICING_LEVELS]; /**< Tertiary cache slot */
+    int *constr_output_buf[CXF_MAX_PRICING_LEVELS];   /**< Output buffers */
 };
 
 /*******************************************************************************

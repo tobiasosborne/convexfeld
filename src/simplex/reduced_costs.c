@@ -7,9 +7,7 @@
  */
 
 #include "convexfeld/cxf_solver.h"
-#include "convexfeld/cxf_model.h"
 #include "convexfeld/cxf_basis.h"
-#include "convexfeld/cxf_matrix.h"
 #include "convexfeld/cxf_types.h"
 #include <stdlib.h>
 #include <math.h>
@@ -23,10 +21,10 @@ extern int cxf_btran_vec(BasisState *basis, const double *input, double *result)
  * For >= constraints: always -1
  * For = constraints: +1 if RHS >= 0, -1 if RHS < 0
  */
-static double get_auxiliary_coeff(const MatrixData *mat, int row) {
-    if (mat == NULL || mat->sense == NULL) return 1.0;
-    char sense = mat->sense[row];
-    double rhs = (mat->rhs != NULL) ? mat->rhs[row] : 0.0;
+static double get_auxiliary_coeff(const SolverState *state, int row) {
+    if (state == NULL || state->work_sense == NULL) return 1.0;
+    char sense = state->work_sense[row];
+    double rhs = (state->work_rhs != NULL) ? state->work_rhs[row] : 0.0;
     if (sense == '>' || sense == 'G') return -1.0;
     if (sense == '<' || sense == 'L') return (rhs < 0) ? -1.0 : 1.0;
     if (sense == '=') return (rhs < 0) ? -1.0 : 1.0;
@@ -34,8 +32,6 @@ static double get_auxiliary_coeff(const MatrixData *mat, int row) {
 }
 
 int cxf_compute_reduced_costs(SolverState *state) {
-    CxfModel *model = state->model_ref;
-    MatrixData *mat = model->matrix;
     BasisState *basis = state->basis;
     int n = state->num_vars;
     int m = state->num_constrs;
@@ -63,17 +59,18 @@ int cxf_compute_reduced_costs(SolverState *state) {
             state->work_dj[j] = 0.0;
         } else {
             double dj = state->work_obj[j];
-            if (j < n && mat != NULL) {
-                int64_t start = mat->col_ptr[j];
-                int64_t end = mat->col_ptr[j + 1];
+            if (j < n && state->csc_col_ptr != NULL) {
+                int64_t start = state->csc_col_ptr[j];
+                int64_t end = state->csc_col_ptr[j + 1];
                 for (int64_t k = start; k < end; k++)
-                    dj -= state->work_pi[mat->row_idx[k]] * mat->values[k];
+                    dj -= state->work_pi[state->csc_row_idx[k]]
+                        * state->csc_values[k];
             } else if (j >= n) {
                 int row = j - n;
                 if (row >= 0 && row < m) {
                     double coeff = (basis->diag_coeff != NULL) ?
                         basis->diag_coeff[row] :
-                        get_auxiliary_coeff(mat, row);
+                        get_auxiliary_coeff(state, row);
                     dj -= state->work_pi[row] * coeff;
                 }
             }

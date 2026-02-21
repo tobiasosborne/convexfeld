@@ -9,8 +9,6 @@
 
 #include "convexfeld/cxf_pricing.h"
 #include "convexfeld/cxf_solver.h"
-#include "convexfeld/cxf_model.h"
-#include "convexfeld/cxf_matrix.h"
 #include "convexfeld/cxf_types.h"
 #include <stdlib.h>
 #include <string.h>
@@ -51,16 +49,13 @@ void cxf_pricing_cascade_update(PricingState *ctx, SolverState *state,
     if (ctx == NULL || state == NULL || var_idx < 0) return;
     cxf_pricing_mark_dirty(ctx, var_idx);
 
-    /* Traverse CSC column to mark affected constraints */
-    CxfModel *model = state->model_ref;
-    if (model == NULL || model->matrix == NULL) return;
-    MatrixData *mat = model->matrix;
-    if (mat->col_ptr == NULL || var_idx >= state->num_vars) return;
+    /* Traverse owned CSC column to mark affected constraints (P3.1) */
+    if (state->csc_col_ptr == NULL || var_idx >= state->num_vars) return;
 
-    int64_t start = mat->col_ptr[var_idx];
-    int64_t end = mat->col_ptr[var_idx + 1];
+    int64_t start = state->csc_col_ptr[var_idx];
+    int64_t end = state->csc_col_ptr[var_idx + 1];
     for (int64_t k = start; k < end; k++) {
-        cxf_pricing_mark_constr_dirty(ctx, mat->row_idx[k]);
+        cxf_pricing_mark_constr_dirty(ctx, state->csc_row_idx[k]);
     }
 }
 

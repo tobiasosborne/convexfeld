@@ -97,6 +97,17 @@ struct SolverState {
     int *col_nz_count;        /**< Active column nonzero counts [num_vars + num_constrs] */
     int num_basic;            /**< Count of basic rows assigned by crash */
     int problem_row_index;    /**< Diagnostic: constraint index causing infeasibility */
+
+    /* P3.1: Working copies of constraint matrix (owned by SolverState).
+     * Prevents mutation of model->matrix during solving (e.g. BFRT). */
+    int64_t *csc_col_ptr;     /**< CSC column pointers [num_vars + 1] */
+    int *csc_row_idx;         /**< CSC row indices [nnz] */
+    double *csc_values;       /**< CSC coefficient values [nnz] */
+    int64_t *csr_row_ptr;     /**< CSR row pointers [num_constrs + 1] (NULL if N/A) */
+    int *csr_col_idx;         /**< CSR column indices [nnz] (NULL if N/A) */
+    double *csr_values;       /**< CSR coefficient values [nnz] (NULL if N/A) */
+    double *work_rhs;         /**< RHS working copy [num_constrs] */
+    char *work_sense;         /**< Constraint senses working copy [num_constrs] */
 };
 
 /*******************************************************************************

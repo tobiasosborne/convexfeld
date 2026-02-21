@@ -30,15 +30,15 @@ static int extract_basis_matrix(double *B, int *row_count, int *col_count,
     BasisState *basis = ctx->basis;
     int m = basis->m;
     int n_orig = ctx->num_vars;
-    MatrixData *A = ctx->model_ref->matrix;
 
-    /* Extract basis columns into dense B */
+    /* Extract basis columns into dense B (using SolverState's CSC copy) */
     for (int j = 0; j < m; j++) {
         int var = basis->basic_vars[j];
-        if (var < n_orig) {
-            for (int64_t k = A->col_ptr[var]; k < A->col_ptr[var + 1]; k++) {
-                int row = A->row_idx[k];
-                if (row < m) B[row * m + j] = A->values[k];
+        if (var < n_orig && ctx->csc_col_ptr != NULL) {
+            for (int64_t k = ctx->csc_col_ptr[var];
+                 k < ctx->csc_col_ptr[var + 1]; k++) {
+                int row = ctx->csc_row_idx[k];
+                if (row < m) B[row * m + j] = ctx->csc_values[k];
             }
         } else {
             int slack_row = var - n_orig;
@@ -285,8 +285,7 @@ int cxf_lu_factorize(LUFactors *lu, SolverState *ctx) {
     int m = basis->m;
     if (m == 0) { lu->valid = 1; return 0; }
 
-    CxfModel *model = ctx->model_ref;
-    if (!model || !model->matrix) return CXF_ERROR_NULL_ARGUMENT;
+    if (!ctx->csc_col_ptr) return CXF_ERROR_NULL_ARGUMENT;
 
     /* Allocate working storage */
     double *B = calloc((size_t)m * m, sizeof(double));
