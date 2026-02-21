@@ -43,8 +43,7 @@ int cxf_ratio_test(SolverState *state, CxfEnv *env, int enteringVar,
     int i, basicVar;
     double d_i, x_i, lb, ub, ratio;
 
-    /* Suppress unused parameter warnings (for future sparse impl) */
-    (void)enteringVar;
+    /* Suppress unused parameter warning (for future sparse impl) */
     (void)columnNZ;
 
     /* Validate inputs */
@@ -57,6 +56,14 @@ int cxf_ratio_test(SolverState *state, CxfEnv *env, int enteringVar,
     feasTol = env->feasibility_tol;
     infinity = env->infinity;
     relaxedTol = 10.0 * feasTol;
+
+    /* Entering direction: +1 if entering from lower bound (increases),
+     * -1 if entering from upper bound (decreases).
+     * Spec: harris_ratio_test.md Stage 1 "Entering direction" */
+    int s = 1;
+    if (state->basis != NULL && enteringVar >= 0 &&
+        state->basis->var_status[enteringVar] == CXF_VAR_AT_UPPER)
+        s = -1;
 
     /* Initialize for first pass */
     minRatio = infinity;
@@ -89,25 +96,25 @@ int cxf_ratio_test(SolverState *state, CxfEnv *env, int enteringVar,
         lb = state->work_lb[basicVar];
         ub = state->work_ub[basicVar];
 
-        /* Compute ratio based on sign of pivot coefficient.
-         * When entering var increases by theta, basic var changes by -theta * d_i.
-         * - If d_i > 0: basic var decreases, hits lower bound
-         * - If d_i < 0: basic var increases, hits upper bound
+        /* Compute ratio using effective pivot direction s * d_i.
+         * When entering var moves by theta, basic var changes by -s*theta*d_i.
+         * Using sd_i = s * d_i:
+         * - If sd_i > 0: basic var decreases, hits lower bound
+         * - If sd_i < 0: basic var increases, hits upper bound
          */
-        if (d_i > relaxedTol) {
-            /* Positive coefficient: basic var decreases toward lower bound */
+        double sd_i = s * d_i;
+        if (sd_i > relaxedTol) {
             if (lb <= -infinity) {
                 continue;  /* Lower bound is infinite */
             }
-            ratio = (x_i - lb) / d_i;
-        } else if (d_i < -relaxedTol) {
-            /* Negative coefficient: basic var increases toward upper bound */
+            ratio = (x_i - lb) / sd_i;
+        } else if (sd_i < -relaxedTol) {
             if (ub >= infinity) {
                 continue;  /* Upper bound is infinite */
             }
-            ratio = (x_i - ub) / d_i;  /* d_i < 0 makes this positive */
+            ratio = (x_i - ub) / sd_i;  /* sd_i < 0 makes this positive */
         } else {
-            continue;  /* Coefficient too small */
+            continue;  /* Effective coefficient too small */
         }
 
         /* Update minimum if this ratio is smaller */
@@ -154,19 +161,18 @@ int cxf_ratio_test(SolverState *state, CxfEnv *env, int enteringVar,
         lb = state->work_lb[basicVar];
         ub = state->work_ub[basicVar];
 
-        /* Compute ratio (same logic as first pass) */
-        if (d_i > relaxedTol) {
-            /* Positive coefficient: basic var decreases toward lower bound */
+        /* Compute ratio (same s * d_i logic as first pass) */
+        double sd_i2 = s * d_i;
+        if (sd_i2 > relaxedTol) {
             if (lb <= -infinity) {
                 continue;
             }
-            ratio = (x_i - lb) / d_i;
-        } else if (d_i < -relaxedTol) {
-            /* Negative coefficient: basic var increases toward upper bound */
+            ratio = (x_i - lb) / sd_i2;
+        } else if (sd_i2 < -relaxedTol) {
             if (ub >= infinity) {
                 continue;
             }
-            ratio = (x_i - ub) / d_i;
+            ratio = (x_i - ub) / sd_i2;
         } else {
             continue;
         }

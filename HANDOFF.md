@@ -1,79 +1,66 @@
 # Agent Handoff
 
-*Last updated: 2026-02-20*
+*Last updated: 2026-02-21*
 
 ---
 
-## STATUS: `d1th` DONE — pricing tolerance escalation implemented per v2 P2.3/P3.20
+## STATUS: V2 compliance review complete. P0.1+P0.2 fixed. 48 beads issues filed.
 
 ### Session Summary
 
-**Implemented multi-level pricing tolerance escalation** in `cxf_simplex_step()`. This was the #1 item in the critical path for 7 false INFEASIBLE Netlib failures. Previously, when pricing found 0 candidates at the loose tolerance (level 0), the function immediately returned ITERATE_OPTIMAL. Now it escalates through 3 tolerance tiers before declaring optimality.
+**Completed a 12-agent multi-scale v2 spec compliance review** covering the entire codebase. Found ~25 CRITICAL, ~35 HIGH, ~20 LOW divergences. Produced a comprehensive roadmap at `docs/v2_compliance_roadmap.md`.
+
+**Created 48 beads issues** with full dependency chains across 6 phases. 9 Phase 0 items are ready to work now.
+
+**Fixed P0.1 + P0.2** (ratio test entering direction + objective update sign). These were the two CRITICAL bugs producing wrong answers for upper-bound entering variables.
 
 ### Changes This Session
 
-| File | Change | Spec Basis |
-|------|--------|------------|
-| `step.c` lines 280-359 | Wrap pricing Phases 1+2 in level escalation loop (0→1→2) | P2.3 Phase 5 + P3.20 Phase 1-2 |
-
-**Detail:** The pricing scan in `cxf_simplex_step` now loops over 3 levels with decreasing tolerance thresholds:
-- Level 0 (loose): `optimality_tol * 10` — only strongly attractive RCs
-- Level 1 (standard): `optimality_tol` — moderately attractive RCs
-- Level 2 (tight): `optimality_tol * 0.1` — catches weak RCs near zero
-
-At each failed level, calls `cxf_pricing_end_level()` and increments `level_escalations` counter. Only declares ITERATE_OPTIMAL when ALL 3 levels return 0 candidates. All 3 pricing paths (Bland, pricing subsystem, fallback scan) benefit from escalation.
-
-### Issues Closed
-
-| ID | Title |
-|----|-------|
-| `d1th` | P2.3: multi-level pricing tolerance escalation incomplete |
+| File | Change |
+|------|--------|
+| `docs/v2_compliance_roadmap.md` | NEW: 395-line roadmap from 12-agent review |
+| `src/simplex/ratio_test.c` | P0.1: Added entering direction `s` to Harris ratio test |
+| `src/simplex/step.c` | P0.1+P0.2: Added `entering_sign` to find_next_blocker, compute_step, BFRT clamp, objective update |
+| `benchmarks/bench_netlib.c` | Added 10s per-problem timeout via SIGALRM |
 
 ### Test Results
 
-- **39/39 unit tests pass**
-- No regressions
-- **Netlib (60s run, 59 smallest problems):** 18 PASS, 27 FAIL, 14 TIMEOUT — no change from before `d1th`
+- **39/39 unit tests pass** (no regressions)
+- **DO NOT run Netlib benchmarks** — expected to fail until Phase 0-2 complete
+
+### Issues Status
+
+| ID | Title | Status |
+|----|-------|--------|
+| `fh54` | P0.1: Ratio test entering direction | **IN PROGRESS** (code done, needs close) |
+| `csa3` | P0.2: Objective update sign | **IN PROGRESS** (code done, needs close) |
 
 ---
 
-## THE KEY LESSON: All V2 Defense Layers Must Be Present Together
+## Next Steps
 
-**Netlib confirmed: tolerance escalation alone changes nothing.** 18/59 pass — identical to before. This is not a failure of the implementation; it validates the architectural insight: the v2 spec's defense layers are designed to work **as a system**. Each layer catches problems the others miss:
+### Immediate — Close P0.1+P0.2 and continue Phase 0
 
-| Layer | What it prevents | Status |
-|-------|-----------------|--------|
-| Crash basis (P2.5) | Too many artificials → long Phase I | `snwu` OPEN |
-| **Pricing escalation (P2.3)** | **False optimality from weak RCs** | **`d1th` DONE** |
-| Proactive perturbation (P2.6) | Degeneracy stalling in early iterations | `zr5l` OPEN |
-| phase_end in Phase I (P3.21) | Missed Phase I→II transition | `fiyt` OPEN |
-| LU accuracy | Numerical drift → false infeasibility | `x5dj` OPEN |
+1. Close `fh54` and `csa3` (code is done, tests pass)
+2. Pick up remaining Phase 0 bugs (`bd ready`):
+   - `mvqw` P0.3: Leaving var status reset
+   - `lmr2` P0.4: Auxiliary coefficient sign
+   - `5u6b` P0.5: BTRAN silent corruption
+   - `6b6b` P0.6: Pivot element filter 1e-5→1e-9
+   - `0jbd` P0.7: Use cxf_refactor_check()
+   - `m9m5` P0.8: Extract solution OPTIMAL override
+   - `tz49` P0.9: BFRT cascade notification
+   - `yw6u` P0.10: diag_coeff reset
 
-**Do NOT expect incremental Netlib improvement from fixing one layer.** The improvement will come as a step function when the critical mass of layers is present. Each layer is necessary but not individually sufficient.
+### After Phase 0 — Phase 1 (false INFEASIBLE root cause)
 
-The false INFEASIBLE pattern: Phase I has improving directions with weak RCs (now caught by escalation), BUT those directions lead to degenerate pivots (needs perturbation), which stall (needs phase_end participation), with accumulated numerical error (needs LU accuracy). Fix all four, and the 27 failures should collapse.
+All 7 Phase 1 items unblock when P0.1 closes. Critical path: P1.1 (remove correct_basic_variables hack).
 
----
+### DO NOT
 
-## Next Steps (Strict V2 Order)
-
-### Critical Path — Remaining Layers
-
-1. ~~`d1th` — Pricing tolerance escalation (P2.3)~~ **DONE**
-
-2. **`zr5l` — Proactive perturbation (P2.6)** — Apply perturbation in first 1-2 inner iterations of round 0. Challenge: Mechanism B (nonbasic flipping) must not flip all original variables before meaningful RCs exist. May need to split perturbation into basic-only (proactive) and full (reactive).
-
-3. **`fiyt` — phase_end in Phase I (P3.21)** — Currently phase_end only runs during Phase II. Spec says it runs both phases. Its constraint activity analysis could detect Phase I→II transition earlier.
-
-4. **`x5dj` — LU accuracy (P3.21)** — The correct_basic_variables hack exists because LU gives inaccurate x_B. Better LU (already tracked as `uxae`) would eliminate this workaround and give accurate infeasibility measurement.
-
-### Already Tracked
-
-- `snwu` — Crash basis (P2.5) — better initial basis reduces Phase I iterations
-- `1azn` — EXPAND perturbation — tracked separately
-- `uxae` — LU factorization performance/accuracy
-- `a5vp` — P2.6 perturbation Phase 2 candidates from pricing subsystem
-- `9yi2` — P2.6 perturbation Phase 3 bound restoration before analysis
+- Run Netlib benchmarks — waste of time until Phase 0-2 done
+- Skip the dependency chain — phases must proceed in order
+- Patch around architectural gaps — implement v2 spec components
 
 ---
 
@@ -81,12 +68,8 @@ The false INFEASIBLE pattern: Phase I has improving directions with weak RCs (no
 
 | Item | Path |
 |---|---|
-| step.c (pricing + BFRT + **escalation**) | `src/simplex/step.c` |
-| perturbation.c (EXPAND, P2.6) | `src/simplex/perturbation.c` |
-| phase_loop.c (Phase I/II loops) | `src/simplex/phase_loop.c` |
-| solve_lp.c (v2 orchestrator) | `src/simplex/solve_lp.c` |
-| candidates.c (pricing candidates) | `src/pricing/candidates.c` |
-| queue.c (pricing levels) | `src/pricing/queue.c` |
-| reduced_costs.c (RC computation) | `src/simplex/reduced_costs.c` |
+| V2 compliance roadmap | `docs/v2_compliance_roadmap.md` |
+| step.c (iteration + P0.1/P0.2 fix) | `src/simplex/step.c` |
+| ratio_test.c (P0.1 fix) | `src/simplex/ratio_test.c` |
 | V2 specs | `docs/specs-v2/specs/modules/` |
-| V2 algorithm specs | `docs/specs-v2/specs/algorithms/` |
+| Beads issues | `bd ready` / `bd list --status=open -n 100` |

@@ -130,7 +130,8 @@ int cxf_apply_pivot(SolverState *state, int entering, int leavingRow,
  */
 static int find_next_blocker(SolverState *state, const double *pivotCol,
                              const int *flipped, int num_flipped,
-                             double cur_step, double *out_pivot) {
+                             double cur_step, int entering_sign,
+                             double *out_pivot) {
     int best_row = -1;
     double best_ratio = CXF_INFINITY;
     double best_pivot = 0.0;
@@ -146,17 +147,18 @@ static int find_next_blocker(SolverState *state, const double *pivotCol,
         if (skip) continue;
 
         double d_i = pivotCol[i];
-        if (fabs(d_i) < CXF_PIVOT_TOL) continue;
+        double sd_i = entering_sign * d_i;
+        if (fabs(sd_i) < CXF_PIVOT_TOL) continue;
 
         int bv = basis->basic_vars[i];
         if (bv < 0) continue;
 
         double x = state->work_x[bv];
         double ratio;
-        if (d_i > 0)
-            ratio = (x - state->work_lb[bv]) / d_i;
+        if (sd_i > 0)
+            ratio = (x - state->work_lb[bv]) / sd_i;
         else
-            ratio = (x - state->work_ub[bv]) / d_i;
+            ratio = (x - state->work_ub[bv]) / sd_i;
 
         if (ratio < -CXF_FEASIBILITY_TOL) continue;
 
@@ -186,16 +188,20 @@ static int find_next_blocker(SolverState *state, const double *pivotCol,
  * @brief Compute step size from ratio test result.
  */
 static double compute_step(SolverState *state, int leavingRow,
-                           double pivotElement, int entering) {
+                           double pivotElement, int entering,
+                           int entering_sign) {
     BasisState *basis = state->basis;
     int leaving = basis->basic_vars[leavingRow];
     double x_l = state->work_x[leaving];
     double step;
 
-    if (pivotElement > 0)
-        step = (x_l - state->work_lb[leaving]) / pivotElement;
+    /* Use effective pivot direction s * pivotElement to determine
+     * which bound the leaving variable hits */
+    double sp = entering_sign * pivotElement;
+    if (sp > 0)
+        step = (x_l - state->work_lb[leaving]) / sp;
     else
-        step = (x_l - state->work_ub[leaving]) / pivotElement;
+        step = (x_l - state->work_ub[leaving]) / sp;
     if (step < 0) step = 0;
 
     /* Limit by entering variable's bound range */
@@ -361,10 +367,13 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env) {
     /*--- Phase 2: Per-candidate evaluation ---*/
     int entering = -1, leavingRow = -1;
     double pivotElement = 0.0, stepSize = 0.0;
+    int entering_sign = 1;  /* +1 from lower, -1 from upper */
     int rc;
 
     for (int ci = 0; ci < num_cand; ci++) {
         entering = candidates[ci];
+        entering_sign = (basis->var_status[entering] == CXF_VAR_AT_UPPER)
+                        ? -1 : 1;
 
         /* Infeasibility check */
         if (state->work_lb[entering] >
@@ -390,7 +399,8 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env) {
         }
 
         /* Step size */
-        stepSize = compute_step(state, leavingRow, pivotElement, entering);
+        stepSize = compute_step(state, leavingRow, pivotElement, entering,
+                                entering_sign);
 
         /* Under Bland's rule, skip degenerate pivots if alternatives exist */
         if (state->use_bland && stepSize < 1e-8 && ci + 1 < num_cand)
@@ -421,7 +431,7 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env) {
             double next_pivot = 0.0;
             int next_row = find_next_blocker(
                 state, pivotCol, flipped_rows, num_flips,
-                stepSize, &next_pivot);
+                stepSize, entering_sign, &next_pivot);
             if (next_row < 0) {
                 /* No more blockers — undo last flip, use it as
                  * the true leaving variable instead */
@@ -461,11 +471,12 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env) {
                 state->work_x[bv] -= stepSize * pivotCol[i];
         }
 
-        /* Clamp flipped variables to their opposite bound */
+        /* Clamp flipped variables to their opposite bound.
+         * Use entering_sign * pivotCol to determine direction. */
         for (int f = 0; f < num_flips; f++) {
             int row = flipped_rows[f];
             int bv = basis->basic_vars[row];
-            if (pivotCol[row] > 0)
+            if (entering_sign * pivotCol[row] > 0)
                 state->work_x[bv] = state->work_ub[bv];
             else
                 state->work_x[bv] = state->work_lb[bv];
@@ -498,7 +509,9 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env) {
     }
 
     /*--- Phase 6: Update objective ---*/
-    state->obj_value += d_entering * stepSize;
+    /* entering_sign accounts for direction: +1 from lower, -1 from upper.
+     * Spec: revised_simplex.md Step 4 item 4 */
+    state->obj_value += entering_sign * d_entering * stepSize;
 
     /*--- Phase 7: Incremental reduced cost update ---*/
     if (btran_ok) {

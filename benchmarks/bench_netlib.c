@@ -6,7 +6,7 @@
  * Reference values from a commercial solver with 1e-8 tolerance.
  */
 
-#define _POSIX_C_SOURCE 199309L
+#define _POSIX_C_SOURCE 200809L
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -14,10 +14,14 @@
 #include <math.h>
 #include <time.h>
 #include <dirent.h>
+#include <signal.h>
+#include <setjmp.h>
+#include <unistd.h>
 #include "convexfeld/convexfeld.h"
 #include "convexfeld/cxf_mps.h"
 
 #define MAX_PROBLEMS 150
+#define TIMEOUT_SEC 10
 #define MAX_NAME_LEN 64
 #define REL_TOL 1e-4  /* 0.01% relative tolerance */
 #define ABS_TOL 1e-6  /* Absolute tolerance for near-zero objectives */
@@ -92,6 +96,15 @@ typedef struct {
     int skipped;
 } Stats;
 
+static volatile sig_atomic_t g_timed_out = 0;
+static jmp_buf g_timeout_jmp;
+
+static void timeout_handler(int sig) {
+    (void)sig;
+    g_timed_out = 1;
+    longjmp(g_timeout_jmp, 1);
+}
+
 static void run_benchmark(const char *mps_path, const char *name, Stats *stats) {
     const Problem *ref = find_reference(name);
     if (!ref) {
@@ -129,8 +142,32 @@ static void run_benchmark(const char *mps_path, const char *name, Stats *stats) 
     }
 
     double t0 = get_time_sec();
-    rc = cxf_optimize(model);
+    g_timed_out = 0;
+
+    struct sigaction sa, old_sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = timeout_handler;
+    sigaction(SIGALRM, &sa, &old_sa);
+
+    if (setjmp(g_timeout_jmp) == 0) {
+        alarm(TIMEOUT_SEC);
+        rc = cxf_optimize(model);
+        alarm(0);
+    } else {
+        /* Timed out via longjmp */
+        rc = -1;
+    }
+
+    sigaction(SIGALRM, &old_sa, NULL);
     double elapsed = get_time_sec() - t0;
+
+    if (g_timed_out) {
+        printf("  %-20s FAIL  status=TIMEOUT [%.1fs]\n", name, elapsed);
+        stats->failed++;
+        cxf_freemodel(model);
+        cxf_freeenv(env);
+        return;
+    }
 
     if (model->status == CXF_OPTIMAL) {
         int ok = check_objective(model->obj_val, ref->ref_obj);
