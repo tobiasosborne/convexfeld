@@ -4,63 +4,62 @@
 
 ---
 
-## STATUS: V2 compliance review complete. P0.1+P0.2 fixed. 48 beads issues filed.
+## STATUS: Phase 0 complete (10/10), Phase 1 complete (7/7), Phase 2 partial (3/6)
 
 ### Session Summary
 
-**Completed a 12-agent multi-scale v2 spec compliance review** covering the entire codebase. Found ~25 CRITICAL, ~35 HIGH, ~20 LOW divergences. Produced a comprehensive roadmap at `docs/v2_compliance_roadmap.md`.
+**12-agent v2 spec compliance review** → `docs/v2_compliance_roadmap.md` (48 beads issues, 6 phases).
 
-**Created 48 beads issues** with full dependency chains across 6 phases. 9 Phase 0 items are ready to work now.
+**Phase 0 (10/10 closed):** All critical bug fixes — ratio test direction, objective sign, leaving var status, aux coefficient, BTRAN error propagation, pivot element filter, refactor check, extract solution status, BFRT cascade, diag_coeff preservation.
 
-**Fixed P0.1 + P0.2** (ratio test entering direction + objective update sign). These were the two CRITICAL bugs producing wrong answers for upper-bound entering variables.
+**Phase 1 (7/7 closed):** Removed `correct_basic_variables` hack, enabled `phase_end` in Phase I, forced refactorization at transition, artificial pivot-out, pricing reset, proactive perturbation, perturbation candidate-removal-not-bound-modification.
 
-### Changes This Session
-
-| File | Change |
-|------|--------|
-| `docs/v2_compliance_roadmap.md` | NEW: 395-line roadmap from 12-agent review |
-| `src/simplex/ratio_test.c` | P0.1: Added entering direction `s` to Harris ratio test |
-| `src/simplex/step.c` | P0.1+P0.2: Added `entering_sign` to find_next_blocker, compute_step, BFRT clamp, objective update |
-| `benchmarks/bench_netlib.c` | Added 10s per-problem timeout via SIGALRM |
+**Phase 2 (3/6 closed):** Hyper-sparse FTRAN/BTRAN, unified tolerance constants, BTRAN error propagation (via P0.5). Remaining: P2.1 (sparse LU), P2.2 (FTRAN residual monitoring), P2.3 (eta memory pool), P2.4 (fix_variables_at_bounds).
 
 ### Test Results
 
 - **39/39 unit tests pass** (no regressions)
-- **DO NOT run Netlib benchmarks** — expected to fail until Phase 0-2 complete
-
-### Issues Status
-
-| ID | Title | Status |
-|----|-------|--------|
-| `fh54` | P0.1: Ratio test entering direction | **IN PROGRESS** (code done, needs close) |
-| `csa3` | P0.2: Objective update sign | **IN PROGRESS** (code done, needs close) |
+- **DO NOT run Netlib benchmarks** — expected to fail until Phase 2+ complete
 
 ---
 
-## Next Steps
+## Next Steps — Critical Path
 
-### Immediate — Close P0.1+P0.2 and continue Phase 0
+### P2.1 (uxae): Sparse Markowitz LU — MAJOR REWRITE
 
-1. Close `fh54` and `csa3` (code is done, tests pass)
-2. Pick up remaining Phase 0 bugs (`bd ready`):
-   - `mvqw` P0.3: Leaving var status reset
-   - `lmr2` P0.4: Auxiliary coefficient sign
-   - `5u6b` P0.5: BTRAN silent corruption
-   - `6b6b` P0.6: Pivot element filter 1e-5→1e-9
-   - `0jbd` P0.7: Use cxf_refactor_check()
-   - `m9m5` P0.8: Extract solution OPTIMAL override
-   - `tz49` P0.9: BFRT cascade notification
-   - `yw6u` P0.10: diag_coeff reset
+This is the critical path bottleneck. Current dense O(m^4) LU in `lu_factorize.c` is 47-65% of runtime. Needs:
+- Compressed sparse column storage (replace dense m×m matrix)
+- Maintained column maxima (eliminate O(m) col_max scan per step)
+- Linked-list row/column count structures
+- Target: O(nnz * fill_in) per factorization
 
-### After Phase 0 — Phase 1 (false INFEASIBLE root cause)
+**This is a ~300 line rewrite.** The file is `src/basis/lu_factorize.c`.
 
-All 7 Phase 1 items unblock when P0.1 closes. Critical path: P1.1 (remove correct_basic_variables hack).
+### After P2.1
 
-### DO NOT
+- `epf7` P2.2: FTRAN residual monitoring (add ||Bx-a|| check)
+- `auj4` P2.3: Eta memory pool (bump allocator)
+- `uyfk` P2.4: Implement cxf_fix_variables_at_bounds properly
 
-- Run Netlib benchmarks — waste of time until Phase 0-2 done
-- Skip the dependency chain — phases must proceed in order
-- Patch around architectural gaps — implement v2 spec components
+### Remaining Phase 1 items that are unblocked but lower priority
+
+None — Phase 1 is complete.
+
+---
+
+## Issue Scoreboard
+
+| Phase | Total | Closed | Remaining |
+|-------|-------|--------|-----------|
+| P0 | 10 | 10 | 0 |
+| P1 | 7 | 7 | 0 |
+| P2 | 6 | 3 | 3 (P2.1, P2.2, P2.3, P2.4) |
+| P3 | 5 | 0 | 5 |
+| P4 | 9 | 0 | 9 |
+| P5 | 4 | 0 | 4 |
+| P6 | 7 | 0 | 7 |
+
+**Critical path:** P2.1 → P3.1 → P4.1 → P4.5 → P5.1
 
 ---
 
@@ -69,7 +68,8 @@ All 7 Phase 1 items unblock when P0.1 closes. Critical path: P1.1 (remove correc
 | Item | Path |
 |---|---|
 | V2 compliance roadmap | `docs/v2_compliance_roadmap.md` |
-| step.c (iteration + P0.1/P0.2 fix) | `src/simplex/step.c` |
-| ratio_test.c (P0.1 fix) | `src/simplex/ratio_test.c` |
+| LU factorize (needs rewrite) | `src/basis/lu_factorize.c` |
+| Phase I transition | `src/simplex/phase_one.c` |
+| Phase loop | `src/simplex/phase_loop.c` |
 | V2 specs | `docs/specs-v2/specs/modules/` |
 | Beads issues | `bd ready` / `bd list --status=open -n 100` |
