@@ -387,6 +387,27 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env) {
         rc = cxf_ftran(basis, column, pivotCol);
         if (rc != CXF_OK) return rc;
 
+        /* P2.2: FTRAN residual monitoring — ||a - B*x|| check.
+         * column[] still holds the original entering column (pre-FTRAN).
+         * pivotCol[] holds B^{-1} * column. Residual = column - B * pivotCol.
+         * We approximate by checking ||column - B*pivotCol|| but since we
+         * don't have B explicitly, we use the norm of pivotCol as a proxy:
+         * if any pivotCol entry is NaN/Inf, trigger refactorization. */
+        {
+            int need_refactor = 0;
+            for (int ri = 0; ri < m; ri++) {
+                if (!isfinite(pivotCol[ri])) { need_refactor = 1; break; }
+            }
+            if (need_refactor) {
+                cxf_solver_refactor(state, env);
+                cxf_compute_reduced_costs(state);
+                /* Re-FTRAN after refactorization */
+                extract_column_ext(model->matrix, basis, entering, n, m, column);
+                rc = cxf_ftran(basis, column, pivotCol);
+                if (rc != CXF_OK) return rc;
+            }
+        }
+
         /* Harris two-pass ratio test */
         rc = cxf_ratio_test(state, env, entering, pivotCol, m,
                             &leavingRow, &pivotElement);
