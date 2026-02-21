@@ -42,7 +42,7 @@ static void apply_lu_solve(const LUFactors *lu, int m, double *result) {
      * L is unit lower triangular, stored column-wise.
      * For each column k, update rows below k. */
     for (int k = 0; k < m; k++) {
-        if (fabs(temp[k]) < 1e-15) continue;  /* Skip zeros */
+        if (fabs(temp[k]) < CXF_MIN_PIVOT) continue;  /* Skip zeros */
         for (int64_t p = lu->L_col_ptr[k]; p < lu->L_col_ptr[k + 1]; p++) {
             int j = lu->L_row_idx[p];  /* Row index > k (below diagonal) */
             temp[j] -= lu->L_values[p] * temp[k];
@@ -58,7 +58,7 @@ static void apply_lu_solve(const LUFactors *lu, int m, double *result) {
             temp[k] -= lu->U_values[p] * temp[j];
         }
         /* Divide by diagonal */
-        if (fabs(lu->U_diag[k]) > 1e-15) {
+        if (fabs(lu->U_diag[k]) > CXF_MIN_PIVOT) {
             temp[k] /= lu->U_diag[k];
         }
     }
@@ -164,6 +164,10 @@ int cxf_ftran(BasisState *basis, const double *column, double *result) {
             }
             return CXF_ERROR_INVALID_ARGUMENT;
         }
+
+        /* P2.5: Hyper-sparse skip — if result at pivot position is zero,
+         * the entire eta application is a no-op. PFI Step 3.3 (Hall 2005). */
+        if (result[pivot_row] == 0.0) continue;
 
         /* Apply eta transformation for E^(-1):
          *   factor = result[r] / pivot_elem

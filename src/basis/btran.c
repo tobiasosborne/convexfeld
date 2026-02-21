@@ -46,7 +46,7 @@ static void apply_lu_btran(const LUFactors *lu, int m, double *result) {
      * U^T is lower triangular (U is upper triangular)
      * For each row k, divide by diagonal then subtract from later rows */
     for (int k = 0; k < m; k++) {
-        if (fabs(lu->U_diag[k]) > 1e-15) {
+        if (fabs(lu->U_diag[k]) > CXF_MIN_PIVOT) {
             temp[k] /= lu->U_diag[k];
         }
         /* U^T[j,k] = U[k,j] for j > k
@@ -179,16 +179,15 @@ int cxf_btran(BasisState *basis, int row, double *result) {
                 return CXF_ERROR_INVALID_ARGUMENT;
             }
 
-            /* Compute dot product of off-diagonal entries with result.
-             * Invariant: indices are in [0,m) and != pivot_row
-             * (guaranteed by cxf_pivot_with_eta construction). */
-            double temp = 0.0;
+            /* P2.5: Compute dot product; skip if both pivot and dot are zero. */
+            double dot = 0.0;
             for (int k = 0; k < eta->nnz; k++) {
-                temp += eta->values[k] * result[eta->indices[k]];
+                dot += eta->values[k] * result[eta->indices[k]];
             }
+            if (result[pivot_row] == 0.0 && dot == 0.0) continue;
 
             /* Update pivot position */
-            result[pivot_row] = (result[pivot_row] - temp) / pivot_elem;
+            result[pivot_row] = (result[pivot_row] - dot) / pivot_elem;
         }
 
         /* Cleanup heap allocation if used */
@@ -283,16 +282,15 @@ int cxf_btran_vec(BasisState *basis, const double *input, double *result) {
                 return CXF_ERROR_INVALID_ARGUMENT;
             }
 
-            /* Compute dot product of off-diagonal entries with result.
-             * Invariant: indices are in [0,m) and != pivot_row
-             * (guaranteed by cxf_pivot_with_eta construction). */
-            double temp = 0.0;
+            /* P2.5: Compute dot product; skip if both pivot and dot are zero. */
+            double dot = 0.0;
             for (int k = 0; k < eta->nnz; k++) {
-                temp += eta->values[k] * result[eta->indices[k]];
+                dot += eta->values[k] * result[eta->indices[k]];
             }
+            if (result[pivot_row] == 0.0 && dot == 0.0) continue;
 
             /* Update pivot position */
-            result[pivot_row] = (result[pivot_row] - temp) / pivot_elem;
+            result[pivot_row] = (result[pivot_row] - dot) / pivot_elem;
         }
 
         /* Cleanup heap allocation if used */
