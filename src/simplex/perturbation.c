@@ -245,6 +245,80 @@ int cxf_simplex_perturbation(SolverState *state, CxfEnv *env) {
         }
     }
 
+    /*--- Phase 4b: EXPAND bound widening (Mechanism B) ---
+     * If Mechanism A (candidate removal) didn't mark any new candidates,
+     * escalate to bound widening for leaving-side degeneracy.
+     * Widens bounds of basic variables at their bounds so ratio test
+     * produces nonzero ratios, breaking degenerate zero-step pivots.
+     * Spec: P2.6 Mechanism B (Gill et al., 1989). */
+    /* Escalate to Mechanism B when leaving-side degeneracy persists:
+     * - Mechanism A has been tried (perturb_count > 0)
+     * - Many consecutive degenerate pivots despite A being active
+     * - EXPAND not yet activated */
+    int need_expand = !state->perturb_expand_active &&
+        state->perturb_count > 0 &&
+        state->degenerate_count > 2 * 50 &&  /* 2x STALL_THRESHOLD */
+        state->saved_lb && state->saved_ub;
+    /* Also escalate proactively in Phase I with SEVERE degeneracy only.
+     * Use 3*m threshold (same as Bland's activation) to avoid false positives. */
+    if (!need_expand && state->phase == 1 &&
+        !state->perturb_expand_active &&
+        state->degenerate_count > 3 * m &&
+        state->saved_lb && state->saved_ub)
+        need_expand = 1;
+    if (need_expand) {
+        int widened = 0;
+        double eps_base = feas_tol * 1000.0;  /* ~1e-4 */
+        if (eps_base < 1e-8) eps_base = 1e-8;
+        if (eps_base > 1e-4) eps_base = 1e-4;
+
+        for (int i = 0; i < m; i++) {
+            int bv = basis->basic_vars[i];
+            if (bv < 0 || bv >= total) continue;
+            double x = state->work_x[bv];
+            double lb = state->work_lb[bv];
+            double ub = state->work_ub[bv];
+
+            /* Deterministic per-variable hash for distinct perturbations */
+            unsigned h = (unsigned)bv * 2654435761u;
+            double frac = (double)(h >> 1) / (double)(1u << 31);
+
+            double eps = eps_base * (1.0 + fabs(lb > -CXF_INFINITY ? lb : 0.0))
+                         * (1.0 + frac);
+
+            if (fabs(x - lb) < feas_tol && lb > -CXF_INFINITY) {
+                state->work_lb[bv] = state->saved_lb[bv] - eps;
+                widened++;
+            }
+            if (fabs(x - ub) < feas_tol && ub < CXF_INFINITY) {
+                double eps_u = eps_base
+                    * (1.0 + fabs(ub < CXF_INFINITY ? ub : 0.0))
+                    * (1.0 + frac);
+                state->work_ub[bv] = state->saved_ub[bv] + eps_u;
+                widened++;
+            }
+        }
+
+        if (widened > 0) {
+            state->perturb_expand_active = 1;
+            perturbed += widened;
+
+            /* Recompute Phase I objective with widened bounds */
+            if (state->phase == 1) {
+                state->obj_value = 0.0;
+                for (int i = 0; i < m; i++) {
+                    int bv = basis->basic_vars[i];
+                    if (bv < 0 || bv >= total) continue;
+                    double xv = state->work_x[bv];
+                    if (xv < state->work_lb[bv])
+                        state->obj_value += state->work_lb[bv] - xv;
+                    else if (xv > state->work_ub[bv])
+                        state->obj_value += xv - state->work_ub[bv];
+                }
+            }
+        }
+    }
+
     /*--- Phase 5: Counter update + pricing notification ---*/
     if (state->pricing && perturbed > 0)
         cxf_pricing_end_level(state->pricing);
@@ -286,5 +360,6 @@ int cxf_simplex_unperturb(SolverState *state, CxfEnv *env) {
     }
 
     state->perturb_count = 0;
+    state->perturb_expand_active = 0;
     return CXF_OK;
 }

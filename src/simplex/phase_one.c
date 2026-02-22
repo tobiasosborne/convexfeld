@@ -195,6 +195,13 @@ int cxf_transition_to_phase_two(SolverState *state, CxfModel *model) {
     int m = state->num_constrs;
     BasisState *basis = state->basis;
 
+    /* Step 0: Unperturb if EXPAND bound widening was active in Phase I.
+     * Restores saved bounds so Phase II starts with clean bounds. */
+    if (state->perturb_expand_active) {
+        extern int cxf_simplex_unperturb(SolverState *, CxfEnv *);
+        cxf_simplex_unperturb(state, model->env);
+    }
+
     /* Step 1: Restore original objective */
     for (int j = 0; j < n; j++)
         state->work_obj[j] = model->obj_coeffs[j];

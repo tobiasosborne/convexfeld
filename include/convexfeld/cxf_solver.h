@@ -111,6 +111,7 @@ struct SolverState {
 
     /* Perturbation state (v2 — P2.6 EXPAND) */
     int perturb_count;        /**< Cumulative count of variables perturbed/removed */
+    int perturb_expand_active; /**< Nonzero if EXPAND bound widening (Mechanism B) is active */
 
     /* B2: Activity bounds (v2 — P3.21 cxf_simplex_setup) */
     double *min_activity;     /**< Per-constraint min activity [num_constrs] */
