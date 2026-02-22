@@ -13,6 +13,33 @@
 #include "cxf_timing.h"
 
 /**
+ * @brief Solution data container (P3.2 — per work_arrays.md).
+ *
+ * Model-level container for optimization results, iteration statistics,
+ * adaptive thresholds, and anti-cycling history.
+ */
+typedef struct SolutionData {
+    /* Iteration statistics */
+    int total_iterations;     /**< Total simplex iterations */
+    int phase1_iterations;    /**< Phase I iterations */
+    int phase2_iterations;    /**< Phase II iterations */
+    int refactor_count;       /**< Number of refactorizations */
+
+    /* Objective tracking */
+    double best_obj;          /**< Best objective found */
+    double obj_bound;         /**< Objective bound (for gap computation) */
+
+    /* Anti-cycling history */
+    int prev_entering;        /**< Previous entering variable index */
+    int prev_leaving;         /**< Previous leaving variable index */
+    int prev_pivot_row;       /**< Previous pivot row */
+    int cycle_detect_flag;    /**< 1 if cycling suspected */
+
+    /* Adaptive thresholds (populated during solve) */
+    double thresholds[6];     /**< [pricing, ratio, pivot, degen, stall, refact] */
+} SolutionData;
+
+/**
  * @brief Solver context for LP optimization.
  *
  * Contains problem data copies, algorithmic state, and working arrays.
@@ -68,6 +95,14 @@ struct SolverState {
     /* Anti-cycling */
     int use_bland;            /**< If nonzero, use Bland's rule for pricing */
     int degenerate_count;     /**< Consecutive degenerate pivots (stepSize=0) */
+
+    /* P3.3: Missing SolverState fields per solver_state.md */
+    int num_slacks;           /**< Number of slack variables (= num_constrs) */
+    int solve_mode_alt;       /**< Alternative solve mode (0=none, 1=crossover) */
+    int init_mode;            /**< Initialization mode (0=cold, 1=warm, 2=hot) */
+    int sol_status;           /**< Solution status (independent of model->status) */
+    double thresholds[6];     /**< Adaptive thresholds [pricing, ratio, pivot,
+                                   degeneracy, stall, refactor] */
 
     /* B1: Saved (unperturbed) bounds (v2 — P2.6 EXPAND) */
     double *saved_lb;         /**< Original lower bounds [num_vars + num_constrs] */

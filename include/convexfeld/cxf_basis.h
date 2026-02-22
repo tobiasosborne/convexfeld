@@ -91,6 +91,9 @@ struct BasisState {
     int eta_capacity;         /**< Capacity for eta vectors */
     EtaVector *eta_head;     /**< Head of eta linked list */
 
+    /* P2.3: Arena allocator for eta vectors (NULL = use individual calloc) */
+    EtaBuffer *eta_pool;      /**< Bump allocator, reset at refactorization */
+
     /* Working storage */
     double *work;             /**< Working array [m] */
 

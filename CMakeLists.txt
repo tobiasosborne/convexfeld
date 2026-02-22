@@ -100,6 +100,7 @@ target_sources(convexfeld PRIVATE
     src/basis/snapshot.c
     src/basis/warm.c
     src/basis/basis_stub.c
+    src/basis/eta_pool.c
     # Simplex module (M7.1)
     src/simplex/solve_lp.c
     src/simplex/iterate.c

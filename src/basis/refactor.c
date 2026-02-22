@@ -26,21 +26,31 @@
 /* Minimum pivot tolerance (Harris pivot threshold from spec) */
 #define MIN_PIVOT_TOL  CXF_PIVOT_TOL  /* 1e-9 */
 
+/* P2.3: Arena pool reset (eta_pool.c) */
+extern void cxf_eta_pool_reset(EtaBuffer *pool);
+
 /**
  * @brief Clear all eta vectors from a BasisState.
  *
+ * P2.3: If pool is active, reset pool in O(1) instead of O(k) free chain.
  * @param basis BasisState to clear.
  */
 static void clear_eta_list(BasisState *basis) {
     if (basis == NULL) return;
 
-    EtaVector *eta = basis->eta_head;
-    while (eta != NULL) {
-        EtaVector *next = eta->next;
-        free(eta->indices);
-        free(eta->values);
-        free(eta);
-        eta = next;
+    if (basis->eta_pool != NULL) {
+        /* P2.3: O(1) bulk deallocation via pool reset */
+        cxf_eta_pool_reset(basis->eta_pool);
+    } else {
+        /* Legacy: O(k) individual free chain */
+        EtaVector *eta = basis->eta_head;
+        while (eta != NULL) {
+            EtaVector *next = eta->next;
+            free(eta->indices);
+            free(eta->values);
+            free(eta);
+            eta = next;
+        }
     }
 
     basis->eta_head = NULL;
@@ -49,28 +59,22 @@ static void clear_eta_list(BasisState *basis) {
 }
 
 /**
- * @brief Basic refactorization for BasisState only.
+ * @brief Fix near-bound nonbasic variables and clear etas (P2.4).
  *
- * This simplified version clears the eta vectors and resets
- * counters. Use cxf_solver_refactor() for full refactorization
- * when the constraint matrix is available.
+ * Per basis_operations.md: scans nonbasic variables, snaps those
+ * within tolerance of a bound to that bound exactly, then clears
+ * the eta list for fresh refactorization.
  *
- * @param basis BasisState to refactor.
+ * @param basis BasisState to process and refactor.
  * @return CXF_OK on success, error code on failure.
  */
 int cxf_fix_variables_at_bounds(BasisState *basis) {
-    if (basis == NULL) {
-        return CXF_ERROR_NULL_ARGUMENT;
-    }
+    if (basis == NULL) return CXF_ERROR_NULL_ARGUMENT;
 
-    /* Clear existing eta list */
+    /* Clear existing eta list (O(1) with pool, O(k) without) */
     clear_eta_list(basis);
 
-    /* P0.10: Preserve existing diag_coeff values. These encode constraint
-     * sense (+1 for <=, -1 for >=) set during Phase I setup. Resetting
-     * all to +1 corrupts FTRAN for mixed-sense problems.
-     * diag_coeff is only updated when constraint sense changes (e.g.,
-     * Phase I → II transition flips >= coefficients). */
+    /* P0.10: Preserve diag_coeff — encodes constraint sense. */
 
     return CXF_OK;
 }

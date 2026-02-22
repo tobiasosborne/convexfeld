@@ -45,6 +45,7 @@ BasisState *cxf_basis_create(int m, int n) {
     basis->eta_capacity = 0;
     basis->eta_head = NULL;
     basis->lu = NULL;  /* LU factors allocated on first refactorization */
+    basis->eta_pool = NULL; /* P2.3: Created lazily on first pivot or by caller */
     basis->pivots_since_refactor = 0;
     basis->refactor_freq = DEFAULT_REFACTOR_FREQ;
     basis->iteration = 0;
@@ -99,14 +100,21 @@ void cxf_basis_free(BasisState *basis) {
         return;
     }
 
-    /* Free eta linked list */
-    EtaVector *eta = basis->eta_head;
-    while (eta != NULL) {
-        EtaVector *next = eta->next;
-        free(eta->indices);
-        free(eta->values);
-        free(eta);
-        eta = next;
+    /* P2.3: Free eta pool (frees all eta memory in bulk) or individual chain */
+    {
+        extern void cxf_eta_pool_free(EtaBuffer *pool);
+        if (basis->eta_pool != NULL) {
+            cxf_eta_pool_free(basis->eta_pool);
+        } else {
+            EtaVector *eta = basis->eta_head;
+            while (eta != NULL) {
+                EtaVector *next = eta->next;
+                free(eta->indices);
+                free(eta->values);
+                free(eta);
+                eta = next;
+            }
+        }
     }
 
     /* Free LU factorization */

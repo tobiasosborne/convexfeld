@@ -2,17 +2,20 @@
  * @file pivot_eta.c
  * @brief Product Form of Inverse pivot update implementation.
  *
- * Implements basis update using eta vectors for the Product Form of
- * Inverse (PFI) representation. Creates Type 2 eta factors that represent
- * the basis change after a simplex pivot.
+ * P2.3: Uses arena allocator (EtaBuffer) when available for O(1) bulk
+ * deallocation at refactorization. Falls back to individual calloc.
  *
  * Spec: docs/specs/functions/basis/cxf_pivot_with_eta.md
+ * Beads: auj4 (P2.3)
  */
 
 #include "convexfeld/cxf_basis.h"
 #include "convexfeld/cxf_types.h"
 #include <stdlib.h>
 #include <math.h>
+
+/* Arena allocator (eta_pool.c) */
+extern void *cxf_eta_pool_alloc(EtaBuffer *pool, size_t size);
 
 /**
  * @brief Update basis using product form of inverse (eta vector).
@@ -69,8 +72,14 @@ int cxf_pivot_with_eta(BasisState *basis, int pivotRow, const double *pivotCol,
         }
     }
 
-    /* Step 4: Allocate eta structure */
-    EtaVector *eta = (EtaVector *)calloc(1, sizeof(EtaVector));
+    /* Step 4: Allocate eta structure (P2.3: prefer pool, fallback calloc) */
+    EtaVector *eta;
+    if (basis->eta_pool != NULL) {
+        eta = (EtaVector *)cxf_eta_pool_alloc(basis->eta_pool,
+                                               sizeof(EtaVector));
+    } else {
+        eta = (EtaVector *)calloc(1, sizeof(EtaVector));
+    }
     if (eta == NULL) {
         return CXF_ERROR_OUT_OF_MEMORY;
     }
@@ -84,15 +93,25 @@ int cxf_pivot_with_eta(BasisState *basis, int pivotRow, const double *pivotCol,
     eta->nnz = nnz;
     eta->next = NULL;
 
-    /* Allocate sparse arrays if needed */
+    /* Allocate sparse arrays (P2.3: prefer pool) */
     if (nnz > 0) {
-        eta->indices = (int *)calloc((size_t)nnz, sizeof(int));
-        eta->values = (double *)calloc((size_t)nnz, sizeof(double));
+        if (basis->eta_pool != NULL) {
+            eta->indices = (int *)cxf_eta_pool_alloc(basis->eta_pool,
+                               (size_t)nnz * sizeof(int));
+            eta->values = (double *)cxf_eta_pool_alloc(basis->eta_pool,
+                               (size_t)nnz * sizeof(double));
+        } else {
+            eta->indices = (int *)calloc((size_t)nnz, sizeof(int));
+            eta->values = (double *)calloc((size_t)nnz, sizeof(double));
+        }
 
         if (eta->indices == NULL || eta->values == NULL) {
-            free(eta->indices);
-            free(eta->values);
-            free(eta);
+            /* Pool alloc failure — can't individually free pool memory */
+            if (basis->eta_pool == NULL) {
+                free(eta->indices);
+                free(eta->values);
+                free(eta);
+            }
             return CXF_ERROR_OUT_OF_MEMORY;
         }
 
