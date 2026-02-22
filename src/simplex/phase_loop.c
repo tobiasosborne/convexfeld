@@ -30,10 +30,11 @@ static double compute_phase1_objective(SolverState *state) {
     int n = state->num_vars;
     int m = state->num_constrs;
     double obj = 0.0;
+    /* Artificials are at [n+m, n+2m) */
     for (int i = 0; i < m; i++) {
-        int vi = n + i;
-        if (state->work_obj[vi] > 0.0 && state->work_x[vi] > 0.0)
-            obj += state->work_x[vi];
+        int ai = n + m + i;
+        if (state->work_obj[ai] > 0.0 && state->work_x[ai] > 0.0)
+            obj += state->work_x[ai];
     }
     return obj;
 }
@@ -46,7 +47,7 @@ static double compute_phase1_objective(SolverState *state) {
  * declaring false INFEASIBLE due to pricing gaps.
  */
 static int has_improving_direction(SolverState *state, CxfEnv *env) {
-    int total = state->num_vars + state->num_constrs;
+    int total = state->num_vars + 2 * state->num_constrs;
     for (int j = 0; j < total; j++) {
         if (state->basis->var_status[j] >= 0) continue;
         double lb = state->work_lb[j], ub = state->work_ub[j];

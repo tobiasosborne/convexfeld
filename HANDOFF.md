@@ -4,103 +4,86 @@
 
 ---
 
-## STATUS: Remediation plan complete. 3 root causes found for 27/30 Netlib failures.
+## STATUS: RC1 done, RC2 in progress (separate artificials 90% complete). 39/40 tests pass.
 
 ### What Was Done This Session
 
-**Investigation of 30 non-timeout Netlib failures using holistic architectural analysis:**
-
 1. **Built Component Interface Contract Map** (`docs/architecture_contract_map.md`)
-   - 3-scale architectural representation: macro flow, iteration anatomy, interface contracts
-   - 8 interface contracts checked for producer/consumer consistency
-   - 6 mismatches flagged, 5 v2 spec violations cataloged
-   - Revised after diagnostic evidence confirmed/refuted hypotheses
+2. **Built diagnostic tools** (`tools/diagnose.c`, `tools/trace_bfrt.c`)
+3. **Found all 30/30 Netlib failure root causes** (`docs/remediation_plan.md`)
+4. **Confirmed v2 spec bug** in BFRT row negation (P3.5)
 
-2. **Built diagnostic tool** (`tools/diagnose.c`)
-   - Standalone harness that calls internal solver functions directly
-   - Traces per-iteration: pivot columns, ratio test decomposition, bound violations,
-     diag_coeff consistency, BFRT flip counts, basic variable feasibility audits
-   - Build: `gcc -std=c99 -O2 -I include -o build/diagnose tools/diagnose.c -L build -lconvexfeld -lm`
+5. **Implemented RC1: Disabled BFRT**
+   - Deleted `negate_constraint_row` (spec bug: dual technique in primal context)
+   - Found second BFRT bug: `find_next_blocker` skipped variables between old/extended step
+   - Disabled BFRT entirely as simplest correct fix
+   - Result: +1 PASS (etamacro), 4 reclassified UNBOUNDED→INFEASIBLE
 
-3. **Ran diagnostic traces on 4 failing instances:**
-   - `recipe` (false UNBOUNDED) — 12 BFRT flips → 12 basic vars past bounds → UNBOUNDED
-   - `grow7` (false UNBOUNDED) — 8 flips → worst infeas 3.58e8 → UNBOUNDED
-   - `boeing2` (false UNBOUNDED) — 262 flips → worst infeas 1.45e5 → UNBOUNDED
-   - `scorpion` (false INFEASIBLE) — 53 diag_coeff mismatches → Phase I stalls
+6. **Implemented RC2 partial: Phase I→II transition fix for <= constraints**
+   - Added missing diag_coeff flip from -1 to +1 for <= at transition
+   - Result: +1 PASS (israel)
 
-4. **Wrote remediation plan** (`docs/remediation_plan.md`)
+7. **Implementing RC2 complete: Separate artificial variables** (IN PROGRESS)
+   - Added `art_coeff[m]` to SolverState
+   - Expanded all arrays to `n + 2*m` (14 files changed)
+   - Rewrote `cxf_setup_phase_one` with separate slack/artificial
+   - Updated `extract_column_ext`, `reduced_costs`, `ratio_test`, `lu_factorize`, `refactor`
+   - 39/40 tests pass. ONE failure remains: `test_geq_constraints`
 
-### Three Confirmed Root Causes
+### Current Bug: test_geq_constraints (obj=0, expected=5)
 
-| # | Root Cause | Failures | Fix |
-|---|-----------|----------|-----|
-| **RC1** | `negate_constraint_row` in BFRT corrupts matrix without updating LU | 18 false UNBOUNDED | Delete the function (standard BFRT doesn't need it) |
-| **RC2** | Phase I uses diag=+1 for violated >= (no surplus variable) | 6 false INFEASIBLE | Always use diag=-1 for >= |
-| **RC3** | MPS parser doesn't handle OBJSENSE | 3 wrong objective (stand*) | Add OBJSENSE parsing |
+**Problem:** `min x0+x1 s.t. x0>=2, x1>=3`. Phase I enters SURPLUS variables
+(not structurals) to drive artificials out. After transition, surpluses are
+basic, structurals at lb=0. Phase II declares OPTIMAL at obj=0.
 
-### Important: V2 Spec May Be Wrong
+**Root cause:** Phase II reduced costs for structurals are wrong (dj=+1, should
+be negative to attract them into basis). The dual prices after transition
+aren't correctly reflecting the >= constraint values. The surplus variables
+absorbed the constraints without the structurals moving.
 
-P3.5 spec ("harris_ratio_test.md Stage 3 Step 6c") prescribes constraint row negation
-after BFRT flips. **Standard BFRT does NOT do this.** The spec either describes a
-technique that requires BOTH negation AND factorization update (but only negation was
-implemented), or the spec is simply incorrect. Either way, removing the negation is
-the correct fix.
+**Investigation needed:** Check `cxf_compute_reduced_costs` after transition.
+The dual prices pi should be computed from B^T * pi = c_B. With surpluses
+basic (obj=0), pi = 0, so structural reduced costs = c_j - 0 = c_j > 0.
+This is "correct" in the sense that at x=0 with surplus=surplus_val, the
+basis IS optimal for the current basis — but the basis should have structurals,
+not surpluses.
 
----
+**Possible fixes:**
+1. In Phase I, prefer structurals over surpluses when entering (modify pricing)
+2. In transition, pivot surpluses out and structurals in (like artificial pivot-out)
+3. Accept this as correct Phase I behavior — Phase II should eventually find better basis
 
-## Next Steps — Execute Remediation Plan
-
-**MANDATORY: Read `docs/remediation_plan.md` for full details.**
-**MANDATORY: Read `docs/architecture_contract_map.md` for architectural context.**
-
-### Execution Order:
-
-1. **RC1 (BFRT fix)** — Delete `negate_constraint_row()` from step.c
-   - Delete function (lines 96-140)
-   - Delete call site (lines 576-577)
-   - Run unit tests: `cd build && ctest`
-   - Run 18 false UNBOUNDED instances: `build/bench_netlib --filter recipe` etc.
-   - Expected: 18 instances change from UNBOUNDED to OPTIMAL or different status
-
-2. **RC2 (Phase I >= fix)** — Fix diag_coeff in phase_one.c
-   - Change >= handling to always use diag = -1.0 (lines 95-106)
-   - Simplify Phase I→II transition code (lines 225-228)
-   - Run unit tests
-   - Run scorpion, bandm, bore3d, e226, stair, tuff
-   - Expected: 6 instances change from INFEASIBLE to OPTIMAL
-
-3. **RC3 (OBJSENSE)** — Add to MPS parser
-   - Add obj_sense field to CxfModel
-   - Parse OBJSENSE section in mps_parse.c
-   - Negate objective in solve_lp.c for maximization
-   - Run standata, standgub, standmps
-
-4. **Final retest** — Full Netlib suite
-   - Expected: ~46+ pass (up from 19)
-   - Remaining ~3 wrong objective may also resolve after RC1
+Fix 3 is the right answer IF Phase II reduced costs are computed correctly.
+The issue may be that surpluses for >= constraints should NOT be nonbasic at 0
+after Phase I — they should track the constraint activity.
 
 ---
 
-## File Locations
+## Next Steps
 
-| Item | Path |
-|------|------|
-| **Remediation plan** | `docs/remediation_plan.md` |
-| **Architecture contract map** | `docs/architecture_contract_map.md` |
-| **Diagnostic tool** | `tools/diagnose.c` |
-| BFRT bug location | `src/simplex/step.c:96-140, 576-577` |
-| Phase I >= bug | `src/simplex/phase_one.c:95-106` |
-| MPS parser | `src/api/mps_parse.c` |
-| Main solver loop | `src/simplex/solve_lp.c` |
-| Step iteration engine | `src/simplex/step.c` |
-| Ratio test | `src/simplex/ratio_test.c` |
-| Phase I setup + transition | `src/simplex/phase_one.c` |
-| V2 compliance roadmap | `docs/v2_compliance_roadmap.md` |
-| Unit tests | `tests/unit/` (40 tests) |
-| Netlib benchmark | `benchmarks/bench_netlib.c` |
+1. **Debug test_geq_constraints**: trace reduced costs and dual prices after
+   Phase I→II transition for `min x+y s.t. x>=2, y>=3`
+2. **Run Netlib key instances** after fixing: scorpion, boeing1, bandm
+3. **Then RC3 (OBJSENSE) and RC4 (RANGES)**
+
+## Key Files Modified This Session
+
+| File | Change |
+|------|--------|
+| `src/simplex/step.c` | BFRT disabled, 3-range column extraction, n+2m totals |
+| `src/simplex/phase_one.c` | Separate artificials, transition simplified |
+| `src/simplex/context.c` | n+2m array allocation, art_coeff |
+| `src/simplex/reduced_costs.c` | 3-range RC computation |
+| `src/simplex/ratio_test.c` | n+2m bounds in both passes |
+| `src/simplex/phase_loop.c` | Phase I obj over artificial range |
+| `src/basis/lu_factorize.c` | 3-range basis extraction |
+| `src/basis/refactor.c` | Diagonal fast-path for artificials |
+| `include/convexfeld/cxf_solver.h` | art_coeff field |
+| `docs/architecture_contract_map.md` | Contract map + post-RC1 landscape |
+| `docs/remediation_plan.md` | Full plan with spec bug analysis |
+| `tools/diagnose.c`, `tools/trace_bfrt.c` | Diagnostic tools |
 
 ## DO NOT
-- Skip reading the remediation plan before implementing fixes
-- Apply fixes out of order (RC1 → RC2 → RC3)
-- Skip unit tests between fixes
-- Run full Netlib with >1s timeout
+- Run full Netlib suite (use targeted --filter)
+- Skip reading docs/remediation_plan.md
+- Modify solver without understanding the architecture contract map

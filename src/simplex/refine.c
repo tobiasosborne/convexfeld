@@ -40,7 +40,7 @@ int cxf_simplex_refine(SolverState *state, CxfEnv *env) {
     double dual_tol = env->optimality_tol;
     int n = state->num_vars;
     int m = state->num_constrs;
-    int total = n + m;
+    int total = n + 2 * m;
 
     /*--- Pass 1: Nonbasic variable cleanup ---*/
     for (int j = 0; j < total; j++) {

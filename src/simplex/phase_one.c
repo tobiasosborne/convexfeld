@@ -54,9 +54,8 @@ int cxf_setup_phase_one(SolverState *state) {
     state->num_artificials = 0;
 
     for (int i = 0; i < m; i++) {
-        int var_idx = n + i;
-        basis->basic_vars[i] = var_idx;
-        basis->var_status[var_idx] = i;
+        int slack_idx = n + i;       /* slack/surplus variable */
+        int art_idx = n + m + i;     /* artificial variable */
 
         /* Compute slack value = RHS - sum(a_ij * x_j) */
         double rhs = state->work_rhs ? state->work_rhs[i] : 0.0;
@@ -77,50 +76,64 @@ int cxf_setup_phase_one(SolverState *state) {
 
         double slack_val = rhs - row_sum;
         char sense = state->work_sense ? state->work_sense[i] : '<';
-        state->work_lb[var_idx] = 0.0;
-        state->work_ub[var_idx] = CXF_INFINITY;
-        double diag = 1.0;
 
-        if (sense == '<' || sense == 'L') {
-            if (slack_val >= 0) {
-                diag = 1.0;
-                state->work_x[var_idx] = slack_val;
-                state->work_obj[var_idx] = 0.0;
-            } else {
-                diag = -1.0;
-                state->work_x[var_idx] = -slack_val;
-                state->work_obj[var_idx] = 1.0;
-                state->num_artificials++;
-            }
-        } else if (sense == '>' || sense == 'G') {
-            double surplus_val = row_sum - rhs;
-            if (surplus_val >= 0) {
-                diag = -1.0;
-                state->work_x[var_idx] = surplus_val;
-                state->work_obj[var_idx] = 0.0;
-            } else {
-                diag = 1.0;
-                state->work_x[var_idx] = -surplus_val;
-                state->work_obj[var_idx] = 1.0;
-                state->num_artificials++;
-            }
-        } else {
-            if (slack_val >= 0) {
-                diag = 1.0;
-                state->work_x[var_idx] = slack_val;
-            } else {
-                diag = -1.0;
-                state->work_x[var_idx] = -slack_val;
-            }
-            state->work_obj[var_idx] = 1.0;
-            if (fabs(slack_val) > CXF_FEASIBILITY_TOL)
-                state->num_artificials++;
-        }
-
+        /* NATURAL diag_coeff — never changes between phases */
+        double diag = (sense == '>' || sense == 'G') ? -1.0 : 1.0;
         if (basis->diag_coeff != NULL)
             basis->diag_coeff[i] = diag;
+
+        /* Default: both slack and artificial at lb=0 */
+        state->work_lb[slack_idx] = 0.0;
+        state->work_ub[slack_idx] = CXF_INFINITY;
+        state->work_lb[art_idx] = 0.0;
+        state->work_ub[art_idx] = CXF_INFINITY;
+
+        /* Determine if constraint needs an artificial */
+        int needs_art = 0;
+        if (sense == '<' || sense == 'L') {
+            needs_art = (slack_val < -CXF_FEASIBILITY_TOL);
+        } else if (sense == '>' || sense == 'G') {
+            needs_art = (slack_val > CXF_FEASIBILITY_TOL);
+            /* For >=: surplus = -slack_val. Violated when slack_val > 0. */
+        } else { /* = */
+            needs_art = (fabs(slack_val) > CXF_FEASIBILITY_TOL);
+        }
+
+        /* Artificial column coefficient: sign chosen so value is positive.
+         * art_coeff[i] = +1 if slack_val >= 0, -1 if slack_val < 0.
+         * With B[i,i] = art_coeff[i], x_B[i] = slack_val / art_coeff[i] = |slack_val|. */
+        double art_sign = (slack_val >= 0) ? 1.0 : -1.0;
+        if (state->art_coeff != NULL)
+            state->art_coeff[i] = art_sign;
+
+        if (!needs_art) {
+            /* Constraint satisfied: slack/surplus is basic */
+            basis->basic_vars[i] = slack_idx;
+            basis->var_status[slack_idx] = i;
+            basis->var_status[art_idx] = CXF_VAR_AT_LOWER;
+
+            /* Basic value = slack_val / diag (from B^{-1} * b) */
+            state->work_x[slack_idx] = (sense == '>' || sense == 'G')
+                ? -slack_val   /* surplus = row_sum - rhs = -slack_val */
+                : slack_val;
+            state->work_obj[slack_idx] = 0.0;
+            state->work_x[art_idx] = 0.0;
+            state->work_obj[art_idx] = 0.0;
+        } else {
+            /* Constraint violated: artificial is basic, slack nonbasic at 0 */
+            basis->basic_vars[i] = art_idx;
+            basis->var_status[art_idx] = i;
+            basis->var_status[slack_idx] = CXF_VAR_AT_LOWER;
+
+            state->work_x[art_idx] = fabs(slack_val);
+            state->work_obj[art_idx] = 1.0;
+            state->work_x[slack_idx] = 0.0;
+            state->work_obj[slack_idx] = 0.0;
+            state->num_artificials++;
+        }
     }
 
+    /* Zero original objective for Phase I */
     for (int j = 0; j < n; j++)
         state->work_obj[j] = 0.0;
 
@@ -132,9 +145,9 @@ int cxf_setup_phase_one(SolverState *state) {
         for (int i = 0; i < m; i++) {
             if (state->row_status[i] != CXF_ROW_BASIC_LOWER) continue;
 
-            /* Only useful if this row has an artificial (obj coeff = 1) */
-            int aux_var = n + i;
-            if (state->work_obj[aux_var] < 0.5) continue;
+            /* Only useful if this row has an artificial */
+            int art_var = n + m + i;
+            if (state->work_obj[art_var] < 0.5) continue;
 
             /* Find best singleton structural column in this row */
             int best_col = -1;
@@ -160,14 +173,14 @@ int cxf_setup_phase_one(SolverState *state) {
             }
 
             if (best_col >= 0) {
-                /* Swap: put structural var in basis, make auxiliary nonbasic */
+                /* Swap: put structural var in basis, make artificial nonbasic */
                 basis->basic_vars[i] = best_col;
                 basis->var_status[best_col] = i;
-                basis->var_status[aux_var] = CXF_VAR_AT_LOWER;
+                basis->var_status[art_var] = CXF_VAR_AT_LOWER;
 
-                /* Set auxiliary to zero (nonbasic at lower) */
-                state->work_x[aux_var] = 0.0;
-                state->work_obj[aux_var] = 0.0;
+                /* Set artificial to zero (nonbasic at lower) */
+                state->work_x[art_var] = 0.0;
+                state->work_obj[art_var] = 0.0;
                 state->num_artificials--;
 
                 /* Compute structural var value from constraint */
@@ -183,9 +196,9 @@ int cxf_setup_phase_one(SolverState *state) {
     /* Compute initial Phase I objective = sum of artificial values */
     state->obj_value = 0.0;
     for (int i = 0; i < m; i++) {
-        int var_idx = n + i;
-        if (state->work_obj[var_idx] > 0.5)
-            state->obj_value += state->work_x[var_idx];
+        int art_idx = n + m + i;
+        if (state->work_obj[art_idx] > 0.5)
+            state->obj_value += state->work_x[art_idx];
     }
 
     state->phase = 1;
@@ -212,32 +225,18 @@ int cxf_transition_to_phase_two(SolverState *state, CxfModel *model) {
     for (int j = 0; j < n; j++)
         state->work_obj[j] = model->obj_coeffs[j];
 
-    /* Set auxiliary objective to 0; fix artificials for = constraints;
-     * restore diag_coeff to natural direction for Phase II.
-     *
-     * During Phase I, diag_coeff may be flipped from its natural value
-     * to keep auxiliary variable values non-negative:
-     *   <= violated: diag flipped from +1 to -1
-     *   >= violated: diag flipped from -1 to +1
-     * Phase II needs natural direction:
-     *   <=: diag = +1 (slack)
-     *   >=: diag = -1 (surplus)
-     *   = : diag = ±1 (stays as-is, artificial fixed at zero)
-     */
+    /* Zero all auxiliary objectives and fix artificials for Phase II.
+     * diag_coeff is already natural (never flipped) — no restoration needed.
+     * Artificials at [n+m, n+2m) get fixed at lb=ub=0.
+     * Equality constraint slacks at [n+i] also fixed at lb=ub=0. */
     BasisState *basis = state->basis;
     for (int i = 0; i < m; i++) {
-        int var_idx = n + i;
-        state->work_obj[var_idx] = 0.0;
         char sense = (state->work_sense != NULL) ? state->work_sense[i] : '<';
-        if (sense == '=' || sense == 'E') {
-            state->work_ub[var_idx] = 0.0;
-        } else if (basis->diag_coeff != NULL) {
-            /* Restore natural diag: +1 for <=, -1 for >= */
-            if ((sense == '>' || sense == 'G') && basis->diag_coeff[i] > 0.0)
-                basis->diag_coeff[i] = -1.0;
-            else if ((sense == '<' || sense == 'L') && basis->diag_coeff[i] < 0.0)
-                basis->diag_coeff[i] = 1.0;
-        }
+        state->work_obj[n + i] = 0.0;       /* slack/surplus obj = 0 */
+        state->work_obj[n + m + i] = 0.0;   /* artificial obj = 0 */
+        state->work_ub[n + m + i] = 0.0;    /* fix artificial at zero */
+        if (sense == '=' || sense == 'E')
+            state->work_ub[n + i] = 0.0;    /* fix equality slack at zero */
     }
     /* P1.3: Force refactorization at Phase I→II transition. */
     cxf_solver_refactor(state, model->env);
@@ -248,20 +247,28 @@ int cxf_transition_to_phase_two(SolverState *state, CxfModel *model) {
      * Spec: simplex_phases.md "Phase I to Phase II Transition". */
     for (int i = 0; i < m; i++) {
         int bv = basis->basic_vars[i];
-        if (bv < n) continue;  /* structural variable — keep */
-        int aux_row = bv - n;
-        if (aux_row < 0 || aux_row >= m) continue;
+        if (bv < n + m) continue;  /* structural or slack/surplus — keep */
+        /* bv is an artificial at [n+m, n+2m). Map to constraint row. */
+        int art_row = bv - n - m;
+        if (art_row < 0 || art_row >= m) continue;
 
         /* Only pivot out if artificial is at zero (degenerate) */
         if (fabs(state->work_x[bv]) > CXF_FEASIBILITY_TOL) continue;
 
-        /* Find a nonbasic structural variable to enter this row.
-         * Scan the row for a column with a nonzero coefficient. */
+        /* Find a nonbasic variable (structural or slack) to replace artificial.
+         * First try the slack/surplus for this constraint row. */
         int best_col = -1;
         double best_abs = 0.0;
+        int slack_var = n + art_row;
+        if (basis->var_status[slack_var] < 0) {
+            /* Slack is nonbasic — it has coefficient diag_coeff at this row */
+            best_col = slack_var;
+            best_abs = fabs(basis->diag_coeff[art_row]);
+        }
+        /* Also scan structural columns for better pivot */
         if (state->csc_col_ptr != NULL) {
             for (int j = 0; j < n; j++) {
-                if (basis->var_status[j] >= 0) continue;  /* skip basic */
+                if (basis->var_status[j] >= 0) continue;
                 int64_t cs = state->csc_col_ptr[j];
                 int64_t ce = state->csc_col_ptr[j + 1];
                 for (int64_t k = cs; k < ce; k++) {
@@ -279,10 +286,17 @@ int cxf_transition_to_phase_two(SolverState *state, CxfModel *model) {
         double *col_buf = state->work_column;
         if (col_buf == NULL) continue;
         memset(col_buf, 0, (size_t)m * sizeof(double));
-        int64_t cs = state->csc_col_ptr[best_col];
-        int64_t ce = state->csc_col_ptr[best_col + 1];
-        for (int64_t k = cs; k < ce; k++)
-            col_buf[state->csc_row_idx[k]] = state->csc_values[k];
+        if (best_col < n) {
+            /* Structural: extract from CSC */
+            int64_t cs = state->csc_col_ptr[best_col];
+            int64_t ce = state->csc_col_ptr[best_col + 1];
+            for (int64_t k = cs; k < ce; k++)
+                col_buf[state->csc_row_idx[k]] = state->csc_values[k];
+        } else {
+            /* Slack/surplus: singleton column */
+            int row = best_col - n;
+            col_buf[row] = basis->diag_coeff[row];
+        }
 
         double *ftran_buf = basis->work;
         if (ftran_buf == NULL) continue;
@@ -305,7 +319,7 @@ int cxf_transition_to_phase_two(SolverState *state, CxfModel *model) {
     state->degenerate_count = 0;
 
     /* Reset FIXED variables to AT_LOWER for Phase II pricing. */
-    for (int j = 0; j < n + m; j++) {
+    for (int j = 0; j < n + 2 * m; j++) {
         if (basis->var_status[j] == CXF_VAR_FIXED)
             basis->var_status[j] = CXF_VAR_AT_LOWER;
     }

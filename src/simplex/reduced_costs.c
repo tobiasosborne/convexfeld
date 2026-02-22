@@ -35,7 +35,7 @@ int cxf_compute_reduced_costs(SolverState *state) {
     BasisState *basis = state->basis;
     int n = state->num_vars;
     int m = state->num_constrs;
-    int total_vars = n + m;
+    int total_vars = n + 2 * m;
 
     /* Step 1: Compute dual prices pi = B^(-T) * c_B via BTRAN */
     /* P0.5: propagate errors instead of silently substituting pi = c_B */
@@ -65,12 +65,19 @@ int cxf_compute_reduced_costs(SolverState *state) {
                 for (int64_t k = start; k < end; k++)
                     dj -= state->work_pi[state->csc_row_idx[k]]
                         * state->csc_values[k];
-            } else if (j >= n) {
+            } else if (j >= n && j < n + m) {
+                /* Slack/surplus */
                 int row = j - n;
+                double coeff = (basis->diag_coeff != NULL) ?
+                    basis->diag_coeff[row] :
+                    get_auxiliary_coeff(state, row);
+                dj -= state->work_pi[row] * coeff;
+            } else if (j >= n + m) {
+                /* Artificial */
+                int row = j - n - m;
                 if (row >= 0 && row < m) {
-                    double coeff = (basis->diag_coeff != NULL) ?
-                        basis->diag_coeff[row] :
-                        get_auxiliary_coeff(state, row);
+                    double coeff = (state->art_coeff != NULL) ?
+                        state->art_coeff[row] : 1.0;
                     dj -= state->work_pi[row] * coeff;
                 }
             }

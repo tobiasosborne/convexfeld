@@ -143,6 +143,13 @@ struct SolverState {
     double *csr_values;       /**< CSR coefficient values [nnz] (NULL if N/A) */
     double *work_rhs;         /**< RHS working copy [num_constrs] */
     char *work_sense;         /**< Constraint senses working copy [num_constrs] */
+
+    /* Phase I: separate artificial variables at indices [num_vars+num_constrs, num_vars+2*num_constrs).
+     * art_coeff[i] = column coefficient of artificial for constraint i (+1 or -1).
+     * Sign chosen so that the artificial value is always non-negative:
+     *   art_coeff[i] = +1 if slack_val >= 0, -1 if slack_val < 0.
+     * Allocated at init, valid during Phase I. */
+    double *art_coeff;        /**< Artificial column coefficients [num_constrs] */
 };
 
 /*******************************************************************************

@@ -87,8 +87,8 @@ int cxf_ratio_test(SolverState *state, CxfEnv *env, int enteringVar,
         basicVar = state->basis->basic_vars[i];
 
         /* Skip invalid variable indices
-         * Valid range: [0, num_vars + num_constrs) to include artificials */
-        int total_vars = state->num_vars + state->num_constrs;
+         * Valid range: [0, num_vars + 2*num_constrs) — includes artificials */
+        int total_vars = state->num_vars + 2 * state->num_constrs;
         if (basicVar < 0 || basicVar >= total_vars) {
             continue;
         }
@@ -153,7 +153,7 @@ int cxf_ratio_test(SolverState *state, CxfEnv *env, int enteringVar,
         basicVar = state->basis->basic_vars[i];
 
         /* Skip invalid variable indices (include artificials) */
-        int total_vars2 = state->num_vars + state->num_constrs;
+        int total_vars2 = state->num_vars + 2 * state->num_constrs;
         if (basicVar < 0 || basicVar >= total_vars2) {
             continue;
         }

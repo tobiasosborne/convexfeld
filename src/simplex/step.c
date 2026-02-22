@@ -69,17 +69,27 @@ static void extract_column_ext(const SolverState *state, int col,
     BasisState *basis = state->basis;
     memset(dense, 0, (size_t)m * sizeof(double));
     if (col < n) {
+        /* Structural variable: extract from CSC */
         if (state->csc_col_ptr == NULL) return;
         int64_t start = state->csc_col_ptr[col];
         int64_t end = state->csc_col_ptr[col + 1];
         for (int64_t k = start; k < end; k++)
             dense[state->csc_row_idx[k]] = state->csc_values[k];
-    } else {
+    } else if (col < n + m) {
+        /* Slack/surplus: diagonal with natural sign */
         int row = col - n;
         if (row >= 0 && row < m) {
             double coeff = (basis && basis->diag_coeff) ?
                 basis->diag_coeff[row] :
                 get_auxiliary_coeff_fallback(state, row);
+            dense[row] = coeff;
+        }
+    } else {
+        /* Artificial variable at [n+m, n+2m): use art_coeff */
+        int row = col - n - m;
+        if (row >= 0 && row < m) {
+            double coeff = (state->art_coeff != NULL) ?
+                state->art_coeff[row] : 1.0;
             dense[row] = coeff;
         }
     }
@@ -97,7 +107,7 @@ int cxf_apply_pivot(SolverState *state, int entering, int leavingRow,
 
     BasisState *basis = state->basis;
     int leaving = basis->basic_vars[leavingRow];
-    int total = state->num_vars + state->num_constrs;
+    int total = state->num_vars + 2 * state->num_constrs;
 
     /* Update basic variable values */
     for (int i = 0; i < state->num_constrs; i++) {
@@ -240,7 +250,7 @@ static void update_reduced_costs(SolverState *state, int entering,
                                  double pivotElement, const double *rho) {
     int n = state->num_vars;
     int m = state->num_constrs;
-    int total = n + m;
+    int total = n + 2 * m;
     BasisState *basis = state->basis;
     double step_dual = d_entering / pivotElement;
 
@@ -258,12 +268,19 @@ static void update_reduced_costs(SolverState *state, int entering,
             for (int64_t k = s; k < e; k++)
                 rho_aj += rho[state->csc_row_idx[k]]
                         * state->csc_values[k];
-        } else if (j >= n) {
+        } else if (j >= n && j < n + m) {
+            /* Slack/surplus: use diag_coeff */
             int row = j - n;
+            double coeff = (basis->diag_coeff) ?
+                basis->diag_coeff[row] :
+                get_auxiliary_coeff_fallback(state, row);
+            rho_aj = rho[row] * coeff;
+        } else if (j >= n + m) {
+            /* Artificial: use art_coeff */
+            int row = j - n - m;
             if (row >= 0 && row < m) {
-                double coeff = (basis->diag_coeff) ?
-                    basis->diag_coeff[row] :
-                    get_auxiliary_coeff_fallback(state, row);
+                double coeff = (state->art_coeff) ?
+                    state->art_coeff[row] : 1.0;
                 rho_aj = rho[row] * coeff;
             }
         }
@@ -286,7 +303,7 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env) {
 
     int m = state->num_constrs;
     int n = state->num_vars;
-    int total = n + m;
+    int total = n + 2 * m;
 
     if (m == 0) { state->iteration++; return ITERATE_OPTIMAL; }
     if (state->csc_col_ptr == NULL) return CXF_ERROR_NULL_ARGUMENT;

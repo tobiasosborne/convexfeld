@@ -100,25 +100,34 @@ int cxf_solver_refactor(SolverState *ctx, CxfEnv *env) {
         cxf_lu_clear(basis->lu);
     }
 
-    /* Check for identity basis (all slacks at row positions).
-     * For pure slack basis, LU is trivial (L=I, U=diag). */
-    int all_diagonal_slacks = 1;
+    /* Check for diagonal basis (all slacks or artificials at their rows).
+     * For diagonal basis, LU is trivial (L=I, U=diag). */
+    int all_diagonal = 1;
     for (int i = 0; i < m; i++) {
         int var = basis->basic_vars[i];
-        /* Check if var is slack for row i */
-        if (var != ctx->num_vars + i) {
-            all_diagonal_slacks = 0;
+        int n = ctx->num_vars;
+        /* Accept slack (n+i) or artificial (n+m+i) at row i */
+        if (var != n + i && var != n + m + i) {
+            all_diagonal = 0;
             break;
         }
     }
 
-    if (all_diagonal_slacks) {
-        /* Identity-like basis - L=I, U=diag(diag_coeff) */
+    if (all_diagonal) {
+        /* Diagonal basis - L=I, U=diag */
         LUFactors *lu = basis->lu;
+        int n = ctx->num_vars;
         for (int i = 0; i < m; i++) {
             lu->perm_row[i] = i;
             lu->perm_col[i] = i;
-            lu->U_diag[i] = basis->diag_coeff[i];
+            int var = basis->basic_vars[i];
+            if (var == n + i) {
+                lu->U_diag[i] = basis->diag_coeff[i];
+            } else {
+                /* artificial at n+m+i */
+                lu->U_diag[i] = (ctx->art_coeff != NULL)
+                    ? ctx->art_coeff[i] : 1.0;
+            }
             lu->L_col_ptr[i] = 0;
             lu->U_col_ptr[i] = 0;
         }
