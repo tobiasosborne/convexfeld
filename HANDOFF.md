@@ -4,13 +4,13 @@
 
 ---
 
-## STATUS: 21/36 Netlib pass. Numerical maintenance implemented. 40/40 unit tests pass.
+## STATUS: 22/36 Netlib pass. Numerical maintenance implemented. 40/40 unit tests pass.
 
 ### Scorecard
 
-**PASS (21):** afiro, sc50b, sc105, share2b, israel, adlittle, blend, lotfi, beaconfd, stocfor1, ship04l, scfxm1, standata, standgub, standmps, scagr7, sctap1, brandy, **scorpion**, **kb2**, **stair**
+**PASS (22):** afiro, sc50b, sc105, share2b, israel, adlittle, blend, lotfi, beaconfd, stocfor1, ship04l, scfxm1, standata, standgub, standmps, scagr7, sctap1, brandy, **scorpion**, **kb2**, **stair**, **e226**
 
-**FAIL (15):** See root cause table below.
+**FAIL (14):** See root cause table below.
 
 ### What Changed This Session (3 new passes, 0 regressions)
 
@@ -54,11 +54,9 @@ These reach OPTIMAL but with significant objective error. The x_B recomputation 
 
 **Likely fix:** Matrix scaling (Priority from HANDOFF v1). boeing1's coefficient range is extreme (~1 to ~3000). Without scaling, the LU factorization amplifies errors.
 
-### 3. E226 — Dual Degeneracy
+### 3. E226 — FIXED (reference CSV was wrong)
 
-**e226**: OPTIMAL but err=61%. Known dual degeneracy issue (documented in gotchas.md). Phase I passes but Phase II drifts massively. The dual degenerate point traps the solver in a suboptimal region.
-
-**What would fix it:** Steepest edge pricing (better direction selection) or advanced anti-cycling (Wolfe perturbation).
+**e226** now PASS. The reference CSV had -11.64 from the presolved version (p_e226.mps). Our answer of -18.75 matches the spec oracle and published Netlib optimal.
 
 ### 4. Capri — Phase I Difficulty
 
@@ -94,6 +92,51 @@ Was TIMEOUT, now OPTIMAL. Same root cause as #1 (numerical drift).
 | `src/simplex/phase_loop.c` | Forced recompute + tighter tolerance before INFEASIBLE |
 | `src/basis/refactor.c` | Adaptive eta threshold in cxf_refactor_check |
 | `CMakeLists.txt` | Added recompute.c |
+
+## Diagnostic Findings (tools/diagnose.c)
+
+Detailed per-problem root cause analysis from this session:
+
+### etamacro (err=0.016%, needs 0.01%)
+- Phase II: PIVCOL max reaches 37300 at iter 742 (severe ill-conditioning)
+- worst_infeas jumps from 0.057 to 1.73 between iter 699-749
+- The bound violation shifts the solver to a wrong vertex
+- **Fix:** Trigger refactorization when worst_infeas exceeds feasibility_tol
+
+### bore3d (never exits Phase I)
+- 248 consecutive degenerate pivots, then numerical 2-cycle on var 218
+- Pivot column max/min ratio reaches 10^16
+- Reduced costs blow up to 10^6 during cycling
+- **Fix:** Force refactorization every 50-100 degenerate pivots in Phase I
+
+### grow7 (12.5% — overshoots optimal)
+- Starts in Phase II (no Phase I needed), 36+48 iter degenerate plateaus
+- 31 basic vars past bounds at termination, worst_infeas=144000
+- Solver overshoots optimal because x_B values are corrupt
+- **Fix:** Bound enforcement after x_B recompute + matrix scaling
+
+### finnis (7.3% — diagnose tool gets 0.2%!)
+- Diagnose tool solves nearly correctly (943 iters, 0.2% error)
+- Actual solver may differ — investigate solve_lp.c flow vs diagnose.c flow
+- **Fix:** Harmonize solve_lp.c and diagnose.c iteration loops
+
+### scsd1 (TIMEOUT → false UNBOUNDED)
+- All 77 constraints are equalities, single infeasible slack on row 5
+- Every iteration is degenerate (448/448), Phase I obj never decreases from 1.0
+- After Bland's rule, RCs blow up to 10^9 → false UNBOUNDED
+- DIAG_MISMATCH on row 5 but RHS-dependent fix causes regressions elsewhere
+- **Fix:** Forced refactorization during degeneracy, NOT diag_coeff change
+
+### scagr25 (2.2% — diagnose tool gets correct answer!)
+- Diagnose tool solves to machine precision (-1.475343e7)
+- 4 diag mismatches but converge despite them
+- Actual solver may differ from diagnose tool flow
+- **Fix:** Same as finnis — investigate solver vs diagnose discrepancy
+
+### recipe (0.76% — diagnose tool gets correct answer!)
+- Diagnose tool shows obj=-266.616 matching reference
+- 63% degenerate pivots in Phase II but converges
+- Discrepancy likely from different refactorization timing in actual solver
 
 ## DO NOT
 

@@ -1033,3 +1033,43 @@ accumulated drift. capri now reaches OPTIMAL (10% error).
 **Lesson:** "No improving direction" during Phase I may be a numerical artifact.
 Always refactorize + recompute before declaring Phase I infeasibility.
 
+---
+
+### RHS-Dependent diag_coeff Causes Regressions (2026-02-22)
+
+**Context:** scsd1 has an all-equality problem where Phase I gets permanently stuck
+with one infeasible slack on a row with negative RHS. The diagnostic tool flags
+`DIAG_MISMATCH: diag=1.0 expected=-1.0` for this row.
+
+**Attempted fix:** Make diag_coeff RHS-dependent: `(rhs < 0) ? -1.0 : 1.0` for
+= and <= constraints.
+
+**Result:** israel regressed from PASS to 9.4% error, stair regressed to INFEASIBLE,
+e226 went from correct to -31.5 (was -18.75). Three regressions for one potential fix.
+
+**Why it fails:** Changing diag_coeff alters the entire algebraic structure — column
+extraction, BTRAN, LU factorization, reduced costs. The code assumes diag_coeff is
+a property of constraint SENSE, not RHS value. Making it RHS-dependent creates
+inconsistencies throughout the solver.
+
+**Correct approach for scsd1:** The issue is Phase I degeneracy on all-equality
+problems, not the diag_coeff sign. Need forced refactorization during long
+degenerate runs to prevent numerical blowup (RCs grow to 1e9, false UNBOUNDED).
+
+**Lesson:** Don't change a fundamental algebraic convention (diag_coeff = f(sense))
+to fix one problem's Phase I convergence. The convention is used throughout the
+solver and changing it has far-reaching effects.
+
+---
+
+### e226 Reference CSV Was Wrong (2026-02-22)
+
+The reference CSV had -11.63892907 for e226, but this value comes from the
+PRESOLVED version (p_e226.mps) which adds 229 upper bound constraints. The
+original e226.mps has NO BOUNDS section. The correct optimal for the original
+is -18.7519290660 (confirmed by spec oracle and our solver). Fixed the CSV.
+
+**Lesson:** Always verify reference values against spec oracles and the actual
+MPS file structure. A reference from a different problem variant is worse than
+no reference.
+
