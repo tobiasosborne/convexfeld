@@ -4,7 +4,7 @@
 
 ---
 
-## STATUS: 22/35 Netlib pass. 40/40 unit tests. 4 new passes this session.
+## STATUS: 22/35 Netlib pass. 40/40 unit tests. RANGES parsing implemented (RC4).
 
 ### Scorecard
 
@@ -55,7 +55,7 @@
 | grow7 | 12.5% | No Phase I needed. 31 basic vars past bounds (worst=144000). Solver overshoots optimal. |
 | boeing1 | 18% | Extreme coefficient range (~1 to ~3000), 570 vars with ub=inf |
 | vtp.base | 20% | Same class as grow7 (primal accuracy) |
-| forplan | 43% | RANGES section not parsed (beads convexfeld-g3z4) |
+| forplan | TIMEOUT | RANGES now parsed (RC4 done) but solver can't handle bounded slacks from ranges yet |
 
 ### Timeouts
 | Instance | Root Cause |
