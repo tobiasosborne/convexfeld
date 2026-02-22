@@ -41,6 +41,13 @@ extern int cxf_ratio_test(SolverState *state, CxfEnv *env, int enteringVar,
                           int *leavingRow_out, double *pivotElement_out);
 extern int cxf_solver_refactor(SolverState *ctx, CxfEnv *env);
 extern int cxf_compute_reduced_costs(SolverState *state);
+extern void cxf_pricing_update_var(PricingState *ctx, SolverState *state,
+                                   int varIndex);
+extern void cxf_pricing_update_constr(PricingState *ctx, SolverState *state,
+                                      int constrIndex);
+extern void cxf_pricing_update_queues(PricingState *ctx, SolverState *state);
+extern void cxf_pricing_candidates_v2(PricingState *ctx, SolverState *state,
+                                      int *count, int **candidates);
 
 /*---------------------------------------------------------------------------*/
 
@@ -340,7 +347,7 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env) {
     if (!pivotCol || !column) return CXF_ERROR_OUT_OF_MEMORY;
 
     /*--- Phase 1+2: Multi-level pricing with tolerance escalation ---
-     * v2 P2.3 Phase 5 + P3.20 Phase 1-2
+     * v2 P2.3 Phase 5 + P3.20 Phase 1-2 + P4.4/P4.5 V2 queue system
      *
      * Level 0 (loose):    optimality_tol * 10 — fast, only strong RCs
      * Level 1 (standard): optimality_tol      — moderate
@@ -350,6 +357,10 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env) {
      *-------------------------------------------------------------------*/
     int candidates[MAX_CANDIDATES];
     int num_cand = 0;
+
+    /* P4.4: Process V2 queues before pricing evaluation */
+    if (state->pricing)
+        cxf_pricing_update_queues(state->pricing, state);
 
     for (int level = 0; level <= 2; level++) {
         if (state->pricing)
@@ -366,6 +377,7 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env) {
 
         num_cand = 0;
         if (state->use_bland) {
+            /* Bland's rule: full scan for anti-cycling guarantee */
             for (int j = 0; j < total && num_cand < MAX_CANDIDATES; j++) {
                 if (basis->var_status[j] >= 0) continue;
                 if (state->work_ub[j] <=
@@ -380,18 +392,51 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env) {
                     candidates[num_cand++] = j;
             }
         } else if (state->pricing) {
-            num_cand = cxf_pricing_candidates(
-                state->pricing, state->work_dj, basis->var_status,
-                total, pricing_tol, candidates, MAX_CANDIDATES);
-            int k2 = 0;
-            for (int k = 0; k < num_cand; k++) {
-                int j = candidates[k];
-                if (state->work_ub[j] >
-                    state->work_lb[j] + CXF_FEASIBILITY_TOL)
-                    candidates[k2++] = j;
+            /* P4.5: V2 adaptive candidate retrieval from queues */
+            int v2_count = 0;
+            int *v2_cands = NULL;
+            cxf_pricing_candidates_v2(state->pricing, state,
+                                      &v2_count, &v2_cands);
+
+            /* RC-filter the V2 dirty queue to find attractive candidates */
+            if (v2_count > 0 && v2_cands != NULL) {
+                double best_rc = 0.0;
+                for (int k = 0; k < v2_count; k++) {
+                    int j = v2_cands[k];
+                    if (j < 0 || j >= total) continue;
+                    if (basis->var_status[j] >= 0) continue;
+                    if (state->work_ub[j] <=
+                        state->work_lb[j] + CXF_FEASIBILITY_TOL)
+                        continue;
+                    double rc = state->work_dj[j];
+                    int attractive = 0;
+                    if (basis->var_status[j] == CXF_VAR_AT_LOWER &&
+                        rc < -pricing_tol)
+                        attractive = 1;
+                    else if (basis->var_status[j] == CXF_VAR_AT_UPPER &&
+                             rc > pricing_tol)
+                        attractive = 1;
+                    if (attractive && num_cand < MAX_CANDIDATES)
+                        candidates[num_cand++] = j;
+                }
             }
-            num_cand = k2;
+
+            /* Fallback: if V2 queues empty, use V1 full scan */
+            if (num_cand == 0) {
+                num_cand = cxf_pricing_candidates(
+                    state->pricing, state->work_dj, basis->var_status,
+                    total, pricing_tol, candidates, MAX_CANDIDATES);
+                int k2 = 0;
+                for (int k = 0; k < num_cand; k++) {
+                    int j = candidates[k];
+                    if (state->work_ub[j] >
+                        state->work_lb[j] + CXF_FEASIBILITY_TOL)
+                        candidates[k2++] = j;
+                }
+                num_cand = k2;
+            }
         } else {
+            /* No pricing context: Dantzig's rule (most negative RC) */
             double best = -pricing_tol;
             for (int j = 0; j < total; j++) {
                 if (basis->var_status[j] >= 0) continue;
@@ -606,16 +651,21 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env) {
         cxf_compute_reduced_costs(state);
     }
 
-    /*--- Phase 8: Pricing cascade notification (v2 P3.18) ---*/
+    /*--- Phase 8: V2 pricing notification (P4.2/P4.3/P4.8) ---*/
     if (state->pricing) {
-        cxf_pricing_cascade_update(state->pricing, state, entering);
-        cxf_pricing_cascade_update(state->pricing, state, leaving);
+        /* P4.2: entering variable → mark adjacent constraints dirty */
+        cxf_pricing_update_var(state->pricing, state, entering);
+        /* P4.3: leaving row → mark adjacent variables dirty */
+        cxf_pricing_update_constr(state->pricing, state, leavingRow);
         /* P0.9: Also notify BFRT-flipped variables */
         for (int f = 0; f < num_flips; f++) {
             int bv = basis->basic_vars[flipped_rows[f]];
             if (bv >= 0 && bv < total)
-                cxf_pricing_cascade_update(state->pricing, state, bv);
+                cxf_pricing_update_var(state->pricing, state, bv);
         }
+        /* V1 compat: also update V1 dirty flags via cascade */
+        cxf_pricing_cascade_update(state->pricing, state, entering);
+        cxf_pricing_cascade_update(state->pricing, state, leaving);
     }
 
     /*--- Phase 9: Refactorization (P0.7: use cxf_refactor_check) ---*/

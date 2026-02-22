@@ -154,6 +154,10 @@ target_link_libraries(test_crash PRIVATE m)
 add_cxf_test(test_perturbation unit/test_perturbation.c)
 target_link_libraries(test_perturbation PRIVATE m)
 
+# P4.2-P4.5: V2 Pricing Queue tests
+add_cxf_test(test_pricing_v2 unit/test_pricing_v2.c)
+target_link_libraries(test_pricing_v2 PRIVATE m)
+
 # MPS Parser tests
 add_cxf_test(test_mps_parser unit/test_mps_parser.c)
 target_link_libraries(test_mps_parser PRIVATE m)

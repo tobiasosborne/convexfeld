@@ -108,4 +108,29 @@ void cxf_pricing_set_level(PricingState *ctx, int level);
 int cxf_pricing_get_constr_candidates(PricingState *ctx, int *out,
                                       int max_out);
 
+/*******************************************************************************
+ * V2 Pricing Core API (P4.2-P4.5)
+ ******************************************************************************/
+
+/** V2 queue insertion helpers (queue_insert.c). */
+void v2_insert_constr(PricingState *ctx, int constr_idx);
+void v2_insert_var(PricingState *ctx, int var_idx);
+
+/** P4.2: Mark constraints dirty after variable enters basis (CSC traversal). */
+void cxf_pricing_update_var(PricingState *ctx,
+                            struct SolverState *state, int varIndex);
+
+/** P4.3: Mark variables dirty after constraint leaves basis (CSR traversal). */
+void cxf_pricing_update_constr(PricingState *ctx,
+                               struct SolverState *state, int constrIndex);
+
+/** P4.4: Process V2 queues at current level (filter, promote, invalidate). */
+void cxf_pricing_update_queues(PricingState *ctx,
+                               struct SolverState *state);
+
+/** P4.5: Retrieve candidate variables via V2 adaptive strategy. */
+void cxf_pricing_candidates_v2(PricingState *ctx,
+                               struct SolverState *state,
+                               int *count_out, int **candidates_out);
+
 #endif /* CXF_PRICING_H */

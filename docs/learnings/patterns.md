@@ -594,3 +594,31 @@ int cxf_simplex_iterate(SolverContext *state, CxfEnv *env) {
 **Results:**
 - Eliminated ~1500 malloc/free calls per solve
 - **2.4% total runtime reduction**
+
+---
+
+## 2026-02-22: V2 Flag-Based Queue Insertion Protocol
+
+### Pattern: 4-bit per-element flags for O(1) duplicate prevention
+
+When maintaining multiple queues with committed/pending splits across pricing levels, use a per-element byte with 4 bits encoding membership:
+
+```c
+#define L1_COMMITTED  0x01   /* bit 0 */
+#define L1_PENDING    0x02   /* bit 1 */
+#define L2_COMMITTED  0x04   /* bit 2 */
+#define L2_PENDING    0x08   /* bit 3 */
+
+/* Check + insert in O(1) */
+uint8_t *flag = &flags[idx];
+if ((*flag & L1_MASK) == 0) {
+    if (!level_active[1])
+        queue[committed++] = idx, *flag |= L1_COMMITTED;
+    else
+        queue[total++] = idx;
+}
+if (level_active[1]) *flag |= L1_PENDING;
+```
+
+### Gotcha: Status filtering direction
+For **variable** queues in simplex pricing, keep NONBASIC vars (var_status < 0), not basic ones (>= 0). The spec says "non-negative status" which refers to a general validity concept, but in practice nonbasic variables are the ones needing RC evaluation.
