@@ -1131,3 +1131,45 @@ transformation. The implicit slack representation tightly couples the
 constraint matrix to the basis operations. Scaling must be applied
 consistently to ALL matrix elements, including implicit ones.
 
+---
+
+### Full Row+Column Scaling Is Mathematically Correct But Solver-Limited (2026-02-22)
+
+**Context:** Implemented full row+column Ruiz equilibration per matrix_finalization.md
+Strategy 3. Fixed FTRAN/BTRAN fallback paths (`*=` → `/=` for non-±1 diag_coeff).
+Set `diag_coeff[i] = D_r[i] * (±1)` so slack columns scale consistently.
+
+**Result:** Scaling is mathematically correct (objective invariant, bounds transform
+correctly, FTRAN/BTRAN division handles non-±1 diag). BUT enabling scaling
+regresses every problem tested:
+- blend: PASS → UNBOUNDED (scaling changes iteration path to degenerate basis)
+- stair: PASS → INFEASIBLE (same)
+- boeing1: 18% → 41% error (worse)
+- grow7: 12.5% → 15% error (worse)
+
+**Root cause:** The solver is not robust enough to handle the different iteration
+path that scaling creates. Scaling changes which variables get selected by pricing,
+which pivots are degenerate, and which bases are visited. Problems that were
+barely passing on the boundary of convergence get pushed over the edge.
+
+**Key finding:** Row norms MUST include the implicit slack coefficient (diag_coeff)
+to prevent over-scaling rows where the slack dominates. Without this, rows with
+small structural coefficients but a unit slack get over-scaled.
+
+**What was shipped:**
+1. FTRAN/BTRAN `/=` fix (backward-compatible, correct for non-±1 diag_coeff)
+2. Full scaling infrastructure (SolverState fields, scaling.c, Phase I/II integration)
+3. Scaling DISABLED (threshold=1e30) pending solver robustness improvements
+
+**What's needed to enable scaling:**
+- Anti-degeneracy: EXPAND perturbation must handle scaled problems
+- Ratio test: needs fallback when no blockers found (instead of UNBOUNDED)
+- Phase I: needs more robust convergence on scaled problems
+- Refactorization: may need more frequent refactoring after scaling
+
+**Lesson:** Scaling is a SYSTEMS problem, not an algorithm problem. The scaling
+math is simple (D_r * A * D_c). The hard part is that every downstream component
+(pricing, ratio test, Phase I, perturbation, refine) must be robust enough to
+handle the changed numerical landscape. Don't enable scaling until the solver
+passes at least 30/35 Netlib without it.
+

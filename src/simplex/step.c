@@ -17,6 +17,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <stdio.h>
 
 #define ITERATE_CONTINUE   0
 #define ITERATE_OPTIMAL    1

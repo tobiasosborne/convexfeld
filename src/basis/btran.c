@@ -88,11 +88,11 @@ static void apply_lu_btran(const LUFactors *lu, int m, double *result) {
  * B^(-T) = B_0^(-T) * E_1^(-T) * ... * E_k^(-T)
  *
  * This applies B_0^(-T) = diag(1/coeff).
- * Since diag_coeff is ±1, 1/coeff = coeff.
+ * Division handles both ±1 and scaled diag_coeff values.
  */
 static void apply_diag_btran(const double *diag_coeff, int m, double *result) {
     for (int i = 0; i < m; i++) {
-        result[i] *= diag_coeff[i];
+        result[i] /= diag_coeff[i];
     }
 }
 

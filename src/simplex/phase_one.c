@@ -51,10 +51,13 @@ int cxf_setup_phase_one(SolverState *state) {
         int slack_idx = n + i;
         char sense = state->work_sense ? state->work_sense[i] : '<';
 
-        /* Natural diag_coeff — never changes between phases */
-        double diag = (sense == '>' || sense == 'G') ? -1.0 : 1.0;
-        if (basis->diag_coeff != NULL)
-            basis->diag_coeff[i] = diag;
+        /* Natural diag_coeff: ±1 per sense, scaled by D_r[i] if scaling active.
+         * Row scaling changes slack column coefficients from ±1 to D_r*(±1). */
+        double sense_sign = (sense == '>' || sense == 'G') ? -1.0 : 1.0;
+        if (basis->diag_coeff != NULL) {
+            basis->diag_coeff[i] = (state->row_scale != NULL)
+                ? state->row_scale[i] * sense_sign : sense_sign;
+        }
 
         /* Slack bounds */
         state->work_lb[slack_idx] = 0.0;
@@ -81,7 +84,7 @@ int cxf_setup_phase_one(SolverState *state) {
                 }
             }
         }
-        state->work_x[slack_idx] = (rhs - row_sum) / diag;
+        state->work_x[slack_idx] = (rhs - row_sum) / basis->diag_coeff[i];
     }
 
     /* Step 2b: Apply MPS RANGES to slack bounds.
@@ -230,9 +233,12 @@ int cxf_transition_to_phase_two(SolverState *state, CxfModel *model) {
         cxf_simplex_unperturb(state, model->env);
     }
 
-    /* Step 1: Restore original objective */
-    for (int j = 0; j < n; j++)
+    /* Step 1: Restore original objective (re-scaled if scaling active) */
+    for (int j = 0; j < n; j++) {
         state->work_obj[j] = model->obj_coeffs[j];
+        if (state->col_scale != NULL)
+            state->work_obj[j] *= state->col_scale[j];
+    }
     for (int i = 0; i < m; i++) {
         state->work_obj[n + i] = 0.0;
         char sense = (state->work_sense != NULL) ? state->work_sense[i] : '<';

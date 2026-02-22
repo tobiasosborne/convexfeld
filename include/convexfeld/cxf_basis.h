@@ -79,9 +79,9 @@ struct BasisState {
 
     /* Initial diagonal coefficients for auxiliary variables.
      * For row i, diag_coeff[i] = coefficient of auxiliary var (n+i) in row i.
-     * Values are ±1 based on constraint sense and RHS sign.
-     * Applied in FTRAN (before etas) and BTRAN (after etas). */
-    double *diag_coeff;       /**< Initial basis diagonal [m] (±1 values) */
+     * Values are ±1 based on constraint sense, or D_r[i]*(±1) when scaling
+     * is active. Applied in FTRAN (before etas) and BTRAN (after etas). */
+    double *diag_coeff;       /**< Initial basis diagonal [m] */
 
     /* LU factorization (computed by cxf_fix_variables_at_bounds) */
     LUFactors *lu;            /**< LU factors, NULL if using eta-only mode */

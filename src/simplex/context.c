@@ -345,6 +345,10 @@ void cxf_simplex_final(SolverState *state) {
     free(state->work_rhs);
     free(state->work_sense);
 
+    /* Free scaling factors */
+    free(state->row_scale);
+    free(state->col_scale);
+
     /* Free basis */
     cxf_basis_free(state->basis);
 

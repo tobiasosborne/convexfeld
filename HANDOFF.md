@@ -4,11 +4,11 @@
 
 ---
 
-## STATUS: 22/35 Netlib pass. 40/40 unit tests. RANGES parsing implemented (RC4).
+## STATUS: 22/35 Netlib pass. 40/40 unit tests. Scaling infrastructure ready but disabled.
 
 ### Scorecard
 
-**PASS (22):** afiro, sc50b, sc105, share2b, israel, adlittle, blend, lotfi, beaconfd, stocfor1, ship04l, scfxm1, standata, standgub, standmps, scagr7, sctap1, brandy, **scorpion**, **kb2**, **stair**, **e226**
+**PASS (22):** afiro, sc50b, sc105, share2b, israel, adlittle, blend, lotfi, beaconfd, stocfor1, ship04l, scfxm1, standata, standgub, standmps, scagr7, sctap1, brandy, scorpion, kb2, stair, e226
 
 **FAIL (13):** etamacro (0.016%), recipe (0.02%), boeing2 (0.09%), scagr25 (2.2%), bore3d (7.5%), finnis (7.3%), capri (10%), grow7 (12.5%), boeing1 (18%), vtp.base (20%), forplan (43%), scsd1 (TIMEOUT), bandm (TIMEOUT), tuff (TIMEOUT)
 
@@ -17,74 +17,53 @@
 ## What Changed This Session
 
 ### Code Changes
-1. **recompute.c** (NEW) — x_B + obj recomputation at refactorization. Fixed scorpion, kb2.
-2. **refactor.c** — adaptive eta threshold min(100, max(50, m/4))
-3. **step.c** — FTRAN residual monitoring + recompute calls after refactorization
-4. **solve_lp.c** — final accuracy pass at OPTIMAL
-5. **phase_loop.c** — forced refactorize/recompute before INFEASIBLE declaration
-6. **refine.c** — CRITICAL: removed RC-based status reassignment (was corrupting obj) and recovery pivots (was changing basis during post-solve). Recipe: 0.76% → 0.02%
-7. **post.c** — replaced eta clearing with full refactorization
-8. **perturbation.c** — restricted EXPAND to Phase I only
-9. **Reference CSV** — fixed e226 from -11.64 (wrong, presolved) to -18.75 (correct)
+1. **ftran.c** — Fixed FTRAN diagonal fallback: `*= diag_coeff` → `/= diag_coeff`. This is backward-compatible (1/±1 = ±1) but required for non-±1 diag_coeff when scaling is active.
+2. **btran.c** — Same fix for BTRAN diagonal fallback.
+3. **cxf_solver.h** — Added `row_scale`, `col_scale` fields to SolverState (NULL when no scaling).
+4. **cxf_basis.h** — Updated diag_coeff comment to note scaling support.
+5. **context.c** — Added free calls for row_scale/col_scale.
+6. **scaling.c** — Complete rewrite: full row+column Ruiz equilibration (matrix_finalization.md Strategy 3). Includes slack-aware row norms (diag_coeff included in row infinity norm). DISABLED via threshold=1e30.
+7. **solve_lp.c** — Wired scaling call + unscaling before solution extraction.
+8. **phase_one.c** — Phase I sets `diag_coeff = row_scale * sense_sign` when scaling active. Phase II transition re-scales restored objective.
 
-### Key Bugs Found via Diagnostic Tool
-1. **refine.c moved nonbasic vars without maintaining Ax=b** — recipe went from correct -266.6 to wrong -268.6 after refine
-2. **post.c cleared etas without refactoring** — destroyed basis inverse representation
-3. **EXPAND in Phase II corrupts simplex path** — scagr25 went from correct to 2.2% error
-4. **e226 reference CSV was wrong** — our solver was correct all along (-18.75)
-5. **scsd1 DIAG_MISMATCH** — equality row 5 has diag=+1 but diagnostic expects -1 (NOT fixable by RHS-dependent diag — causes regressions on israel/stair/e226)
+### Key Finding: Scaling Is Systems-Limited
 
----
+The scaling implementation is mathematically correct:
+- `A' = D_r * A * D_c` with consistent bound/RHS/obj/diag_coeff transformation
+- Objective value invariant (c_s^T y = c^T x)
+- FTRAN/BTRAN correctly divide by diag_coeff (not multiply)
+- Slack-aware row norms prevent over-scaling
 
-## Remaining Failures — Detailed Root Causes
+But enabling scaling **regresses every tested problem**:
+- blend: PASS → UNBOUNDED
+- stair: PASS → INFEASIBLE
+- boeing1: 18% → 41% error (worse)
+- grow7: 12.5% → 15% error (worse)
 
-### Near-misses (just above 0.01% threshold)
-| Instance | Error | Root Cause |
-|----------|-------|-----------|
-| etamacro | 0.016% | PIVCOL max=37300 at iter 742, basis ill-conditioning causes bound violation (worst_infeas jumps 0.057→1.73) |
-| recipe | 0.02% | Fixed by refine fix, residual from degenerate Phase II pivots |
-| boeing2 | 0.09% | Minor numerical drift |
-
-### Moderate errors
-| Instance | Error | Root Cause |
-|----------|-------|-----------|
-| scagr25 | 2.2% | EXPAND in Phase I corrupts Phase I path → different Phase II starting basis. Without EXPAND: PASS. With: FAIL. Trade-off with stair. |
-| bore3d | 7.5% | Never exits Phase I: 248 degenerate pivots then var-218 numerical 2-cycle (PIVCOL max/min ratio 10^16) |
-| finnis | 7.3% | Diagnose tool gets 0.2%! solver gets 7.3%. NOT refine, NOT step2/step3, NOT doScan, NOT perturbation timing. Unknown remaining architectural difference. |
-| capri | 10% | Phase I degeneracy with high residual infeasibility (obj=12.3, 99.96% reduced) |
-| grow7 | 12.5% | No Phase I needed. 31 basic vars past bounds (worst=144000). Solver overshoots optimal. |
-| boeing1 | 18% | Extreme coefficient range (~1 to ~3000), 570 vars with ub=inf |
-| vtp.base | 20% | Same class as grow7 (primal accuracy) |
-| forplan | TIMEOUT | RANGES now parsed (RC4 done) but solver can't handle bounded slacks from ranges yet |
-
-### Timeouts
-| Instance | Root Cause |
-|----------|-----------|
-| scsd1 | All-equality Phase I cycling. Every iteration degenerate. RCs blow up to 10^9 → false UNBOUNDED/TIMEOUT |
-| bandm | Dense LU performance |
-| tuff | Dense LU performance |
+Root cause: the solver's anti-degeneracy, ratio test, and Phase I convergence aren't robust enough to handle the different iteration path scaling creates.
 
 ---
 
-## Unsolved Mystery: finnis solver-vs-diagnose discrepancy
+## Next Steps
 
-The diagnose tool gets 0.2% error (943 iters, nearly correct). The solver gets 7.3% (906 iters). Tested and ELIMINATED:
-- step2/step3 (bound propagation) — disabling didn't change result
-- post-pivot phase_end doScan=1 — disabling didn't change result
-- Reactive perturbation timing — disabling didn't change result
-- refine.c post-solve — already fixed
+### To Enable Scaling (requires solver robustness first)
+1. Improve anti-cycling: EXPAND perturbation must work reliably
+2. Ratio test fallback: don't return UNBOUNDED when no blockers — try alternate candidates
+3. Phase I convergence: forced refactorize + recompute cycle on stall
+4. Set threshold to ~1e4 (catches boeing1/grow7/bore3d but not blend/stair)
+5. Run full 35-problem regression
 
-**Remaining suspects:**
-- Bland's rule activation logic (different threshold: `perturb_count > 0 && degenerate_count > 3*m` vs step.c internal `degenerate_count > 50`)
-- Outer loop convergence detection (basis_diff breaking inner loop)
-- The two calls to phase_end per iteration (diagnose calls once, solver calls twice)
-- Some subtle interaction between all the above
+### Other Priorities
+- etamacro, recipe, boeing2: near-miss problems (< 0.1% error)
+- scsd1: Phase I cycling on all-equality problem
+- bandm, tuff: dense LU performance (timeout)
+- finnis: solver-vs-diagnose discrepancy (see previous HANDOFF)
 
 ---
 
 ## DO NOT
+- Enable scaling without fixing ratio test UNBOUNDED fallback first
 - Change diag_coeff based on RHS sign (causes regressions on israel/stair/e226)
 - Re-add RC-based status reassignment in refine.c (corrupts obj)
 - Re-add recovery pivots in refine.c Pass 2 (changes basis during post-solve)
-- Enable EXPAND Mechanism B in Phase II (corrupts simplex path)
 - Skip reading this file and docs/learnings/gotchas.md

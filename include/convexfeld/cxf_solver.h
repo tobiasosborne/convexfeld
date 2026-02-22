@@ -146,6 +146,11 @@ struct SolverState {
     double *work_rhs;         /**< RHS working copy [num_constrs] */
     char *work_sense;         /**< Constraint senses working copy [num_constrs] */
 
+    /* Row/column scaling factors (NULL if no scaling applied).
+     * Per matrix_finalization.md Strategy 3 (Ruiz equilibration). */
+    double *row_scale;        /**< Row scaling D_r [num_constrs] (NULL = unscaled) */
+    double *col_scale;        /**< Column scaling D_c [num_vars] (NULL = unscaled) */
+
     /* (art_coeff removed — Phase I now uses implicit bound-violation approach
      * per two_phase_method.md spec. No explicit artificial variables.) */
 };

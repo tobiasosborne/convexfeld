@@ -109,9 +109,10 @@ int cxf_ftran(BasisState *basis, const double *column, double *result) {
     if (basis->lu != NULL && basis->lu->valid) {
         apply_lu_solve(basis->lu, m, result);
     } else if (basis->diag_coeff != NULL) {
-        /* Fall back to diagonal scaling (legacy mode) */
+        /* Fall back to diagonal B_0^{-1}: result = diag(1/d) * result.
+         * Division handles both ±1 and scaled diag_coeff values. */
         for (int i = 0; i < m; i++) {
-            result[i] *= basis->diag_coeff[i];
+            result[i] /= basis->diag_coeff[i];
         }
     }
 

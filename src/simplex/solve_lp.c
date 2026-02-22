@@ -23,6 +23,8 @@
 #include "convexfeld/cxf_matrix.h"
 #include "convexfeld/cxf_types.h"
 #include <math.h>
+#include <string.h>
+#include <stdlib.h>
 
 #define ITERATE_CONTINUE   0
 #define ITERATE_OPTIMAL    1
@@ -107,11 +109,45 @@ int cxf_solve_lp(CxfModel *model) {
     rc = cxf_simplex_init(model, &state);
     if (rc != CXF_OK) { model->status = rc; return rc; }
 
-    /* Matrix scaling disabled: column-only Ruiz equilibration causes
-     * fundamental inconsistency with diag_coeff-based slack representation.
-     * Full row+column scaling needs diag_coeff to be non-±1, requiring
-     * changes throughout FTRAN/BTRAN/column extraction.
-     * TODO: implement full scaling with proper slack coefficient handling. */
+    /* Full row+column Ruiz equilibration (matrix_finalization.md Strategy 3).
+     * Must run AFTER init (copies matrix) but BEFORE crash/Phase I
+     * (which use scaled data). */
+    {
+        extern void cxf_scale_problem(SolverState *, double *, double *);
+        int m_s = state->num_constrs;
+        int n_s = state->num_vars;
+        double *rs = (double *)malloc((size_t)m_s * sizeof(double));
+        double *cs = (double *)malloc((size_t)n_s * sizeof(double));
+        if (rs && cs) {
+            cxf_scale_problem(state, rs, cs);
+
+            /* Check if scaling was actually applied */
+            int scaled = 0;
+            for (int i = 0; i < m_s && !scaled; i++)
+                if (fabs(rs[i] - 1.0) > 1e-12) scaled = 1;
+            for (int j = 0; j < n_s && !scaled; j++)
+                if (fabs(cs[j] - 1.0) > 1e-12) scaled = 1;
+
+            if (scaled) {
+                state->row_scale = rs;
+                state->col_scale = cs;
+                /* Re-save bounds for EXPAND perturbation */
+                int total_s = n_s + m_s;
+                if (state->saved_lb && state->saved_ub) {
+                    memcpy(state->saved_lb, state->work_lb,
+                           (size_t)total_s * sizeof(double));
+                    memcpy(state->saved_ub, state->work_ub,
+                           (size_t)total_s * sizeof(double));
+                }
+            } else {
+                free(rs);
+                free(cs);
+            }
+        } else {
+            free(rs);
+            free(cs);
+        }
+    }
 
     /* Crash basis (P2.5) */
     cxf_simplex_crash(state, env);
@@ -256,6 +292,21 @@ int cxf_solve_lp(CxfModel *model) {
         cxf_solver_refactor(state, env);
         cxf_recompute_xB(state);
         cxf_recompute_objective(state);
+    }
+
+    /* Unscale primal solution and restore original bounds.
+     * Must run AFTER final accuracy pass (uses scaled matrix) but
+     * BEFORE extract and CS fix in cxf_simplex_final (use original bounds). */
+    if (state->col_scale != NULL) {
+        for (int j = 0; j < state->num_vars; j++)
+            state->work_x[j] *= state->col_scale[j];
+        /* Restore original structural bounds for CS fix */
+        if (model->lb && model->ub)
+            memcpy(state->work_lb, model->lb,
+                   (size_t)state->num_vars * sizeof(double));
+        if (model->ub)
+            memcpy(state->work_ub, model->ub,
+                   (size_t)state->num_vars * sizeof(double));
     }
 
     /* Extract solution for all terminal statuses, not just OPTIMAL.
