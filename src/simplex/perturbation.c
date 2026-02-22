@@ -255,12 +255,15 @@ int cxf_simplex_perturbation(SolverState *state, CxfEnv *env) {
      * - Mechanism A has been tried (perturb_count > 0)
      * - Many consecutive degenerate pivots despite A being active
      * - EXPAND not yet activated */
-    int need_expand = !state->perturb_expand_active &&
+    /* EXPAND Mechanism B: Phase I only, with moderate threshold.
+     * Disabled in Phase II — EXPAND leads to suboptimal vertices (scagr25). */
+    int need_expand = state->phase == 1 &&
+        !state->perturb_expand_active &&
         state->perturb_count > 0 &&
-        state->degenerate_count > 2 * 50 &&  /* 2x STALL_THRESHOLD */
+        state->degenerate_count > 2 * 50 &&
         state->saved_lb && state->saved_ub;
-    /* Also escalate proactively in Phase I with SEVERE degeneracy only.
-     * Use 3*m threshold (same as Bland's activation) to avoid false positives. */
+    /* Also escalate proactively in Phase I with SEVERE degeneracy.
+     * Use 3*m threshold (same as Bland's activation). */
     if (!need_expand && state->phase == 1 &&
         !state->perturb_expand_active &&
         state->degenerate_count > 3 * m &&
