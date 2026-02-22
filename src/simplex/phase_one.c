@@ -213,8 +213,17 @@ int cxf_transition_to_phase_two(SolverState *state, CxfModel *model) {
         state->work_obj[j] = model->obj_coeffs[j];
 
     /* Set auxiliary objective to 0; fix artificials for = constraints;
-     * flip >= artificials to surplus (diag +1 → -1) so Phase II
-     * maintains the >= direction instead of allowing violation. */
+     * restore diag_coeff to natural direction for Phase II.
+     *
+     * During Phase I, diag_coeff may be flipped from its natural value
+     * to keep auxiliary variable values non-negative:
+     *   <= violated: diag flipped from +1 to -1
+     *   >= violated: diag flipped from -1 to +1
+     * Phase II needs natural direction:
+     *   <=: diag = +1 (slack)
+     *   >=: diag = -1 (surplus)
+     *   = : diag = ±1 (stays as-is, artificial fixed at zero)
+     */
     BasisState *basis = state->basis;
     for (int i = 0; i < m; i++) {
         int var_idx = n + i;
@@ -222,9 +231,12 @@ int cxf_transition_to_phase_two(SolverState *state, CxfModel *model) {
         char sense = (state->work_sense != NULL) ? state->work_sense[i] : '<';
         if (sense == '=' || sense == 'E') {
             state->work_ub[var_idx] = 0.0;
-        } else if ((sense == '>' || sense == 'G') &&
-                   basis->diag_coeff != NULL && basis->diag_coeff[i] > 0.0) {
-            basis->diag_coeff[i] = -1.0;
+        } else if (basis->diag_coeff != NULL) {
+            /* Restore natural diag: +1 for <=, -1 for >= */
+            if ((sense == '>' || sense == 'G') && basis->diag_coeff[i] > 0.0)
+                basis->diag_coeff[i] = -1.0;
+            else if ((sense == '<' || sense == 'L') && basis->diag_coeff[i] < 0.0)
+                basis->diag_coeff[i] = 1.0;
         }
     }
     /* P1.3: Force refactorization at Phase I→II transition. */
