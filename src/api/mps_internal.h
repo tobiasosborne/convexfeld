@@ -26,6 +26,7 @@ typedef struct {
     char name[MPS_MAX_NAME];
     char sense;  /* N=obj, '='/'<'/'>' for constraints */
     double rhs;
+    double range_value;  /* MPS RANGES section value (0.0 = no range) */
 } MpsRow;
 
 /* Column (variable) entry */

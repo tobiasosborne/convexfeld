@@ -143,6 +143,23 @@ static int parse_bounds_line(MpsState *s, const char *line) {
     return CXF_OK;
 }
 
+/* Parse RANGES section line — same format as RHS (name/value pairs) */
+static int parse_ranges_line(MpsState *s, const char *line) {
+    int pos = 0;
+    char tok[MPS_MAX_NAME], row_name[MPS_MAX_NAME], val_str[32];
+
+    if (!next_token(line, &pos, tok, sizeof(tok))) return CXF_OK;
+
+    while (next_token(line, &pos, row_name, sizeof(row_name))) {
+        if (!next_token(line, &pos, val_str, sizeof(val_str))) break;
+        double val = atof(val_str);
+
+        int row_idx = mps_find_row(s, row_name);
+        if (row_idx >= 0) s->rows[row_idx].range_value = val;
+    }
+    return CXF_OK;
+}
+
 int mps_parse_file(MpsState *s, FILE *fp) {
     char line[MPS_MAX_LINE];
     MpsSection section = SEC_NONE;
@@ -169,6 +186,7 @@ int mps_parse_file(MpsState *s, FILE *fp) {
             case SEC_COLUMNS: status = parse_col_line(s, p); break;
             case SEC_RHS: status = parse_rhs_line(s, p); break;
             case SEC_BOUNDS: status = parse_bounds_line(s, p); break;
+            case SEC_RANGES: status = parse_ranges_line(s, p); break;
             default: break;
         }
         if (status != CXF_OK) return status;

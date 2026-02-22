@@ -97,11 +97,23 @@ static int build_csc_direct(MpsState *s, CxfModel *model, const int *row_map,
         return CXF_ERROR_OUT_OF_MEMORY;
     }
 
+    /* Check if any row has a range value */
+    int has_ranges = 0;
+    for (int i = 0; i < s->num_rows; i++) {
+        if (s->rows[i].range_value != 0.0) { has_ranges = 1; break; }
+    }
+    if (has_ranges) {
+        mat->range_values = (double *)cxf_calloc((size_t)num_constrs,
+                                                  sizeof(double));
+    }
+
     int constr_idx = 0;
     for (int i = 0; i < s->num_rows; i++) {
         if (s->rows[i].sense == 'N') continue;
         mat->rhs[constr_idx] = s->rows[i].rhs;
         mat->sense[constr_idx] = s->rows[i].sense;
+        if (mat->range_values)
+            mat->range_values[constr_idx] = s->rows[i].range_value;
         constr_idx++;
     }
 

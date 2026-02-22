@@ -42,6 +42,7 @@ struct MatrixData {
     /* Constraint data */
     double *rhs;              /**< Right-hand sides [num_rows] */
     char *sense;              /**< Constraint senses [num_rows] */
+    double *range_values;     /**< MPS RANGES values [num_rows] (NULL if none) */
 };
 
 #endif /* CXF_MATRIX_H */

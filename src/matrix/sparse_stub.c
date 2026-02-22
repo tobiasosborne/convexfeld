@@ -55,6 +55,7 @@ void cxf_sparse_free(MatrixData *mat) {
     /* Free constraint data */
     free(mat->rhs);
     free(mat->sense);
+    free(mat->range_values);
 
     /* Free the structure itself */
     free(mat);

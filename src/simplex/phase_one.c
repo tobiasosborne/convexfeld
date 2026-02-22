@@ -84,6 +84,34 @@ int cxf_setup_phase_one(SolverState *state) {
         state->work_x[slack_idx] = (rhs - row_sum) / diag;
     }
 
+    /* Step 2b: Apply MPS RANGES to slack bounds.
+     * RANGES converts one-sided constraints to two-sided range constraints
+     * by modifying the slack variable's bound range. */
+    if (state->model_ref && state->model_ref->matrix &&
+        state->model_ref->matrix->range_values) {
+        double *rv = state->model_ref->matrix->range_values;
+        for (int i = 0; i < m; i++) {
+            double r = rv[i];
+            if (r == 0.0) continue;
+            int slack_idx = n + i;
+            char sense = state->work_sense ? state->work_sense[i] : '<';
+            if (sense == '<' || sense == 'L' ||
+                sense == '>' || sense == 'G') {
+                /* L/G: slack range is [0, |r|] */
+                state->work_ub[slack_idx] = fabs(r);
+            } else if (sense == '=' || sense == 'E') {
+                /* E: slack range depends on sign of r */
+                if (r > 0) {
+                    state->work_lb[slack_idx] = -r;
+                    state->work_ub[slack_idx] = 0.0;
+                } else {
+                    state->work_lb[slack_idx] = 0.0;
+                    state->work_ub[slack_idx] = -r;
+                }
+            }
+        }
+    }
+
     /* Step 3: Use crash results to swap structurals into basis.
      * For rows marked BASIC_LOWER by crash, look for a singleton
      * structural that can replace the slack. */
