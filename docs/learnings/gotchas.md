@@ -1099,3 +1099,35 @@ MUST maintain constraint consistency. Moving nonbasic vars without adjusting
 basic vars violates Ax=b. Use the diagnostic tool (diagnose.c) to compare
 iteration-level behavior with the actual solver.
 
+---
+
+### Column-Only Scaling Doesn't Work With Implicit Slack Representation (2026-02-22)
+
+**Context:** Implemented Ruiz equilibration (column-only, no row scaling) to
+reduce coefficient range. Scaling was correct algorithmically but caused
+massive regressions (israel: -8.97e5 → -6.57e8, etamacro: 198394, etc.).
+
+**Root cause:** The solver's slack/surplus variables use diag_coeff (±1) as
+their column coefficients in the constraint matrix. These are implicit — not
+in the CSC matrix, but used in column extraction, FTRAN diagonal basis, and
+BTRAN. Column scaling changes the CSC values (structural columns) but NOT
+diag_coeff, creating an inconsistency: the scaled constraint system has
+scaled structural columns but unscaled slack columns.
+
+**Why it breaks:** When a structural variable enters the basis and a slack
+leaves, the FTRAN/BTRAN operates on a mixed-scale matrix. The basis B has
+some columns from A_scaled and some from diag (unscaled). The LU
+factorization of this mixed-scale basis is inaccurate.
+
+**What would fix it:** Full scaling requires either:
+1. Generalize diag_coeff to non-±1 values (scale by D_r), updating all
+   places that assume ±1 (FTRAN diagonal fallback, BTRAN apply_diag_btran,
+   column extraction, Phase I w-coefficient computation)
+2. OR: scale the model BEFORE building the solver state, so CSC and
+   diag_coeff are both in the scaled domain from the start
+
+**Lesson:** Matrix scaling in a simplex solver is not a simple pre/post
+transformation. The implicit slack representation tightly couples the
+constraint matrix to the basis operations. Scaling must be applied
+consistently to ALL matrix elements, including implicit ones.
+
