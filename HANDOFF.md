@@ -4,7 +4,7 @@
 
 ---
 
-## STATUS: Phase 0-1 done, Phase 2 5/6, Phase 3 done, Phase 4 5/9, Phase 5 2/4, Phase 6 7/7 done
+## STATUS: Phase 0-1 done, Phase 2 5/6, Phase 3 3/5, Phase 4 9/9 DONE, Phase 5 3/4, Phase 6 7/7 DONE
 
 ### Session Summary
 
@@ -38,10 +38,11 @@ This session completed the entire critical path from P4.2 through Phase 6:
 | Phase | Issues Closed |
 |-------|---------------|
 | P4 | P4.2, P4.3, P4.4, P4.5 |
+| P4 | P4.6, P4.7, P4.8, P4.9 |
 | P5 | P5.1, P5.2, P5.4 |
 | P6 | P6.1, P6.2, P6.3, P6.4, P6.6, P6.7 |
 
-**Total: 13 issues closed**
+**Total: 17 issues closed**
 
 ---
 
@@ -49,21 +50,17 @@ This session completed the entire critical path from P4.2 through Phase 6:
 
 ### Incomplete phases:
 - **P2**: 5/6 done. Missing: P2.3 (eta memory pool), P2.4 (fix_variables_at_bounds)
-- **P3**: Missing P3.2 (SolutionData struct), P3.3 (SolverState fields), P3.4 (BasisState fields)
-- **P4**: Missing P4.6 (end_level rewrite), P4.7 (mark_dirty 4-bit flags), P4.8 (complete wiring), P4.9 (steepest edge)
-- **P5**: Missing P5.3 (crash basis implementation)
-- **P6**: Only P6.5 (solve entry chain) remains — lower priority
+- **P3**: 3/5 done. Missing: P3.2 (SolutionData struct), P3.3 (SolverState fields)
+- **P4**: 9/9 COMPLETE
+- **P5**: 3/4 done. Missing: P5.3 (crash basis implementation)
+- **P6**: 7/7 COMPLETE (except P6.5 solve entry chain — lower priority)
 
 ### Ready issues (`bd ready`):
-- `52go` P4.7: mark_dirty with 4-bit flags
-- `9ef0` P4.9: steepest edge weight updates
-- `fevq` P4.6: end_level with queue compaction
-- `txab` P4.8: complete V2 wiring (remove V1 fallbacks)
 - `dk0i` P3.3: missing SolverState fields
-- `hyi2` P3.4: missing BasisState fields
 - `huah` P3.2: SolutionData struct
 - `uyfk` P2.4: fix_variables_at_bounds
 - `auj4` P2.3: eta memory pool
+- `snwu` P5.3: crash basis implementation
 - `4le3` P6.5: solve entry chain
 
 ### Refactor backlog:

@@ -174,6 +174,7 @@ target_sources(convexfeld PRIVATE
     src/pricing/queue_insert.c
     src/pricing/update_var.c
     src/pricing/update_constr.c
+    src/pricing/weight_update.c
     # Callbacks module (M5.2.2+)
     src/callbacks/context.c
     src/callbacks/init.c

@@ -133,4 +133,10 @@ void cxf_pricing_candidates_v2(PricingState *ctx,
                                struct SolverState *state,
                                int *count_out, int **candidates_out);
 
+/** P4.9: Update steepest edge / Devex weights after pivot. */
+void cxf_pricing_update_weights(PricingState *ctx,
+                                struct SolverState *state,
+                                int entering, int leavingRow,
+                                const double *pivotCol, const double *rho);
+
 #endif /* CXF_PRICING_H */
