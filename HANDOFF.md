@@ -61,6 +61,9 @@ Root cause: the solver's anti-degeneracy, ratio test, and Phase I convergence ar
 
 ---
 
+### Ratio Test Improvement (shipped, active)
+The ratio test now has a bound-flip fallback: when no valid blocker is found but the entering variable has finite bounds, it flips to the opposite bound instead of returning UNBOUNDED. Also, when multiple candidates exist, UNBOUNDED rejection tries the next candidate before giving up. These changes are active and harmless without scaling.
+
 ## DO NOT
 - Enable scaling without fixing ratio test UNBOUNDED fallback first
 - Change diag_coeff based on RHS sign (causes regressions on israel/stair/e226)

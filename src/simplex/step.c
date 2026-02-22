@@ -17,7 +17,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-#include <stdio.h>
 
 #define ITERATE_CONTINUE   0
 #define ITERATE_OPTIMAL    1
@@ -504,7 +503,28 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env) {
         rc = cxf_ratio_test(state, env, entering, pivotCol, m,
                             &leavingRow, &pivotElement);
         if (rc == CXF_UNBOUNDED) {
-            if (state->use_bland && ci + 1 < num_cand) continue;
+            /* Per harris_ratio_test.md: reject column and reprice.
+             * If entering has finite opposite bound, flip it instead.
+             * Only return UNBOUNDED if genuinely unbounded. */
+            if (ci + 1 < num_cand) continue;
+            /* Bound flip: entering has finite range → flip to opposite bound */
+            double lb_e = state->work_lb[entering];
+            double ub_e = state->work_ub[entering];
+            if (lb_e > -CXF_INFINITY && ub_e < CXF_INFINITY) {
+                double old_x = state->work_x[entering];
+                double new_x = (entering_sign > 0) ? ub_e : lb_e;
+                double delta = new_x - old_x;
+                state->work_x[entering] = new_x;
+                basis->var_status[entering] = (entering_sign > 0)
+                    ? CXF_VAR_AT_UPPER : CXF_VAR_AT_LOWER;
+                /* Update basic variable values for the flip */
+                for (int ii = 0; ii < m; ii++)
+                    state->work_x[basis->basic_vars[ii]] -=
+                        delta * pivotCol[ii];
+                state->obj_value += state->work_dj[entering] * delta;
+                state->iteration++;
+                return ITERATE_CONTINUE;
+            }
             return ITERATE_UNBOUNDED;
         }
         if (rc != CXF_OK) return rc;

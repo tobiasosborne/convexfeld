@@ -28,7 +28,7 @@
 #define SCALE_MIN       1e-6
 #define SCALE_MAX       1e6
 #define CONVERGE_TOL    0.01
-#define RANGE_THRESHOLD 1e30  /* Disabled: solver not robust enough yet */
+#define RANGE_THRESHOLD 1e30  /* Disabled: needs multi-candidate pricing first */
 
 /**
  * @brief Check if matrix needs scaling (Phase 1 validation).
