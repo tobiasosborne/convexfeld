@@ -249,27 +249,25 @@ neg_row=75 bv=73 x=42.50 lb=10.00 ub=18.00 ratio=-24.50 d=-1.00
 ```
 Variable 73 is 24.5 past its upper bound (18.0). The only ratio is negative → skipped → UNBOUNDED.
 
-**CONFIRMED V2 SPEC BUG:** The spec (harris_ratio_test.md Stage 3, Step 6c) literally says:
-"Negate the relevant row coefficients in the constraint matrix to maintain algebraic
-consistency when the variable changes its bound direction." This is WRONG for three reasons:
+**CORRECTED (2026-02-22):** The spec is NOT contradictory. The initial analysis
+conflated three distinct operations that share the word "flip":
 
-1. **Dual/primal conflation.** The spec references Forrest & Goldfarb (1992) who developed
-   BFRT for DUAL simplex where row operations are natural. ConvexFeld uses PRIMAL simplex
-   where the correct bound-flip operation is a column substitution (x → u-x), not row negation.
+1. **Non-basic bound flip** (revised_simplex.md) — nonbasic var moves lb↔ub. No row negation.
+2. **BFRT long-step flip** (harris_ratio_test.md) — basic blocking var flips to opposite bound
+   so the entering step can continue. Row negation IS part of this operation.
+3. **Variable fixing at bound** (pivot_operations.md) — permanent fixing, different operation.
 
-2. **"Algebraic consistency" is undefined.** The spec claims negation "maintains the invariant"
-   but is SILENT on LU/eta factor validity. The factorization is immediately invalid after
-   row negation — B has changed but B^{-1} (stored as eta product) hasn't. This isn't
-   "numerical drift" — it's a discrete algebraic break.
+Row negation in BFRT is a **real operation** in production solvers. The reference source code
+confirms: when a basic variable bound-flips during BFRT, the solver negates the row coefficients,
+RHS, activity bounds, and may change constraint sense.
 
-3. **Refactorization described as optional.** The spec says "periodic refactorization resets
-   drift" as if the issue is gradual. But any FTRAN/BTRAN call after row negation produces
-   wrong results, so the very next iteration is corrupted.
+**The implementation bug was INCOMPLETE BFRT** (missing factorization update), not a spec error.
+`negate_constraint_row()` negated the matrix but did NOT create an eta vector or otherwise
+update B^{-1}. All subsequent FTRAN/BTRAN used stale factorization → cumulative corruption.
 
-Standard primal BFRT (Koberstein 2005, Maros 2003) does NOT negate rows. It clamps the
-flipped variable to the opposite bound, extends the step, and continues — no matrix modification.
-
-**Fix:** Remove `negate_constraint_row()` calls entirely. Standard BFRT clamping is sufficient.
+**Current status:** BFRT disabled as interim measure. Proper BFRT requires row negation +
+corresponding factorization update (eta vector for the negated row). Re-enable once this
+is implemented correctly.
 
 ---
 
@@ -337,7 +335,7 @@ BFRT, re-test to see if they resolve. If not, separate investigation needed.
 
 | ID | Spec Ref | Violation | Status | Required Action |
 |----|----------|-----------|--------|-----------------|
-| **V1** | P3.5 | `negate_constraint_row` prescribed by spec but wrong for primal simplex | **SPEC BUG** | Remove row negation; spec imported dual technique into primal context |
+| **V1** | P3.5 | `negate_constraint_row` implemented without factorization update | **IMPL BUG** (not spec bug) | BFRT row negation is correct but MUST include eta/LU update. Disabled until properly implemented. |
 | **V2** | P0.9 | BFRT pricing notification | **FIXED** | Already in step.c:673-677 |
 | **V3** | Phase I | Conditional diag_coeff based on initial feasibility | **SPEC OMISSION** | Spec doesn't mention diag_coeff; always use fixed sign per sense |
 | **V4** | MPS | No OBJSENSE parsing | **MISSING FEATURE** | Add OBJSENSE handling |

@@ -502,21 +502,14 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env) {
     int flipped_rows[MAX_BFRT_FLIPS];
     int num_flips = 0;
 
-    /* BFRT disabled: the implementation has multiple interacting bugs
-     * (row negation, blocker search, step limiting by entering bound).
-     * Standard ratio test without flips is correct. BFRT is a performance
-     * optimization that can be re-enabled once properly implemented.
-     * See docs/remediation_plan.md RC1. */
+    /* BFRT disabled: negate_constraint_row() negated the matrix without
+     * updating the LU/eta factorization, corrupting all subsequent FTRAN/BTRAN.
+     * The spec IS correct (row negation is part of BFRT), but the implementation
+     * was incomplete — needs an eta vector for the negated row.
+     * Re-enable once factorization update is implemented.
+     * See docs/remediation_plan.md RC1, docs/architecture_contract_map.md. */
     (void)flipped_rows;
     state->flip_count += num_flips;
-
-    /* NOTE: v2 spec (harris_ratio_test.md Stage 3 Step 6c) prescribed
-     * negate_constraint_row() here. REMOVED — spec bug. The spec imported
-     * a dual-simplex technique (Forrest & Goldfarb 1992) into primal simplex.
-     * Row negation invalidates the LU/eta factorization without updating it,
-     * causing cumulative bound violations → false UNBOUNDED on 18 Netlib
-     * instances. Standard primal BFRT does not modify the matrix.
-     * See docs/remediation_plan.md RC1, docs/architecture_contract_map.md. */
 
     /* Cycling detection */
     if (stepSize < 1e-8) {

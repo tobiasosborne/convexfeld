@@ -34,35 +34,30 @@ cumulative bound violations until the ratio test can't find valid candidates.
 - grow7: 8 BFRT flips → worst infeasibility 3.58e8 → UNBOUNDED at iter 347
 - boeing2: 262 BFRT flips → worst infeasibility 1.45e5 → UNBOUNDED at iter 156
 
-### V2 Spec Bug (CONFIRMED)
+### CORRECTED: Implementation Bug, Not Spec Bug
 
-P3.5 references "harris_ratio_test.md Stage 3 Step 6c" which literally says:
-> "Negate the relevant row coefficients in the constraint matrix to maintain
->  algebraic consistency when the variable changes its bound direction."
+**Previous analysis claimed the spec was wrong. This is INCORRECT.**
 
-**This is a spec error, not an implementation error.** The implementation
-faithfully followed the spec. Three problems with the spec:
+The spec (harris_ratio_test.md Stage 3 Step 6c) prescribes row negation for
+BFRT long-step flips. This is a DIFFERENT operation from non-basic bound flips
+(revised_simplex.md) and variable fixing (pivot_operations.md). The three
+operations were conflated in the original analysis.
 
-1. **Dual/primal conflation.** The spec references Forrest & Goldfarb (1992)
-   who developed BFRT for DUAL simplex. Row negation is natural in dual simplex
-   but wrong in primal simplex. ConvexFeld is primal. The correct primal
-   bound-flip is a conceptual column substitution (x → u-x), not row negation.
+Row negation IS correct for BFRT — production solvers do this. The implementation
+bug was that `negate_constraint_row()` negated the matrix **without updating the
+LU/eta factorization**. The correct BFRT implementation requires:
 
-2. **"Algebraic consistency" is undefined.** The spec claims negation maintains
-   an invariant but never addresses that the LU/eta factorization becomes
-   immediately invalid. The basis B has changed but B^{-1} hasn't.
+1. Negate row coefficients in CSR/CSC
+2. Negate RHS
+3. Swap/negate activity bounds
+4. **Create an eta vector (or equivalent) reflecting the row negation**
+5. Update unbounded counts
 
-3. **Refactorization described as optional.** The spec says "periodic
-   refactorization resets drift" as if the issue is gradual. But the very
-   next FTRAN/BTRAN call produces wrong results.
+Our implementation did steps 1-3 but SKIPPED step 4. This made all subsequent
+FTRAN/BTRAN use stale factorization → cumulative corruption.
 
-Standard primal BFRT (Koberstein 2005, Maros 2003)
-does NOT negate constraint rows. The BFRT procedure is:
-
-1. Find leaving variable (hits bound)
-2. If leaving var has both finite bounds: flip to opposite bound, extend step
-3. Find next blocker
-4. Repeat until no more flips or max flips reached
+**Current status:** BFRT disabled as interim measure until properly implemented
+with factorization update. Standard ratio test (no flips) is correct but slower.
 5. Pivot the final leaving variable out
 
 No matrix modification is required. The pivot column doesn't change during BFRT
