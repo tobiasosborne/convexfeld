@@ -57,7 +57,7 @@ The crash procedure typically reduces Phase I iterations by selecting a substant
 
 ### cxf_simplex_perturbation
 
-**Purpose:** Apply bound perturbation to break degeneracy when the simplex method is detected to be cycling or stalling, by analyzing implied bounds for pricing candidates and removing irrecoverably degenerate variables from the pricing set.
+**Purpose:** Apply anti-cycling measures when the simplex method is detected to be cycling or stalling, using two complementary mechanisms: (1) pricing restriction via implied bound analysis to remove irrecoverably degenerate entering candidates, and (2) EXPAND-style bound widening to break leaving-side degeneracy when basic variables sit exactly at their bounds.
 
 **Signature:**
 - Input: `state` : pointer-to-SolverState - The solver state with basis, working bounds, saved bounds, constraint matrix, reduced costs, and pricing state
@@ -66,47 +66,59 @@ The crash procedure typically reduces Phase I iterations by selecting a substant
 
 **Preconditions:**
 - Stalling has been detected by the basis snapshot diff mechanism (P3.16, P3.20 post_iterate)
-- The solver state must have valid pricing state, working bounds, and constraint matrix
+- The solver state must have valid pricing state, working bounds, saved bounds, and constraint matrix
 - The pricing subsystem must be initialized
 
 **Postconditions:**
-- On success: degenerate variables have been removed from the pricing candidate set, working bounds have been perturbed to ensure unique ratio test outcomes, the perturbation counter has been incremented, and the pricing state has been updated
-- On infeasibility: a variable whose lower bound exceeds its upper bound (after perturbation analysis) has been identified, and the diagnostic index has been stored
+- On success (Mechanism A applied): irrecoverably degenerate variables have been removed from the pricing candidate set, the perturbation counter has been incremented, and the pricing state has been updated. The remaining pricing candidates have implied bound gaps large enough to permit non-degenerate pivots.
+- On success (Mechanism B applied): working bounds of basic variables at their bounds have been widened by a small variable-dependent epsilon, the perturbation active flag has been set, the perturbation counter has been incremented, and constraint activities have been updated to reflect the modified bounds.
+- On infeasibility: a variable whose lower bound exceeds its upper bound (after implied bound analysis) has been identified, and the diagnostic index has been stored
 
 **Side Effects:**
-- Modifies working bounds for perturbed variables
-- Removes degenerate variables from the pricing candidate set
+- Removes degenerate variables from the pricing candidate set (Mechanism A: entering-side)
+- Modifies working bounds for basic variables at bounds (Mechanism B: leaving-side, EXPAND widening)
 - Notifies the pricing subsystem of all changes via dirty-marking and cascade updates
 - Increments the perturbation counter on the solver state
+- Sets the perturbation active flag when EXPAND widening is applied
 - Updates the work counter
 
 **Error Conditions:**
 - Lower bound exceeds upper bound for a candidate variable (detected during implied bound analysis) -> returns the infeasibility code with diagnostic index
 
 **Behavioral Description:**
-This function implements the perturbation and anti-cycling strategy described in P2.6 (Perturbation and Anti-Cycling), based on the EXPAND procedure (Gill, Murray, Saunders, and Wright, 1989). It is invoked when the post-iteration stall detection (cxf_simplex_post_iterate, P3.20) determines that the solver is not making sufficient progress.
+This function implements the two-mechanism anti-cycling strategy described in P2.6 (Perturbation and Anti-Cycling). It is invoked when the post-iteration stall detection (cxf_simplex_post_iterate, P3.20) determines that the solver is not making sufficient progress.
 
 **Phase 1: Pricing candidate retrieval.** The function obtains the current pricing candidates from the pricing subsystem (cxf_pricing_candidates, P3.17). These are the variables currently eligible for entering the basis.
 
-**Phase 2: Optional bound restoration.** If a previous perturbation is active, the function may first restore saved bounds before applying a new perturbation cycle. This prevents perturbation drift from accumulating over multiple cycles.
+**Phase 2: Optional bound restoration.** If a previous perturbation cycle is active, the function may first restore saved bounds before applying a new cycle. This prevents perturbation drift from accumulating over multiple invocations.
 
-**Phase 3: Per-candidate implied bound analysis.** For each pricing candidate, the function evaluates whether the variable is irrecoverably degenerate:
+**Phase 3: Per-candidate implied bound analysis (Mechanism A — entering-side).** For each pricing candidate, the function evaluates whether the variable is irrecoverably degenerate:
 
-1. **Non-basic variables at lower bound.** The function checks whether the variable's bound range is consistent. If the lower bound exceeds the upper bound beyond tolerance, the problem is infeasible.
+1. **Non-basic variables at lower bound.** The function checks whether the variable's bound range is consistent. If the lower bound exceeds the upper bound beyond tolerance, the problem is infeasible. Otherwise, variables that cannot improve the objective are removed from the candidate set.
 
-2. **Basic variables.** For each basic candidate, the function computes the implied bounds from the variable's column in the constraint matrix. The column product (coefficient times activity bound) determines the range of feasible values. If the implied bounds indicate the variable is degenerate (zero feasible range within tolerance), the variable is removed from the pricing set because no pivot involving it can make progress.
+2. **Basic variables.** For each basic candidate, the function computes the implied bounds from the variable's column in the constraint matrix using saved (original) bounds. The column product (coefficient times saved bound) determines the range of feasible values. If the implied bounds indicate the variable is irrecoverably degenerate (zero feasible range within tolerance), the variable is removed from the pricing set. All column entries for the removed variable are invalidated and neighboring variables' constraint counts are decremented.
 
-3. **Removal from pricing.** Variables identified as irrecoverably degenerate are removed from the pricing candidate set to prevent the simplex method from repeatedly selecting them. This is the core anti-cycling mechanism: by shrinking the candidate pool to only variables that can make genuine progress, the method avoids revisiting the same degenerate basis.
+3. **Removal from pricing.** Variables identified as irrecoverably degenerate are removed from the pricing candidate set to prevent the simplex method from repeatedly selecting them. This addresses entering-side degeneracy: by shrinking the candidate pool to only variables that can make genuine progress, the method avoids revisiting the same degenerate basis.
 
-**Phase 4: Pricing notification.** The pricing subsystem is notified of all removals and bound changes via cascading updates (cxf_pricing_cascade_update, P3.18).
+**Phase 4: EXPAND bound widening (Mechanism B — leaving-side).** When pricing restriction alone is insufficient to resolve stalling (indicated by persistent stalling after candidate removal, or by a high proportion of zero-step pivots), the function applies EXPAND-style bound perturbation (Gill et al., 1989):
+
+1. For each basic variable at (or within tolerance of) one of its bounds, widen the relevant working bound by a small variable-dependent epsilon, computed from the feasibility tolerance scaled by the variable's bound magnitude and a deterministic hash of the variable index. This ensures distinct perturbations per variable (Wolfe, 1963).
+
+2. Set the perturbation active flag to trigger unperturbation after the perturbed problem reaches optimality.
+
+3. Recompute constraint activity bounds to reflect the modified working bounds.
+
+This mechanism directly addresses leaving-side degeneracy: basic variables are no longer exactly at their bounds, so the ratio test produces strictly positive step lengths. This is particularly important during Phase I (P2.9), where the crash basis often places many slack variables at their lower bounds.
+
+**Phase 5: Pricing notification.** The pricing subsystem is notified of all removals and bound changes via cascading updates (cxf_pricing_cascade_update, P3.18).
 
 **Thread Safety:** Not thread-safe. Must be called within a single-threaded simplex iteration context.
 
 **Dependencies:**
-- P2.6 (Perturbation and Anti-Cycling) - implements the EXPAND-family perturbation strategy
+- P2.6 (Perturbation and Anti-Cycling) - implements both mechanisms of the anti-cycling strategy
 - P3.17 (Pricing Core) - cxf_pricing_candidates for candidate retrieval
 - P3.18 (Pricing Support) - cxf_pricing_mark_dirty, cxf_pricing_cascade_update for notification; cxf_pricing_end_level for removing candidates
-- P1.04 (SolverState) - reads/modifies working bounds, pricing state, perturbation counter
+- P1.04 (SolverState) - reads/modifies working bounds, saved bounds, pricing state, perturbation counter, perturbation active flag
 - P1.05 (BasisState) - basis header for identifying basic variables
 
 ---
@@ -145,7 +157,7 @@ This function performs a lightweight preprocessing pass that reduces the effecti
 
 **Step 1: Candidate identification.** The function scans all variables and collects those whose bound range (upper bound minus lower bound) is below a tightness threshold. The threshold is a multiple of the feasibility tolerance. A minimum candidate count is enforced to prevent degenerate preprocessing on very small problems.
 
-**Step 2: Candidate sorting.** The candidates are sorted by bound width (tightest first) using cxf_sort_by_values (P3.14). This ordering ensures that the most constrained variables are fixed first, maximizing the chance that each fixing remains feasible.
+**Step 2: Candidate sorting.** The candidates are sorted by bound width (tightest first) using cxf_sort_indices (P3.14). This ordering ensures that the most constrained variables are fixed first, maximizing the chance that each fixing remains feasible.
 
 **Step 3: Activity initialization.** The constraint activity arrays are cleared (or initialized from current activity bounds) to provide a clean baseline for tracking the cumulative effect of variable fixings.
 
@@ -165,7 +177,7 @@ This function performs a lightweight preprocessing pass that reduces the effecti
 
 **Dependencies:**
 - P3.02 (Allocation Helpers) - cxf_alloc_eta for eta vector allocation
-- P3.14 (Matrix Core) - cxf_sort_by_values for candidate sorting
+- P3.14 (Matrix Core) - cxf_sort_indices for candidate sorting
 - P1.04 (SolverState) - reads bounds, constraint matrix; modifies activity arrays, objective, eta chain
 - P1.05 (BasisState) - eta chain management for fixing records
 
@@ -288,7 +300,7 @@ The two-phase simplex method (Dantzig, 1963; Chvatal, 1983) separates feasibilit
 
 4. **Constraint cleanup.** Inactive constraints identified during Phase I processing (those whose activity bounds indicate they are not binding at the current solution) are removed from the active set. This cleanup, performed by the sparse removal mechanism described above, reduces the effective problem size entering Phase II.
 
-5. **Basis preservation.** The basis itself (the set of basic variables and their positions) is carried forward from Phase I to Phase II unchanged. The Phase I solution is a basic feasible solution, and Phase II begins from this vertex of the feasible polyhedron. The basis factorization may be refreshed (via cxf_fix_variables_at_bounds, P3.16) to ensure numerical accuracy for Phase II iterations, since the objective change can affect the conditioning of subsequent operations.
+5. **Basis preservation.** The basis itself (the set of basic variables and their positions) is carried forward from Phase I to Phase II unchanged. The Phase I solution is a basic feasible solution, and Phase II begins from this vertex of the feasible polyhedron. The basis factorization may be refreshed (via cxf_basis_refactor, P3.16) to ensure numerical accuracy for Phase II iterations, since the objective change can affect the conditioning of subsequent operations.
 
 6. **Tolerance adjustment.** The optimality tolerance used for Phase II termination may differ from the feasibility tolerance used for Phase I. Phase I uses the primal feasibility tolerance to determine when constraint violations are acceptable; Phase II uses the dual feasibility (optimality) tolerance to determine when reduced costs are small enough to declare optimality. These are typically configured as separate environment parameters.
 
@@ -380,10 +392,10 @@ The six functions in this module bracket and condition the main simplex iteratio
 2. **cxf_simplex_crash** (this module) — construct initial basis
 3. **cxf_simplex_preprocess** (this module) — fix near-bound variables
 4. **cxf_simplex_setup** (this module) — compute activity bounds
-5. cxf_fix_variables_at_bounds (P3.16) — initial basis factorization
+5. cxf_basis_refactor (P3.16) — initial basis factorization
 
 **Within the iteration loop:**
-6. cxf_log_iteration_progress (P3.20) — progress logging
+6. cxf_simplex_iterate (P3.20) — progress logging
 7. **cxf_simplex_phase_end** (this module) — phase transition and constraint cleanup
 8. **cxf_simplex_perturbation** (this module) — anti-cycling when stalling detected
 9. cxf_simplex_step/step2/step3 (P3.20) — main pivot and bound propagation
@@ -393,14 +405,14 @@ The six functions in this module bracket and condition the main simplex iteratio
 **Post-iteration cleanup:**
 12. **cxf_simplex_refine** (this module) — solution refinement
 13. cxf_simplex_final (P3.22) — solution extraction
-14. cxf_simplex_postsolve (P3.22) — resource deallocation
+14. cxf_simplex_cleanup (P3.22) — resource deallocation
 
 ### Relationship to Algorithm Specifications
 
 | Function | Primary Algorithm Spec | Role |
 |----------|----------------------|------|
 | cxf_simplex_crash | P2.5 (Crash Basis Construction) | Implements the crash algorithm |
-| cxf_simplex_perturbation | P2.6 (Perturbation and Anti-Cycling) | Implements the EXPAND-family perturbation strategy |
+| cxf_simplex_perturbation | P2.6 (Perturbation and Anti-Cycling) | Implements pricing restriction (entering-side) and EXPAND bound widening (leaving-side) |
 | cxf_simplex_preprocess | P2.1 (Revised Simplex Method) | Preprocessing reduction within the simplex framework |
 | cxf_simplex_setup | P2.1 (Revised Simplex Method) | Activity bound computation for feasibility and propagation |
 | cxf_simplex_phase_end | P2.1 (Revised Simplex Method) | Phase I/II transition management |
@@ -479,12 +491,12 @@ All functions operate within a single-threaded simplex solve. Thread safety for 
 
 ## References
 
-- Achterberg, T., Bixby, R.E., Gu, Z., Rothberg, E., and Weninger, D. (2020). "Presolve Reductions in Linear Programming." *INFORMS Journal on Computing*, 32(2):473-506.
+- Achterberg, T., Bixby, R.E., Gu, Z., Rothberg, E., and Weninger, D. (2020). "Presolve Reductions in Mixed Integer Programming." *INFORMS Journal on Computing*, 32(2):473-506.
 - Chvatal, V. (1983). *Linear Programming*. W.H. Freeman.
 - Dantzig, G.B. (1963). *Linear Programming and Extensions*. Princeton University Press.
 - Gill, P.E., Murray, W., Saunders, M.A., and Wright, M.H. (1989). "A practical anti-cycling procedure for linearly constrained optimization." *Mathematical Programming*, 45(1-3):437-474.
 - Gleixner, A.M., Steffy, D.E., and Wolter, K. (2016). "Iterative refinement for linear programming." *INFORMS Journal on Computing*, 28(3):449-464.
 - Gould, N.I.M. and Reid, J.K. (1989). "New crash procedures for large systems of linear constraints." *Mathematical Programming*, 45(1-3):475-501.
 - Maros, I. (2003). *Computational Techniques of the Simplex Method*. Springer. International Series in Operations Research and Management Science, Vol. 61.
-- Savelsbergh, M.W.P. (1994). "Preprocessing and Probing Techniques for Linear Programming Problems." *ORSA Journal on Computing*, 6(4):445-454.
+- Savelsbergh, M.W.P. (1994). "Preprocessing and Probing Techniques for Mixed Integer Programming Problems." *ORSA Journal on Computing*, 6(4):445-454.
 - Vanderbei, R.J. (2014). *Linear Programming: Foundations and Extensions*. 4th ed. Springer.

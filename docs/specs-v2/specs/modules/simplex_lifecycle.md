@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The Simplex Lifecycle module contains the three functions that bracket the entire simplex solve: initialization before the iteration loop begins, post-solve variable fixing after it terminates, and post-solve bound tightening with resource deallocation. Together these functions manage the creation, population, and destruction of the SolverState (P1.04), the central data structure through which all simplex functions communicate. cxf_simplex_init allocates and populates the SolverState from the model's problem data. cxf_simplex_final performs dual-feasibility-based variable fixing to simplify the solution. cxf_simplex_postsolve performs implied-bound propagation, additional variable fixing, and frees all temporary working memory. These lifecycle functions implement the initialization and cleanup phases of the revised simplex method described in P2.1 (Revised Simplex Method).
+The Simplex Lifecycle module contains the three functions that bracket the entire simplex solve: initialization before the iteration loop begins, post-solve variable fixing after it terminates, and post-solve bound tightening with resource deallocation. Together these functions manage the creation, population, and destruction of the SolverState (P1.04), the central data structure through which all simplex functions communicate. cxf_simplex_init allocates and populates the SolverState from the model's problem data. cxf_simplex_final performs dual-feasibility-based variable fixing to simplify the solution. cxf_simplex_cleanup performs implied-bound propagation, additional variable fixing, and frees all temporary working memory. These lifecycle functions implement the initialization and cleanup phases of the revised simplex method described in P2.1 (Revised Simplex Method).
 
 ## Functions
 
@@ -20,7 +20,7 @@ The Simplex Lifecycle module contains the three functions that bracket the entir
 
 **Preconditions:**
 - The model must have a valid constraint matrix with consistent dimensions (number of variables, constraints, and nonzeros)
-- The model's environment must be active and initialized
+- The model's environment must be active (licensed and initialized)
 - If `initMode` is non-zero, the model must have valid variable type information for semi-continuous and semi-integer variable detection
 - If `altModel` is non-null, it must contain valid warm-start data
 
@@ -155,7 +155,7 @@ The rationale follows standard practice for revised simplex implementations: the
 - Constraint activity verification detects a violated constraint -> applies partial fixings and returns success (not an error, but fewer variables are fixed)
 
 **Behavioral Description:**
-This function performs post-solve solution cleanup by fixing variables at their bounds when dual feasibility conditions guarantee that the fixing does not change the optimal objective value. Fixing reduces the effective problem dimension and improves numerical stability for subsequent operations such as barrier crossover or sensitivity analysis. The approach is based on the standard complementary slackness conditions of linear programming (Dantzig, 1963).
+This function performs post-solve solution cleanup by fixing variables at their bounds when dual feasibility conditions guarantee that the fixing does not change the optimal objective value. Fixing reduces the effective problem dimension and improves numerical stability for subsequent operations such as barrier crossover, MIP branching, or sensitivity analysis. The approach is based on the standard complementary slackness conditions of linear programming (Dantzig, 1963).
 
 **Phase 1: Target value determination.** The function scans all variables with non-negative status (active, unfixed variables). For each variable, it evaluates the dual value (reduced cost) to determine the appropriate fixing target:
 
@@ -189,7 +189,7 @@ All temporary arrays (target values, constraint queue, visited flags) are freed 
 
 ---
 
-### cxf_simplex_postsolve
+### cxf_simplex_cleanup
 
 **Purpose:** Perform constraint-based implied bound tightening and variable fixing after the simplex solve, then free all temporary working arrays.
 
@@ -221,9 +221,7 @@ All temporary arrays (target values, constraint queue, visited flags) are freed 
 - Errors from the core bound propagation helper are propagated
 
 **Behavioral Description:**
-This function performs substantial post-solve analysis before freeing memory. It implements constraint-based bound propagation -- the standard implied-bound tightening technique from LP presolve (Savelsbergh, 1994) -- applied to the post-solve state to identify variables that can be fixed at their bounds.
-
-**Naming history:** Formerly `cxf_simplex_cleanup`; renamed to `cxf_simplex_postsolve` to better reflect its substantial post-solve analysis beyond simple resource cleanup.
+Despite its name suggesting simple resource cleanup, this function performs substantial post-solve analysis before freeing memory. It implements constraint-based bound propagation -- the standard implied-bound tightening technique from LP presolve (Savelsbergh, 1994) -- applied to the post-solve state to identify variables that can be fixed at their bounds.
 
 **Phase 1: Basis index adjustment.** For variables with special flags (quadratic, semi-continuous, general constraint, piecewise-linear, or ranged), the function temporarily adjusts basis header indices by subtracting an offset. This normalization enables uniform processing of all variables regardless of their special-handling requirements. The adjustment is reversed in Phase 6.
 
@@ -284,15 +282,15 @@ The three functions in this module define the outermost brackets of a simplex so
 2. cxf_simplex_crash (P3.21) -- construct initial basis
 3. cxf_simplex_preprocess (P3.21) -- fix near-bound variables
 4. cxf_simplex_setup (P3.21) -- compute activity bounds
-5. cxf_fix_variables_at_bounds (P3.16) -- initial basis factorization
+5. cxf_basis_refactor (P3.16) -- initial basis factorization
 
 **The iteration loop:**
-6. cxf_log_iteration_progress through cxf_simplex_post_iterate (P3.20) -- repeated until termination
+6. cxf_simplex_iterate through cxf_simplex_post_iterate (P3.20) -- repeated until termination
 
 **After the iteration loop:**
 7. cxf_simplex_refine (P3.21) -- solution refinement
 8. **cxf_simplex_final** (this module) -- dual-feasibility variable fixing
-9. **cxf_simplex_postsolve** (this module) -- implied-bound tightening and resource deallocation
+9. **cxf_simplex_cleanup** (this module) -- implied-bound tightening and resource deallocation
 
 ### Relationship to Data Model Specifications
 
@@ -300,11 +298,11 @@ The three functions in this module define the outermost brackets of a simplex so
 |----------|------------------------|-----------------|
 | cxf_simplex_init | P1.04 (SolverState) - Creation | Allocates and populates all fields described in P1.04 |
 | cxf_simplex_final | P1.04 (SolverState) - Mutation | Modifies variable status and bounds via pivot operations |
-| cxf_simplex_postsolve | P1.04 (SolverState) - Destruction | Frees all working arrays; corresponds to the Destruction lifecycle phase of P1.04 |
+| cxf_simplex_cleanup | P1.04 (SolverState) - Destruction | Frees all working arrays; corresponds to the Destruction lifecycle phase of P1.04 |
 
 cxf_simplex_init is the sole creator of the SolverState structure. The lifecycle described in P1.04 (SolverState, Lifecycle section) maps directly to the initialization phases of this function: zero-initialized allocation, dimension copying, working array sizing, array allocation, data copying, and special variable processing.
 
-cxf_simplex_postsolve is the primary destructor. While it does not free every array (the solve driver handles some cleanup), it frees the temporary working arrays and performs the bulk of the implied-bound analysis before other cleanup functions handle the remaining arrays and the SolverState structure itself.
+cxf_simplex_cleanup is the primary destructor. While it does not free every array (the solve driver handles some cleanup), it frees the temporary working arrays and performs the bulk of the implied-bound analysis before other cleanup functions handle the remaining arrays and the SolverState structure itself.
 
 ### Initialization Complexity
 
@@ -337,7 +335,7 @@ cxf_simplex_init populates a per-variable flags array that marks variables requi
 | PIECEWISE_LINEAR | Variable with multi-segment PWL function | Phase 7 (PWL processing) |
 | RANGED | Ranged constraint slack variable | Phase 8 (finalization) |
 
-These flags are read by the simplex iteration functions (P3.20) and the pivot operations (P3.19) to apply appropriate special-case handling. cxf_simplex_postsolve also reads the flags to adjust basis header indices during its temporary normalization step.
+These flags are read by the simplex iteration functions (P3.20) and the pivot operations (P3.19) to apply appropriate special-case handling. cxf_simplex_cleanup also reads the flags to adjust basis header indices during its temporary normalization step.
 
 ### Allocation Strategy
 
@@ -353,22 +351,22 @@ The initialization function follows a strict allocation discipline:
 
 ### Post-Solve Analysis Pipeline
 
-cxf_simplex_final and cxf_simplex_postsolve form a two-stage post-solve analysis pipeline:
+cxf_simplex_final and cxf_simplex_cleanup form a two-stage post-solve analysis pipeline:
 
 | Stage | Function | Technique | Purpose |
 |-------|----------|-----------|---------|
 | 1 | cxf_simplex_final | Dual feasibility analysis | Fix variables at bounds based on reduced cost signs |
-| 2 | cxf_simplex_postsolve | Implied bound propagation | Tighten variable bounds using constraint activity analysis, then fix at bounds |
+| 2 | cxf_simplex_cleanup | Implied bound propagation | Tighten variable bounds using constraint activity analysis, then fix at bounds |
 
-Stage 1 (cxf_simplex_final) uses a local criterion: each variable is evaluated independently based on its dual value and bounds. Stage 2 (cxf_simplex_postsolve) uses a global criterion: constraint activities propagate information across variables, enabling fixings that require knowledge of the full constraint structure.
+Stage 1 (cxf_simplex_final) uses a local criterion: each variable is evaluated independently based on its dual value and bounds. Stage 2 (cxf_simplex_cleanup) uses a global criterion: constraint activities propagate information across variables, enabling fixings that require knowledge of the full constraint structure.
 
 ### Numerical Stability Techniques
 
-Both cxf_simplex_final and cxf_simplex_postsolve use the same numerically stable addition technique when accumulating constraint activities. When the magnitudes of the two operands differ significantly, floating-point addition can lose precision. The functions detect this by checking whether the reverse subtraction recovers the original operand. If precision loss is detected, the result is multiplied by a conservative rounding factor (slightly above 1.0 for positive results, slightly below 1.0 for negative results) to ensure that activity bounds remain conservative. This prevents false infeasibility or false tightness from accumulated rounding errors. The technique is a simplified variant of compensated summation (Kahan, 1965), adapted for the specific needs of bound propagation where conservative over-estimation is preferred over exact summation.
+Both cxf_simplex_final and cxf_simplex_cleanup use the same numerically stable addition technique when accumulating constraint activities. When the magnitudes of the two operands differ significantly, floating-point addition can lose precision. The functions detect this by checking whether the reverse subtraction recovers the original operand. If precision loss is detected, the result is multiplied by a conservative rounding factor (slightly above 1.0 for positive results, slightly below 1.0 for negative results) to ensure that activity bounds remain conservative. This prevents false infeasibility or false tightness from accumulated rounding errors. The technique is a simplified variant of compensated summation (Kahan, 1965), adapted for the specific needs of bound propagation where conservative over-estimation is preferred over exact summation.
 
 ### Work Estimation
 
-cxf_simplex_final supports optional work estimation via the `workOut` parameter. When non-null, the function accumulates a weighted estimate of computational work at each phase transition, using per-operation cost multipliers scaled by a problem-dependent work multiplier stored in the SolverState. This estimate is used by the outer solve driver for progress prediction and time-limit enforcement. cxf_simplex_postsolve uses a similar mechanism via the timing pointer stored in the SolverState.
+cxf_simplex_final supports optional work estimation via the `workOut` parameter. When non-null, the function accumulates a weighted estimate of computational work at each phase transition, using per-operation cost multipliers scaled by a problem-dependent work multiplier stored in the SolverState. This estimate is used by the outer solve driver for progress prediction and time-limit enforcement. cxf_simplex_cleanup uses a similar mechanism via the timing pointer stored in the SolverState.
 
 ### Return Code Conventions
 
@@ -385,7 +383,7 @@ cxf_simplex_final supports optional work estimation via the `workOut` parameter.
 |----------|---------------|-------|
 | cxf_simplex_init | Not thread-safe | Allocates and populates a single-threaded SolverState |
 | cxf_simplex_final | Not thread-safe | Modifies variable status, bounds, and pricing state |
-| cxf_simplex_postsolve | Not thread-safe | Modifies bounds, constraint senses, pricing state; frees arrays |
+| cxf_simplex_cleanup | Not thread-safe | Modifies bounds, constraint senses, pricing state; frees arrays |
 
 All functions operate within a single-threaded simplex solve. Thread safety for concurrent solves is achieved at the model level by creating independent solver instances, each with its own SolverState.
 
@@ -410,4 +408,4 @@ All functions operate within a single-threaded simplex solve. Thread safety for 
 - Dantzig, G.B. (1963). *Linear Programming and Extensions*. Princeton University Press.
 - Kahan, W. (1965). "Further remarks on reducing truncation errors." *Communications of the ACM*, 8(1):40.
 - Maros, I. (2003). *Computational Techniques of the Simplex Method*. Springer. International Series in Operations Research and Management Science, Vol. 61.
-- Savelsbergh, M.W.P. (1994). "Preprocessing and Probing Techniques for Linear Programming Problems." *ORSA Journal on Computing*, 6(4):445-454.
+- Savelsbergh, M.W.P. (1994). "Preprocessing and Probing Techniques for Mixed Integer Programming Problems." *ORSA Journal on Computing*, 6(4):445-454.

@@ -2,9 +2,9 @@
 
 ## Purpose
 
-The Environment Lifecycle module manages the complete lifecycle of the Environment structure, from initial allocation through activation to eventual destruction. The Environment is the top-level context object for an LP solver session, and its lifecycle involves five distinct operations: creating the raw structure with default values, finalizing it into an active session, initializing the logging subsystem, tracking which model is currently active, and releasing all owned resources on destruction.
+The Environment Lifecycle module manages the complete lifecycle of the Environment structure, from initial allocation through activation to eventual destruction. The Environment is the top-level context object for an LP solver session, and its lifecycle involves five distinct operations: creating the raw structure with default values, finalizing it into an active licensed session, initializing the logging subsystem, tracking which model is currently active, and releasing all owned resources on destruction.
 
-The creation and destruction operations form a symmetrical pair: creation allocates and initializes a zeroed Environment with parameter defaults, system information, and a mutex, while destruction systematically releases every owned resource in reverse allocation order. Between these, the finalization operation is the most complex: it transitions the Environment from its initial inactive state to an active state by validating hardware capabilities, detecting system resources, and reading configuration files. The log file and active model tracking functions provide narrower lifecycle management for specific subsystems owned by the Environment.
+The creation and destruction operations form a symmetrical pair: creation allocates and initializes a zeroed Environment with parameter defaults, system information, and a mutex, while destruction systematically releases every owned resource in reverse allocation order. Between these, the finalization operation is the most complex: it transitions the Environment from its initial inactive state to an active, licensed state by validating hardware capabilities, detecting system resources, reading configuration files, and acquiring a license through a priority-ordered chain of licensing backends. The log file and active model tracking functions provide narrower lifecycle management for specific subsystems owned by the Environment.
 
 ## Functions
 
@@ -13,8 +13,10 @@ The creation and destruction operations form a symmetrical pair: creation alloca
 **Purpose:** Allocate and initialize an Environment structure with default parameter values, system information, and threading primitives.
 
 **Signature:**
+- Input: `license_mode` : int - Selects the licensing strategy (normal, ISV, WLS, or special modes)
 - Input: `extra_flags` : int - Additional configuration flags affecting initialization behavior
 - Input: `parent_environment` : pointer-to-Environment or null - Parent environment from which to inherit parameter defaults; null for standalone environments
+- Input: `isv_parameters` : array of 7 opaque pointers - ISV configuration parameters for vendor licensing; passed through unchanged and stored for later use during initialization validation
 - Output: `created_environment` : pointer-to-pointer-to-Environment - On success, receives the newly created Environment pointer; on failure, set to null
 - Output: int - Zero on success, or an error code (OUT_OF_MEMORY, INVALID_ARGUMENT, UNKNOWN_PARAMETER)
 
@@ -33,32 +35,37 @@ The creation and destruction operations form a symmetrical pair: creation alloca
 - Queries the operating system for CPU information, platform details, hostname, and OS distribution
 - Allocates and populates the parameter table from a static definition table containing parameter names, types, default values, minimum/maximum bounds, and flags
 - When a parent environment is provided, inherits current parameter values from the parent's parameter table instead of using the static defaults
+- When the license mode indicates ISV licensing, iterates through ISV-specific parameters, resets each to its default value if it differs from the default, and marks each as ISV-protected in the parameter flags array
 
 **Error Conditions:**
 - Memory allocation failure at any stage -> OUT_OF_MEMORY; all partially allocated resources are cleaned up before returning
 - Parameter registration failure during table construction -> propagated error code; parameter table resources are freed
+- ISV parameter lookup failure (parameter not found in table) -> UNKNOWN_PARAMETER
+- Environment validation failure during ISV processing -> propagated error code
 
 **Behavioral Description:**
 
 1. Set the output pointer to null.
 2. Allocate a zeroed block of memory for the Environment structure. If allocation fails, return OUT_OF_MEMORY.
 3. Write both validation sentinels (primary and secondary) into the structure to enable integrity checking.
-4. Initialize internal bookkeeping pointers, including a circular linked list for internal tracking and the extra flags field.
-5. Set the batch size limit to its large default value.
-6. Initialize the process-level global state (idempotent; safe to call multiple times).
-7. Allocate and initialize a mutex for thread-safe reference count manipulation. If this fails, clean up and return the error.
-8. Set the root environment pointer to self (for standalone environments) and initialize the reference count to one.
-9. Allocate the error message buffer. If allocation fails, clean up and return OUT_OF_MEMORY. Initialize the buffer to an empty string.
-10. Query the operating system for CPU information, platform details, OS distribution, and hostname, storing each in fixed-size buffers within the Environment.
-11. If the parameter table has not already been allocated, build it:
+4. Store the ISV configuration parameters for later use during initialization validation.
+5. Initialize internal bookkeeping pointers, including a circular linked list for internal tracking and the license mode and extra flags fields.
+6. Set the batch size limit to its large default value.
+7. Initialize the process-level global state (idempotent; safe to call multiple times).
+8. Allocate and initialize a mutex for thread-safe reference count manipulation. If this fails, clean up and return the error.
+9. Set the root environment pointer to self (for standalone environments) and initialize the reference count to one.
+10. Allocate the error message buffer. If allocation fails, clean up and return OUT_OF_MEMORY. Initialize the buffer to an empty string.
+11. Query the operating system for CPU information, platform details, OS distribution, and hostname, storing each in fixed-size buffers within the Environment.
+12. If the parameter table has not already been allocated, build it:
     a. Count the number of parameters in the static definition table by scanning for the end-of-public-parameters marker and the overall end sentinel.
     b. Allocate the parameter entry array and per-parameter flags array.
     c. For each parameter, copy its metadata (name, type, minimum, maximum, default) from the static definition to the entry array. If a parent environment is provided, inherit the current value from the parent; otherwise use the static default. String-type parameters receive a default empty string, with one specific directory parameter receiving a platform-appropriate default path.
     d. Register each parameter name (converted to uppercase) in a lookup structure for efficient name-based access.
-12. Execute a secondary initialization phase that configures additional Environment subsystems.
-13. Execute a final initialization step.
-14. On success, store the Environment pointer in the output and return zero.
-15. On any failure during steps 7-13, perform cleanup: decrement the reference count under the mutex, and if the count reaches zero, free the Environment via the internal destructor. Return the error code.
+13. Execute a secondary initialization phase that configures additional Environment subsystems.
+14. If the license mode indicates ISV licensing: for each of the four ISV-specific parameters (key, vendor name, application name, expiration), look up the parameter by name, compare its current value to its default, and if they differ, log a warning and reset it to the default using the appropriate typed parameter setter. Mark each ISV parameter as protected in the flags array.
+15. Execute a final initialization step.
+16. On success, store the Environment pointer in the output and return zero.
+17. On any failure during steps 8-15, perform cleanup: decrement the reference count under the mutex, and if the count reaches zero, free the Environment via the internal destructor. Return the error code.
 
 **Thread Safety:** Unsafe. This function allocates new resources and is not designed for concurrent invocation. The resulting Environment, once created, supports thread-safe reference count manipulation through its mutex.
 
@@ -68,16 +75,19 @@ The creation and destruction operations form a symmetrical pair: creation alloca
 - System information queries (CPU, platform, hostname, distribution)
 - Parameter table construction from static definitions
 - Parameter setter functions (int, double, string variants)
+- Environment validation function
 
 ---
 
 ### cxf_env_finalize
 
-**Purpose:** Transition an Environment from the INACTIVE state to the ACTIVE state by validating hardware capabilities, initializing subsystems, loading configuration files, and finalizing system-dependent parameters.
+**Purpose:** Transition an Environment from the INACTIVE state to the ACTIVE state by validating hardware capabilities, initializing subsystems, acquiring a license through a priority-ordered chain of licensing backends, loading configuration files, and finalizing system-dependent parameters.
 
 **Signature:**
 - Input: `environment` : pointer-to-Environment - The environment to finalize
+- Input: `auxiliary_parameter` : opaque - Additional parameter passed through to server connection functions
 - Input: `read_config_file` : bool - Whether to load the optional configuration file
+- Input: `server_parameter` : int - Additional server configuration parameter
 - Output: int - Zero on success, or an error code
 
 **Preconditions:**
@@ -85,20 +95,24 @@ The creation and destruction operations form a symmetrical pair: creation alloca
 - The environment must be in the INACTIVE state (activation state equals zero); attempting to finalize an already-started environment is an error
 
 **Postconditions:**
-- On success: the environment's activation state is ACTIVE, all subsystems are initialized, and the environment is ready to create models
+- On success: the environment's activation state is ACTIVE, the licensed flag is set, all subsystems are initialized, and the environment is ready to create models
 - On failure: all resources allocated during finalization are freed, the environment's state is fully rolled back to its pre-finalization state using a snapshot/restore mechanism, and the environment remains in the INACTIVE state
 
 **Side Effects:**
 - Takes a snapshot of the entire Environment state at the beginning of finalization to enable atomic rollback on failure
-- Checks hardware capabilities (requires SIMD instruction support; fails with an error if not available)
+- Allocates a large license data structure used to hold parsed configuration file contents and server configuration
+- Checks hardware capabilities (requires SIMD instruction support; fails with a license error if not available)
 - Detects logical and physical CPU core counts from the operating system
 - Reads and applies system environment variable overrides for core counts, maximum cores, and memory limits
 - Initializes core affinity data
 - Initializes four subsystem phases (memory management, parameter handling, logging infrastructure, and solver configuration)
 - Reads parameters from the previously saved backup to restore any programmatic settings
 - Processes the no-local-disk flag if set
-- Discovers and parses the configuration file, extracting configuration parameters into the environment's parameter table
+- Discovers and parses the configuration file, extracting server addresses, credentials, and configuration parameters into the environment's parameter table
 - Loads the optional configuration file if requested, applying parameter overrides from it
+- Acquires a license through the appropriate backend (see License Acquisition below)
+- Validates thread count and other license-constrained parameters
+- Checks for license expiration warnings
 - Initializes the recording subsystem if enabled
 - Applies memory limits from environment variables
 - Initializes thread pool infrastructure
@@ -107,35 +121,61 @@ The creation and destruction operations form a symmetrical pair: creation alloca
 **Error Conditions:**
 - Environment validation failure -> INVALID_ARGUMENT
 - Environment already started -> INVALID_ARGUMENT with error message
-- Memory allocation failure (buffers) -> OUT_OF_MEMORY
-- Hardware capability check failure (missing required SIMD instructions) -> error with descriptive message
-- Configuration file not found or unreadable -> error with descriptive message
+- Memory allocation failure (license data, buffers) -> OUT_OF_MEMORY
+- Hardware capability check failure (missing required SIMD instructions) -> NO_LICENSE with descriptive message
+- License file not found or unreadable -> NO_LICENSE with descriptive message
+- initialization validation failure (expired, wrong type, corrupted) -> NO_LICENSE with descriptive message
+- Server connection failure (token server, remote solver, cloud, cluster manager) -> NO_LICENSE or NETWORK error
+- WLS initialization failure -> NOT_SUPPORTED or NO_LICENSE
+- Single-use license conflict (another process already holds the lock) -> error with conflicting process information
+- ISV key validation failure -> NO_LICENSE with an appropriate ISV key validation failure message
 - Version mismatch between client and library -> warning logged (not an error)
 
 **Behavioral Description:**
 
-The finalization process proceeds through seven behavioral stages. If any stage fails, execution jumps to the cleanup stage, which rolls back the environment to its pre-finalization state.
+The finalization process proceeds through eight behavioral stages. If any stage fails, execution jumps to the cleanup stage, which rolls back the environment to its pre-finalization state.
 
 **Stage 1 -- Validation and State Backup:**
-Validate the environment pointer using the structural validation check. Verify that the activation state is INACTIVE; if not, report an error. Take a full snapshot of the current environment state (all fields) into a backup buffer. Set the activation state to INITIALIZING.
+Validate the environment pointer using the structural validation check. Verify that the activation state is INACTIVE; if not, report an error. Take a full snapshot of the current environment state (all fields) into a backup buffer. Set the activation state to INITIALIZING. Allocate and initialize the license data structure.
 
 **Stage 2 -- Hardware and System Resource Detection:**
-Verify that the CPU supports the required SIMD instruction set. If not, report an error indicating the processor is unsupported. Detect the CPU feature flags. Query the operating system for the logical and physical core counts. Read system environment variables that override the detected core counts (valid range: 1 to 1024 for each). Read the max-cores environment variable and apply it as an upper bound. Initialize the core affinity data structure, marking all cores as available.
+Verify that the CPU supports the required SIMD instruction set. If not, report a license error indicating the processor is unsupported. Detect the CPU feature flags. Query the operating system for the logical and physical core counts. Read system environment variables that override the detected core counts (valid range: 1 to 1024 for each). Read the max-cores environment variable and apply it as an upper bound, subject to the license limit. Initialize the core affinity data structure, marking all cores as available.
 
 **Stage 3 -- Subsystem and Parameter Initialization:**
 Execute four sequential subsystem initialization phases, each of which configures a different aspect of the environment (memory management, secondary initialization, logging, and solver configuration). Restore parameter values from the backup to preserve any programmatic settings that were made between creation and finalization, with special handling for the log file parameter to avoid overwriting an existing log file setting. Process the no-local-disk flag if it is set, propagating it to all parameters that depend on local disk availability. Initialize a mutex for the first thread pool.
 
-**Stage 4 -- Configuration Loading:**
-Discover the configuration file path. If no path was set programmatically, search for the configuration file in the standard platform-specific locations. Parse the configuration file and extract all configuration parameters into the environment's parameter table, setting each only if it has a non-default value in the configuration file. If the read-config-file flag is set, attempt to load the optional solver configuration file from the current working directory; silently ignore if the file is not found.
+**Stage 4 -- License File Discovery and Configuration Loading:**
+Unless the deployment type is one that does not use a file (remote solver or embedded), discover the configuration file path. If no path was set programmatically, search for the configuration file in the standard platform-specific locations. Parse the configuration file and extract all configuration parameters (server addresses, credentials, timeouts, ports, access IDs, secret keys, and other licensing parameters) into the environment's parameter table, setting each only if it has a non-default value in the configuration file. If the read-config-file flag is set, attempt to load the optional solver configuration file from the current working directory; silently ignore if the file is not found.
 
-**Stage 5 -- Post-Configuration Validation:**
-Check the version code and display a warning if the client version differs from the library version. Check batch mode restrictions.
+**Stage 5 -- License Acquisition:**
+Based on the deployment type stored on the environment, acquire a license through the appropriate backend. The deployment types and their handling form a priority chain:
 
-**Stage 6 -- Final Configuration:**
-Initialize the recording subsystem if the recording flag is set. Read and apply the memory limit environment variable, setting either the hard or soft memory limit depending on the sign of the value. Initialize the second thread pool mutex. Transition the activation state to ACTIVE. Open the log file if configured.
+- **Local file license:** Read and validate the configuration file. Determine the license subtype (standard, limited, restricted, academic). Apply the corresponding model size limits. For single-use licenses, attempt to acquire a system-wide exclusive lock; if another solver process holds the lock, report an error with the conflicting process identifier if available. Display informational messages for academic and restricted licenses, including expiration dates where applicable.
 
-**Stage 7 -- Error Cleanup (on failure only):**
-Free the configuration file path. Destroy the first thread pool mutex. Free parameter storage pools. Close the log file if it was opened. Free all string parameter values that were allocated during initialization. Free the parameter flags array. Restore the environment state from the snapshot taken in Stage 1, returning the environment to its pre-finalization state. Report the final error through the error handling subsystem.
+- **ISV embedded license:** Validate the vendor name and product name. Check for special vendor-specific handling. Determine if the product is size-limited (by product name suffix conventions). Compute a license integrity value from the vendor name, product name, and feature count. Validate the license code against this integrity value. If validation requires an unlock key not present, attempt a fallback cascade through server-based licensing backends (remote solver, cloud, token server, local file) before failing. Check for distributed computing feature enablement. Display the ISV license identification message.
+
+- **Token server:** Validate that a token server address is configured. Connect to the token server using the configured address, port, and credentials. Token servers implement a checkout/checkin model for floating licenses, as described in standard floating license architectures (see ConvexFeld documentation on token server licensing).
+
+- **remote solver:** Validate that a remote solver address is configured. Apply unrestricted model size limits. Connect to the remote solver for remote optimization.
+
+- **Cloud service:** Validate that a cloud server address is configured. Initialize the cloud connection with appropriate authentication. Connect via the standard server protocol.
+
+- **Cluster manager:** Validate that a cluster manager address is configured. Apply unrestricted model size limits. Connect to the cluster manager. Mark the license as validated.
+
+- **Web License Service (WLS):** Initialize the WLS connection. Verify the server's identity using standard public-key authentication (JWT-based verification with an RSA public key). Two authentication modes are supported: direct mode (using access credentials) and token mode (using a pre-generated token, suitable for containers and CI/CD environments). Retrieve license limits (single-use flag, core limit, thread limit, and any server-configured parameter overrides) from the WLS service. Apply core and thread limits. Enforce single-use restrictions if indicated. Start a background thread for automatic token renewal.
+
+- **Embedded/special mode:** Apply unrestricted model size limits and mark the license as validated. This mode is used for internal development and testing.
+
+- **Auto-detect mode:** Attempt each available licensing backend in priority order: cloud service, remote solver, token server, cluster manager, and finally local file. The first backend that succeeds is used. If all fail, report the error from the final (local file) attempt. After successful local file validation in auto-detect mode, the deployment type is updated to reflect that a local file license is in use.
+
+**Stage 6 -- Post-License Validation:**
+Verify that a license handle was successfully obtained. For ISV licenses, check for usage restrictions that prohibit certain tool combinations. Validate the Threads parameter against the license limits. Check the version code and display a warning if the client version differs from the library version. Check batch mode restrictions.
+
+**Stage 7 -- Final Configuration:**
+Check for impending license expiration and display a warning if the license expires within a configurable threshold (on the order of weeks). Log configuration file and configuration file usage for certain license modes. Initialize the recording subsystem if the recording flag is set. Read and apply the memory limit environment variable, setting either the hard or soft memory limit depending on the sign of the value. Initialize the second thread pool mutex. Transition the activation state to ACTIVE. Open the log file if configured.
+
+**Stage 8 -- Error Cleanup (on failure only):**
+Free the configuration file path. Destroy the first thread pool mutex. Free parameter storage pools. If a license handle was obtained, signal any associated background thread to stop, wait for the thread to complete, release license resources, and free the license handle. Close the log file if it was opened. Free all string parameter values that were allocated during initialization. Free the parameter flags array. Restore the environment state from the snapshot taken in Stage 1, returning the environment to its pre-finalization state. Free the license data structure. Report the final error through the error handling subsystem.
 
 **Thread Safety:** Unsafe. Finalization must be called from a single thread before the environment is shared. After successful finalization, the environment supports concurrent access through its mutex.
 
@@ -144,6 +184,8 @@ Free the configuration file path. Destroy the first thread pool mutex. Free para
 - Hardware capability detection (SIMD check, CPU feature detection, core count detection)
 - Memory allocation subsystem
 - Parameter setter and getter functions
+- License file discovery and parsing
+- Server connection functions (token server, remote solver, cloud, WLS)
 - Configuration file reader
 - Mutex initialization and destruction
 - Thread creation and synchronization
@@ -278,7 +320,7 @@ Free the configuration file path. Destroy the first thread pool mutex. Free para
 
 ### cxf_env_free_internal
 
-**Purpose:** Deallocate an Environment structure and all resources it owns, including child environments, associated models, server connections, thread pools, mutexes, parameter storage, and allocated string fields.
+**Purpose:** Deallocate an Environment structure and all resources it owns, including child environments, associated models, server connections, license resources, thread pools, mutexes, parameter storage, and allocated string fields.
 
 **Signature:**
 - Input: `environment_ptr` : pointer-to-pointer-to-Environment - Double pointer to the environment to free; set to null on return
@@ -298,20 +340,21 @@ Free the configuration file path. Destroy the first thread pool mutex. Free para
 - Cleans up asynchronous operation state
 - Recursively frees all child environments, managing reference counts under the parent's mutex
 - Frees all associated model entries and the model array
-- Frees all allocated string fields (covering system info, server addresses, and other configuration)
+- Releases license resources (tokens, WLS connections, server sessions)
+- Frees all allocated string fields (approximately 35 individual pointer fields covering system info, server addresses, ISV data, WLS credentials, and other configuration)
 - Frees parameter string arrays (root environment only)
 - Destroys thread pools and their mutexes
 - Cleans up callback state
 - Frees parameter storage memory pools and the parameter table
 - Frees the error message buffer
-- Destroys all mutexes (thread pool, main critical section)
+- Destroys all mutexes (thread pool, WLS, main critical section)
 - Closes the log file
 - Clears the validation sentinel
 - Frees the environment memory block itself
 
 **Error Conditions:**
 - Null pointer input (either level of the double pointer) -> returns immediately with no action
-- Child environment still referenced (reference count > 0 after decrement) -> logs a warning about deferred free; if the child has an active remote solver job, attempts to terminate it with a bounded polling loop, then sends a termination message and logs a warning
+- Child environment still referenced (reference count > 0 after decrement) -> logs a warning about deferred free; if the child has an active remote remote solver job, attempts to terminate it with a bounded polling loop, then sends a termination message and logs a warning
 
 **Behavioral Description:**
 
@@ -324,18 +367,21 @@ Free the configuration file path. Destroy the first thread pool mutex. Free para
    c. Otherwise, recursively call this function on the child. If the parent's reference count reached zero and the parent is a different object from the child, recursively free the parent as well.
    d. After processing all children, clear the child count and free the child array.
 5. **Model cleanup:** Iterate through the model entry array, freeing each model pointer within each entry. Free the model array itself and any additional model data.
-6. **String field deallocation:** Free each of the individually allocated string fields, covering system information strings, server address strings, and other configuration strings.
-7. **Parameter string arrays (root environment only):** Iterate through both string parameter arrays, freeing each allocated string. Free the arrays themselves.
-8. **Thread pool and async cleanup:** Destroy the thread pool region, clean up asynchronous state, and destroy the thread pool mutex. For the root environment with specific CPU feature flags, finalize thread pools and destroy parameter storage memory pools.
-9. **Final field cleanup:** Free the parameter flags array. Clean up callback state. Destroy the thread pool mutex and main critical section mutex.
-10. **Invalidate the environment:** Clear the validation sentinel to zero, preventing any future use-after-free from passing validation checks.
-11. **Close log file:** If a log file handle is open, close it.
-12. **Final deallocation:** If this is the root environment (or the root is null), free the environment memory block using a temporary zeroed context for the allocator. If this is a child environment, free the memory using the root environment as the allocator context.
+6. **License cleanup:** Call the license cleanup function. If this is the root environment, free the license data structure.
+7. **String field deallocation:** Free each of the approximately 35 individually allocated string fields, covering system information strings, remote solver strings, ISV strings, WLS strings, and server address strings.
+8. **Parameter string arrays (root environment only):** Iterate through both string parameter arrays, freeing each allocated string. Free the arrays themselves.
+9. **Additional buffer fields:** Free WLS credential buffers, token data, and any special structures.
+10. **Thread pool and async cleanup:** Destroy the thread pool region, clean up asynchronous state, and destroy the thread pool mutex. For the root environment with specific CPU feature flags, finalize thread pools and destroy parameter storage memory pools.
+11. **Final field cleanup:** Free the parameter flags array and WLS token data. Clean up callback state. Destroy the WLS mutex, thread pool mutex, and main critical section mutex.
+12. **Invalidate the environment:** Clear the validation sentinel to zero, preventing any future use-after-free from passing validation checks.
+13. **Close log file:** If a log file handle is open, close it.
+14. **Final deallocation:** If this is the root environment (or the root is null), preserve the ISV parameter pointers, then free the environment memory block using a temporary zeroed context for the allocator. If this is a child environment, free the memory using the root environment as the allocator context.
 
 **Thread Safety:** Conditional. The function acquires the parent environment's mutex when manipulating reference counts for child environment cleanup. The function itself should not be called concurrently on the same environment from multiple threads.
 
 **Dependencies:**
-- Remote solver session management (terminate, cleanup async, send terminate, free connection)
+- remote solver session management (terminate, cleanup async, send terminate, free connection)
+- License cleanup and license data free functions
 - Memory deallocation function
 - Thread pool destruction
 - Async state cleanup
@@ -368,15 +414,28 @@ The finalization function implements an atomic-like initialization pattern: the 
 
 Environments use reference counting to manage shared lifetime across parent-child relationships. When a child environment is created, the parent's reference count is incremented. When the child is freed, the parent's count is decremented under the parent's mutex. The parent is only freed when its count reaches zero. If destruction is requested while the count is still positive, a warning is logged and the free is deferred until the last reference is released.
 
+### License Acquisition Priority
+
+The auto-detect license mode implements a priority chain that reflects common deployment patterns:
+
+1. Cloud service (highest priority -- preferred for cloud-native deployments)
+2. remote solver (on-premise enterprise deployments)
+3. Token server (floating initialized environments)
+4. Cluster manager (distributed computing setups)
+5. Local configuration file (standalone workstations -- fallback)
+
+Each backend is attempted only if its required configuration (server address) is present and non-empty. The first successful backend is used. This priority order ensures that enterprise and cloud deployments, which typically have the most flexible licensing, are tried before falling back to single-machine licensing.
+
 ### Parameter Initialization Precedence
 
 During finalization, parameters are resolved through a layered system where later layers override earlier ones:
 
 1. Built-in defaults (from the static parameter definition table, established during creation)
-2. Configuration file parameters (loaded from the optional solver configuration file)
-3. Programmatic settings (preserved through the snapshot/restore mechanism)
+2. License file parameters (extracted during Stage 4 of finalization)
+3. Configuration file parameters (loaded from the optional solver configuration file)
+4. Programmatic settings (preserved through the snapshot/restore mechanism)
 
-This precedence system ensures that programmatic settings always take priority, while configuration file settings override defaults without overriding explicit user choices.
+This precedence system ensures that programmatic settings always take priority, while configuration file and configuration file settings override defaults without overriding explicit user choices.
 
 ### Resource Cleanup Ordering
 
@@ -384,12 +443,13 @@ The destruction function follows a strict ordering that mirrors the reverse of c
 
 1. Active connections first (remote solver sessions, remote jobs)
 2. Dependent structures (child environments via recursive descent, then models)
-3. Allocated string fields and parameter arrays
-4. Threading infrastructure (thread pools, async state, mutexes)
-5. Core infrastructure (parameter table, error buffer, main mutex)
-6. Validation sentinel invalidation
-7. Log file closure
-8. Final memory deallocation
+3. License resources
+4. Allocated string fields and parameter arrays
+5. Threading infrastructure (thread pools, async state, mutexes)
+6. Core infrastructure (parameter table, error buffer, main mutex)
+7. Validation sentinel invalidation
+8. Log file closure
+9. Final memory deallocation
 
 This ordering prevents dangling references: connections are terminated before the environment state they depend on is freed, child environments are freed before their parent's shared resources, and the validation sentinel is cleared before the memory block is freed so that any subsequent use-after-free attempt fails validation.
 
@@ -414,6 +474,8 @@ This ordering prevents dangling references: connections are terminated before th
 [x] No copied code fragments
 [x] All descriptions are behavioral, not implementational
 [x] All data structures described semantically using Layer 1 types
+[x] License acquisition described as priority chain without protocol details, server URLs, file paths, or binary constants
+[x] No ISV hash formula, WLS public keys, JWT UUIDs, or verification codes
 [x] No version-specific packed encoding values
 [x] No structure sizes in bytes or field offsets
 [x] Passes the Clean Room Test: someone who never saw the binary could write this from public ConvexFeld documentation and standard solver architecture knowledge

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The Solve Entry & Dispatch module contains the six functions that form the top-level optimization call chain, from the public API entry point through internal dispatch to the appropriate solver. This module is the gateway through which every optimization request flows: it validates the model, acquires the necessary locale safety state, initializes message buffers and logging, determines whether to use the callback or non-callback execution path, applies pending model modifications, detects the model's problem type (LP, QP), handles multi-scenario routing, and ultimately delegates to the solver algorithm modules (P3.25 Solve LP Core, P3.26 Solve Barrier & Concurrent) for actual computation.
+The Solve Entry & Dispatch module contains the six functions that form the top-level optimization call chain, from the public API entry point through internal dispatch to the appropriate solver. This module is the gateway through which every optimization request flows: it validates the model, acquires the necessary locale safety state, initializes message buffers and logging, determines whether to use the callback or non-callback execution path, applies pending model modifications, detects the model's problem type (LP, QP), handles multi-scenario routing, and ultimately delegates to the solver algorithm modules (P3.25 Solve LP Core, P3.26 Solve Barrier & Concurrent, P3.27 [out of scope: MIP]) for actual computation.
 
 The six functions form a strict call chain:
 
@@ -49,7 +49,7 @@ This module does not contain any solver algorithms. Its role is purely organizat
 **Side Effects:**
 - Validates the model via the structural validation check (P3.07)
 - Sets up a signal handler for interrupt handling on applicable deployment types
-- Acquires the locale safety state (cxf_save_locale_state, P3.11), ensuring the "C" locale for consistent numeric formatting
+- Acquires the locale safety state (cxf_acquire_solve_lock, P3.11), ensuring the "C" locale for consistent numeric formatting
 - Clears the environment's message buffers and resets message state
 - Sets the model's modification-blocked flag to prevent concurrent modifications
 - Clears the model's status code
@@ -57,6 +57,7 @@ This module does not contain any solver algorithms. Its role is purely organizat
 - Delegates to remote solver if the model is configured for remote computation
 - Registers a log callback relay if a logging path is configured
 - Invokes cxf_optimize_internal for the actual optimization
+- Validates single-use license restrictions after optimization
 - Logs callback invocation statistics (call count and cumulative time) if callbacks were used
 - Invokes the pre-optimize and post-optimize lifecycle hooks (P3.13) to manage the error buffer lock
 - Writes result files (solution or IIS) if a result file path is configured and the optimization status is optimal or suboptimal
@@ -67,6 +68,7 @@ This module does not contain any solver algorithms. Its role is purely organizat
 - Locale safety acquisition failure (memory allocation) -> out-of-memory error code
 - remote solver synchronization failure -> propagated error code
 - Internal optimization failure -> propagated error code from cxf_optimize_internal
+- Single-use license violation -> error code with diagnostic message
 - Out-of-memory at any stage -> out-of-memory error code with message an appropriate out-of-memory error message
 
 **Behavioral Description:**
@@ -74,7 +76,7 @@ This function is the sole public entry point for optimization. It wraps the enti
 
 **Step 1: Model validation.** The function validates the model using the standard structural validation check. If validation fails with an out-of-memory error, a specific diagnostic message is set. For other validation failures, the error is returned directly.
 
-**Step 2: Signal handler setup.** For deployment types that support interrupt handling, the function registers a signal handler to allow graceful interruption of long-running optimizations via operating system signals.
+**Step 2: Signal handler setup.** For deployment types that support interrupt handling (local file and web license service), the function registers a signal handler to allow graceful interruption of long-running optimizations via operating system signals.
 
 **Step 3: Locale safety.** The function acquires the locale safety state (P3.11), saving the calling thread's locale and switching to the standard "C" locale. This ensures consistent decimal point formatting throughout the optimization.
 
@@ -88,7 +90,7 @@ This function is the sole public entry point for optimization. It wraps the enti
 
 **Step 8: Internal optimization.** The function delegates to cxf_optimize_internal for the actual optimization work.
 
-**Step 9: Callback cleanup.** If callbacks were used and the deployment type permits callback statistics logging, the function logs the total callback invocation count and cumulative time spent in user callbacks.
+**Step 9: License and callback cleanup.** After optimization, the function validates single-use license restrictions. If callbacks were used and the deployment type permits callback statistics logging, the function logs the total callback invocation count and cumulative time spent in user callbacks.
 
 **Step 10: Lifecycle callbacks.** The pre-optimize callback (error buffer lock) is invoked on the error path; the post-optimize callback (error buffer unlock) is invoked on all paths (P3.13).
 
@@ -100,8 +102,8 @@ This function is the sole public entry point for optimization. It wraps the enti
 
 **Dependencies:**
 - P3.07 (Input Validation) - cxf_checkmodel for model validation
-- P3.11 (Threading & Synchronization) - cxf_save_locale_state / cxf_release_solve_lock for locale safety; cxf_get_threads, cxf_get_physical_cores, cxf_get_logical_processors, cxf_validate_thread_count for hardware logging
-- P3.13 (Callbacks) - cxf_pre_optimize_hook / cxf_post_optimize_hook for error buffer lifecycle
+- P3.11 (Threading & Synchronization) - cxf_acquire_solve_lock / cxf_release_solve_lock for locale safety; cxf_get_threads, cxf_get_physical_cores, cxf_get_logical_processors, cxf_set_thread_count for hardware logging
+- P3.13 (Callbacks) - cxf_pre_optimize_callback / cxf_post_optimize_callback for error buffer lifecycle
 - P3.09 (Error Handling) - cxf_error_model, cxf_set_error_message for error reporting
 - P1.01 (Environment) - environment state fields (message buffers, output flag, session reference, callback state)
 - P1.02 (Model) - model state fields (modification-blocked, status code, callback count, remote solver flag)
@@ -134,14 +136,15 @@ This function is the sole public entry point for optimization. It wraps the enti
 - For concurrent optimization: caches and clamps tolerance parameters on all concurrent environments, restoring them after optimization
 - Saves and restores solver focus and fingerprint flags across the optimization
 - Sets the model's self-reference pointer for callback access during optimization
-- Detects the model type; for continuous models with solver focus or NLP mode, marks the model for special treatment
+- Detects whether the model is a MIP or continuous model; for continuous models with solver focus or NLP mode, marks the model for MIP-like or NLP-like treatment
+- Clears existing solution data for MIP models with quadratic terms
 - Validates model labels if label checking is enabled
 - Logs model dimensions (row count, column count, nonzero count)
 - Computes model fingerprint for determinism verification (controlled by fingerprint mode parameter)
-- Logs presolve statistics
+- Logs presolve statistics and performs MIP-specific presolve analysis
 - Analyzes coefficient ranges and logs warnings for numerically challenging matrices
 - Dispatches to the solve chain (cxf_solve_entry or directly to cxf_solver_dispatch depending on problem size)
-- Handles non-convex QP detection: when the solver returns a non-positive-semidefinite error for a continuous model, the function may apply non-convex handling based on the non-convex handling parameter
+- Handles non-convex QP detection: when the solver returns a non-positive-semidefinite error for a continuous model, the function may automatically convert it to a MIP formulation based on the non-convex handling parameter
 - Checks for asynchronous completion when in remote solver mode
 - Cleans up solve state and frees cached parameter arrays
 
@@ -171,23 +174,26 @@ This function is the central routing point for optimization. It bridges the gap 
 
 **Phase 4: Concurrent environment parameter management.** For concurrent optimization (where multiple solver instances run in parallel with different parameter settings), the function caches tolerance parameters from all concurrent environments. The tolerance values are clamped to safe ranges to prevent numerical instability. These cached values are restored after optimization completes, ensuring that the concurrent environments' parameter state is preserved across solves.
 
-**Phase 5: Solver focus and model type detection.** The function saves the solver focus and fingerprint flags, then determines the model type. For continuous models that have the solver focus flag set or NLP mode enabled, the model is marked for special treatment.
+**Phase 5: Solver focus and model type detection.** The function saves the solver focus and fingerprint flags, then determines the model type. For continuous models that have the solver focus flag set (indicating the user wants MIP-like treatment of a continuous model) or NLP mode enabled, the model is marked for special treatment.
 
-**Phase 6: Model analysis and logging.** The function logs model dimensions, computes the model fingerprint (for determinism verification), logs presolve statistics, and analyzes coefficient ranges for numerical warnings.
+**Phase 6: Solution clearing for MIP with quadratic terms.** If the model is classified as MIP and contains quadratic terms or integer variables, any existing solution data is cleared to prevent stale results from a previous solve.
 
-**Phase 7: Solver dispatch.** The function dispatches to the appropriate solver through either cxf_solve_entry (for models with multi-scenario support) or directly to cxf_solver_dispatch (P3.25) for single-model optimization.
+**Phase 7: Model analysis and logging.** The function logs model dimensions, computes the model fingerprint (for determinism verification), logs presolve statistics, performs MIP-specific presolve analysis, and analyzes coefficient ranges for numerical warnings.
 
-**Phase 8: Non-convex QP handling.** If the solver returns a non-positive-semidefinite error (indicating the quadratic objective or constraints are non-convex), the function consults the non-convex handling parameter:
-- If the parameter indicates automatic non-convex handling (value >= 2), the model is marked as non-convex and re-dispatched.
-- If the parameter indicates automatic handling with a check for QCP dual requests (value == -1), and QCP duals are not requested, the model is converted for non-convex handling. If QCP duals are requested, an error is logged with guidance.
+**Phase 8: Solver dispatch.** The function dispatches to the appropriate solver through either cxf_solve_entry (for models with multi-scenario support) or directly to cxf_solver_dispatch (P3.25) for single-model optimization.
+
+**Phase 9: Non-convex QP handling.** If the solver returns a non-positive-semidefinite error (indicating the quadratic objective or constraints are non-convex) and the model is not already classified as MIP, the function consults the non-convex handling parameter:
+- If the parameter indicates automatic MIP conversion (value >= 2), the model is marked as non-convex and re-dispatched as a MIP.
+- If the parameter indicates automatic handling with a check for QCP dual requests (value == -1), and QCP duals are not requested, the model is converted to MIP. If QCP duals are requested, an error is logged with guidance.
 - Otherwise, the non-positive-semidefinite error is returned as-is.
 
-**Phase 9: State restoration and cleanup.** Solver focus and fingerprint flags are restored. Concurrent environment parameters are restored from their cached values. Thread-local and solve state are cleaned up.
+**Phase 10: State restoration and cleanup.** Solver focus and fingerprint flags are restored. Concurrent environment parameters are restored from their cached values. Thread-local and solve state are cleaned up.
 
 **Thread Safety:** Not thread-safe. Must be called from a single thread per model. Concurrent optimization uses internal threading managed by the solver.
 
 **Dependencies:**
 - P3.07 (Input Validation) - cxf_check_label for label validation
+- P3.06 (Model Type Checking) - cxf_is_mip_model for MIP detection
 - P3.33 (Statistics & Diagnostics) - cxf_presolve_stats, cxf_coefficient_stats for model analysis
 - P3.25 (Solve LP Core) - cxf_solver_dispatch for algorithm routing
 - P3.28 (Multi-Objective & Scenario) - multi-scenario support
@@ -224,6 +230,7 @@ This function is the central routing point for optimization. It bridges the gap 
 - Updates the model manager state
 - Clears the solver focus flag during optimization (the saved value is used for mode detection)
 - For continuous models with solver focus or NLP mode: sets the solver execution flag, disables fingerprinting in NLP mode, and logs the special solve mode
+- Clears existing solution data for MIP models with quadratic terms or integer variables
 - Validates model labels if label checking is enabled
 - For single models: dispatches to cxf_solver_dispatch (P3.25) and handles non-convex QP conversion
 - For multi-scenario models: logs model dimensions, computes fingerprint, logs presolve statistics, analyzes coefficient ranges, and dispatches to cxf_solve_dispatch
@@ -233,7 +240,7 @@ This function is the central routing point for optimization. It bridges the gap 
 - Model modification application failure -> propagated error code
 - Label validation failure -> propagated error code
 - Solver dispatch failure -> propagated error code
-- Non-positive-semidefinite error for non-convex QP -> may apply non-convex handling or return error (see behavioral description)
+- Non-positive-semidefinite error for non-convex QP -> may convert to MIP or return error (see behavioral description)
 - Fingerprint computation failure -> propagated error code
 - Coefficient analysis failure -> propagated error code
 
@@ -246,21 +253,24 @@ This function serves as the decision point between single-model optimization and
 
 **Step 3: Model modification flush.** Pending modifications are applied to the matrix data.
 
-**Step 4: Model type detection and mode setup.** The function determines the model type. For continuous models with the solver focus flag or NLP mode enabled, the model is marked for special treatment (NLP solve of a convex model, or special-focus solve of a continuous model).
+**Step 4: Model type detection and mode setup.** The function determines whether the model is a MIP. For continuous models with the solver focus flag or NLP mode enabled, the model is marked for special treatment (MIP-like solve of a continuous model, or NLP solve of a convex model).
 
-**Step 5: Label validation.** If label checking is enabled on the environment and the model is not in asynchronous mode, label attributes are validated.
+**Step 5: Solution clearing.** For MIP models with quadratic terms or integer variables, existing solution data is cleared.
 
-**Step 6: Routing decision.** The function examines the model's scenario count:
+**Step 6: Label validation.** If label checking is enabled on the environment and the model is not in asynchronous mode, label attributes are validated.
 
-- **Single model (scenario count < 1):** The function dispatches directly to cxf_solver_dispatch (P3.25) with the model and thread-local data. If the solver returns a non-positive-semidefinite error and the model is continuous, the non-convex handling logic (identical to cxf_optimize_internal Phase 8) is applied, potentially re-dispatching with non-convex handling enabled.
+**Step 7: Routing decision.** The function examines the model's scenario count:
 
-- **Multi-scenario model (scenario count >= 1):** The function logs model dimensions, computes the model fingerprint (gated by the fingerprint mode parameter), logs presolve statistics, analyzes coefficient ranges, and then dispatches to cxf_solve_dispatch for multi-scenario handling.
+- **Single model (scenario count < 1):** The function dispatches directly to cxf_solver_dispatch (P3.25) with the model and thread-local data. If the solver returns a non-positive-semidefinite error and the model is continuous, the non-convex handling logic (identical to cxf_optimize_internal Phase 9) is applied, potentially converting the model to MIP and retrying.
 
-**Step 7: State restoration.** The model manager state is updated, the solver execution flag is cleared, and the saved solver focus and fingerprint flags are restored.
+- **Multi-scenario model (scenario count >= 1):** The function logs model dimensions, computes the model fingerprint (gated by the fingerprint mode parameter), logs presolve statistics and MIP presolve analysis, analyzes coefficient ranges, and then dispatches to cxf_solve_dispatch for multi-scenario handling.
+
+**Step 8: State restoration.** The model manager state is updated, the solver execution flag is cleared, and the saved solver focus and fingerprint flags are restored.
 
 **Thread Safety:** Not thread-safe. Must be called from a single thread per model.
 
 **Dependencies:**
+- P3.06 (Model Type Checking) - cxf_is_mip_model for MIP classification
 - P3.07 (Input Validation) - cxf_check_label for label validation
 - P3.25 (Solve LP Core) - cxf_solver_dispatch for algorithm routing
 - P3.31 (Model Lifecycle) - cxf_model_apply_modifications for modification flush; cxf_update_model_manager
@@ -404,7 +414,7 @@ This function provides the fast path for optimization when no user callbacks are
 
 **Preconditions:**
 - The model must have registered callbacks or be configured for remote solver / asynchronous operation
-- The model's environment must be valid with an active callback communication channel
+- The model's environment must be valid with an active license information structure containing a callback communication channel
 
 **Postconditions:**
 - On success: The optimization has been performed (either locally or remotely through the callback channel). Any results from the callback thread have been processed and errors propagated.
@@ -463,7 +473,7 @@ This function manages the full callback communication lifecycle for optimization
 - P3.07 (Input Validation) - cxf_validate_model_state for model validation; cxf_check_attr_names for variable name validation
 - P3.09 (Error Handling) - cxf_error_with_info for detailed error reporting
 - P3.11 (Threading & Synchronization) - cxf_sleep for polling during error recovery
-- P1.01 (Environment) - callback communication channel, error suppression flag
+- P1.01 (Environment) - license information, callback communication channel, error suppression flag
 - P1.02 (Model) - async flag, modification-blocked flag, model identifier
 - P1.07 (CallbackState) - callback result structure with primary and secondary error codes
 
@@ -503,10 +513,10 @@ Both cxf_optimize_internal and cxf_solve_entry implement identical non-convex QP
 | Parameter Value | Behavior |
 |----------------|----------|
 | 0 (default) | Return the error as-is |
-| -1 (auto) | Apply non-convex handling unless QCP duals are requested |
-| >= 2 (explicit) | Always apply non-convex handling |
+| -1 (auto) | Convert to MIP unless QCP duals are requested |
+| >= 2 (explicit) | Always convert to MIP |
 
-The conversion involves clearing any presolved model, setting the non-convex flag on the matrix data, and retrying the solve through cxf_solver_dispatch with non-convex treatment. This behavior follows the standard approach for non-convex quadratic programs described in commercial solver documentation: when a QP is detected as non-convex (the Q matrix is not positive semidefinite), it can be reformulated using spatial branching techniques (Belotti et al., 2013).
+The conversion involves clearing any presolved model, setting the non-convex flag on the matrix data, and retrying the solve through cxf_solver_dispatch with MIP treatment. This behavior follows the standard approach for non-convex quadratic programs described in commercial solver documentation: when a QP is detected as non-convex (the Q matrix is not positive semidefinite), it can be reformulated as a mixed-integer program using spatial branch-and-bound techniques (Belotti et al., "Mixed-Integer Nonlinear Optimization," Acta Numerica, 2013).
 
 ### Lazy Update Pattern
 
@@ -528,6 +538,7 @@ cxf_optimize_internal implements a save/clamp/restore pattern for tolerance para
 |------------------|-------------|---------|
 | P3.25 (Solve LP Core) | cxf_solver_dispatch | Routes to simplex, barrier, or concurrent solver |
 | P3.26 (Solve Barrier & Concurrent) | cxf_solve_barrier, cxf_solve_concurrent | Barrier and concurrent solve algorithms |
+| P3.27 (Solve MIP) | cxf_solve_mip | Branch-and-bound solver |
 | P3.28 (Multi-Objective & Scenario) | cxf_solve_multiscenario | Multi-scenario optimization |
 | P3.29 (Solution Processing) | cxf_wire_result_attributes | Solution data access setup |
 
@@ -536,7 +547,7 @@ cxf_optimize_internal implements a save/clamp/restore pattern for tolerance para
 The state tracker allocated by cxf_solve_no_callbacks provides a lightweight mechanism for monitoring optimization progress across the thread boundary. It caches attribute indices (resolved at initialization time) so that the worker thread can update progress fields by direct array access rather than name-based attribute lookup. The tracked metrics include:
 
 - **Model dimensions:** Constraint count, variable count, SOS count, quadratic constraint count, general constraint count, objective count, scenario count
-- **Optimization progress:** Status, objective value, objective bound, runtime, iteration count, barrier iteration count
+- **Optimization progress:** Status, objective value, objective bound, objective bound (continuous relaxation), runtime, node count, open node count, iteration count, barrier iteration count
 - **Completion:** A completion flag set by the worker thread when optimization finishes
 
 ### Error Handling Patterns
@@ -556,7 +567,7 @@ The module uses several error handling patterns from P3.09:
 | Out-of-memory code | Memory allocation failed | All six functions |
 | Lock failure code | Callback synchronization lock could not be acquired | cxf_solve_with_callbacks |
 | User interrupt code | User requested termination via callback or signal | cxf_solve_with_callbacks |
-| Non-PSD code | Quadratic objective/constraints not positive semidefinite | cxf_optimize_internal, cxf_solve_entry (may trigger non-convex retry) |
+| Non-PSD code | Quadratic objective/constraints not positive semidefinite | cxf_optimize_internal, cxf_solve_entry (may be converted to MIP retry) |
 | Multi-scenario incompatibility code | Multi-objective combined with multi-scenario | cxf_solve_dispatch |
 | Other error codes | Propagated from downstream modules | All six functions |
 
@@ -582,7 +593,7 @@ The module uses several error handling patterns from P3.09:
 [x] No copied code fragments from analyzed source
 [x] All descriptions are behavioral, not implementational
 [x] All data structures described semantically using Layer 1/2 references
-[x] Explicit cross-references to P1.01, P1.02, P1.07 (data model) and P3.01, P3.07, P3.09, P3.11, P3.13, P3.25, P3.28, P3.29, P3.31, P3.32, P3.33 (module specs)
+[x] Explicit cross-references to P1.01, P1.02, P1.07 (data model) and P3.01, P3.06, P3.07, P3.09, P3.11, P3.13, P3.25, P3.28, P3.29, P3.31, P3.32, P3.33 (module specs)
 [x] Passes the Clean Room Test: could be written without seeing the binary
 ```
 

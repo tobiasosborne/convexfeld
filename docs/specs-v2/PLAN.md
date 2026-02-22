@@ -104,7 +104,7 @@ then writes a semantic specification following the Layer 1 template.
 | P1.06 | PricingState structure spec | `specs/data-model/pricing_state.md` | `docs/learnings/data-structures/PricingState_layout.md` |
 | P1.07 | CallbackState structure spec | `specs/data-model/callback_state.md` | `docs/learnings/functions/cxf_callback_functions_analysis.md` |
 | P1.08 | EtaVector structure spec | `specs/data-model/eta_vector.md` | `docs/learnings/functions/cxf_alloc_eta_analysis.md`, basis files |
-| P1.09 | SolutionData structure spec | `specs/data-model/work_arrays.md` | `docs/learnings/functions/cxf_alloc_work_arrays_analysis.md` |
+| P1.09 | WorkArrays structure spec | `specs/data-model/work_arrays.md` | `docs/learnings/functions/cxf_alloc_work_arrays_analysis.md` |
 | P1.10 | Supporting structures spec | `specs/data-model/supporting_structures.md` | IISState, ModificationTracker, WarmStartData, CrossoverState learnings |
 
 **Per-task instructions for Phase 1:**
@@ -139,7 +139,7 @@ with specific design choices documented.
 | P2.5 | Crash Basis Construction | `specs/algorithms/crash_basis.md` | cxf_simplex_crash.c, learnings | Maros (2003) Ch. 9 |
 | P2.6 | Perturbation / Anti-Cycling | `specs/algorithms/perturbation.md` | cxf_simplex_perturbation.c, learnings | Wolfe (1963), Bland (1977) |
 | P2.7 | Crossover (Barrier to Simplex) | `specs/algorithms/crossover.md` | `docs/learnings/algorithms/crossover.md`, crossover files | Megiddo (1991) |
-| P2.8 | Bound Propagation | `specs/algorithms/bound_propagation.md` | cxf_propagate_bounds.c, cxf_propagate_bounds.c | Savelsbergh (1994) |
+| P2.8 | Bound Propagation | `specs/algorithms/bound_propagation.md` | cxf_cleanup_helper.c, cxf_propagate_bounds.c | Savelsbergh (1994) |
 
 **Per-task instructions for Phase 2:**
 
@@ -174,14 +174,14 @@ then writes behavioral contracts.
 |---------|-------|-----------|-------------|
 | P3.01 | Memory Primitives | cxf_calloc, cxf_realloc, cxf_vector_free, cxf_model_alloc | `specs/modules/memory_primitives.md` |
 | P3.02 | Allocation Helpers | cxf_alloc_eta, cxf_alloc_work_arrays, cxf_setup_resources | `specs/modules/allocation_helpers.md` |
-| P3.03 | State Initialization | cxf_init_solve_state, cxf_free_warmstart_basis, cxf_free_work_arrays | `specs/modules/state_initialization.md` |
+| P3.03 | State Initialization | cxf_init_solve_state, cxf_setup_basis, cxf_setup_work_arrays, cxf_setup_mip_params | `specs/modules/state_initialization.md` |
 | P3.05 | State Cleanup - Buffers | cxf_free_callback_state, cxf_free_solution_pool, cxf_clear_solution, cxf_clear_pending_buffer, cxf_reset_pending_buffer | `specs/modules/state_cleanup_buffers.md` |
 
 #### 3.06-3.08: Validation
 
 | Task ID | Title | Functions | Output File |
 |---------|-------|-----------|-------------|
-| P3.06 | Model Type Checking | cxf_is_quadratic, cxf_is_socp, cxf_is_socp_internal, cxf_check_model_flags1, cxf_check_model_flags2 | `specs/modules/model_type_checking.md` |
+| P3.06 | Model Type Checking | cxf_is_mip_model, cxf_is_quadratic, cxf_is_socp, cxf_is_socp_internal, cxf_check_model_flags1, cxf_check_model_flags2 | `specs/modules/model_type_checking.md` |
 | P3.08 | Data Validation | cxf_validate_array, cxf_validate_vartypes, cxf_validate_solution, cxf_special_check | `specs/modules/data_validation.md` |
 
 #### 3.09-3.10: Error & Logging
@@ -189,28 +189,28 @@ then writes behavioral contracts.
 | Task ID | Title | Functions | Output File |
 |---------|-------|-----------|-------------|
 | P3.09 | Error Handling | cxf_error_env, cxf_error_model, cxf_set_error_message, cxf_env_set_status | `specs/modules/error_handling.md` |
-| P3.10 | Logging | cxf_set_error_string, cxf_log, cxf_register_log_callback | `specs/modules/logging.md` |
+| P3.10 | Logging | cxf_errorlog, cxf_log, cxf_register_log_callback | `specs/modules/logging.md` |
 
 #### 3.11-3.13: Infrastructure
 
 | Task ID | Title | Functions | Output File |
 |---------|-------|-----------|-------------|
-| P3.11 | Threading & Sync | cxf_save_locale_state, cxf_release_solve_lock, cxf_env_acquire_lock, cxf_get_logical_processors, cxf_get_physical_cores, cxf_get_threads, cxf_validate_thread_count | `specs/modules/threading_sync.md` |
+| P3.11 | Threading & Sync | cxf_acquire_solve_lock, cxf_release_solve_lock, cxf_env_acquire_lock, cxf_get_logical_processors, cxf_get_physical_cores, cxf_get_threads, cxf_set_thread_count | `specs/modules/threading_sync.md` |
 | P3.12 | Thread Init & Thunks | cxf_init_thread_local, LeaveCriticalSection, LeaveCriticalSection_thunk | `specs/modules/thread_init_thunks.md` |
-| P3.13 | Callbacks | cxf_init_callback_struct, cxf_callback_terminate, cxf_pre_optimize_hook, cxf_post_optimize_hook, cxf_getconstrs_callback, cxf_copy_env_callbacks | `specs/modules/callbacks.md` |
+| P3.13 | Callbacks | cxf_init_callback_struct, cxf_callback_terminate, cxf_pre_optimize_callback, cxf_post_optimize_callback, cxf_getconstrs_callback, cxf_copy_env_callbacks | `specs/modules/callbacks.md` |
 
 #### 3.14-3.15: Matrix Operations
 
 | Task ID | Title | Functions | Output File |
 |---------|-------|-----------|-------------|
-| P3.14 | Matrix Core | cxf_matrix_setup, cxf_prepare_row_data, cxf_build_row_major, cxf_sort_by_values | `specs/modules/matrix_core.md` |
+| P3.14 | Matrix Core | cxf_matrix_setup, cxf_prepare_row_data, cxf_build_row_major, cxf_sort_indices | `specs/modules/matrix_core.md` |
 | P3.15 | Matrix Finalization | cxf_finalize_row_data (6 parts) | `specs/modules/matrix_finalization.md` |
 
 #### 3.16: Basis Operations
 
 | Task ID | Title | Functions | Output File |
 |---------|-------|-----------|-------------|
-| P3.16 | Basis Operations | cxf_fix_variables_at_bounds, cxf_progress_snapshot, cxf_basis_diff, cxf_basis_warm, cxf_pivot_with_eta | `specs/modules/basis_operations.md` |
+| P3.16 | Basis Operations | cxf_basis_refactor, cxf_basis_snapshot, cxf_basis_diff, cxf_basis_warm, cxf_pivot_with_eta | `specs/modules/basis_operations.md` |
 
 #### 3.17-3.18: Pricing System
 
@@ -229,9 +229,9 @@ then writes behavioral contracts.
 
 | Task ID | Title | Functions | Output File |
 |---------|-------|-----------|-------------|
-| P3.20 | Simplex Iteration | cxf_log_iteration_progress, cxf_simplex_step, cxf_simplex_step2, cxf_simplex_step3, cxf_simplex_post_iterate | `specs/modules/simplex_iteration.md` |
+| P3.20 | Simplex Iteration | cxf_simplex_iterate, cxf_simplex_step, cxf_simplex_step2, cxf_simplex_step3, cxf_simplex_post_iterate | `specs/modules/simplex_iteration.md` |
 | P3.21 | Simplex Phases | cxf_simplex_crash, cxf_simplex_perturbation, cxf_simplex_preprocess, cxf_simplex_setup, cxf_simplex_phase_end, cxf_simplex_refine | `specs/modules/simplex_phases.md` |
-| P3.22 | Simplex Lifecycle | cxf_simplex_postsolve, cxf_simplex_final, cxf_simplex_init (4 parts) | `specs/modules/simplex_lifecycle.md` |
+| P3.22 | Simplex Lifecycle | cxf_simplex_cleanup, cxf_simplex_final, cxf_simplex_init (4 parts) | `specs/modules/simplex_lifecycle.md` |
 
 #### 3.23: Crossover
 
@@ -245,7 +245,9 @@ then writes behavioral contracts.
 |---------|-------|-----------|-------------|
 | P3.24 | Solve Entry & Dispatch | cxf_optimize, cxf_optimize_internal, cxf_solve_entry, cxf_solve_dispatch, cxf_solve_no_callbacks, cxf_solve_with_callbacks | `specs/modules/solve_entry.md` |
 | P3.25 | Solve LP Core | cxf_solve_lp (6 parts), cxf_solver_dispatch (6 parts) | `specs/modules/solve_lp_core.md` |
-| P3.26 | Solve Barrier & Concurrent | cxf_solve_barrier, cxf_solve_concurrent (6 parts), cxf_solve_concurrent_distributed | `specs/modules/solve_barrier_concurrent.md` |
+| P3.26 | Solve Barrier & Concurrent | cxf_solve_barrier, cxf_solve_concurrent (6 parts), cxf_solve_concurrent_distributed, cxf_solve_concurrent_mip | `specs/modules/solve_barrier_concurrent.md` |
+| P3.27 | Solve MIP | cxf_solve_mip, cxf_presolve_mip, cxf_setup_mip_params, cxf_process_mip_solution (6 parts) | `specs/modules/solve_mip.md` |
+| P3.28 | Multi-Objective & Scenario | cxf_solve_multiobj, cxf_solve_multiscenario, cxf_setup_scenario (5 parts) | `specs/modules/solve_multiobj.md` |
 
 #### 3.29-3.31: Solution & Lifecycle
 
@@ -260,7 +262,7 @@ then writes behavioral contracts.
 | Task ID | Title | Functions | Output File |
 |---------|-------|-----------|-------------|
 | P3.33 | Statistics & Diagnostics | cxf_presolve_stats, cxf_coefficient_stats, cxf_compute_coef_stats, cxf_gencon_stats, cxf_compute_violations, cxf_compute_fingerprint, cxf_get_timestamp | `specs/modules/statistics_diagnostics.md` |
-| P3.34 | Cleanup Utilities | cxf_propagate_bounds, cxf_cleanup_coeff_change, cxf_cleanup_optimization, cxf_propagate_bounds | `specs/modules/cleanup_utilities.md` |
+| P3.34 | Cleanup Utilities | cxf_cleanup_helper, cxf_cleanup_coeff_change, cxf_cleanup_optimization, cxf_propagate_bounds | `specs/modules/cleanup_utilities.md` |
 | P3.35 | Query Utilities | cxf_get_genconstr_name, cxf_get_qconstr_data, cxf_count_genconstr_types, cxf_has_history, cxf_fix_variable | `specs/modules/query_utilities.md` |
 
 **Per-task instructions for Phase 3:**
@@ -312,7 +314,7 @@ then writes behavioral contracts.
 | Task ID | Title | Output File | Key Inputs |
 |---------|-------|-------------|------------|
 | P5.1 | Error & Status Codes | `specs/reference/error_status_codes.md` | `docs/learnings/functions/cxf_error_logging_analysis.md`, all error-handling analyzed files |
-| P5.2 | Parameters & Defaults | `specs/reference/parameters_defaults.md` | cxf_env_finalize, parameter-reading functions |
+| P5.2 | Parameters & Defaults | `specs/reference/parameters_defaults.md` | cxf_env_finalize, cxf_setup_mip_params, parameter-reading functions |
 | P5.3 | Tolerances & Constants | `specs/reference/tolerances_constants.md` | Simplex, pricing, pivot analyzed files for tolerance usage |
 
 **Per-task instructions for Phase 5:**
@@ -495,18 +497,18 @@ cxf_calloc, cxf_realloc, cxf_vector_free, cxf_model_alloc
 **P3.02 - Allocation Helpers (3)**
 cxf_alloc_eta, cxf_alloc_work_arrays, cxf_setup_resources
 
-**P3.03 - State Initialization (3)**
-cxf_init_solve_state, cxf_free_warmstart_basis, cxf_free_work_arrays
+**P3.03 - State Initialization (4)**
+cxf_init_solve_state, cxf_setup_basis, cxf_setup_work_arrays, cxf_setup_mip_params
 
 **P3.04 - State Cleanup Solver (6)**
-cxf_cleanup_solve_state, cxf_free_attribute_table, cxf_free_basis_state,
+cxf_cleanup_solve_state, cxf_free_solver_state, cxf_free_basis_state,
 
 **P3.05 - State Cleanup Buffers (5)**
 cxf_free_callback_state, cxf_free_solution_pool, cxf_clear_solution,
 cxf_clear_pending_buffer, cxf_reset_pending_buffer
 
-**P3.06 - Model Type Checking (5)**
-cxf_is_quadratic, cxf_is_socp, cxf_is_socp_internal,
+**P3.06 - Model Type Checking (6)**
+cxf_is_mip_model, cxf_is_quadratic, cxf_is_socp, cxf_is_socp_internal,
 cxf_check_model_flags1, cxf_check_model_flags2
 
 **P3.07 - Input Validation (7)**
@@ -519,27 +521,27 @@ cxf_validate_array, cxf_validate_vartypes, cxf_validate_solution, cxf_special_ch
 cxf_error_env, cxf_error_model, cxf_set_error_message, cxf_env_set_status
 
 **P3.10 - Logging (3)**
-cxf_set_error_string, cxf_log, cxf_register_log_callback
+cxf_errorlog, cxf_log, cxf_register_log_callback
 
 **P3.11 - Threading & Sync (7)**
-cxf_save_locale_state, cxf_release_solve_lock, cxf_env_acquire_lock,
-cxf_get_logical_processors, cxf_get_physical_cores, cxf_get_threads, cxf_validate_thread_count
+cxf_acquire_solve_lock, cxf_release_solve_lock, cxf_env_acquire_lock,
+cxf_get_logical_processors, cxf_get_physical_cores, cxf_get_threads, cxf_set_thread_count
 
 **P3.12 - Thread Init & Thunks (3)**
 cxf_init_thread_local, LeaveCriticalSection, LeaveCriticalSection_thunk
 
 **P3.13 - Callbacks (6)**
-cxf_init_callback_struct, cxf_callback_terminate, cxf_pre_optimize_hook,
-cxf_post_optimize_hook, cxf_getconstrs_callback, cxf_copy_env_callbacks
+cxf_init_callback_struct, cxf_callback_terminate, cxf_pre_optimize_callback,
+cxf_post_optimize_callback, cxf_getconstrs_callback, cxf_copy_env_callbacks
 
 **P3.14 - Matrix Core (4)**
-cxf_matrix_setup, cxf_prepare_row_data, cxf_build_row_major, cxf_sort_by_values
+cxf_matrix_setup, cxf_prepare_row_data, cxf_build_row_major, cxf_sort_indices
 
 **P3.15 - Matrix Finalization (1 multi-part)**
 cxf_finalize_row_data (6 parts)
 
 **P3.16 - Basis Operations (5)**
-cxf_fix_variables_at_bounds, cxf_progress_snapshot, cxf_basis_diff, cxf_basis_warm, cxf_pivot_with_eta
+cxf_basis_refactor, cxf_basis_snapshot, cxf_basis_diff, cxf_basis_warm, cxf_pivot_with_eta
 
 **P3.17 - Pricing Core (5)**
 cxf_pricing_candidates, cxf_pricing_update, cxf_pricing_update_var,
@@ -554,7 +556,7 @@ cxf_pricing_get_constr_stats, cxf_pricing_get_constr_candidates
 cxf_pivot_bound, cxf_pivot_primal, cxf_pivot_special, cxf_pivot_check, cxf_pivot_update
 
 **P3.20 - Simplex Iteration (5)**
-cxf_log_iteration_progress, cxf_simplex_step, cxf_simplex_step2, cxf_simplex_step3,
+cxf_simplex_iterate, cxf_simplex_step, cxf_simplex_step2, cxf_simplex_step3,
 cxf_simplex_post_iterate
 
 **P3.21 - Simplex Phases (6)**
@@ -562,7 +564,7 @@ cxf_simplex_crash, cxf_simplex_perturbation, cxf_simplex_preprocess,
 cxf_simplex_setup, cxf_simplex_phase_end, cxf_simplex_refine
 
 **P3.22 - Simplex Lifecycle (3 + 1 multi-part)**
-cxf_simplex_postsolve, cxf_simplex_final, cxf_simplex_init (4 parts)
+cxf_simplex_cleanup, cxf_simplex_final, cxf_simplex_init (4 parts)
 
 **P3.23 - Crossover (2, includes multi-part)**
 cxf_crossover, cxf_crossover_bounds (4 parts)
@@ -574,9 +576,16 @@ cxf_solve_no_callbacks, cxf_solve_with_callbacks
 **P3.25 - Solve LP Core (2 multi-part)**
 cxf_solve_lp (6 parts), cxf_solver_dispatch (6 parts)
 
-**P3.26 - Solve Barrier & Concurrent (3, includes multi-part)**
+**P3.26 - Solve Barrier & Concurrent (4, includes multi-part)**
 cxf_solve_barrier, cxf_solve_concurrent (6 parts),
-cxf_solve_concurrent_distributed
+cxf_solve_concurrent_distributed, cxf_solve_concurrent_mip
+
+**P3.27 - Solve MIP (4, includes multi-part)**
+cxf_solve_mip, cxf_presolve_mip, cxf_setup_mip_params,
+cxf_process_mip_solution (6 parts)
+
+**P3.28 - Multi-Objective & Scenario (3, includes multi-part)**
+cxf_solve_multiobj, cxf_solve_multiscenario, cxf_setup_scenario (5 parts)
 
 **P3.29 - Solution Processing (6)**
 cxf_process_lp_solution, cxf_uncrush_solution, cxf_wire_result_attributes,
@@ -597,7 +606,7 @@ cxf_presolve_stats, cxf_coefficient_stats, cxf_compute_coef_stats, cxf_gencon_st
 cxf_compute_violations, cxf_compute_fingerprint, cxf_get_timestamp
 
 **P3.34 - Cleanup Utilities (4)**
-cxf_propagate_bounds, cxf_cleanup_coeff_change, cxf_cleanup_optimization, cxf_propagate_bounds
+cxf_cleanup_helper, cxf_cleanup_coeff_change, cxf_cleanup_optimization, cxf_propagate_bounds
 
 **P3.35 - Query Utilities (5)**
 cxf_get_genconstr_name, cxf_get_qconstr_data, cxf_count_genconstr_types,
@@ -605,9 +614,9 @@ cxf_has_history, cxf_fix_variable
 
 ### Function Count Verification
 
-Phase 3 total: 4+3+3+6+5+5+7+4+4+3+7+3+6+4+1+5+5+8+5+5+6+4+2+6+2+3+6+5+4+3+7+4+5 = **152 function slots**
+Phase 3 total: 4+3+4+6+5+6+7+4+4+3+7+3+6+4+1+5+5+8+5+5+6+4+2+6+2+4+4+3+6+5+4+3+7+4+5 = **163 function slots**
 
-Note: Some multi-part functions count as 1 slot. The 152 includes all single-file functions
+Note: Some multi-part functions count as 1 slot. The 163 includes all single-file functions
 plus all multi-part functions as single entries.
 
 ---

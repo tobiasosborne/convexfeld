@@ -29,6 +29,7 @@ The optimization pipeline involves the following modules, listed in approximate 
 | Pivot Operations | P3.19 | Ratio test, bound flips, variable fixing |
 | Crossover | P3.23 | Barrier-to-simplex solution conversion |
 | Barrier & Concurrent | P3.26 | Interior-point method, concurrent solver racing |
+| MIP Solver | P3.27 | Branch-and-bound for integer programs |
 | Solution Processing | P3.29 | Uncrush, attribute wiring, gap computation, solution pool |
 | Callbacks | P3.13 | User callbacks, lifecycle hooks |
 | Error Handling | P3.09 | Error state management, message propagation |
@@ -62,7 +63,7 @@ USER CODE
     v                    v                     v
 +--[3. cxf_solve_entry]-----------------------------------------------+
 |  Model type detection | Scenario routing                            |
-|  Non-convex QP handling (retry with non-convex treatment if needed) |
+|  Non-convex QP handling (retry as MIP if needed)                    |
 +---------------------------------------------------------------------+
     |                              |
     v                              v
@@ -74,12 +75,12 @@ USER CODE
 |  Parameter backup | Method selection heuristic                      |
 |  Presolve-solve-uncrush cycle | Result reporting                    |
 +---------------------------------------------------------------------+
-    |            |            |            |
-    v            v            v            v
- Simplex     Barrier     Concurrent    PDHG
- (0,1)       (2)         (3,4,5)       (6)
-    |            |            |            |
-    v            v            v            v
+    |            |            |            |           |
+    v            v            v            v           v
+ Simplex     Barrier     Concurrent    PDHG        MIP
+ (0,1)       (2)         (3,4,5)       (6)         (B&B)
+    |            |            |            |           |
+    v            v            v            v           v
 +--[5. Solver Algorithm Execution]------------------------------------+
 |  (Details per algorithm path below)                                 |
 +---------------------------------------------------------------------+
@@ -87,7 +88,7 @@ USER CODE
     v
 +--[6. Solution Processing]------------------------------------------+
 |  Uncrush presolved solution | Evaluate objective                    |
-|  Wire result attributes | Compute optimality gap                   |
+|  Wire result attributes | Compute MIP gap                          |
 +---------------------------------------------------------------------+
     |
     v
@@ -158,7 +159,7 @@ The no-callback path spawns a worker thread and monitors progress via a state tr
 
 This function routes between single-model and multi-scenario optimization.
 
-**Step 3.1: Model type detection.** Determines the model type. For continuous models with solver focus or NLP mode, marks the model for special treatment.
+**Step 3.1: Model type detection.** Determines whether the model is MIP or continuous. For continuous models with solver focus or NLP mode, marks the model for special treatment.
 
 **Step 3.2: Routing decision.**
 
@@ -181,7 +182,7 @@ This function routes between single-model and multi-scenario optimization.
                            results back
 ```
 
-**Step 3.3: Non-convex QP handling.** If the solver returns a non-positive-semidefinite error for a continuous model, the non-convex handling parameter is consulted. If automatic conversion is enabled, the model is marked as non-convex and re-dispatched through the solver with non-convex treatment. This creates a retry loop within the solve chain.
+**Step 3.3: Non-convex QP handling.** If the solver returns a non-positive-semidefinite error for a continuous model, the non-convex handling parameter is consulted. If automatic conversion is enabled, the model is marked as non-convex and re-dispatched through the solver as a MIP. This creates a retry loop within the solve chain.
 
 **State handed to Phase 4:** A single model (or scenario clone) ready for algorithm dispatch.
 
@@ -189,20 +190,20 @@ This function routes between single-model and multi-scenario optimization.
 
 This is the central branching point where the solve flow splits by algorithm type.
 
-**Step 4.1: Parameter backup.** Saves approximately 30 environment parameters to local storage. These span method selection, tolerances, threading, and heuristics. All are restored before return, regardless of outcome.
+**Step 4.1: Parameter backup.** Saves approximately 30 environment parameters to local storage. These span method selection, tolerances, cuts, branching, threading, and heuristics. All are restored before return, regardless of outcome.
 
-**Step 4.2: Model type detection and method selection.** Determines the model structure (LP, QP, SOCP) and selects the solving algorithm:
+**Step 4.2: Model type detection and method selection.** Determines the model structure (LP, QP, SOCP, MIP) and selects the solving algorithm:
 
 ```
                 cxf_solver_dispatch
                        |
         +--------------+--------------+
         |              |              |
-     [LP/QP]        [SOCP]         [Non-convex QP]
+     [LP/QP]        [SOCP]         [MIP]
         |              |              |
         v              v              v
-  Method selection  Force barrier  Non-convex
-  heuristic                        handling
+  Method selection  Force barrier  Branch-and-bound
+  heuristic                        with LP relaxation
         |
    +----+----+----+----+----+
    |    |    |    |    |    |
@@ -287,14 +288,14 @@ This is the core of the LP solver. The two-level structure prevents cycling whil
 ```
 OUTER LOOP (round control, max ~5/10/100 rounds depending on mode)
   |
-  +-- Take outer basis snapshot (cxf_progress_snapshot, P3.16)
+  +-- Take outer basis snapshot (cxf_basis_snapshot, P3.16)
   |
   +-- INNER LOOP (basis stabilization)
   |     |
-  |     +--[1] cxf_progress_snapshot (P3.16)
+  |     +--[1] cxf_basis_snapshot (P3.16)
   |     |       Capture current basis state
   |     |
-  |     +--[2] cxf_log_iteration_progress (P3.20)
+  |     +--[2] cxf_simplex_iterate (P3.20)
   |     |       Progress logging and callback notification
   |     |       (Naming misnomer: does NOT perform iterations)
   |     |
@@ -355,7 +356,7 @@ cxf_simplex_final (P3.22)
     Complementary slackness analysis
     |
     v
-cxf_simplex_postsolve (P3.22)
+cxf_simplex_cleanup (P3.22)
     Implied bound propagation (FBBT)
     -> Delegates to cxf_propagate_bounds (P3.34)
     Convert tight inequality constraints to equalities
@@ -424,6 +425,38 @@ cxf_solver_dispatch
     |   -> Apply basis to parent model
     |   -> Run simplex cleanup pass
     |
+    +--[Distributed concurrent MIP]
+        cxf_solve_concurrent_mip (P3.26)
+        -> Create worker environments on remote servers
+        -> Assign diversified seeds, aggressive params on last worker
+        -> Delegate to distributed worker dispatch
+        -> Sum statistics across all workers
+        -> Perform optimality gap analysis
+        -> Copy winning solution to parent
+```
+
+### Phase 5d: MIP Path
+
+```
+cxf_solver_dispatch
+    |
+    v
+Allocate SolutionInfo structure
+    |
+    v
+cxf_solve_mip (P3.27)
+    -> Presolve: create reduced model copy
+    -> Branch-and-bound with LP relaxations at each node
+       (each node solves an LP via cxf_solve_lp)
+    -> Solution pool management via cxf_copy_solution (P3.29)
+    -> Track incumbent, bounds, and gap
+    |
+    v
+Uncrush solution from presolved space
+    -> cxf_uncrush_solution (P3.29)
+    |
+    v
+Verify objective via cxf_scale_objval (P3.29)
 ```
 
 ### Phase 6: Solution Processing
@@ -450,7 +483,7 @@ After any algorithm path completes, solution processing transforms raw solver ou
     |       |
     |   +---+---+
     |   |       |
-    |  [LP]   [General]
+    |  [LP]   [MIP/General]
     |   |       |
     |   v       v
     |  cxf_process_lp_solution    cxf_wire_result_attributes
@@ -458,8 +491,14 @@ After any algorithm path completes, solution processing transforms raw solver ou
     |  Wire iteration counts,    Wire iteration counts,
     |  node counts, objective    node counts, solution
     |  (status-dependent)        arrays (X, Slack, QCSlack),
-    |                            compute optimality gap via
+    |                            compute MIP gap via
     |                            cxf_compute_gap (P3.29)
+    |
+    +--[Solution pool (MIP only)]
+        cxf_copy_solution (P3.29)
+        Maintain sorted pool by objective
+        Enforce PoolSolutions, PoolGap limits
+        Deterministic ordering via weighted fingerprint
 ```
 
 ### Phase 7: Cleanup and Result Delivery
@@ -479,6 +518,9 @@ The cleanup phase reverses all setup operations performed in Phase 1, restoring 
     |
     +--[Solver focus and fingerprint restore]
     |   (in cxf_solve_entry and cxf_optimize_internal)
+    |
+    +--[Validate single-use license restrictions]
+    |   (in cxf_optimize)
     |
     +--[Log callback statistics]
     |   If callbacks were used: log invocation count and cumulative time
@@ -528,6 +570,8 @@ SOLVING (internal, not user-visible)
     +---> UNBOUNDED        (objective improvable without bound)
     +---> ITERATION_LIMIT  (iteration limit reached, best solution if any)
     +---> TIME_LIMIT       (time limit reached, best solution if any)
+    +---> NODE_LIMIT       (MIP node limit reached)
+    +---> SOLUTION_LIMIT   (MIP solution count limit reached)
     +---> INTERRUPTED      (user abort via signal or callback)
     +---> NUMERIC          (numerical difficulties, solution unreliable)
     +---> SUBOPTIMAL       (feasible but not proven optimal)
@@ -582,7 +626,7 @@ cxf_solver_dispatch:  ~30 parameters (method, tolerances, cuts, branching,
                        tolerances, mode flags)
 ```
 
-Both levels restore on all exit paths. This two-level backup is necessary because cxf_solve_lp may be called multiple times within a single cxf_solver_dispatch invocation (e.g., for concurrent solver instances or crossover cleanup passes).
+Both levels restore on all exit paths. This two-level backup is necessary because cxf_solve_lp may be called multiple times within a single cxf_solver_dispatch invocation (e.g., for LP relaxations at MIP nodes).
 
 ## Error Handling
 
@@ -603,10 +647,10 @@ cxf_solve_entry
 cxf_solver_dispatch
     |  propagates errors, ensures parameter restore on all paths
     v
-cxf_solve_lp / cxf_solve_barrier / cxf_solve_concurrent
+cxf_solve_lp / cxf_solve_barrier / cxf_solve_concurrent / cxf_solve_mip
     |  propagates errors from sub-functions
     v
-Simplex iteration functions / Barrier subsystem
+Simplex iteration functions / Barrier subsystem / MIP B&B
     |  return error codes for specific conditions
     v
 Leaf functions (pricing, pivot, eta allocation, etc.)
@@ -628,7 +672,7 @@ Leaf functions (pricing, pivot, eta allocation, etc.)
 | Error | Origin | Propagation | Recovery |
 |-------|--------|-------------|----------|
 | Out-of-memory | Any allocation | Propagates to cxf_optimize, sets "exhausted available memory" message | None; solve aborted |
-| Q-not-PSD | cxf_solve_barrier | May trigger non-convex QP retry in cxf_solve_entry | Apply non-convex handling if NonConvex enabled |
+| Q-not-PSD | cxf_solve_barrier | May trigger non-convex QP retry in cxf_solve_entry | Convert to MIP if NonConvex enabled |
 | Infeasibility (in iteration) | step/step2/step3 | Sets INFEASIBLE status, zero return | Status communicated to user |
 | Unboundedness (in iteration) | step | Sets UNBOUNDED status, zero return | Status communicated to user |
 | User interrupt | post_iterate or callback | Sets INTERRUPTED status | Graceful termination with best solution |
@@ -664,8 +708,8 @@ The callback path (cxf_solve_with_callbacks) implements a specialized error reco
 | OutputFlag | Controls logging verbosity | cxf_optimize Phase 1 |
 | ResultFile | Triggers post-solve result file writing | cxf_optimize Phase 7 |
 | NumericFocus | Controls numerical precision emphasis | cxf_coefficient_stats |
-| PoolSolutions | Maximum solution pool size | cxf_copy_solution |
-| PoolGap/PoolGapAbs | Solution pool quality threshold | cxf_copy_solution |
+| PoolSolutions | Maximum solution pool size (MIP) | cxf_copy_solution |
+| PoolGap/PoolGapAbs | Solution pool quality threshold (MIP) | cxf_copy_solution |
 | FeasibilityTol | Primal feasibility tolerance | Throughout simplex |
 | OptimalityTol | Dual feasibility tolerance | Throughout simplex |
 | MarkowitzTol | Basis factorization stability control | cxf_solver_dispatch |
@@ -674,7 +718,9 @@ The callback path (cxf_solve_with_callbacks) implements a specialized error reco
 
 cxf_solver_dispatch backs up approximately 30 parameters spanning:
 - Method selection and algorithm control
-- Tolerances (feasibility, optimality, Markowitz)
+- Tolerances (feasibility, optimality, integrality, Markowitz)
+- Cut control parameters
+- Branching strategy parameters
 - Heuristic settings
 - Thread counts
 - Presolve settings

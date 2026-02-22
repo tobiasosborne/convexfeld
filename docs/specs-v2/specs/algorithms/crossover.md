@@ -15,6 +15,7 @@ After a barrier (interior-point) method solves a linear program, the resulting s
 
 - **Warm-starting**: Subsequent solves (e.g., after adding cuts or changing bounds) are far more efficient when starting from a basis.
 - **Sensitivity analysis**: Post-optimality analysis requires knowledge of which constraints are active, which is encoded in the basis.
+- **Branch-and-bound**: Mixed-integer solvers rely on dual simplex from a basis to process subproblems efficiently.
 - **Uniqueness**: Interior-point solutions are not unique in degenerate problems; a basic solution provides a canonical representation.
 
 The crossover procedure bridges the gap between interior-point and simplex representations by systematically pushing variables to their bounds and constructing a valid basis.

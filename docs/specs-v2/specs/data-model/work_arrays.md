@@ -1,8 +1,8 @@
-# SolutionData (Solution Data Container)
+# WorkArrays (Solution Data Container)
 
 ## Purpose
 
-SolutionData is the model-level container for all optimization output data. **Naming history:** Formerly `WorkArrays`; renamed to better reflect its actual role as a solution data container rather than a scratch buffer structure. This structure stores the results of an optimization call: primal variable values, dual values (for constraints, range constraints, and SOS constraints), objective function values and bounds, iteration and node counts, and solution pool entries. It does not hold scratch buffers for simplex iterations -- that role belongs to SolverState. It is allocated at the beginning of an optimization call, populated by the solver during and after the solve, and retained on the Model so that the user can query solution attributes (such as variable values, objective value, iteration count, and solution pool entries) after the optimization returns. It is freed when the solution is cleared or the model is destroyed.
+WorkArrays is the model-level container for all optimization output data. Despite its name (which derives from the internal allocation and deallocation function names), this structure does not hold scratch buffers for simplex iterations -- that role belongs to SolverState. Instead, WorkArrays stores the results of an optimization call: primal variable values, dual values (for constraints, range constraints, and SOS constraints), objective function values and bounds, iteration and node counts, and solution pool entries. It is allocated at the beginning of an optimization call, populated by the solver during and after the solve, and retained on the Model so that the user can query solution attributes (such as variable values, objective value, iteration count, and solution pool entries) after the optimization returns. It is freed when the solution is cleared or the model is destroyed.
 
 This structure serves as the bridge between the solver's internal state and the public attribute system. After optimization completes, a wiring step connects entries in the model's attribute table to specific fields within this structure, enabling the attribute getter API to return solution data without additional computation.
 
@@ -12,7 +12,7 @@ This structure serves as the bridge between the solver's internal state and the 
 
 | Field | Type | Purpose | Valid Values | Invariants |
 |-------|------|---------|--------------|------------|
-| solveMode | int | Records which optimization algorithm produced the solution (e.g., simplex, barrier) and controls how result attributes are wired | Standard solve mode codes | Set by the solver dispatch logic; read during attribute wiring |
+| solveMode | int | Records which optimization algorithm produced the solution (e.g., simplex, barrier, MIP) and controls how result attributes are wired | Standard solve mode codes | Set by the solver dispatch logic; read during attribute wiring |
 
 ### Primal and Dual Solution Arrays
 
@@ -28,8 +28,18 @@ This structure serves as the bridge between the solver's internal state and the 
 | Field | Type | Purpose | Valid Values | Invariants |
 |-------|------|---------|--------------|------------|
 | objectiveValue | double | Best objective function value found during optimization; wired to the "ObjVal" attribute | Any finite double when a feasible solution exists; uninitialized otherwise | Updated by the solver upon finding improving solutions |
-| objectiveBound | double | Best proven bound on the optimal objective value; wired to the "ObjBound" attribute | Any finite double | Equals objectiveValue at optimality for LP |
+| objectiveBound | double | Best proven bound on the optimal objective value; wired to the "ObjBound" attribute | Any finite double | For LP: equals objectiveValue at optimality; for MIP: may differ from objectiveValue |
+| objectiveBoundContinuous | double | Objective bound from the continuous relaxation; wired to the "ObjBoundC" attribute | Any finite double | Set during MIP solving from the root relaxation |
 | poolObjectiveBound | double | Objective bound applicable to the solution pool; wired to the "PoolObjBound" attribute | Any finite double | Relevant only when the solution pool is populated |
+| mipGap | double | Relative gap between the best objective value and the best bound; wired to the "MIPGap" attribute | Non-negative double; zero at optimality | Computed as abs(objectiveValue - objectiveBound) / abs(objectiveValue), following standard MIP gap conventions |
+
+### Search Tree Counters
+
+| Field | Type | Purpose | Valid Values | Invariants |
+|-------|------|---------|--------------|------------|
+| nodeCount | double | Total number of branch-and-bound nodes explored; wired to the "NodeCount" attribute | Non-negative | Monotonically non-decreasing during a MIP solve; zero for pure LP |
+| openNodeCount | double | Number of unexplored nodes remaining in the search tree; wired to the "OpenNodeCount" attribute | Non-negative | Zero when the MIP solve is complete |
+| timeOpen | double | Time at which the current node was opened, for progress reporting | Non-negative | Updated during MIP search |
 
 ### Iteration Counters
 
@@ -92,9 +102,9 @@ This structure serves as the bridge between the solver's internal state and the 
 
 ## Relationships
 
-- **Owned by** Model. The Model holds a pointer to the SolutionData structure. The Model is responsible for allocating and freeing SolutionData.
+- **Owned by** Model. The Model holds a pointer to the WorkArrays structure. The Model is responsible for allocating and freeing WorkArrays.
 
-- **Owns** primalValues and dualValues arrays. These are separately allocated arrays whose lifetime is managed by the SolutionData allocation and deallocation functions.
+- **Owns** primalValues and dualValues arrays. These are separately allocated arrays whose lifetime is managed by the WorkArrays allocation and deallocation functions.
 
 - **Borrows** rangeDuals and sosDuals. These typically point into the interior of the dualValues allocation rather than being independently allocated. They must not be freed separately.
 
@@ -102,17 +112,17 @@ This structure serves as the bridge between the solver's internal state and the 
 
 - **Owns** cutVariableValues and cutObjectiveValues arrays. Similar ownership semantics as the solution pool arrays.
 
-- **Referenced by** the attribute table. After optimization, the attribute wiring step stores pointers into SolutionData fields within the model's attribute table entries. These pointers become invalid when SolutionData is freed, so attribute cache invalidation must precede SolutionData deallocation.
+- **Referenced by** the attribute table. After optimization, the attribute wiring step stores pointers into WorkArrays fields within the model's attribute table entries. These pointers become invalid when WorkArrays is freed, so attribute cache invalidation must precede WorkArrays deallocation.
 
-- **Populated by** the solver (SolverState or barrier state). The solver writes solution data into SolutionData during and after optimization.
+- **Populated by** the solver (SolverState, barrier state, or MIP state). The solver writes solution data into WorkArrays during and after optimization.
 
-- **Read by** the presolve uncrushing step. After solving a presolved model, the uncrush operation reads primal values from SolutionData to map them back to the original variable space.
+- **Read by** the presolve uncrushing step. After solving a presolved model, the uncrush operation reads primal values from WorkArrays to map them back to the original variable space.
 
 ## Lifecycle
 
 ### Creation
 
-1. At the start of an optimization call, the allocation function checks whether the Model already has a SolutionData instance.
+1. At the start of an optimization call, the allocation function checks whether the Model already has a WorkArrays instance.
 2. If not, a zero-initialized block is allocated, large enough to hold all fixed-size fields.
 3. The activeFlag is set to 1, indicating the structure is live.
 4. Scale factors are computed from the model's variable count multiplied by standard algorithmic tolerance and scaling constants.
@@ -120,30 +130,31 @@ This structure serves as the bridge between the solver's internal state and the 
 6. History tracking fields (previousEnteringVar, previousLeavingVar, previousPivotRow) are set to -1 (unset).
 7. Threshold values are set to -1.0 (not yet activated).
 8. Auxiliary indices are set to -1 (not active).
-9. If a template SolutionData is provided (e.g., from a scenario model), the non-pointer fields are bulk-copied from the template. After copying, all pointer fields (primalValues, dualValues, rangeDuals, sosDuals) are explicitly set to null to prevent aliasing of the template's owned arrays.
+9. If a template WorkArrays is provided (e.g., from a scenario model), the non-pointer fields are bulk-copied from the template. After copying, all pointer fields (primalValues, dualValues, rangeDuals, sosDuals) are explicitly set to null to prevent aliasing of the template's owned arrays.
 10. Solution pool and cut counters are cleared to zero, and their associated pointer arrays are set to null.
 
 ### Mutation
 
 - **During simplex iterations**: the cycle detection fields, threshold values, and auxiliary indices are updated as the solver progresses. Scale factors may be adjusted. Iteration counters are incremented.
 - **On finding a feasible solution**: primalValues and dualValues arrays are allocated (if not already) and populated. The objectiveValue is set. The solutionCount is incremented.
-- **On solve completion**: the attribute wiring function connects attribute table entries to SolutionData fields. The solveMode is finalized.
+- **During MIP search**: nodeCount, openNodeCount, and timeOpen are updated. Pool solutions are appended by allocating new entries in poolVariableValues and updating poolSolutionCount. objectiveBound and mipGap are updated as the search progresses.
+- **On solve completion**: the attribute wiring function connects attribute table entries to WorkArrays fields. The solveMode is finalized.
 
 ### Destruction
 
-1. The attribute cache on the Model is invalidated, breaking any wired pointers from the attribute table into SolutionData.
+1. The attribute cache on the Model is invalidated, breaking any wired pointers from the attribute table into WorkArrays.
 2. The primalValues array is freed if non-null.
 3. The dualValues array is freed if non-null. Since rangeDuals and sosDuals alias into this allocation, they are not freed separately; they are simply set to null.
 4. Each entry in poolVariableValues (if the pool is active) is freed individually, then the poolVariableValues array itself is freed. poolObjectiveValues and poolObjectiveBounds are freed.
 5. Each entry in cutVariableValues is freed, then the array itself. cutObjectiveValues is freed.
-6. The SolutionData structure itself is freed.
-7. The Model's pointer to SolutionData is set to null.
+6. The WorkArrays structure itself is freed.
+7. The Model's pointer to WorkArrays is set to null.
 
 Deallocation must occur in reverse allocation order to avoid dangling references. In particular, attribute cache invalidation must happen before any field deallocation.
 
 ## Invariants
 
-1. **Active flag consistency**: If activeFlag is 0, no other field should be read or written. Callers must check activeFlag (or the null-ness of the Model's pointer) before accessing SolutionData.
+1. **Active flag consistency**: If activeFlag is 0, no other field should be read or written. Callers must check activeFlag (or the null-ness of the Model's pointer) before accessing WorkArrays.
 
 2. **Array length consistency**: The length of primalValues equals numVars from the model's matrix data. The length of dualValues equals numConstrs plus numRangeConstrs plus numSOSConstraints. Each poolVariableValues entry has length numVars.
 
@@ -155,23 +166,23 @@ Deallocation must occur in reverse allocation order to avoid dangling references
 
 6. **Index sentinel**: Any auxiliary index or previous-pivot index equal to -1 indicates "not set" and must not be used as an array index.
 
-7. **Attribute wiring validity**: If attribute table entries have been wired to SolutionData fields, the SolutionData structure must remain allocated and at the same memory address until the attribute cache is invalidated. Freeing or reallocating SolutionData without invalidating the cache produces dangling pointers.
+7. **Attribute wiring validity**: If attribute table entries have been wired to WorkArrays fields, the WorkArrays structure must remain allocated and at the same memory address until the attribute cache is invalidated. Freeing or reallocating WorkArrays without invalidating the cache produces dangling pointers.
 
 ## Thread Safety
 
-SolutionData is **not thread-safe**. It is designed to be accessed by a single thread during and after a single optimization call.
+WorkArrays is **not thread-safe**. It is designed to be accessed by a single thread during and after a single optimization call.
 
 - All fields are read and written without synchronization.
-- Each concurrent optimization (e.g., concurrent LP solves or scenario processing) must operate on its own Model with its own SolutionData instance.
-- After optimization returns, the user's thread may read SolutionData fields (via the attribute API) without locking, since no other thread should be modifying the structure post-solve.
+- Each concurrent optimization (e.g., concurrent LP solves or scenario processing) must operate on its own Model with its own WorkArrays instance.
+- After optimization returns, the user's thread may read WorkArrays fields (via the attribute API) without locking, since no other thread should be modifying the structure post-solve.
 
 ## Design Rationale
 
-**Separation from SolverState**: While SolverState holds the internal working data needed *during* simplex iterations (basis arrays, reduced costs, sparse matrix copies, eta vectors), SolutionData holds the *results* that persist after the solver finishes. This separation means the solver can free all its temporary working data (SolverState) immediately after completing, while the solution data (SolutionData) remains available for the user to query. This is a standard pattern in commercial LP solvers where the solver's internal memory footprint should be reclaimed promptly, but solution attributes must remain accessible.
+**Separation from SolverState**: While SolverState holds the internal working data needed *during* simplex iterations (basis arrays, reduced costs, sparse matrix copies, eta vectors), WorkArrays holds the *results* that persist after the solver finishes. This separation means the solver can free all its temporary working data (SolverState) immediately after completing, while the solution data (WorkArrays) remains available for the user to query. This is a standard pattern in commercial LP solvers where the solver's internal memory footprint should be reclaimed promptly, but solution attributes must remain accessible.
 
 **Dual value aliasing**: Rather than allocating three separate arrays for linear constraint duals, range constraint duals, and SOS constraint duals, a single contiguous allocation is made and the three pointers are set to offsets within it. This reduces the number of allocations and improves cache locality when iterating over all dual values. The trade-off is slightly more complex deallocation logic (only the base array is freed). This is a common memory management optimization in numerical software (Maros, 2003, Section 2.2 on efficient memory management).
 
-**Template copying**: When solving multi-scenario optimization problems, the solver clones the model and solves each scenario independently. After a scenario solve, the scenario model's SolutionData serves as a template for populating the original model's SolutionData. The bulk copy transfers scalar fields (counters, objective values, scale factors, thresholds) efficiently, while pointer fields are cleared afterward to prevent double ownership. This is a standard "copy-then-fixup" pattern for structures containing a mix of value and pointer fields.
+**Template copying**: When solving multi-scenario optimization problems, the solver clones the model and solves each scenario independently. After a scenario solve, the scenario model's WorkArrays serves as a template for populating the original model's WorkArrays. The bulk copy transfers scalar fields (counters, objective values, scale factors, thresholds) efficiently, while pointer fields are cleared afterward to prevent double ownership. This is a standard "copy-then-fixup" pattern for structures containing a mix of value and pointer fields.
 
 **Adaptive thresholds initialized to -1.0**: The threshold array uses -1.0 as a sentinel value meaning "not yet set." Many simplex implementations use adaptive tolerances that are computed lazily on first need, based on problem characteristics observed during the solve (e.g., the magnitude of matrix coefficients or the degree of degeneracy). Initializing to -1.0 allows each consumer to detect "first use" and compute an appropriate initial threshold. This pattern is described in the context of dynamic tolerance adjustment by Maros (2003, Chapter 8).
 

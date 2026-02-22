@@ -56,11 +56,11 @@ cxf_cleanup_solve_state is the cleanup counterpart to cxf_init_solve_state, call
 
 ---
 
-### cxf_free_attribute_table
+### cxf_free_solver_state
 
 **Purpose:** Free the model's attribute table structure and its owned entries array, removing the metadata that supports the model's attribute access API.
 
-**Naming history:** Formerly `cxf_free_solver_state`; renamed to better reflect its specific responsibility of freeing the attribute table structure rather than broader solver state.
+**Note:** Despite the name suggesting it frees "solver state," this function specifically frees the attribute table structure. The naming reflects an earlier architectural phase where this model field held broader solver state.
 
 **Signature:**
 - Input: model : pointer-to-Model - The model whose attribute table should be freed
@@ -87,7 +87,7 @@ cxf_cleanup_solve_state is the cleanup counterpart to cxf_init_solve_state, call
 - None. This function does not return an error code. Null attribute table is handled gracefully.
 
 **Behavioral Description:**
-cxf_free_attribute_table performs a two-level deallocation of the model's attribute table. It first frees the nested entries array (which contains the per-attribute metadata descriptors), nulls the entries pointer defensively, and then frees the attribute table wrapper structure itself. The model's reference to the attribute table is set to null to prevent use-after-free. The function re-reads the attribute table pointer after freeing the entries array as a defensive measure against potential side effects.
+cxf_free_solver_state performs a two-level deallocation of the model's attribute table. It first frees the nested entries array (which contains the per-attribute metadata descriptors), nulls the entries pointer defensively, and then frees the attribute table wrapper structure itself. The model's reference to the attribute table is set to null to prevent use-after-free. The function re-reads the attribute table pointer after freeing the entries array as a defensive measure against potential side effects.
 
 **Null Safety:** The function checks for null at every level: if the attribute table pointer is null, it returns immediately; if the entries array is null, it skips to freeing the table structure.
 
@@ -105,7 +105,7 @@ cxf_free_attribute_table performs a two-level deallocation of the model's attrib
 
 ### cxf_free_basis_state
 
-**Purpose:** Free the array of concurrent solver environments associated with the model, handling reference counting, deferred cleanup for environments that are still in use by other owners, and termination of active remote solver jobs.
+**Purpose:** Free the array of concurrent solver environments associated with the model, handling reference counting, deferred cleanup for environments that are still in use by other owners, and termination of active remote remote solver jobs.
 
 **Signature:**
 - Input: model : pointer-to-Model - The model whose concurrent environment array should be freed
@@ -119,7 +119,7 @@ cxf_free_attribute_table performs a two-level deallocation of the model's attrib
 - Every environment in the concurrent environments array has been processed:
   - Its root environment's reference count has been decremented (under lock).
   - If the reference count reached zero, the environment has been fully freed via the internal environment destruction function.
-  - If the reference count remained positive (environment still in use by another owner), the environment is handled with deferred cleanup: a warning is logged, any active remote solver job is terminated, and the array slot is cleared.
+  - If the reference count remained positive (environment still in use by another owner), the environment is handled with deferred cleanup: a warning is logged, any active remote remote solver job is terminated, and the array slot is cleared.
 - The concurrent environments array itself has been freed.
 - The model's concurrent environments pointer has been set to null.
 - The model's concurrent environment count has been set to zero.
@@ -128,7 +128,7 @@ cxf_free_attribute_table performs a two-level deallocation of the model's attrib
 - Decrements reference counts on root environments (under critical section lock for thread safety).
 - May fully destroy environments whose reference counts reach zero.
 - May log warning messages about deferred environment cleanup.
-- May terminate active remote solver jobs by:
+- May terminate active remote remote solver jobs by:
   - Setting a termination flag in the async operation state.
   - Polling the remote job status with a bounded retry loop.
   - Sending a termination message to the remote solver.
@@ -139,7 +139,7 @@ cxf_free_attribute_table performs a two-level deallocation of the model's attrib
 - None. This function does not return an error code. Empty arrays and null pointers are handled gracefully. Remote job termination failures are logged but do not cause the function to fail.
 
 **Behavioral Description:**
-cxf_free_basis_state manages the lifecycle of concurrent solver environments created during concurrent optimization (where multiple solver algorithms run in parallel with different parameter settings). For each environment in the array, it locates the root environment (which may be a shared parent) and decrements its reference count under a critical section lock to ensure thread safety. If the reference count reaches zero, the environment is destroyed immediately. If the count remains positive (another owner still needs the environment), the function performs a deferred cleanup: it logs a diagnostic warning, checks for active remote solver jobs associated with the environment, and if found, attempts graceful termination with a bounded polling loop before forcefully killing the job and freeing the connection. After processing all environments, the array itself is freed and the model's tracking fields are cleared.
+cxf_free_basis_state manages the lifecycle of concurrent solver environments created during concurrent optimization (where multiple solver algorithms run in parallel with different parameter settings). For each environment in the array, it locates the root environment (which may be a shared parent) and decrements its reference count under a critical section lock to ensure thread safety. If the reference count reaches zero, the environment is destroyed immediately. If the count remains positive (another owner still needs the environment), the function performs a deferred cleanup: it logs a diagnostic warning, checks for active remote remote solver jobs associated with the environment, and if found, attempts graceful termination with a bounded polling loop before forcefully killing the job and freeing the connection. After processing all environments, the array itself is freed and the model's tracking fields are cleared.
 
 **Reference Counting Protocol:**
 1. Enter critical section on the root environment's mutex
@@ -329,7 +329,7 @@ During model destruction (cxf_freemodel), the functions in this module are calle
 2. **cxf_free_basis_state** -- Free concurrent environments (may involve remote job termination)
 3. **cxf_free_iis_state** -- Free IIS diagnostic data
 4. **cxf_free_warmstart_basis** -- Free warm-start data
-5. **cxf_free_attribute_table** -- Free attribute table (last, as other cleanup may query attributes)
+5. **cxf_free_solver_state** -- Free attribute table (last, as other cleanup may query attributes)
 6. **cxf_cleanup_solve_state** -- Finalize timing and callbacks (called at end of each solve, not just destruction)
 
 ### Defensive Memory Patterns
@@ -348,7 +348,7 @@ The cleanup functions in this module are the inverse counterparts to initializat
 | Cleanup Function (P3.04) | Initialization Counterpart |
 |--------------------------|---------------------------|
 | cxf_cleanup_solve_state | cxf_init_solve_state (P3.03) |
-| cxf_free_attribute_table | Attribute table creation during model init |
+| cxf_free_solver_state | Attribute table creation during model init |
 | cxf_free_basis_state | Concurrent environment creation during concurrent solve setup |
 | cxf_free_iis_state | IIS computation (cxf_computeIIS) |
 | cxf_free_warmstart_basis | Warm-start creation (via VBasis/CBasis attribute setting) |

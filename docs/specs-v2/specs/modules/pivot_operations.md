@@ -452,11 +452,11 @@ All functions operate within a single-threaded simplex solve. Thread safety for 
 
 ## References
 
-- Achterberg, T., Bixby, R.E., Gu, Z., Rothberg, E., and Weninger, D. (2020). "Presolve Reductions in Linear Programming." *INFORMS Journal on Computing*, 32(2):473-506.
+- Achterberg, T., Bixby, R.E., Gu, Z., Rothberg, E., and Weninger, D. (2020). "Presolve Reductions in Mixed Integer Programming." *INFORMS Journal on Computing*, 32(2):473-506.
 - Andersen, E.D. and Andersen, K.D. (1995). "Presolving in Linear Programming." *Mathematical Programming*, 71(2):221-245.
 - Dantzig, G.B. (1963). *Linear Programming and Extensions*. Princeton University Press.
 - Forrest, J.J.H. and Goldfarb, D. (1992). "Steepest-edge simplex algorithms for linear programming." *Mathematical Programming*, 57(1):341-374.
 - Harris, P.M.J. (1973). "Pivot selection methods of the Devex LP code." *Mathematical Programming*, 5(1):1-28.
 - Higham, N.J. (2002). *Accuracy and Stability of Numerical Algorithms*. Second Edition. SIAM.
 - Maros, I. (2003). *Computational Techniques of the Simplex Method*. Springer. International Series in Operations Research and Management Science, Vol. 61.
-- Savelsbergh, M.W.P. (1994). "Preprocessing and Probing Techniques for Linear Programming Problems." *ORSA Journal on Computing*, 6(4):445-454.
+- Savelsbergh, M.W.P. (1994). "Preprocessing and Probing Techniques for Mixed Integer Programming Problems." *ORSA Journal on Computing*, 6(4):445-454.

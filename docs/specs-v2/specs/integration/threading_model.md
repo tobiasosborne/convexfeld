@@ -10,8 +10,8 @@ The threading model addresses five concerns:
 
 1. **API serialization:** Ensuring that concurrent API calls on the same environment do not corrupt shared state.
 2. **Locale isolation:** Ensuring that per-thread numeric formatting settings do not interfere across threads.
-3. **Thread count management:** Determining how many threads the solver should use, reconciling hardware availability and user preferences.
-4. **Internal parallelism:** Distributing computational work across threads within the barrier solver and concurrent solver.
+3. **Thread count management:** Determining how many threads the solver should use, reconciling hardware availability, user preferences, and license limits.
+4. **Internal parallelism:** Distributing computational work across threads within the barrier solver, concurrent solver, and solver.
 5. **Signal safety:** Ensuring that operating system signal handlers interact correctly with multi-threaded solver operations.
 
 ## Components Involved
@@ -27,6 +27,7 @@ The threading model spans the following modules and data structures:
 | **P3.24 (Solve Entry & Dispatch)** | Locale acquisition at API boundary; modification-blocked flag; execution path selection (sync/async/callback) |
 | **P3.25 (Solve LP Core)** | Thread-unsafe solver state; concurrent solver dispatch creating independent model copies |
 | **P3.26 (Solve Barrier & Concurrent)** | Local concurrent solver with worker threads; distributed concurrent with remote workers; log relay critical section |
+| **P3.27 (Solve MIP)** | Thread-unsafe MIP operations; thread safety achieved through model-level isolation |
 | **P3.32 (Optimization Preparation)** | Signal handler installation with solve lock for mutual exclusion |
 | **P3.09 (Error Handling)** | Thread-unsafe error buffer; error buffer lock for cascading error preservation |
 
@@ -53,15 +54,15 @@ User Thread(s)
 |  - Algorithm selection                            |
 +---------------------------------------------------+
     |
-    +------------+-------------+
-    |            |             |
-    v            v             v
- [Simplex]   [Barrier]   [Concurrent]
- single-     internal     N solver
- threaded    thread       instances
-             pool for     (independent
-             linear       model copies)
-             algebra
+    +------------+-------------+----------------+
+    |            |             |                |
+    v            v             v                v
+ [Simplex]   [Barrier]   [Concurrent]     [MIP B&B]
+ single-     internal     N solver         LP relax.
+ threaded    thread       instances        at nodes
+             pool for     (independent     (each is
+             linear       model copies)    single-
+             algebra                       threaded)
                 |              |
                 v              v
            [Worker        [Worker threads
@@ -73,8 +74,8 @@ User Thread(s)
                            termination,
                            solution
                            aggregation]
-    |            |             |
-    +------------+-------------+
+    |            |             |                |
+    +------------+-------------+----------------+
     |
     v
 +---------------------------------------------------+
@@ -114,7 +115,12 @@ Level 4: Thread Pool Mutex (per-environment)
     |
     +-- Protects: thread pool initialization and destruction
     |
-Level 5: Log Relay Critical Section (per-concurrent-solve)
+Level 5: Compute Server Lock (per-connection)
+    |
+    +-- Protects: remote solver communication channel
+    |   for message serialization
+    |
+Level 6: Log Relay Critical Section (per-concurrent-solve)
         |
         +-- Protects: log message forwarding from distributed
             workers to parent environment
@@ -154,7 +160,9 @@ Before any parallel operation begins, the solver determines the effective thread
 
 **Step 3: User parameter application.** The user-configured Threads parameter is read from the environment. If this value is less than the auto-detected count, it takes precedence. A value of zero means "automatic" (no reduction).
 
-**Step 4: Oversubscription warning.** If the resolved thread count exceeds the number of logical processors, a warning is emitted advising the user to reduce the Threads parameter.
+**Step 4: License limit enforcement.** The license thread limit is checked. If it is more restrictive than the current count, the license limit is used. This ensures the solver never exceeds contractual parallelism limits.
+
+**Step 5: Oversubscription warning.** If the resolved thread count exceeds the number of logical processors, a warning is emitted advising the user to reduce the Threads parameter.
 
 The resolution chain is illustrated as follows:
 
@@ -165,7 +173,10 @@ Model Override ──(if set)──> base_count
 Logical Processors ──(cap for large systems)──> auto_count
        |
        v
-min(auto_count, user_Threads_param) ──> effective_threads
+min(auto_count, user_Threads_param) ──> user_count
+       |
+       v
+min(user_count, license_limit) ──> effective_threads
 ```
 
 ### 3. Concurrent Optimization Flow
@@ -181,6 +192,8 @@ When the solver algorithm dispatch (P3.25) selects a concurrent method, multiple
 3. **Instance diversification.** Each instance receives a different configuration to explore different portions of the solution space:
    - Per-instance seed offsets for randomized tie-breaking
    - For distributed LP: fixed method assignment (barrier, dual simplex, primal simplex)
+   - For distributed MIP with many workers: the last worker receives aggressive parameters (optimality-focused MIPFocus, increased cuts, aggressive presolve)
+
 4. **Worker thread creation.** Instances beyond the first are dispatched to worker threads. Instance 0 may run on the calling thread's schedule.
 
 5. **Completion polling.** The main thread polls completion flags in a busy-wait loop that transitions from yield-based to sleep-based polling after a threshold number of iterations. The loop also checks for user interrupts.
@@ -193,13 +206,14 @@ When the solver algorithm dispatch (P3.25) selects a concurrent method, multiple
 
 8. **Cleanup.** All worker threads are joined before any model is freed. Worker models are freed before worker environments. Temporary buffers are freed last.
 
-#### Distributed Concurrent (remote solvers)
+#### Distributed Concurrent (remote remote solvers)
 
-The distributed concurrent flow follows the same pattern but replaces worker threads with remote solver workers. Key differences:
+The distributed concurrent flow follows the same pattern but replaces worker threads with remote remote solver workers. Key differences:
 
-- Worker environments are created by connecting to remote solvers
+- Worker environments are created by connecting to remote remote solvers
 - A critical section protects the log message relay from workers to the parent environment
 - Communication with workers uses a structured message protocol (serialization with network byte order)
+- A license lock prevents concurrent distributed solves from the same environment
 
 ### 4. Per-Thread State for Parallel Simplex
 
@@ -312,7 +326,8 @@ The following table summarizes the thread safety level of each module and the sy
 | **P3.24 Solve Entry** | Conditional | Per-thread locale isolation; single-owner model | Must not be called concurrently on the same model. Locale isolation protects cross-thread formatting. |
 | **P3.25 Solve LP Core** | Not thread-safe | Model-level isolation | Each concurrent solve uses an independent model copy. |
 | **P3.26 Concurrent (local)** | Internal threading | Independent model clones | Worker threads use independent copies; parent modifications occur only after all workers join. |
-| **P3.26 Concurrent (distributed)** | Internal threading | CS for log relay | Workers run on remote servers; CS protects shared log channel. |
+| **P3.26 Concurrent (distributed)** | Internal threading | CS for log relay; license lock | Workers run on remote servers; CS protects shared log channel. |
+| **P3.27 [out of scope: MIP]** | Not thread-safe | Model-level isolation | Thread safety achieved through independent model copies at the concurrent solve level. |
 | **P3.32 Signal Handler** | Conditional | Solve lock (exclusive) | Only one optimization can install a signal handler at a time. Module-level global state for model reference. |
 
 ## Error Handling
@@ -325,7 +340,7 @@ When multiple threads must access the same environment's error state (e.g., duri
 
 ### Error Buffer Lock (Not a Thread Lock)
 
-The error buffer locked flag (P3.13 lifecycle hooks) is a **single-thread cascading-error guard**, not a thread synchronization mechanism. It prevents inner functions from overwriting the root-cause error message during a cascading failure within a single API call. The lock is set by cxf_pre_optimize_hook at optimization start and cleared by cxf_post_optimize_hook at optimization end.
+The error buffer locked flag (P3.13 lifecycle hooks) is a **single-thread cascading-error guard**, not a thread synchronization mechanism. It prevents inner functions from overwriting the root-cause error message during a cascading failure within a single API call. The lock is set by cxf_pre_optimize_callback at optimization start and cleared by cxf_post_optimize_callback at optimization end.
 
 ### Errors in Concurrent Solver Instances
 
@@ -345,6 +360,7 @@ Each concurrent solver instance operates on an independent model clone with its 
 | **Threads** | User-requested thread count | 0 (auto) | Zero means auto-detect; positive value caps thread count |
 | **ConcurrentMethod** | Selects concurrent solving strategy | -1 (auto) | Controls whether and how concurrent solving is used |
 | **ConcurrentJobs** | Number of concurrent solver instances | 0 (auto) | Zero means solver decides based on thread count |
+| **DistributedMIPJobs** | Number of distributed MIP workers | 0 (disabled) | Positive value enables distributed concurrent MIP |
 | **Method** | Solver algorithm selection | -1 (auto) | Methods 3, 4, 5 select concurrent LP solving |
 | **OutputFlag** | Controls logging verbosity | 1 (enabled) | Affects whether thread count and hardware info are logged |
 | **Seed** | Random seed for tie-breaking | 0 | Combined with per-instance offsets for concurrent solver diversification |
@@ -358,9 +374,12 @@ Environment initialization:
 User configuration:
     cxf_setintparam("Threads", N) -> threadsParameter
 
+initialization validation:
+    license_validate() -> license_thread_limit
+
 At optimization time:
     cxf_get_threads() -> effective_threads
-        = min(auto_or_override, threadsParameter)
+        = min(auto_or_override, threadsParameter, license_thread_limit)
 
 For concurrent solving:
     effective_threads / concurrent_instance_count -> threads_per_instance
@@ -412,7 +431,7 @@ The solver provides a determinism guarantee: with the same model, parameters, an
 
 **Decision:** On large systems, the auto-detected thread count prefers the physical core count over the logical core count.
 
-**Rationale:** LP solving is a compute-intensive workload that benefits primarily from independent execution units (physical cores), not from simultaneous multithreading (SMT/Hyper-Threading). SMT provides diminishing returns for compute-bound tasks because the two logical cores on the same physical core share execution resources. Using the physical core count as the baseline on large systems avoids the overhead of excessive thread synchronization while still utilizing all available compute capacity. An internal cap further limits the thread count to prevent diminishing returns from thread coordination overhead.
+**Rationale:** LP and MIP solving are compute-intensive workloads that benefit primarily from independent execution units (physical cores), not from simultaneous multithreading (SMT/Hyper-Threading). SMT provides diminishing returns for compute-bound tasks because the two logical cores on the same physical core share execution resources. Using the physical core count as the baseline on large systems avoids the overhead of excessive thread synchronization while still utilizing all available compute capacity. An internal cap further limits the thread count to prevent diminishing returns from thread coordination overhead.
 
 ---
 
@@ -425,7 +444,7 @@ The solver provides a determinism guarantee: with the same model, parameters, an
 [x] No copied code fragments
 [x] All descriptions are behavioral, not implementational
 [x] All data structures described semantically using Layer 1 types
-[x] Explicit cross-references to P1.01, P3.09, P3.11, P3.12, P3.13, P3.24, P3.25, P3.26, P3.32
+[x] Explicit cross-references to P1.01, P3.09, P3.11, P3.12, P3.13, P3.24, P3.25, P3.26, P3.27, P3.32
 [x] Passes the Clean Room Test: could be written without seeing the binary
 ```
 

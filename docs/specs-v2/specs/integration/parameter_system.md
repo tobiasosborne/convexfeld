@@ -16,15 +16,16 @@ The parameter system spans the following modules and data structures:
 |-----------|---------------|--------------------------|
 | Environment (data model) | P1.01 | Owns the parameter table, parameter storage, and per-parameter flags |
 | Model (data model) | P1.02 | References an environment (shared or private child) for parameter access |
-| Environment Lifecycle | P3.30 | Creates parameter table, sets defaults, applies config overrides during finalization |
+| Environment Lifecycle | P3.30 | Creates parameter table, sets defaults, applies license/config overrides during finalization |
 | Solve Entry & Dispatch | P3.24 | Reads parameters for execution path selection, concurrent parameter management |
 | Solve LP Core | P3.25 | Reads method, tolerances, limits; backs up and restores ~30 parameters around solve |
 | Simplex Lifecycle | P3.22 | Copies tolerances, iteration limits, and mode parameters into SolverState at init time |
 | Simplex Phases | P3.21 | Reads feasibility tolerance, perturbation parameters |
 | Pricing Core | P3.17 | Reads pricing strategy parameter indirectly via SolverState mode |
 | Solve Barrier & Concurrent | P3.26 | Reads barrier parameters, thread counts, concurrent method settings |
+| Solve MIP | P3.27 | Reads MIP strategy, cut, heuristic, and branching parameters |
 | Multi-Objective & Scenario | P3.28 | Reads multi-objective settings; may reset solution pool parameters |
-| Threading & Synchronization | P3.11 | Reads Threads parameter, hardware limits |
+| Threading & Synchronization | P3.11 | Reads Threads parameter, hardware limits, license thread limit |
 | Parameters & Defaults (reference) | P5.2 | Catalogs all parameters, types, defaults, and valid ranges |
 | Tolerances & Constants (reference) | P5.3 | Documents numerical tolerances and their algorithmic roles |
 
@@ -44,6 +45,8 @@ When an environment is created (P3.30 cxf_env_create_internal), the parameter sy
 
 4. **Parent inheritance.** If the environment is created as a child of an existing environment, current parameter values are inherited from the parent's parameter table instead of using the static defaults. This is the mechanism by which model-level environments inherit from the session environment.
 
+5. **ISV protection.** For environments configured with ISV (Independent Software Vendor) licensing, ISV-specific parameters are reset to their defaults and marked as protected in the flags array, preventing user modification.
+
 **Result:** An environment with all parameters set to their defaults (or inherited values), ready for further configuration.
 
 ### Phase 2: Parameter Overrides During Finalization
@@ -52,13 +55,17 @@ When the environment is finalized (P3.30 cxf_env_finalize), parameters undergo a
 
 **Layer 1 -- Built-in defaults.** Already established during creation (Phase 1).
 
-**Layer 2 -- Configuration file parameters.** If the configuration file loading flag is set, the optional solver configuration file (typically in the current working directory) is loaded and its parameter settings are applied. This allows per-project parameter customization without code changes.
+**Layer 2 -- License file parameters.** During finalization Stage 4, the configuration file is parsed and any configuration parameters it contains (server addresses, credentials, timeouts, feature flags) are extracted into the parameter table. Each parameter is set only if it has a non-default value in the configuration file. This allows license administrators to enforce organizational defaults.
 
-**Layer 3 -- Programmatic settings.** The finalization process uses a snapshot/restore mechanism to preserve any parameter values that were set programmatically between environment creation and finalization. Specifically, the environment state is snapshotted at the start of finalization, and after config file parameters are applied, the programmatic settings are restored from the snapshot. This ensures that explicit API calls always take precedence over file-based settings.
+**Layer 3 -- Configuration file parameters.** If the configuration file loading flag is set, the optional solver configuration file (typically in the current working directory) is loaded and its parameter settings are applied. This allows per-project parameter customization without code changes.
+
+**Layer 4 -- Programmatic settings.** The finalization process uses a snapshot/restore mechanism to preserve any parameter values that were set programmatically between environment creation and finalization. Specifically, the environment state is snapshotted at the start of finalization, and after license and config file parameters are applied, the programmatic settings are restored from the snapshot. This ensures that explicit API calls always take precedence over file-based settings.
 
 **Additional overrides during finalization:**
 - System environment variables override core counts and memory limits (CXF_CORES, CXF_PHYSICALCORES, CXF_MAXCORES, CXF_MEMLIMIT).
-**Result:** An active environment with all parameter layers resolved. The final parameter values reflect the precedence: programmatic > config file > defaults.
+- initialization validation may impose thread limits and model size limits that constrain parameter-controlled behavior.
+
+**Result:** An active environment with all parameter layers resolved. The final parameter values reflect the precedence: programmatic > config file > configuration file > defaults.
 
 ### Phase 3: Model-Level Parameter Inheritance
 
@@ -79,17 +86,17 @@ When optimization begins (P3.24 cxf_optimize through cxf_solver_dispatch in P3.2
 **4a. Entry validation and logging (P3.24 cxf_optimize).**
 - OutputFlag is read to determine whether to log version and hardware information.
 - ResultFile is read to determine whether to write result files after optimization.
-- The thread count is computed by reconciling the Threads parameter and hardware detection (P3.11 cxf_get_threads).
+- The thread count is computed by reconciling the Threads parameter, hardware detection, and license limits (P3.11 cxf_get_threads).
 
 **4b. Model analysis and path selection (P3.24 cxf_optimize_internal).**
 - The callback count and async mode determine the execution path (normal, callback, or no-callback fast path).
 - For concurrent optimization: tolerance parameters from all concurrent environments are cached and clamped to safe ranges before optimization begins. The cached values are restored after optimization, ensuring that the user's original settings are preserved.
 
 **4c. Algorithm dispatch (P3.25 cxf_solver_dispatch).**
-- Approximately 30 parameters are backed up to local storage at the start of dispatch. These span method selection, tolerances, thread counts, and algorithm tuning. All are restored before the function returns, regardless of success or failure.
+- Approximately 30 parameters are backed up to local storage at the start of dispatch. These span method selection, tolerances, cut control, branching strategy, heuristic settings, thread counts, and algorithm tuning. All are restored before the function returns, regardless of success or failure.
 - **Method** determines the solving algorithm (simplex, barrier, concurrent, PDHG).
 - **NonConvex** controls handling of non-convex quadratic programs.
-- **ConcurrentMethod**, **Threads** affect concurrent solver configuration.
+- **ConcurrentMethod**, **ConcurrentMIP**, **Threads** affect concurrent solver configuration.
 - **Presolve** and related parameters control the presolve-solve-uncrush cycle.
 - Problem structure and warm-start availability influence automatic method selection when Method is set to AUTO (-1).
 
@@ -137,8 +144,9 @@ For concurrent optimization, the restore extends to all concurrent environments:
       |
       v
 [Environment Finalization]
-      |  Config file overrides (Layer 2)
-      |  Programmatic settings restored (Layer 3, highest precedence)
+      |  License file overrides (Layer 2)
+      |  Config file overrides (Layer 3)
+      |  Programmatic settings restored (Layer 4, highest precedence)
       |  System env var overrides for hardware/memory
       v
 [Active Environment]  -- final resolved values
@@ -170,6 +178,8 @@ During optimization, the parameter system exists in a temporarily modified state
 | LP-specific backup | LP params saved | cxf_solve_lp | After LP solve returns |
 | SolverState copy | Tolerances/limits copied to SolverState | cxf_simplex_init | N/A (SolverState is destroyed) |
 | Concurrent clamping | Tolerance params on concurrent envs clamped | cxf_optimize_internal | After optimization returns |
+| MIP parameter normalization | Presolve mode normalized | cxf_solve_mip | After MIP solve returns |
+| Multi-objective reset | PoolSearchMode reset to 0 | cxf_solve_multiobj | After multi-obj returns |
 
 ---
 
@@ -182,12 +192,13 @@ Parameter validation occurs at multiple points:
 1. **At set time.** When a parameter is set via the public API, the value is checked against the parameter's minimum and maximum bounds (as defined in the parameter table). Out-of-range values are rejected with an INVALID_ARGUMENT error.
 
 2. **At finalization.** During environment finalization, certain parameters are validated against system capabilities:
+   - The Threads parameter is validated against the license thread limit.
    - Hardware-dependent parameters (core counts, memory limits) are reconciled with detected capabilities.
 
 3. **At solve time.** During solver dispatch, parameters are checked for consistency with the model type:
    - PDHG method requested for a QP model generates a warning and method adjustment.
    - Concurrent methods are restricted for SOCP and certain QP models.
-   - NonConvex parameter determines whether non-PSD Q matrix errors are treated as terminal.
+   - NonConvex parameter determines whether non-PSD Q matrix errors are treated as terminal or trigger MIP conversion.
 
 ### Parameter-Related Error Codes
 
@@ -196,6 +207,8 @@ Parameter validation occurs at multiple points:
 | Invalid parameter name | UNKNOWN_PARAMETER | Parameter name not found in the lookup structure |
 | Value out of range | INVALID_ARGUMENT | Value violates the parameter's min/max bounds |
 | Wrong type | INVALID_ARGUMENT | Attempt to set a double value on an int parameter, etc. |
+| ISV-protected parameter | INVALID_ARGUMENT | Attempt to modify an ISV-protected parameter |
+| License thread limit exceeded | Warning logged | Thread count reduced to license limit (not an error) |
 | Unsupported method for model type | Warning + adjustment | Method adjusted to a compatible selection |
 
 ### Restore-on-Error Guarantee
@@ -215,6 +228,7 @@ Parameters are organized into functional categories, each affecting different as
 | Parameter | Read By | Effect |
 |-----------|---------|--------|
 | Method | cxf_solver_dispatch (P3.25) | Selects the root LP algorithm: simplex, barrier, concurrent, or PDHG |
+| NodeMethod | solver (P3.27) | Selects the LP algorithm for MIP node relaxations |
 | SiftMethod | Simplex subsystem | Selects the LP algorithm for sifting sub-problems |
 | SimplexPricing | cxf_simplex_init (P3.22) | Selects the variable pricing strategy (partial, steepest edge, Devex) |
 | Crossover | cxf_solve_lp (P3.25) | Controls barrier-to-simplex crossover strategy |
@@ -228,6 +242,8 @@ Parameters are organized into functional categories, each affecting different as
 | OptimalityTol | cxf_simplex_init (P3.22), pricing (P3.17) | Dual feasibility / reduced cost threshold for optimality declaration |
 | MarkowitzTol | Basis factorization (P3.16) | Pivot selection stability/sparsity trade-off |
 | BarConvTol | Barrier solver (P3.26) | Interior-point convergence threshold |
+| IntFeasTol | solver (P3.27) | Integer variable integrality threshold |
+| MIPGap, MIPGapAbs | solver (P3.27) | MIP termination gap thresholds |
 | PerturbValue | cxf_simplex_perturbation (P3.21) | Anti-cycling perturbation magnitude |
 
 #### Termination Parameters
@@ -238,6 +254,9 @@ Parameters are organized into functional categories, each affecting different as
 | TimeLimit | Solve entry (P3.24), all solver modules | Wall-clock time bound |
 | WorkLimit | Solve entry (P3.24), all solver modules | Deterministic work bound |
 | BarIterLimit | Barrier solver (P3.26) | Maximum barrier iterations |
+| NodeLimit | solver (P3.27) | Maximum branch-and-bound nodes |
+| SolutionLimit | solver (P3.27) | Stop after finding this many feasible solutions |
+| Cutoff | solver (P3.27) | Objective value cutoff for node fathoming |
 
 #### Output and Logging Parameters
 
@@ -253,6 +272,7 @@ Parameters are organized into functional categories, each affecting different as
 | Parameter | Read By | Effect |
 |-----------|---------|--------|
 | Threads | cxf_get_threads (P3.11), cxf_solver_dispatch (P3.25) | Parallel thread count |
+| ConcurrentMIP | cxf_solver_dispatch (P3.25) | Number of concurrent MIP instances |
 | InheritParams | Concurrent/multi-obj subsystems | Whether sub-environments inherit parent parameters |
 
 #### Algorithmic Tuning Parameters
@@ -272,20 +292,21 @@ Parameters are organized into functional categories, each affecting different as
 
 The following table maps each major solver module to the parameter categories it reads:
 
-| Module | Method | Tolerances | Limits | Output | Threading | Tuning | Presolve |
-|--------|--------|-----------|--------|--------|-----------|--------|----------|
-| Solve Entry (P3.24) | | | x | x | x | | |
-| Solver Dispatch (P3.25) | x | x | x | x | x | x | x |
-| Solve LP (P3.25) | x | x | x | | | x | |
-| Simplex Init (P3.22) | x | x | x | | | x | |
-| Simplex Phases (P3.21) | | x | | | | x | |
-| Pricing Core (P3.17) | | x | | | | | |
-| Basis Factorization (P3.16) | | x | | | | | |
-| Barrier (P3.26) | x | x | x | | x | | |
-| Concurrent (P3.26) | x | x | | | x | | |
-| Multi-Objective (P3.28) | | | | | | | |
-| Threading (P3.11) | | | | | x | | |
-| Env Lifecycle (P3.30) | | | | x | x | | |
+| Module | Method | Tolerances | Limits | Output | Threading | Tuning | MIP | Cuts | Presolve |
+|--------|--------|-----------|--------|--------|-----------|--------|-----|------|----------|
+| Solve Entry (P3.24) | | | x | x | x | | | | |
+| Solver Dispatch (P3.25) | x | x | x | x | x | x | x | x | x |
+| Solve LP (P3.25) | x | x | x | | | x | | | |
+| Simplex Init (P3.22) | x | x | x | | | x | | | |
+| Simplex Phases (P3.21) | | x | | | | x | | | |
+| Pricing Core (P3.17) | | x | | | | | | | |
+| Basis Factorization (P3.16) | | x | | | | | | | |
+| Barrier (P3.26) | x | x | x | | x | | | | |
+| Concurrent (P3.26) | x | x | | | x | | | | |
+| MIP Solver (P3.27) | x | x | x | | x | x | x | x | x |
+| Multi-Objective (P3.28) | | | | | | | x | | |
+| Threading (P3.11) | | | | | x | | | | |
+| Env Lifecycle (P3.30) | | | | x | x | | | | |
 
 ---
 
@@ -351,10 +372,12 @@ When the solver resolves an AUTO parameter, the resolved value may or may not be
 
 ### Parameter Save/Restore Scope
 
-cxf_solver_dispatch backs up approximately 30 parameters -- a broad set spanning method, tolerances, threading, and presolve. This broad scope reflects the reality that the solver may modify any of these parameters during a solve:
+cxf_solver_dispatch backs up approximately 30 parameters -- a broad set spanning method, tolerances, cuts, branching, heuristics, threading, and presolve. This broad scope reflects the reality that the solver may modify any of these parameters during a solve:
 
 - Tolerances may be adjusted for numerical recovery.
 - Method may be overridden for sub-problems or crossover.
+- Cut aggressiveness may be increased if the initial root relaxation is weak.
+- Thread counts may be reduced for sub-MIP heuristics.
 - Presolve may be disabled for retry after a presolve-related failure.
 
 The cost of this broad backup (saving ~30 typed values to local storage) is negligible compared to the solve itself, making the inclusive approach preferable to a minimal backup that risks missing a parameter the solver modifies in an unexpected code path.
@@ -374,12 +397,13 @@ The Method parameter interacts with the detected problem type to determine the a
 | LP (with warm start) | Typically simplex | Warm start not useful for barrier |
 | QP | Barrier (default) | PDHG not available for QP |
 | SOCP | Barrier (forced) | Only barrier supports conic constraints |
+| MIP | Branch-and-bound with LP relaxation | NodeMethod controls relaxation method |
 
 ### Thread Count and Concurrent Methods
 
 The effective thread count (computed by cxf_get_threads, P3.11) constrains which concurrent methods are available:
 
-1. The Threads parameter is reconciled with hardware detection.
+1. The Threads parameter is reconciled with hardware detection and the license limit.
 2. Concurrent methods require sufficient threads to run multiple solvers in parallel.
 3. The thread count is divided among concurrent instances, with each instance receiving a share.
 4. If the effective thread count is too low for meaningful concurrency, the dispatch falls back to a non-concurrent method.
@@ -390,6 +414,7 @@ Tolerance parameters interact with each other and with termination parameters:
 
 - **FeasibilityTol** and **OptimalityTol** together determine when a simplex solution is declared optimal. Both must be satisfied simultaneously.
 - **BarConvTol** determines barrier convergence independently. After barrier convergence, crossover to a basic solution uses simplex tolerances.
+- **MIPGap** and **MIPGapAbs** provide two convergence criteria for MIP; the solver terminates when either is satisfied.
 - Tighter tolerances generally require more iterations, interacting with **IterationLimit** and **TimeLimit**.
 - **NumericFocus** influences how aggressively the solver tightens internal tolerances and applies numerical safeguards.
 

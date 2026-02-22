@@ -4,7 +4,7 @@
 
 The Solve LP Core module contains the two central orchestration functions for LP solving: the LP solve pipeline and the solver algorithm dispatch. Together they form the heart of the optimization flow, sitting between the entry chain (P3.24) and the simplex iteration engine (P3.20). The LP solve pipeline manages the complete lifecycle of an LP solve from initialization through solution extraction, coordinating the crash basis construction, crossover from barrier solutions, the two-level simplex iteration loop, piecewise-linear constraint handling, and result status mapping. The solver algorithm dispatch determines which algorithm to apply (simplex, barrier, concurrent, or first-order method) based on model structure and user parameters, manages the presolve-solve-uncrush cycle, and handles parameter backup and restore to protect the environment from solver-internal modifications.
 
-These two functions are the most complex in the LP subsystem and implement the orchestration aspects of the revised simplex method (Dantzig, 1963; Maros, 2003), barrier-to-simplex crossover (Megiddo, 1991; Bixby and Saltzman, 1994), and the general algorithm selection logic for LP and QP problems.
+These two functions are the most complex in the LP subsystem and implement the orchestration aspects of the revised simplex method (Dantzig, 1963; Maros, 2003), barrier-to-simplex crossover (Megiddo, 1991; Bixby and Saltzman, 1994), and the general algorithm selection logic for LP, QP, and MIP problems.
 
 ## Functions
 
@@ -75,8 +75,8 @@ This crossover procedure converts the interior-point solution to a basic feasibl
 
 *Inner loop:* Within each outer round, the function executes the following sequence repeatedly until the basis stabilizes:
 
-1. **Basis snapshot** (cxf_progress_snapshot, P3.16): Capture the current basis state for later comparison.
-2. **Simplex iterate** (cxf_log_iteration_progress, P3.20): Execute progress logging and bookkeeping for the current iteration batch.
+1. **Basis snapshot** (cxf_basis_snapshot, P3.16): Capture the current basis state for later comparison.
+2. **Simplex iterate** (cxf_simplex_iterate, P3.20): Execute progress logging and bookkeeping for the current iteration batch.
 3. **Iterate variant**: Execute a post-iteration variant for additional processing (phase transition checks).
 4. **Perturbation** (cxf_simplex_perturbation, P3.21): On early iterations only, apply anti-cycling perturbation if the EXPAND procedure (Gill, Murray, Saunders, and Wright, 1989) determines that the solver is stalling.
 5. **Step** (cxf_simplex_step, P3.20): Execute the primary simplex pivot operation (pricing, ratio test, basis update).
@@ -126,11 +126,11 @@ The PWL coefficient updates use a batch processing approach for efficiency, proc
 **Thread Safety:** Not thread-safe. Each concurrent solve must use an independent model with its own solver state. Thread safety for concurrent LP solving is achieved at the model level (P3.24, P3.25 cxf_solver_dispatch concurrent dispatch).
 
 **Dependencies:**
-- P3.22 (Simplex Lifecycle) - cxf_simplex_init for state allocation, cxf_simplex_postsolve for bound tightening and deallocation, cxf_solver_state_cleanup for state deallocation
+- P3.22 (Simplex Lifecycle) - cxf_simplex_init for state allocation, cxf_simplex_cleanup for bound tightening and deallocation, cxf_solver_state_cleanup for state deallocation
 - P3.21 (Simplex Phases) - cxf_simplex_crash for crash basis, cxf_simplex_perturbation for anti-cycling, cxf_simplex_phase_end for phase transition processing
-- P3.20 (Simplex Iteration) - cxf_log_iteration_progress for logging, cxf_simplex_step/step2/step3 for pivoting and bound propagation, cxf_simplex_post_iterate for stall detection
+- P3.20 (Simplex Iteration) - cxf_simplex_iterate for logging, cxf_simplex_step/step2/step3 for pivoting and bound propagation, cxf_simplex_post_iterate for stall detection
 - P3.23 (Crossover) - cxf_crossover and cxf_crossover_bounds for barrier-to-simplex crossover
-- P3.16 (Basis Factorization) - cxf_fix_variables_at_bounds for LU factorization, cxf_progress_snapshot and cxf_basis_diff for convergence detection
+- P3.16 (Basis Factorization) - cxf_basis_refactor for LU factorization, cxf_basis_snapshot and cxf_basis_diff for convergence detection
 - P1.02 (Model) - model structure access for matrix data, environment, solution data
 - P1.04 (SolverState) - solver state structure for all working data
 - P1.01 (Environment) - parameter access for solver configuration
@@ -139,7 +139,7 @@ The PWL coefficient updates use a batch processing approach for efficiency, proc
 
 ### cxf_solver_dispatch
 
-**Purpose:** Determine the appropriate solving algorithm for the model based on its structure (LP, QP, SOCP) and user parameters, dispatch to the selected solver, manage the presolve-solve-uncrush cycle, and report optimization results.
+**Purpose:** Determine the appropriate solving algorithm for the model based on its structure (LP, QP, SOCP, MIP) and user parameters, dispatch to the selected solver, manage the presolve-solve-uncrush cycle, and report optimization results.
 
 **Signature:**
 - Input: `model` : pointer-to-Model - The model to solve, with valid matrix data, environment, and optional warm-start or hint information
@@ -149,21 +149,24 @@ The PWL coefficient updates use a batch processing approach for efficiency, proc
 **Preconditions:**
 - The model must be valid (validity sentinel verified by caller in P3.24)
 - The model's matrix data must be fully populated
-- The model's environment must have configured parameters
+- The model's environment must have a valid license and configured parameters
+- For MIP models: integer variable types must be set in the matrix data
 - For QP models: the Q matrix must be populated
 - For concurrent solving: concurrent environment count must be set
 
 **Postconditions:**
-- On success: the model's status has been set, solution data has been populated (primal values, objective value, iteration count), timing accumulators have been updated, result summary has been logged, and all environment parameters have been restored to their pre-dispatch values
+- On success: the model's status has been set, solution data has been populated (primal values, objective value, iteration count, node count for MIP), timing accumulators have been updated, result summary has been logged, and all environment parameters have been restored to their pre-dispatch values
 - On error: partial cleanup has been performed, the error code has been propagated, and environment parameters have been restored
 
 **Side Effects:**
 - Backs up approximately 30 environment parameters to local storage and restores them before return
 - Initializes and clears solve state fields on the model (status, method indicator, warm-start state)
 - May allocate a presolved model (stored at the model's presolve model field) and deallocate it before return
+- May allocate SolutionInfo structure for MIP solving
 - Modifies model's solution arrays (primal, dual, slack, reduced costs, objective, bounds)
 - Computes and stores a model fingerprint (hash) for change detection
 - Logs detailed optimization results (iterations, nodes, time, objective, gap, status)
+- Issues callbacks for MIP progress and solution events
 - May create and destroy concurrent solver threads
 
 **Error Conditions:**
@@ -176,7 +179,7 @@ The PWL coefficient updates use a batch processing approach for efficiency, proc
 
 This function is the algorithm routing and lifecycle management layer, sitting between the solve entry chain (P3.24) and the individual solver implementations (cxf_solve_lp for simplex, cxf_solve_barrier for interior point, and others). It handles the complexity of selecting the right algorithm, managing presolve, and extracting solutions for all model types.
 
-**Phase 1: Parameter backup.** The function saves approximately 30 environment parameters to a local backup structure. These parameters span method selection, tolerances, heuristic settings, thread counts, and algorithm tuning. This backup is essential because solver sub-functions may modify environment parameters during the solve (for example, adjusting tolerances when encountering numerical difficulty or overriding method selection for sub-problems). All parameters are restored from this backup before the function returns, regardless of success or failure.
+**Phase 1: Parameter backup.** The function saves approximately 30 environment parameters to a local backup structure. These parameters span method selection, tolerances, cut control, branching strategy, heuristic settings, thread counts, and algorithm tuning. This backup is essential because solver sub-functions may modify environment parameters during the solve (for example, adjusting tolerances when encountering numerical difficulty or overriding method selection for sub-problems). All parameters are restored from this backup before the function returns, regardless of success or failure.
 
 **Phase 2: Solve state initialization.** The function clears and initializes solve state fields on the model:
 - The Q-matrix positive-semidefiniteness adjustment flag is cleared
@@ -186,13 +189,15 @@ This function is the algorithm routing and lifecycle management layer, sitting b
 
 **Phase 3: Model type detection.** The function inspects the model to determine its structure and select the appropriate solving algorithm:
 
-1. **Quadratic detection.** If the model has a quadratic objective (Q matrix with nonzero terms), it is classified as QP. For QP models, the default method is barrier (interior point), since simplex methods for QP require specialized extensions. If the user requested PDHG (first-order method) for a QP, a warning is logged and the method is adjusted.
+1. **MIP detection.** The function checks whether the model contains integer variables (binary, integer, semi-continuous, or semi-integer types), SOS constraints, or other integrality features. If so, the model is classified as MIP, and concurrent environment setup is performed if concurrent MIP solving is configured.
 
-2. **SOCP detection.** If the model contains second-order cone constraints, it is classified as SOCP. SOCP models are restricted to the barrier method, since simplex and first-order methods do not natively handle conic constraints.
+2. **Quadratic detection.** If the model has a quadratic objective (Q matrix with nonzero terms), it is classified as QP. For QP models, the default method is barrier (interior point), since simplex methods for QP require specialized extensions. If the user requested PDHG (first-order method) for a QP, a warning is logged and the method is adjusted.
 
-3. **Non-convex QP handling.** If the model is a non-convex QP (the Q matrix is indefinite), the function checks the NonConvex parameter. If non-convex solving is not enabled, the function returns the Q-not-PSD error with a diagnostic message. If enabled, the function adjusts the solving strategy (typically linearizing the quadratic terms via the PreQLinearize parameter).
+3. **SOCP detection.** If the model contains second-order cone constraints, it is classified as SOCP. SOCP models are restricted to the barrier method, since simplex and first-order methods do not natively handle conic constraints.
 
-4. **Concurrent restrictions.** Concurrent solving is restricted for certain model types: QP models cannot use concurrent simplex (only concurrent barrier variants), and SOCP models cannot use concurrent solving at all.
+4. **Non-convex QP handling.** If the model is a non-convex QP (the Q matrix is indefinite), the function checks the NonConvex parameter. If non-convex solving is not enabled, the function returns the Q-not-PSD error with a diagnostic message. If enabled, the function adjusts the solving strategy (typically linearizing the quadratic terms via the PreQLinearize parameter).
+
+5. **Concurrent restrictions.** Concurrent solving is restricted for certain model types: QP models cannot use concurrent simplex (only concurrent barrier variants), and SOCP models cannot use concurrent solving at all.
 
 **Phase 4: Method selection.** For LP models with AUTO method selection, the function applies a heuristic scoring procedure to choose between simplex and barrier:
 - Problem structure indicators (sparsity, dimension ratio, constraint types) are evaluated via a multi-factor scoring system
@@ -212,27 +217,39 @@ This function is the algorithm routing and lifecycle management layer, sitting b
 
 - **Barrier (method 2):** Dispatches to the barrier (interior point) solver. If crossover is enabled (the default), the barrier result is followed by a crossover phase to obtain a vertex solution.
 
-- **PDHG (method 6):** Dispatches to the primal-dual hybrid gradient solver, a first-order method suitable for large LP problems where moderate accuracy is acceptable. This method is LP-only and does not support QP.
+- **PDHG (method 6):** Dispatches to the primal-dual hybrid gradient solver, a first-order method suitable for large LP problems where moderate accuracy is acceptable. This method is LP-only and does not support QP or MIP.
 
 - **Simplex (methods 0, 1):** Dispatches to the simplex solver (cxf_solve_lp, this module). Method 0 selects primal simplex and method 1 selects dual simplex. If warm-start information or variable hints are available, they are passed to the simplex solver for initialization.
+
+- **MIP dispatch:** For MIP models, the function first allocates a SolutionInfo structure for tracking incumbent solutions, then dispatches to the solver (which internally uses branch-and-bound with LP relaxations). The solver may create a presolved model and solve it instead of the original.
 
 **Phase 7: Warm-start and hint processing.** Before dispatching simplex solves, the function processes available warm-start information:
 - If a previous basis is available, it is passed as the starting basis
 - If variable hints are provided (hint values and hint validity indicators), they are used to guide the initial solution
+- If branch priorities are set, they are passed to the solver for branching decisions
 - If partition data is available, it is used by the concurrent solver for workload distribution
 
-**Phase 8: Solution extraction and uncrushing.** After the solver returns:
+**Phase 8: Presolve and MIP handling.** For MIP models:
+1. The solver may create a presolved (reduced) copy of the model at the model's presolve model field
+2. The presolved model is solved instead of the original
+3. After the presolved model is solved, the solution must be "uncrushed" — mapped back from the presolved variable space to the original variable space
+4. Solution uncrushing copies the primal and dual values, adjusting for variable fixings, bound tightenings, and constraint eliminations that occurred during presolve
+5. MIP result processing adjusts the status if needed (for example, if presolve detected infeasibility without calling the solver)
+
+**Phase 9: Solution extraction and uncrushing.** After the solver returns:
 1. Statistics (iteration count, node count, runtime) are copied from the solver's internal accounting to the model
 2. For presolved models, the solution is uncrushed to the original variable space
 3. Primal solution values are allocated (if not already) and populated
 4. The objective value is computed from the primal solution and the original objective coefficients (as a verification against the solver's reported objective)
+5. If the model has a solution pool (multiple solutions from MIP), the pool entries are also extracted
 
-**Phase 9: Result reporting.** The function logs a detailed summary of the optimization results:
+**Phase 10: Result reporting.** The function logs a detailed summary of the optimization results:
 - For LP: iteration count, runtime, objective value, and status message
+- For MIP: additionally reports node count, thread count, solution count, best objective, best bound, optimality gap (as a percentage), and gap computation details
 - Q-not-PSD errors receive a specific diagnostic message explaining the issue
 - The status is translated to a human-readable message (Optimal, Infeasible, Unbounded, Time limit, etc.)
 
-**Phase 10: Parameter restore.** All approximately 30 environment parameters saved in Phase 1 are restored from the backup structure. This occurs on both the success and error paths, ensuring the environment is always returned to its pre-dispatch state.
+**Phase 11: Parameter restore.** All approximately 30 environment parameters saved in Phase 1 are restored from the backup structure. This occurs on both the success and error paths, ensuring the environment is always returned to its pre-dispatch state.
 
 **Thread Safety:** Not thread-safe at the function level. However, the function may internally launch concurrent solver threads when concurrent methods are selected. Thread safety for the concurrent solvers is managed internally by creating independent model copies for each thread. The caller must ensure that the model is not modified by other threads during the dispatch.
 
@@ -265,14 +282,14 @@ cxf_optimize (P3.24, public API)
               -> cxf_simplex_crash (P3.21) -- crash basis
               -> cxf_crossover (P3.23) -- barrier crossover
               -> [iteration loop]:
-                -> cxf_log_iteration_progress (P3.20)
+                -> cxf_simplex_iterate (P3.20)
                 -> cxf_simplex_step (P3.20)
                 -> cxf_simplex_step2 (P3.20)
                 -> cxf_simplex_step3 (P3.20)
                 -> cxf_simplex_phase_end (P3.21)
                 -> cxf_simplex_perturbation (P3.21)
               -> cxf_solution_extract
-              -> cxf_simplex_postsolve (P3.22)
+              -> cxf_simplex_cleanup (P3.22)
 ```
 
 cxf_solver_dispatch handles the branching point where the solve flow splits by algorithm type (simplex vs. barrier vs. concurrent vs. PDHG). cxf_solve_lp handles the LP-specific pipeline after the algorithm has been selected.
@@ -283,7 +300,7 @@ Both functions implement a parameter save/restore pattern to protect the environ
 
 - **cxf_solve_lp** saves and restores a small set of LP-specific parameters (iteration limits, tolerances, mode flags) that may be modified by the inner loop or sub-functions.
 
-- **cxf_solver_dispatch** saves and restores approximately 30 parameters spanning the full range of solver configuration (method, tolerances, threading, heuristics, presolve settings). This broader backup is necessary because the dispatch function may invoke solvers that modify any of these settings.
+- **cxf_solver_dispatch** saves and restores approximately 30 parameters spanning the full range of solver configuration (method, tolerances, cuts, branching, threading, heuristics, presolve settings). This broader backup is necessary because the dispatch function may invoke solvers that modify any of these settings.
 
 Both functions restore parameters on all exit paths (success, error, early termination), ensuring the environment is never left in a modified state after a solve completes. This invariant is critical for users who call cxf_optimize repeatedly on the same model.
 
@@ -303,7 +320,7 @@ This two-level structure is related to the long-step/short-step pivot strategies
 
 cxf_solver_dispatch implements a multi-factor heuristic for automatic method selection when the user specifies Method=AUTO:
 
-1. **Model type constraints:** SOCP forces barrier; QP defaults to barrier.
+1. **Model type constraints:** SOCP forces barrier; QP defaults to barrier; MIP uses branch-and-bound with LP relaxation method determined recursively.
 
 2. **Problem size and structure:** For LP models, the heuristic evaluates multiple problem characteristics and computes an aggregate score. The scoring system works as follows:
 
@@ -320,7 +337,7 @@ cxf_solver_dispatch implements a multi-factor heuristic for automatic method sel
 
 3. **Warm-start availability:** Warm-start information (a previous basis or variable hints) strongly favors simplex selection, since interior-point methods cannot directly exploit warm-start data. When a warm start is available and the thread count is below a moderate threshold, the system may additionally adjust the concurrent configuration to include a warm-started simplex instance (Bixby, 2002).
 
-4. **Concurrent fallback:** When concurrent methods are available (sufficient thread count), the dispatch may select concurrent solving to hedge between methods, running simplex and barrier simultaneously and returning whichever finishes first. The concurrent option is preferred when the scoring is ambiguous (no strong preference for either method), since it hedges against the risk of choosing the slower algorithm.
+4. **Concurrent fallback:** When concurrent methods are available (sufficient thread count and appropriate license), the dispatch may select concurrent solving to hedge between methods, running simplex and barrier simultaneously and returning whichever finishes first. The concurrent option is preferred when the scoring is ambiguous (no strong preference for either method), since it hedges against the risk of choosing the slower algorithm.
 
 The specific scoring weights and thresholds for the auto-selection heuristic are solver-tuning decisions that vary across solver versions. The general framework of evaluating problem structure to select between simplex and barrier is a well-established practice in the LP solver literature (Bixby, 2002; Maros, 2003).
 
@@ -372,17 +389,17 @@ This PWL handling extends the standard simplex method to handle piecewise-linear
 
 ### Presolve-Solve-Uncrush Cycle
 
-cxf_solver_dispatch manages the full presolve cycle:
+cxf_solver_dispatch manages the full presolve cycle for MIP models:
 
 1. **Presolve:** The presolve phase creates a reduced copy of the model by applying reductions (variable fixing, constraint elimination, bound tightening, coefficient strengthening). The reduced model is stored at the model's presolve model field.
 
-2. **Solve:** The reduced model is solved instead of the original.
+2. **Solve:** The reduced model is solved instead of the original. For MIP, this involves branch-and-bound with LP relaxations at each node.
 
 3. **Uncrush:** The solution from the reduced model is mapped back to the original model's variable space. This uncrushing reverses each presolve reduction in reverse order: re-introducing eliminated variables by computing their values from the remaining solution, relaxing tightened bounds, and restoring eliminated constraints.
 
 4. **Verification:** The objective value is recomputed from the original model's coefficients and the uncrushed solution as a consistency check.
 
-This three-phase pattern is standard in modern LP solvers (Andersen and Andersen, 1995).
+This three-phase pattern is standard in modern LP solvers (Achterberg et al., 2020).
 
 ### Concurrent Solving Architecture
 
@@ -449,19 +466,24 @@ Both functions require exclusive access to the model during the solve. Concurren
 
 The presolve system is **outside the scope of this specification**. While cxf_solver_dispatch orchestrates the presolve-solve-uncrush cycle (creating a reduced model, solving it, and mapping the solution back to the original variable space), the presolve reduction techniques themselves -- the specific transformations that simplify the model before solving -- are not specified here.
 
-Presolve for LP problems encompasses a wide range of reduction techniques including:
+Presolve for LP and MIP problems encompasses a wide range of reduction techniques including:
 - Bound tightening (variable and constraint)
 - Redundant constraint detection and removal
 - Variable fixing (singleton columns, forcing constraints)
 - Coefficient strengthening
+- Probing (for MIP)
+- Clique and set-packing detection
 - Substitution of implied free variables
 - Parallel row and column detection
 
 These techniques are extensively documented in the published literature:
 - Andersen, E.D. and Andersen, K.D. (1995). "Presolving in Linear Programming." *Mathematical Programming*, 71(2):221-245. (Foundational LP presolve techniques.)
+- Achterberg, T., Bixby, R.E., Gu, Z., Rothberg, E., and Weninger, D. (2020). "Presolve Reductions in Mixed Integer Programming." *INFORMS Journal on Computing*, 32(2):473-506. (Comprehensive survey of MIP presolve techniques.)
+- Savelsbergh, M.W.P. (1994). "Preprocessing and Probing Techniques for Mixed Integer Programming Problems." *ORSA Journal on Computing*, 6(4):445-454. (Probing and preprocessing for MIP.)
 
 The solve pipeline's interaction with presolve is documented in this specification:
-- cxf_solver_dispatch Phase 8 describes solution uncrushing (reversing presolve reductions to recover the original-space solution).
+- cxf_solver_dispatch Phase 8 describes the presolve-solve-uncrush cycle for MIP models.
+- cxf_solver_dispatch Phase 9 describes solution uncrushing (reversing presolve reductions to recover the original-space solution).
 - cxf_solve_lp Phase 9 describes status code remapping that accounts for presolve's potential to interchange infeasible and unbounded statuses.
 
 A separate presolve module specification would be required to cover the reduction techniques in detail.
@@ -484,6 +506,7 @@ A separate presolve module specification would be required to cover the reductio
 
 ## References
 
+- Achterberg, T., Bixby, R.E., Gu, Z., Rothberg, E., and Weninger, D. (2020). "Presolve Reductions in Mixed Integer Programming." *INFORMS Journal on Computing*, 32(2):473-506.
 - Andersen, E.D. and Andersen, K.D. (1995). "Presolving in Linear Programming." *Mathematical Programming*, 71(2):221-245.
 - Bixby, R.E. (2002). "Solving Real-World Linear Programs: A Decade and More of Progress." *Operations Research*, 50(1):3-15.
 - Bixby, R.E. and Saltzman, M.J. (1994). "Recovering an Optimal LP Basis from an Interior Point Solution." *Operations Research Letters*, 15(4):169-178.
@@ -494,3 +517,4 @@ A separate presolve module specification would be required to cover the reductio
 - Gould, N.I.M. and Reid, J.K. (1989). "New crash procedures for large systems of linear constraints." *Mathematical Programming*, 45(1-3):475-501.
 - Maros, I. (2003). *Computational Techniques of the Simplex Method*. Springer. International Series in Operations Research and Management Science, Vol. 61.
 - Megiddo, N. (1991). "On Finding Primal- and Dual-Optimal Bases." *ORSA Journal on Computing*, 3(1):63-65.
+- Savelsbergh, M.W.P. (1994). "Preprocessing and Probing Techniques for Mixed Integer Programming Problems." *ORSA Journal on Computing*, 6(4):445-454.

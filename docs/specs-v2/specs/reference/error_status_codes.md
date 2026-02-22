@@ -52,6 +52,13 @@ Error codes are returned by solver functions to indicate the nature of a failure
 | QCP_EQUALITY_CONSTRAINT | 10021 | A quadratic equality constraint was specified, which is non-convex. The solver may suggest setting the NonConvex parameter. |
 | EXCEED_2B_NONZEROS | 10025 | The coefficient matrix or LU factorization has more than two billion nonzero entries, exceeding internal index limits. |
 
+### License Errors
+
+| Name | Value | Description |
+|------|-------|-------------|
+| NO_LICENSE | 10009 | Failed to obtain a valid license. The solver was not properly licensed or the license had expired. |
+| SIZE_LIMIT_EXCEEDED | 10010 | The model exceeds the size limit imposed by a restricted (demo or academic) license. |
+
 ### I/O and File Errors
 
 | Name | Value | Description |
@@ -59,16 +66,27 @@ Error codes are returned by solver functions to indicate the nature of a failure
 | CALLBACK | 10011 | An error occurred in a user-provided callback function. |
 | FILE_READ | 10012 | Failed to read the requested file. |
 | FILE_WRITE | 10013 | Failed to write the requested file. |
+| NODEFILE | 10019 | An error occurred reading or writing a node file during MIP optimization. |
 
 ### Feature and Compatibility Errors
 
 | Name | Value | Description |
 |------|-------|-------------|
 | IIS_NOT_INFEASIBLE | 10015 | Attempted to perform infeasibility analysis (IIS computation) on a model that is feasible. |
+| NOT_FOR_MIP | 10016 | The requested operation is not valid for a integer model (e.g., requesting continuous relaxation information). |
 | NOT_SUPPORTED | 10024 | The requested feature is not supported in the current usage environment or configuration. |
 | INVALID_PIECEWISE_OBJ | 10026 | A piecewise-linear objective function violated required properties (e.g., breakpoints not in non-decreasing order). |
 | UPDATEMODE_CHANGE | 10027 | Attempted to modify the UpdateMode parameter after model creation, which is not permitted. |
 | TUNE_MODEL_TYPES | 10031 | Attempted to tune models of different types simultaneously, which is not supported. |
+
+### Network and Server Errors
+
+| Name | Value | Description |
+|------|-------|-------------|
+| NETWORK | 10022 | A problem occurred communicating with a Compute Server. |
+| JOB_REJECTED | 10023 | The Compute Server was unable to process the submitted job (e.g., server queue is full). |
+| CLOUD | 10028 | An error occurred launching or communicating with a cloud computing job. |
+| CSWORKER | 10030 | A client-server application error occurred on the worker side. |
 
 ### Security Errors
 
@@ -102,7 +120,7 @@ Optimization status codes describe the outcome of an optimization call. They are
 |------|-------|-------------|
 | LOADED | 1 | Model is loaded, but no solution information is available. This is the initial state before optimization. |
 | OPTIMAL | 2 | Model was solved to optimality (subject to tolerances), and an optimal solution is available. |
-| SUBOPTIMAL | 13 | Unable to satisfy optimality tolerances; a sub-optimal solution is available. |
+| SUBOPTIMAL | 13 | Unable to satisfy optimality tolerances; a sub-optimal solution is available. This may occur when node relaxations in MIP cannot be solved to full precision. |
 
 ### Infeasibility and Unboundedness
 
@@ -118,7 +136,10 @@ Optimization status codes describe the outcome of an optimization call. They are
 | Name | Value | Description |
 |------|-------|-------------|
 | ITERATION_LIMIT | 7 | Optimization terminated because the simplex or barrier iteration limit was reached. |
+| NODE_LIMIT | 8 | Optimization terminated because the number of branch-and-cut nodes explored exceeded the NodeLimit parameter. |
 | TIME_LIMIT | 9 | Optimization terminated because the elapsed time exceeded the TimeLimit parameter. |
+| SOLUTION_LIMIT | 10 | Optimization terminated because the number of feasible solutions found reached the SolutionLimit parameter. |
+| USER_OBJ_LIMIT | 15 | A user-specified objective limit (BestObjStop or BestBdStop parameter) was reached. |
 | WORK_LIMIT | 16 | Optimization terminated because the computational work expended exceeded the WorkLimit parameter. |
 | MEM_LIMIT | 17 | Optimization terminated because allocated memory exceeded the SoftMemLimit parameter. |
 
@@ -126,7 +147,7 @@ Optimization status codes describe the outcome of an optimization call. They are
 
 | Name | Value | Description |
 |------|-------|-------------|
-| INTERRUPTED | 11 | Optimization was terminated by the user (e.g., via Ctrl-C or a callback requesting termination). |
+| INTERRUPTED | 11 | Optimization was terminated by the user (e.g., via Ctrl-C, a callback requesting termination, or a license becoming invalid during optimization). |
 | NUMERIC | 12 | Optimization was terminated due to unrecoverable numerical difficulties. |
 | INPROGRESS | 14 | An asynchronous optimization call was made, but the associated optimization run is not yet complete. |
 

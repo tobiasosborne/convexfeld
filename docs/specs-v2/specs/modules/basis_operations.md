@@ -6,9 +6,9 @@ The Basis Operations module manages the Product Form of the Inverse (PFI) repres
 
 ## Functions
 
-### cxf_fix_variables_at_bounds
+### cxf_basis_refactor
 
-**Purpose:** Identify and fix variables at their bounds during simplex iterations, creating eta vectors for the PFI representation to reduce the working basis size and improve numerical stability.
+**Purpose:** Identify and fix variables at their bounds during simplex iterations, creating eta vectors for the PFI representation to reduce the working basis size and improve numerical stability. Despite its name, this function does not perform LU refactorization; it performs constraint-driven variable fixing.
 
 **Signature:**
 - Input: `state` : pointer-to-SolverState - The solver's working state containing the basis, constraint matrix, bounds, and objective data
@@ -69,7 +69,7 @@ The function processes a list of candidate constraints to identify variables tha
 
 ---
 
-### cxf_progress_snapshot
+### cxf_basis_snapshot
 
 **Purpose:** Capture a lightweight snapshot of the solver's iteration counters and progress metrics, establishing a baseline for subsequent cycling detection via cxf_basis_diff.
 
@@ -102,7 +102,7 @@ The function copies a fixed set of integer counter values from the solver state 
 
 The snapshot is extremely lightweight: it consists of exactly SNAPSHOT_SIZE integer copies with no loops over problem data, no memory allocation, and O(1) time complexity. It is designed to be called frequently (e.g., before each batch of simplex iterations) without measurable overhead.
 
-**Naming history:** Formerly `cxf_basis_snapshot`; renamed to clarify that this function captures only scalar counters (not the variable status array, objective value, or any basis matrix data). The companion function cxf_basis_diff computes a weighted difference score from these counters.
+Note on naming: Despite its name suggesting a full basis copy, this function captures only scalar counters -- not the variable status array, not the objective value, and not any basis matrix data. A more descriptive name would be "progress snapshot." The companion function cxf_basis_diff computes a weighted difference score from these counters.
 
 **Thread Safety:** Not thread-safe. The counter values are read without synchronization; must be called from the same thread performing simplex iterations.
 
@@ -118,12 +118,12 @@ The snapshot is extremely lightweight: it consists of exactly SNAPSHOT_SIZE inte
 
 **Signature:**
 - Input: `state` : pointer-to-SolverState - The current solver state with updated iteration counters
-- Input: `snapshot` : pointer-to-array-of-int - A previously captured snapshot from cxf_progress_snapshot
+- Input: `snapshot` : pointer-to-array-of-int - A previously captured snapshot from cxf_basis_snapshot
 - Output: double - A non-negative progress score; higher values indicate more progress since the snapshot
 
 **Preconditions:**
 - The solver state must be the same state from which the snapshot was captured (same solve instance)
-- The snapshot must have been populated by a prior call to cxf_progress_snapshot
+- The snapshot must have been populated by a prior call to cxf_basis_snapshot
 
 **Postconditions:**
 - Returns a non-negative double representing the weighted, normalized amount of solver progress since the snapshot
@@ -160,7 +160,7 @@ All deltas are clamped to zero (negative progress is treated as no progress), an
 
 **Dependencies:**
 - P1.04 (SolverState) - reads current counter values and the nonzero count for normalization
-- cxf_progress_snapshot (this module) - produces the snapshot array that this function compares against
+- cxf_basis_snapshot (this module) - produces the snapshot array that this function compares against
 - cxf_simplex_perturbation (P3.14) - the anti-cycling action triggered when this function reports low progress
 
 ---
@@ -196,7 +196,7 @@ All deltas are clamped to zero (negative progress is treated as no progress), an
 - No Q-matrix contributions for the variable -> returns success immediately (no eta created)
 
 **Behavioral Description:**
-This function is part of the PFI update mechanism for problems with quadratic objectives. When a variable with nonzero Q-matrix entries is being fixed at a bound (typically called from cxf_fix_variables_at_bounds), the solver must record the quadratic contributions so that reduced costs of neighboring variables can be correctly maintained during warm-start restoration or crossover.
+This function is part of the PFI update mechanism for problems with quadratic objectives. When a variable with nonzero Q-matrix entries is being fixed at a bound (typically called from cxf_basis_refactor), the solver must record the quadratic contributions so that reduced costs of neighboring variables can be correctly maintained during warm-start restoration or crossover.
 
 The function proceeds as follows:
 
@@ -220,7 +220,7 @@ The function proceeds as follows:
 - P1.04 (SolverState) - reads Q-matrix data, bounds, and eta management fields
 - P1.08 (EtaVector) - creates Variant 3 (WARM_START) eta vector
 - P2.01 (Product Form of the Inverse) - memory pool allocation and eta chain management
-- cxf_fix_variables_at_bounds (this module) - primary caller during variable fixing with quadratic objectives
+- cxf_basis_refactor (this module) - primary caller during variable fixing with quadratic objectives
 
 ---
 
@@ -294,23 +294,27 @@ After each extraction phase, the performance counter is incremented proportional
 
 ### Naming Clarifications
 
-**Naming history:** Formerly `cxf_basis_refactor`; renamed to `cxf_fix_variables_at_bounds` to clarify that this function identifies and fixes variables at bounds to reduce the working basis size, rather than performing LU refactorization. The actual benefit is a smaller effective basis, which speeds up subsequent FTRAN/BTRAN operations. True LU refactorization of the basis matrix is a separate operation (see P2.01, Step 6: Refactorization).
+Several function names in this module are historically misleading:
+
+- **cxf_basis_refactor** does not perform LU refactorization. It identifies and fixes variables at bounds to reduce the working basis size. The actual benefit is a smaller effective basis, which speeds up subsequent FTRAN/BTRAN operations. True LU refactorization of the basis matrix is a separate operation (see P2.01, Step 6: Refactorization).
+
+- **cxf_basis_snapshot** does not capture the actual basis (variable status array, LU factors, or solution vector). It captures only a fixed-size set of scalar iteration counters. A more descriptive name would be "progress counter snapshot."
 
 ### Relationships Between Functions
 
 The five functions in this module interact as follows:
 
-1. **cxf_fix_variables_at_bounds** is the primary variable-fixing function. During its fixing phase, it may call **cxf_basis_warm** to record quadratic objective contributions for variables that have Q-matrix entries. Both functions create eta vectors that are prepended to the same eta chain managed by the SolverState.
+1. **cxf_basis_refactor** is the primary variable-fixing function. During its fixing phase, it may call **cxf_basis_warm** to record quadratic objective contributions for variables that have Q-matrix entries. Both functions create eta vectors that are prepended to the same eta chain managed by the SolverState.
 
-2. **cxf_pivot_with_eta** is called independently from the simplex iteration loop (not from this module's other functions). It records standard pivot operations, while cxf_fix_variables_at_bounds records variable-fixing operations. Both contribute to the same eta chain, and both types of records must be processed during FTRAN and BTRAN.
+2. **cxf_pivot_with_eta** is called independently from the simplex iteration loop (not from this module's other functions). It records standard pivot operations, while cxf_basis_refactor records variable-fixing operations. Both contribute to the same eta chain, and both types of records must be processed during FTRAN and BTRAN.
 
-3. **cxf_progress_snapshot** and **cxf_basis_diff** form a matched pair for cycling detection. The snapshot captures a baseline, and the diff measures progress against that baseline. They are called from the main LP solve driver (cxf_solve_lp), not from other functions in this module.
+3. **cxf_basis_snapshot** and **cxf_basis_diff** form a matched pair for cycling detection. The snapshot captures a baseline, and the diff measures progress against that baseline. They are called from the main LP solve driver (cxf_solve_lp), not from other functions in this module.
 
 ### Eta Vector Types Created by This Module
 
 | Function | Eta Type | Variant (P1.08) | Purpose |
 |----------|----------|------------------|---------|
-| cxf_fix_variables_at_bounds | VARIABLE_FIX | Variant 2 (compact or full) | Records variable fixed at bound |
+| cxf_basis_refactor | VARIABLE_FIX | Variant 2 (compact or full) | Records variable fixed at bound |
 | cxf_basis_warm | WARM_START | Variant 3 | Records quadratic objective contributions |
 | cxf_pivot_with_eta | PIVOT | Variant 1 (with optional column data) | Records simplex pivot transformation |
 
@@ -320,14 +324,14 @@ All eta vectors created by this module are allocated from the SolverState's aren
 
 ### Interaction with the Pricing Subsystem
 
-cxf_fix_variables_at_bounds is the only function in this module that interacts with the pricing subsystem. When a variable is fixed, the function invalidates the pricing cache entry for that variable (so the pricer does not consider it for future pivot selection) and sends an update notification so the pricing state reflects the reduced problem size. cxf_pivot_with_eta does not interact with pricing directly; pricing updates after a pivot are handled by the calling simplex step function.
+cxf_basis_refactor is the only function in this module that interacts with the pricing subsystem. When a variable is fixed, the function invalidates the pricing cache entry for that variable (so the pricer does not consider it for future pivot selection) and sends an update notification so the pricing state reflects the reduced problem size. cxf_pivot_with_eta does not interact with pricing directly; pricing updates after a pivot are handled by the calling simplex step function.
 
 ### Thread Safety Summary
 
 | Function | Thread Safety | Notes |
 |----------|---------------|-------|
-| cxf_fix_variables_at_bounds | Not thread-safe | Modifies solver state, eta chain, pricing state, and constraint matrix |
-| cxf_progress_snapshot | Not thread-safe | Reads solver counters without synchronization |
+| cxf_basis_refactor | Not thread-safe | Modifies solver state, eta chain, pricing state, and constraint matrix |
+| cxf_basis_snapshot | Not thread-safe | Reads solver counters without synchronization |
 | cxf_basis_diff | Not thread-safe | Reads solver counters without synchronization |
 | cxf_basis_warm | Not thread-safe | Modifies eta chain and allocates from memory pool |
 | cxf_pivot_with_eta | Not thread-safe | Modifies eta chain, eta counts, and allocates from memory pool |

@@ -2,9 +2,40 @@
 
 ## Purpose
 
-This module provides pure query functions that inspect a model's mathematical structure to determine its problem class and solution availability. The model type checkers classify the problem as LP, QP, or SOCP by examining properties of the model's matrix data (variable types, constraint types, and special structure counts) without modifying any state. Two additional state-checking functions inspect the solver state to determine whether active optimization state or dual solution data is available. All five functions are lightweight, side-effect-free queries used by the solver dispatch logic to route optimization to the appropriate algorithm and by the attribute system to determine what solution data can be reported.
+This module provides pure query functions that inspect a model's mathematical structure to determine its problem class and solution availability. The model type checkers classify the problem as LP, QP, or SOCP by examining properties of the model's matrix data (variable types, constraint types, and special structure counts) without modifying any state. Two additional state-checking functions inspect the solver state to determine whether active optimization state or dual solution data is available. All six functions are lightweight, side-effect-free queries used by the solver dispatch logic to route optimization to the appropriate algorithm and by the attribute system to determine what solution data can be reported.
 
 ## Functions
+
+### cxf_is_mip_model
+
+**Purpose:** Determines whether a model contains any elements that require the mixed-integer programming (MIP) solver rather than a continuous solver.
+
+**Signature:**
+- Input: model : pointer-to-Model - The model to inspect
+- Output: int - 1 if the model is a MIP, 0 if the model is a pure continuous problem (LP or QP)
+
+**Preconditions:**
+- model may be null (returns 0 in that case)
+
+**Postconditions:**
+- The return value accurately reflects whether any MIP-qualifying elements are present in the model's matrix data
+- No state has been modified
+
+**Side Effects:**
+- None. This is a pure query function.
+
+**Error Conditions:**
+- If model is null, returns 0
+- If the model's matrix data pointer is null, returns 0
+
+**Behavioral Description:**
+This function checks whether the model contains any mathematical elements that require branch-and-bound or other MIP-specific solving techniques. It inspects the model's matrix data for the following MIP-qualifying properties: the presence of a direct MIP solve flag, integer variables, binary variables, SOS (Special Ordered Set) constraints, indicator constraints, piecewise-linear objective terms, semi-continuous or semi-integer variables, quadratic constraints (which may indicate non-convex MIQCP), a multi-objective or scenario optimization flag, and a force-non-convex flag. If any of these properties is present (count greater than zero or flag nonzero), the function returns 1. If none are present, the model is a pure continuous problem and the function returns 0. The function performs null-safe access: a null model or null matrix data causes an immediate return of 0.
+
+**Thread Safety:** Safe. Read-only access to model and matrix data fields. No state modification.
+
+**Dependencies:** None. Accesses only the Model's matrix data pointer and fields within MatrixData.
+
+---
 
 ### cxf_is_quadratic
 
@@ -29,7 +60,7 @@ This module provides pure query functions that inspect a model's mathematical st
 - If the model's matrix data pointer is null, returns 0
 
 **Behavioral Description:**
-This function determines whether a model has general constraints (such as absolute value, min/max, or piecewise-linear constraints) that can be handled by continuous quadratic optimization, without any discrete elements that would require specialized handling. There are two paths to a positive result: (1) the Environment has a force-QP parameter set, which overrides all other checks and immediately returns 1, or (2) the model has general constraints present AND none of the following disqualifying elements: binary variables, indicator constraints, semi-continuous variables, semi-integer variables, nonlinear programming variables (when NLP mode is enabled in the Environment), other nonlinear elements, or multi-scenario configurations. If general constraints are absent (the model is a pure LP or has only standard linear/quadratic objective terms), the function returns 0 -- the QP classification applies only when general constraints are present that benefit from continuous QP handling.
+This function determines whether a model has general constraints (such as absolute value, min/max, or piecewise-linear constraints) that can be handled by continuous quadratic optimization, without any discrete elements that would require branch-and-bound. There are two paths to a positive result: (1) the Environment has a force-QP parameter set, which overrides all other checks and immediately returns 1, or (2) the model has general constraints present AND none of the following disqualifying elements: binary variables, indicator constraints, semi-continuous variables, semi-integer variables, nonlinear programming variables (when NLP mode is enabled in the Environment), other nonlinear elements, or multi-scenario configurations. If general constraints are absent (the model is a pure LP or has only standard linear/quadratic objective terms), the function returns 0 -- the QP classification applies only when general constraints are present that benefit from continuous QP handling.
 
 **Thread Safety:** Safe. Read-only access to model, matrix data, and environment fields. No state modification.
 
@@ -163,11 +194,12 @@ This function determines whether dual solution data (such as shadow prices and r
 
 ### Solver Dispatch Architecture
 
-The three model type checking functions (cxf_is_quadratic, cxf_is_socp_internal, cxf_is_socp) form the classification layer that the optimizer uses to route a problem to the appropriate solver algorithm. The dispatch logic typically evaluates these functions in a priority order:
+The four model type checking functions (cxf_is_mip_model, cxf_is_quadratic, cxf_is_socp_internal, cxf_is_socp) form the classification layer that the optimizer uses to route a problem to the appropriate solver algorithm. The dispatch logic typically evaluates these functions in a priority order:
 
-1. **cxf_is_socp_internal**: If true, route to the SOCP/barrier solver
-2. **cxf_is_quadratic**: If true, route to the QP solver
-3. **Default**: Route to the LP simplex or barrier solver
+1. **cxf_is_mip_model**: If true, route to the MIP branch-and-bound solver
+2. **cxf_is_socp_internal**: If true (and not MIP), route to the SOCP/barrier solver
+3. **cxf_is_quadratic**: If true, route to the QP solver
+4. **Default**: Route to the LP simplex or barrier solver
 
 cxf_is_socp (the public variant) is used for reporting and display rather than dispatch.
 
@@ -190,20 +222,21 @@ The type-checking functions inspect the following categories of model properties
 
 | Category | Properties Checked |
 |----------|-------------------|
-| **Discrete variables** | Semi-continuous variable count, semi-integer variable count |
+| **Discrete variables** | Integer variable count, binary variable count, semi-continuous variable count, semi-integer variable count |
 | **Special constraints** | SOS constraint count, indicator constraint count, general constraint count, quadratic constraint count, explicit cone count |
 | **Nonlinear elements** | NLP variable count (conditional on NLP mode), other nonlinear element count, piecewise-linear objective count |
-| **Configuration flags** | Optimization flag, force-non-convex flag, multi-scenario count |
+| **Configuration flags** | MIP solve flag, optimization flag, force-non-convex flag, multi-scenario count |
 | **Solve state** | Solution status, solver active flag, dual data availability, basis factorization availability |
 
 ### Pure Query Guarantee
 
-All five functions in this module are guaranteed to be side-effect free. They perform no memory allocation, no state modification, and no I/O. They read only from existing model structures and return a boolean-like integer. This makes them safe to call from any context, including callbacks, attribute getters, and concurrent read operations.
+All six functions in this module are guaranteed to be side-effect free. They perform no memory allocation, no state modification, and no I/O. They read only from existing model structures and return a boolean-like integer. This makes them safe to call from any context, including callbacks, attribute getters, and concurrent read operations.
 
 ## References
 
 - Dantzig, G.B. (1963). *Linear Programming and Extensions*. Princeton University Press. (LP classification and simplex optimality conditions.)
 - Lobo, M.S., Vandenberghe, L., Boyd, S., and Lebret, H. (1998). "Applications of Second-Order Cone Programming." *Linear Algebra and its Applications*, 284(1-3):193-228. (SOCP problem classification and solver routing.)
+- Wolsey, L.A. (1998). *Integer Programming*. John Wiley & Sons. (integer model classification: integer variables, SOS constraints, indicator constraints.)
 
 ---
 

@@ -10,18 +10,19 @@
 
 | Metric | Count |
 |--------|-------|
-| Unique functions | 149 |
-| Layer 3 modules | 33 |
-| Multi-part functions | 8 |
-| Original audit functions | 140 |
+| Unique functions | 158 |
+| Layer 3 modules | 35 |
+| Multi-part functions | 10 |
+| Original audit functions | 149 |
 | Functions discovered during Phase 3 | 9 |
 
 ### Corrections from Plan Section 6
 
 | Change | Detail |
 |--------|--------|
-| Added `cxf_is_finite` | Assigned to P3.07 (Input Validation). Was in analyzed dir but missing from plan. |
+| Added `cxf_check_nan_or_inf` | Assigned to P3.07 (Input Validation). Was in analyzed dir but missing from plan. |
 | Removed phantom `LeaveCriticalSection` | Plan listed it separately in P3.12, but no analyzed file exists. The audit's `LeaveCriticalSection` was analyzed as `LeaveCriticalSection_thunk`. |
+| Deduplicated `cxf_setup_mip_params` | Was in both P3.03 and P3.27. Assigned to P3.27 (Solve MIP) only. |
 
 ---
 
@@ -57,8 +58,8 @@
 | Function | Multi-part | Notes |
 |----------|-----------|-------|
 | cxf_init_solve_state | | Solver state initialization |
-| cxf_free_warmstart_basis | | Basis state setup |
-| cxf_free_work_arrays | | Work array configuration |
+| cxf_setup_basis | | Basis state setup |
+| cxf_setup_work_arrays | | Work array configuration |
 
 **Spec file:** `specs/modules/state_initialization.md`
 
@@ -69,7 +70,7 @@
 | Function | Multi-part | Notes |
 |----------|-----------|-------|
 | cxf_cleanup_solve_state | | Solver state teardown |
-| cxf_free_attribute_table | | Solver state deallocation |
+| cxf_free_solver_state | | Solver state deallocation |
 | cxf_free_basis_state | | Basis state deallocation |
 | cxf_free_iis_state | | IIS state deallocation |
 | cxf_free_warmstart_basis | | Warm-start data deallocation (Phase 3 discovery) |
@@ -92,10 +93,11 @@
 
 ---
 
-### P3.06 - Model Type Checking (5 functions)
+### P3.06 - Model Type Checking (6 functions)
 
 | Function | Multi-part | Notes |
 |----------|-----------|-------|
+| cxf_is_mip_model | | integer model detection |
 | cxf_is_quadratic | | Quadratic model detection |
 | cxf_is_socp | | SOCP model detection |
 | cxf_is_socp_internal | | Internal SOCP classification |
@@ -113,7 +115,7 @@
 | cxf_check_env | | Environment validity check |
 | cxf_check_nan | | NaN detection |
 | cxf_check_is_finite | | Finiteness check |
-| cxf_is_finite | | Combined NaN/infinity check (Phase 3 discovery) |
+| cxf_check_nan_or_inf | | Combined NaN/infinity check (Phase 3 discovery) |
 | cxf_check_label | | String label validation |
 | cxf_check_multiobj_scenario | | Multi-objective scenario validation |
 | cxf_check_feasibility | | Solution feasibility check |
@@ -152,7 +154,7 @@
 
 | Function | Multi-part | Notes |
 |----------|-----------|-------|
-| cxf_set_error_string | | Error log output |
+| cxf_errorlog | | Error log output |
 | cxf_log | | General log output |
 | cxf_register_log_callback | | Log callback registration |
 
@@ -164,13 +166,13 @@
 
 | Function | Multi-part | Notes |
 |----------|-----------|-------|
-| cxf_save_locale_state | | Solve lock acquisition |
+| cxf_acquire_solve_lock | | Solve lock acquisition |
 | cxf_release_solve_lock | | Solve lock release |
 | cxf_env_acquire_lock | | Environment lock acquisition |
 | cxf_get_logical_processors | | Logical CPU count query |
 | cxf_get_physical_cores | | Physical core count query |
 | cxf_get_threads | | Thread count query |
-| cxf_validate_thread_count | | Thread count configuration |
+| cxf_set_thread_count | | Thread count configuration |
 
 **Spec file:** `specs/modules/threading_sync.md`
 
@@ -193,8 +195,8 @@
 |----------|-----------|-------|
 | cxf_init_callback_struct | | Callback state initialization |
 | cxf_callback_terminate | | Callback-driven termination |
-| cxf_pre_optimize_hook | | Pre-optimization callback invocation |
-| cxf_post_optimize_hook | | Post-optimization callback invocation |
+| cxf_pre_optimize_callback | | Pre-optimization callback invocation |
+| cxf_post_optimize_callback | | Post-optimization callback invocation |
 | cxf_getconstrs_callback | | Constraint retrieval via callback |
 | cxf_copy_env_callbacks | | Environment callback propagation |
 
@@ -209,7 +211,7 @@
 | cxf_matrix_setup | | Matrix data structure initialization |
 | cxf_prepare_row_data | | Row-major data preparation |
 | cxf_build_row_major | | Row-major representation construction |
-| cxf_sort_by_values | | Index array sorting |
+| cxf_sort_indices | | Index array sorting |
 
 **Spec file:** `specs/modules/matrix_core.md`
 
@@ -229,8 +231,8 @@
 
 | Function | Multi-part | Notes |
 |----------|-----------|-------|
-| cxf_fix_variables_at_bounds | | Basis refactorization |
-| cxf_progress_snapshot | | Basis state snapshot |
+| cxf_basis_refactor | | Basis refactorization |
+| cxf_basis_snapshot | | Basis state snapshot |
 | cxf_basis_diff | | Basis difference computation |
 | cxf_basis_warm | | Warm-start basis setup |
 | cxf_pivot_with_eta | | Pivot operation with eta vector update |
@@ -288,7 +290,7 @@
 
 | Function | Multi-part | Notes |
 |----------|-----------|-------|
-| cxf_log_iteration_progress | | Main iteration driver |
+| cxf_simplex_iterate | | Main iteration driver |
 | cxf_simplex_step | | Single simplex step (pricing + ratio test) |
 | cxf_simplex_step2 | | Step continuation (pivot execution) |
 | cxf_simplex_step3 | | Step finalization (basis update) |
@@ -317,7 +319,7 @@
 
 | Function | Multi-part | Notes |
 |----------|-----------|-------|
-| cxf_simplex_postsolve | | Simplex state cleanup |
+| cxf_simplex_cleanup | | Simplex state cleanup |
 | cxf_simplex_final | | Final simplex result processing |
 | cxf_simplex_init | 4 parts | Simplex initialization pipeline |
 
@@ -362,15 +364,41 @@
 
 ---
 
-### P3.26 - Solve Barrier & Concurrent (3 functions)
+### P3.26 - Solve Barrier & Concurrent (4 functions)
 
 | Function | Multi-part | Notes |
 |----------|-----------|-------|
 | cxf_solve_barrier | | Interior-point method entry |
 | cxf_solve_concurrent | 6 parts | Concurrent optimization pipeline |
 | cxf_solve_concurrent_distributed | | Distributed concurrent solve |
+| cxf_solve_concurrent_mip | | Concurrent MIP solve |
 
 **Spec file:** `specs/modules/solve_barrier_concurrent.md`
+
+---
+
+### P3.27 - Solve MIP (4 functions)
+
+| Function | Multi-part | Notes |
+|----------|-----------|-------|
+| cxf_solve_mip | | MIP solve entry |
+| cxf_presolve_mip | | MIP presolve |
+| cxf_setup_mip_params | | MIP parameter configuration |
+| cxf_process_mip_solution | 6 parts | MIP solution processing pipeline |
+
+**Spec file:** `specs/modules/solve_mip.md`
+
+---
+
+### P3.28 - Multi-Objective & Scenario (3 functions)
+
+| Function | Multi-part | Notes |
+|----------|-----------|-------|
+| cxf_solve_multiobj | | Multi-objective optimization |
+| cxf_solve_multiscenario | | Multi-scenario optimization (Phase 3 discovery) |
+| cxf_setup_scenario | 5 parts | Scenario setup pipeline |
+
+**Spec file:** `specs/modules/solve_multiobj.md`
 
 ---
 
@@ -447,7 +475,7 @@
 
 | Function | Multi-part | Notes |
 |----------|-----------|-------|
-| cxf_propagate_bounds | | Cleanup helper utilities (Phase 3 discovery) |
+| cxf_cleanup_helper | | Cleanup helper utilities (Phase 3 discovery) |
 | cxf_cleanup_coeff_change | | Coefficient change cleanup |
 | cxf_cleanup_optimization | | Post-optimization cleanup |
 | cxf_propagate_bounds | | Bound propagation |
@@ -480,6 +508,8 @@ These 10 functions were too complex for single-file analysis and were decomposed
 | cxf_env_finalize | 8 | P3.30 | Environment finalization (licensing pipeline) |
 | cxf_finalize_row_data | 6 | P3.15 | Matrix row data finalization |
 | cxf_model_apply_modifications | 4 | P3.31 | Lazy modification application |
+| cxf_process_mip_solution | 6 | P3.27 | MIP solution processing |
+| cxf_setup_scenario | 5 | P3.28 | Scenario setup |
 | cxf_simplex_init | 4 | P3.22 | Simplex initialization |
 | cxf_solve_concurrent | 6 | P3.26 | Concurrent optimization |
 | cxf_solve_lp | 6 | P3.25 | LP solve pipeline |
@@ -491,12 +521,12 @@ These 10 functions were too complex for single-file analysis and were decomposed
 
 | Function | Module | Category |
 |----------|--------|----------|
-| cxf_save_locale_state | P3.11 | Threading & Sync |
+| cxf_acquire_solve_lock | P3.11 | Threading & Sync |
 | cxf_alloc_eta | P3.02 | Allocation Helpers |
 | cxf_alloc_work_arrays | P3.02 | Allocation Helpers |
 | cxf_basis_diff | P3.16 | Basis Operations |
-| cxf_fix_variables_at_bounds | P3.16 | Basis Operations |
-| cxf_progress_snapshot | P3.16 | Basis Operations |
+| cxf_basis_refactor | P3.16 | Basis Operations |
+| cxf_basis_snapshot | P3.16 | Basis Operations |
 | cxf_basis_warm | P3.16 | Basis Operations |
 | cxf_build_row_major | P3.14 | Matrix Core |
 | cxf_callback_terminate | P3.13 | Callbacks |
@@ -509,9 +539,9 @@ These 10 functions were too complex for single-file analysis and were decomposed
 | cxf_check_model_flags2 | P3.06 | Model Type Checking |
 | cxf_check_multiobj_scenario | P3.07 | Input Validation |
 | cxf_check_nan | P3.07 | Input Validation |
-| cxf_is_finite | P3.07 | Input Validation |
+| cxf_check_nan_or_inf | P3.07 | Input Validation |
 | cxf_cleanup_coeff_change | P3.34 | Cleanup Utilities |
-| cxf_propagate_bounds | P3.34 | Cleanup Utilities |
+| cxf_cleanup_helper | P3.34 | Cleanup Utilities |
 | cxf_cleanup_optimization | P3.34 | Cleanup Utilities |
 | cxf_cleanup_solve_state | P3.04 | State Cleanup: Solver |
 | cxf_clear_pending_buffer | P3.05 | State Cleanup: Buffers |
@@ -536,14 +566,14 @@ These 10 functions were too complex for single-file analysis and were decomposed
 | cxf_env_update_active_model | P3.30 | Environment Lifecycle |
 | cxf_error_env | P3.09 | Error Handling |
 | cxf_error_model | P3.09 | Error Handling |
-| cxf_set_error_string | P3.10 | Logging |
+| cxf_errorlog | P3.10 | Logging |
 | cxf_finalize_row_data | P3.15 | Matrix Finalization |
 | cxf_fix_variable | P3.35 | Query Utilities |
 | cxf_free_basis_state | P3.04 | State Cleanup: Solver |
 | cxf_free_callback_state | P3.05 | State Cleanup: Buffers |
 | cxf_free_iis_state | P3.04 | State Cleanup: Solver |
 | cxf_free_solution_pool | P3.05 | State Cleanup: Buffers |
-| cxf_free_attribute_table | P3.04 | State Cleanup: Solver |
+| cxf_free_solver_state | P3.04 | State Cleanup: Solver |
 | cxf_free_warmstart_basis | P3.04 | State Cleanup: Solver |
 | cxf_gencon_stats | P3.33 | Statistics & Diagnostics |
 | cxf_get_genconstr_name | P3.35 | Query Utilities |
@@ -557,6 +587,7 @@ These 10 functions were too complex for single-file analysis and were decomposed
 | cxf_init_callback_struct | P3.13 | Callbacks |
 | cxf_init_solve_state | P3.03 | State Initialization |
 | cxf_init_thread_local | P3.12 | Thread Init & Thunks |
+| cxf_is_mip_model | P3.06 | Model Type Checking |
 | cxf_is_quadratic | P3.06 | Model Type Checking |
 | cxf_is_socp | P3.06 | Model Type Checking |
 | cxf_is_socp_internal | P3.06 | Model Type Checking |
@@ -573,10 +604,11 @@ These 10 functions were too complex for single-file analysis and were decomposed
 | cxf_pivot_special | P3.19 | Pivot Operations |
 | cxf_pivot_update | P3.19 | Pivot Operations |
 | cxf_pivot_with_eta | P3.16 | Basis Operations |
-| cxf_post_optimize_hook | P3.13 | Callbacks |
-| cxf_pre_optimize_hook | P3.13 | Callbacks |
+| cxf_post_optimize_callback | P3.13 | Callbacks |
+| cxf_pre_optimize_callback | P3.13 | Callbacks |
 | cxf_prepare_optimization | P3.32 | Optimization Preparation |
 | cxf_prepare_row_data | P3.14 | Matrix Core |
+| cxf_presolve_mip | P3.27 | Solve MIP |
 | cxf_presolve_stats | P3.33 | Statistics & Diagnostics |
 | cxf_pricing_candidates | P3.17 | Pricing Core |
 | cxf_pricing_cascade_update | P3.18 | Pricing Support |
@@ -592,6 +624,7 @@ These 10 functions were too complex for single-file analysis and were decomposed
 | cxf_pricing_update_constr | P3.17 | Pricing Core |
 | cxf_pricing_update_var | P3.17 | Pricing Core |
 | cxf_process_lp_solution | P3.29 | Solution Processing |
+| cxf_process_mip_solution | P3.27 | Solve MIP |
 | cxf_propagate_bounds | P3.34 | Cleanup Utilities |
 | cxf_realloc | P3.01 | Memory Primitives |
 | cxf_register_log_callback | P3.10 | Logging |
@@ -599,15 +632,17 @@ These 10 functions were too complex for single-file analysis and were decomposed
 | cxf_reset_pending_buffer | P3.05 | State Cleanup: Buffers |
 | cxf_scale_objval | P3.29 | Solution Processing |
 | cxf_set_error_message | P3.09 | Error Handling |
-| cxf_validate_thread_count | P3.11 | Threading & Sync |
-| cxf_free_warmstart_basis | P3.03 | State Initialization |
+| cxf_set_thread_count | P3.11 | Threading & Sync |
+| cxf_setup_basis | P3.03 | State Initialization |
+| cxf_setup_mip_params | P3.27 | Solve MIP |
 | cxf_setup_resources | P3.02 | Allocation Helpers |
-| cxf_free_work_arrays | P3.03 | State Initialization |
-| cxf_simplex_postsolve | P3.22 | Simplex Lifecycle |
+| cxf_setup_scenario | P3.28 | Multi-Objective & Scenario |
+| cxf_setup_work_arrays | P3.03 | State Initialization |
+| cxf_simplex_cleanup | P3.22 | Simplex Lifecycle |
 | cxf_simplex_crash | P3.21 | Simplex Phases |
 | cxf_simplex_final | P3.22 | Simplex Lifecycle |
 | cxf_simplex_init | P3.22 | Simplex Lifecycle |
-| cxf_log_iteration_progress | P3.20 | Simplex Iteration |
+| cxf_simplex_iterate | P3.20 | Simplex Iteration |
 | cxf_simplex_perturbation | P3.21 | Simplex Phases |
 | cxf_simplex_phase_end | P3.21 | Simplex Phases |
 | cxf_simplex_post_iterate | P3.20 | Simplex Iteration |
@@ -620,13 +655,17 @@ These 10 functions were too complex for single-file analysis and were decomposed
 | cxf_solve_barrier | P3.26 | Solve Barrier & Concurrent |
 | cxf_solve_concurrent | P3.26 | Solve Barrier & Concurrent |
 | cxf_solve_concurrent_distributed | P3.26 | Solve Barrier & Concurrent |
+| cxf_solve_concurrent_mip | P3.26 | Solve Barrier & Concurrent |
 | cxf_solve_dispatch | P3.24 | Solve Entry & Dispatch |
 | cxf_solve_entry | P3.24 | Solve Entry & Dispatch |
 | cxf_solve_lp | P3.25 | Solve LP Core |
+| cxf_solve_mip | P3.27 | Solve MIP |
+| cxf_solve_multiobj | P3.28 | Multi-Objective & Scenario |
+| cxf_solve_multiscenario | P3.28 | Multi-Objective & Scenario |
 | cxf_solve_no_callbacks | P3.24 | Solve Entry & Dispatch |
 | cxf_solve_with_callbacks | P3.24 | Solve Entry & Dispatch |
 | cxf_solver_dispatch | P3.25 | Solve LP Core |
-| cxf_sort_by_values | P3.14 | Matrix Core |
+| cxf_sort_indices | P3.14 | Matrix Core |
 | cxf_special_check | P3.08 | Data Validation |
 | cxf_uncrush_solution | P3.29 | Solution Processing |
 | cxf_update_model_manager | P3.31 | Model Lifecycle |
@@ -645,10 +684,10 @@ These 10 functions were too complex for single-file analysis and were decomposed
 | Size | Modules | IDs |
 |------|---------|-----|
 | 1-2 functions | 4 | P3.12, P3.15, P3.23, P3.25 |
-| 3 functions | 6 | P3.02, P3.03, P3.10, P3.22, P3.26, P3.32 |
-| 4 functions | 6 | P3.01, P3.08, P3.09, P3.14, P3.31, P3.34 |
-| 5 functions | 8 | P3.05, P3.06, P3.16, P3.17, P3.19, P3.20, P3.30, P3.35 |
-| 6 functions | 5 | P3.04, P3.13, P3.21, P3.24, P3.29 |
+| 3 functions | 6 | P3.02, P3.03, P3.10, P3.22, P3.28, P3.32 |
+| 4 functions | 8 | P3.01, P3.08, P3.09, P3.14, P3.26, P3.27, P3.31, P3.34 |
+| 5 functions | 7 | P3.05, P3.16, P3.17, P3.19, P3.20, P3.30, P3.35 |
+| 6 functions | 6 | P3.04, P3.06, P3.13, P3.21, P3.24, P3.29 |
 | 7 functions | 2 | P3.11, P3.33 |
 | 8 functions | 2 | P3.07, P3.18 |
 
@@ -662,8 +701,8 @@ These functions were not in the original 149-function audit but were identified 
 
 | Function | Module | Discovery Context |
 |----------|--------|-------------------|
-| cxf_is_finite | P3.07 | IEEE 754 helper, related to cxf_check_nan/cxf_check_is_finite |
-| cxf_propagate_bounds | P3.34 | Helper discovered during cleanup analysis |
+| cxf_check_nan_or_inf | P3.07 | IEEE 754 helper, related to cxf_check_nan/cxf_check_is_finite |
+| cxf_cleanup_helper | P3.34 | Helper discovered during cleanup analysis |
 | cxf_compute_violations | P3.33 | Discovered during solution processing analysis |
 | cxf_free_warmstart_basis | P3.04 | Discovered during state cleanup analysis |
 | cxf_pricing_mark_dirty | P3.18 | Discovered during pricing system analysis |

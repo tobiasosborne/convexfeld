@@ -4,9 +4,9 @@
 
 The Cleanup Utilities module contains functions responsible for restoring solver and model state after various operations complete. These functions serve three distinct purposes: (1) releasing temporary data structures used to batch model modifications, (2) restoring signal handling state after optimization completes, and (3) performing constraint-based bound tightening during the simplex cleanup phase.
 
-Despite the module's name, its most algorithmically significant member is the bound propagation function (also known as the cleanup helper), which implements Feasibility-Based Bound Tightening (FBBT) -- a standard preprocessing technique described by Savelsbergh (1994) and Brearley, Mitra, and Williams (1975). This function derives tighter variable bounds from constraint activity analysis and detects hidden infeasibilities. The remaining functions handle resource cleanup for coefficient change tracking structures and signal handler restoration.
+Despite the module's name, its most algorithmically significant member is the bound propagation function (also known as the cleanup helper), which implements Feasibility-Based Bound Tightening (FBBT) -- a standard preprocessing technique described by Savelsbergh (1994) and Brearley, Mitra, and Williams (1975). This function derives tighter variable bounds from constraint activity analysis, detects hidden infeasibilities, and improves the quality of the solution for downstream processing such as MIP branching. The remaining functions handle resource cleanup for coefficient change tracking structures and signal handler restoration.
 
-Two of the four function names in this module -- cxf_propagate_bounds and cxf_propagate_bounds -- refer to the same underlying function. cxf_propagate_bounds is the algorithmically descriptive name; cxf_propagate_bounds reflects its calling context (invoked during the simplex cleanup phase). Both names are documented here, with cxf_propagate_bounds as the primary specification and cxf_propagate_bounds as an alias.
+Two of the four function names in this module -- cxf_cleanup_helper and cxf_propagate_bounds -- refer to the same underlying function. cxf_propagate_bounds is the algorithmically descriptive name; cxf_cleanup_helper reflects its calling context (invoked during the simplex cleanup phase). Both names are documented here, with cxf_propagate_bounds as the primary specification and cxf_cleanup_helper as an alias.
 
 ## Functions
 
@@ -64,7 +64,7 @@ This function participates in the solver's lazy update pattern: coefficient chan
 
 **Postconditions:**
 - If the model is valid and a custom signal handler was installed for this optimization, the default signal handler is restored, the global model reference used by the handler is cleared, and the model's signal-handler-active flag is reset
-- If the model is invalid, no handler was installed, or the environment uses a remote deployment mode, no state is modified
+- If the model is invalid, no handler was installed, or the environment uses a remote license mode, no state is modified
 
 **Side Effects:**
 - Restores the operating system's default interrupt signal (SIGINT) handler
@@ -74,16 +74,16 @@ This function participates in the solver's lazy update pattern: coefficient chan
 **Error Conditions:**
 - Invalid model (fails structural validation) -> silent return, no action
 - Signal handler not active (flag not set on model) -> silent return, no action
-- Remote deployment mode (remote solver, cloud, or cluster manager) -> silent return, no action (remote deployments use a different interrupt mechanism)
+- Remote license mode (remote solver, cloud, or cluster manager) -> silent return, no action (remote licenses use a different interrupt mechanism)
 
 **Behavioral Description:**
 The function first validates the model using the standard structural validation check. If the model is invalid, it returns immediately.
 
 Next, it checks the model's signal-handler-active flag. If this flag is not set, it means no custom signal handler was installed for this optimization (or cleanup has already been performed), so the function returns.
 
-The function then checks the environment's deployment mode. For remote deployment types (remote solver, cloud, cluster manager), signal handling is managed through the remote protocol rather than through local OS signals, so the function returns without modifying signal state.
+The function then checks the environment's license mode. For remote deployment types (remote solver, cloud, cluster manager), signal handling is managed through the remote protocol rather than through local OS signals, so the function returns without modifying signal state.
 
-If all three checks pass -- valid model, handler active, local deployment -- the function performs three cleanup actions in order:
+If all three checks pass -- valid model, handler active, local license -- the function performs three cleanup actions in order:
 
 1. Restores the default interrupt signal handler by calling the operating system's signal registration function for the interrupt signal (SIGINT) with the default handler disposition.
 2. Clears the module-level global model pointer to null. This pointer is set by the counterpart setup function (invoked before optimization) and allows the custom signal handler to access the model being optimized. Clearing it prevents dangling references after the model might be freed.
@@ -103,7 +103,7 @@ This function is the cleanup counterpart to a setup function that is called befo
 
 **Purpose:** Perform iterative constraint-based bound tightening using a worklist-driven propagation algorithm, deriving tighter variable bounds from constraint activity analysis and detecting infeasibilities.
 
-**Aliases:** cxf_propagate_bounds (reflects the calling context: invoked during the simplex cleanup phase)
+**Aliases:** cxf_cleanup_helper (reflects the calling context: invoked during the simplex cleanup phase)
 
 **Signature:**
 - Input: `environment` : pointer-to-Environment -- The environment providing memory allocation services
@@ -201,11 +201,11 @@ The algorithm proceeds in the following phases:
 
 ---
 
-### cxf_propagate_bounds
+### cxf_cleanup_helper
 
 **Purpose:** Alias for cxf_propagate_bounds. See cxf_propagate_bounds for the complete behavioral specification.
 
-**Naming history:** Formerly `cxf_cleanup_helper`; renamed to `cxf_propagate_bounds` to better reflect its actual behavior of performing iterative constraint-based bound tightening.
+**Note on naming:** The name "cleanup_helper" reflects the calling context: this function is invoked during the simplex cleanup phase by cxf_simplex_cleanup. Despite its name suggesting a simple utility, it performs the most algorithmically complex operation in this module -- iterative constraint-based bound tightening. The name cxf_propagate_bounds more accurately describes the function's behavior.
 
 **Signature:** Identical to cxf_propagate_bounds.
 
@@ -223,11 +223,11 @@ The four functions in this module serve three distinct purposes:
 |----------|----------|------------|-------------|
 | cxf_cleanup_coeff_change | Resource cleanup | Simple (leaf function) | Model destruction, model update, pending buffer cleanup |
 | cxf_cleanup_optimization | Signal restoration | Simple (leaf function) | Optimization dispatch (after optimization completes) |
-| cxf_propagate_bounds / cxf_propagate_bounds | Bound tightening algorithm | Complex (iterative, allocates working memory) | Simplex cleanup phase |
+| cxf_propagate_bounds / cxf_cleanup_helper | Bound tightening algorithm | Complex (iterative, allocates working memory) | Simplex cleanup phase |
 
 ### Naming Convention
 
-Two of the four listed function names -- cxf_propagate_bounds and cxf_propagate_bounds -- are aliases for the same underlying function. The name cxf_propagate_bounds was assigned during early analysis based on its call site (the simplex cleanup function). The name cxf_propagate_bounds was assigned during deeper analysis when the function's algorithm was understood. Both names appear in the function map for traceability. In this specification, cxf_propagate_bounds is the primary name and cxf_propagate_bounds is documented as an alias.
+Two of the four listed function names -- cxf_cleanup_helper and cxf_propagate_bounds -- are aliases for the same underlying function. The name cxf_cleanup_helper was assigned during early analysis based on its call site (the simplex cleanup function). The name cxf_propagate_bounds was assigned during deeper analysis when the function's algorithm was understood. Both names appear in the function map for traceability. In this specification, cxf_propagate_bounds is the primary name and cxf_cleanup_helper is documented as an alias.
 
 ### Common Patterns
 
@@ -242,7 +242,7 @@ Two of the four listed function names -- cxf_propagate_bounds and cxf_propagate_
 
 cxf_propagate_bounds operates in a phase where the simplex solver has completed its main iterations. The caller (the simplex cleanup function) is responsible for:
 1. Initializing the activity arrays (lower_activity, upper_activity) and unbounded count arrays (positive_unbounded_count, negative_unbounded_count) from the current variable bounds and constraint matrix before calling this function.
-2. Interpreting the return status: if infeasible, the solver reports the problem as infeasible; if successful, the tightened bounds may detect variables that can be fixed.
+2. Interpreting the return status: if infeasible, the solver reports the problem as infeasible; if successful, the tightened bounds may improve subsequent MIP branching decisions or detect variables that can be fixed.
 
 The bound propagation algorithm references the Layer 2 algorithm specification on Feasibility-Based Bound Tightening, which provides the full mathematical derivation, convergence theory, and numerical considerations.
 
@@ -252,7 +252,7 @@ cxf_cleanup_optimization is part of a setup/cleanup pair:
 - **Before optimization:** A setup function installs a custom interrupt signal handler that enables graceful termination. It stores a reference to the model being optimized in a module-level global variable, sets the model's signal-handler-active flag, and saves the previous signal handler.
 - **After optimization:** cxf_cleanup_optimization reverses these actions: restores the default signal handler, clears the global model reference, and resets the active flag.
 
-This pair ensures that during optimization the user can request graceful termination (e.g., via Ctrl-C), while outside of optimization the default signal behavior is in effect. Remote deployment modes (remote solver, cloud, cluster manager) bypass this mechanism because they use protocol-level termination signaling rather than local OS signals.
+This pair ensures that during optimization the user can request graceful termination (e.g., via Ctrl-C), while outside of optimization the default signal behavior is in effect. Remote license modes (remote solver, cloud, cluster manager) bypass this mechanism because they use protocol-level termination signaling rather than local OS signals.
 
 ### Lazy Update Pattern
 

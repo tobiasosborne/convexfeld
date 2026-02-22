@@ -15,7 +15,7 @@ The conversion pipeline has four stages, three of which are provided by this mod
 | 2 | cxf_build_row_major | Perform two-pass CSC-to-CSR conversion |
 | 3 | cxf_finalize_row_data (external) | Re-apply scaling, restore original arrays |
 
-The fourth function, cxf_sort_by_values, is a general-purpose hybrid sorting utility used throughout the matrix subsystem for ordering sparse index arrays.
+The fourth function, cxf_sort_indices, is a general-purpose hybrid sorting utility used throughout the matrix subsystem for ordering sparse index arrays.
 
 ## Functions
 
@@ -199,11 +199,11 @@ The overall time complexity is O(nnz) for the linear CSR construction plus O(nnz
 - Memory allocation and deallocation (Memory Primitives module)
 - Error reporting (Error Handling module)
 - SOS row-major construction helper
-- Quadratic constraint index sorting helper (cxf_sort_by_values or a related sorting utility)
+- Quadratic constraint index sorting helper (cxf_sort_indices or a related sorting utility)
 
 ---
 
-### cxf_sort_by_values
+### cxf_sort_indices
 
 **Purpose:** Sort a pair of parallel sparse arrays (values and associated integer indices) in ascending order of the values, using a hybrid sorting algorithm optimized for the array sizes typical in LP solver operations.
 
@@ -240,7 +240,7 @@ The function implements a hybrid sorting algorithm combining quicksort and shell
 
 4. **Parallel array management:** Throughout all sorting operations, whenever two elements are compared and swapped in the values array, the corresponding elements in the indices array are swapped identically, maintaining the value-index correspondence.
 
-**Naming history:** Formerly `cxf_sort_indices`; renamed to better reflect that the primary sort key is the values array, with indices permuted as satellites. This function is used in contexts such as ordering sparse vector entries by coefficient magnitude, sorting pricing candidates by reduced cost, and arranging quadratic constraint terms by constraint index.
+Note: Despite the function name suggesting sorting of indices, the primary sort key is the values array. The indices are permuted as satellites. This function is used in contexts such as ordering sparse vector entries by coefficient magnitude, sorting pricing candidates by reduced cost, and arranging quadratic constraint terms by constraint index.
 
 **Thread Safety:** Safe (operates only on the provided arrays with no shared state).
 
@@ -272,6 +272,9 @@ The partitioning performed by cxf_matrix_setup is a critical optimization for pr
 
 The matrix may be stored in scaled form during optimization (where all coefficients have been multiplied by row and column scaling factors to improve numerical conditioning; see Tomlin, 1975; Curtis and Reid, 1972). Row-major access requests from the user API expect unscaled (original) coefficients. The pipeline handles this by unscaling before CSR construction and re-scaling afterward, ensuring that the cached CSR always reflects the appropriate coefficient form for its context.
 
+### Naming Note
+
+The function cxf_sort_indices sorts by values, not by indices, despite its name. The "indices" in the name refers to the fact that integer index arrays are sorted alongside their associated values (as satellites), which is the typical use case in sparse matrix operations.
 
 ### Thread Safety Summary
 
@@ -280,7 +283,7 @@ The matrix may be stored in scaled form during optimization (where all coefficie
 | cxf_prepare_row_data | Unsafe | Modifies matrix data in place, releases locks |
 | cxf_matrix_setup | Unsafe | Partitions CSC arrays in place, swaps pointers |
 | cxf_build_row_major | Unsafe | Allocates and stores arrays on the matrix |
-| cxf_sort_by_values | Safe | Operates only on provided arrays, no shared state |
+| cxf_sort_indices | Safe | Operates only on provided arrays, no shared state |
 
 All unsafe functions require the caller to hold the model-level critical section or otherwise ensure exclusive access to the matrix data.
 

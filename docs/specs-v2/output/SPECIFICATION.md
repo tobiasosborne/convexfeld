@@ -1,15 +1,15 @@
 # ConvexFeld LP Solver: Cleanroom Behavioral Specification
 
-**Version:** 2.1 (Consolidated, LP-only)
-**Date:** 2026-02-16
-**Files assembled:** 62
-**Total lines:** 22,219
+**Version:** 2.0 (Consolidated)
+**Date:** 2026-02-15
+**Files assembled:** 64
+**Total lines:** 23,763
 
 ---
 
 ## About This Document
 
-This document is the consolidated output of the ConvexFeld LP Solver cleanroom reverse-engineering project. It contains complete behavioral specifications organized into 5 specification layers plus implementation guidance.
+This document is the consolidated output of the ConvexFeld LP Solver cleanroom reverse-engineering project. It contains complete behavioral specifications for 158 internal functions organized into 5 specification layers plus implementation guidance.
 
 **IP Compliance:** All content has been validated for intellectual property cleanliness. This document contains:
 - No hex addresses, byte offsets, or binary layout details
@@ -23,7 +23,7 @@ This document is the consolidated output of the ConvexFeld LP Solver cleanroom r
 **Specification Layers:**
 1. **Data Model (Part I):** Core data structures and their semantic fields
 2. **Algorithms (Part II):** Step-by-step algorithm descriptions
-3. **Module Contracts (Part III):** Per-function behavioral contracts
+3. **Module Contracts (Part III):** Per-function behavioral contracts (35 modules, 158 functions)
 4. **Integration (Part IV):** Cross-module interaction patterns
 5. **Reference (Part V):** Error codes, parameters, tolerances
 6. **Implementation Guidance (Part VI):** Build order, testing, numerical stability
@@ -84,6 +84,8 @@ This document is the consolidated output of the ConvexFeld LP Solver cleanroom r
 - [P3.24 -- Module: Solve Entry & Dispatch](#p324-module-solve-entry-dispatch)
 - [P3.25 -- Module: Solve LP Core](#p325-module-solve-lp-core)
 - [P3.26 -- Module: Solve Barrier & Concurrent](#p326-module-solve-barrier-concurrent)
+- [P3.27 -- Module: Solve MIP](#p327-module-solve-mip)
+- [P3.28 -- Module: Multi-Objective & Scenario](#p328-module-multi-objective-scenario)
 - [P3.29 -- Module: Solution Processing](#p329-module-solution-processing)
 - [P3.30 -- Module: Environment Lifecycle](#p330-module-environment-lifecycle)
 - [P3.31 -- Module: Model Lifecycle](#p331-module-model-lifecycle)
@@ -118,7 +120,7 @@ This document is the consolidated output of the ConvexFeld LP Solver cleanroom r
 
 ## Purpose
 
-The Model structure is the central data container for a single optimization problem instance within an LP solver. It encapsulates all problem data (variables, constraints, objective, matrix coefficients), solver configuration, solution state, and the attribute system that exposes model properties to the public API. Every public API call that operates on a problem accepts a reference to a Model, and the structure serves as the root from which all problem-specific data is reachable. A Model is always associated with exactly one Environment, from which it inherits global configuration.
+The Model structure is the central data container for a single optimization problem instance within an LP solver. It encapsulates all problem data (variables, constraints, objective, matrix coefficients), solver configuration, solution state, and the attribute system that exposes model properties to the public API. Every public API call that operates on a problem accepts a reference to a Model, and the structure serves as the root from which all problem-specific data is reachable. A Model is always associated with exactly one Environment, from which it inherits global configuration and licensing state.
 
 ## Fields
 
@@ -150,7 +152,7 @@ Fields are grouped by logical purpose rather than memory layout.
 
 | Field | Type | Purpose | Valid Values | Invariants |
 |-------|------|---------|--------------|------------|
-| environment | pointer-to-Environment | Reference to the Environment that owns or is associated with this model. Provides access to logging, parameter defaults, and thread management. | Non-null pointer to a valid Environment | Must always point to a valid, live Environment; the Environment must outlive the Model |
+| environment | pointer-to-Environment | Reference to the Environment that owns or is associated with this model. Provides access to licensing, logging, parameter defaults, and thread management. | Non-null pointer to a valid Environment | Must always point to a valid, live Environment; the Environment must outlive the Model |
 | environment_owned | int | Indicates whether this model owns its Environment (i.e., has a private child Environment that must be freed when the model is freed) versus borrowing a shared Environment | 0 (borrowed/shared) or 1 (owned/child) | If 1, the model's destructor must free the child Environment |
 
 ### Concurrent Optimization
@@ -167,6 +169,12 @@ Fields are grouped by logical purpose rather than memory layout.
 | callback_count | int | Number of user-registered callback functions. When nonzero, the solver invokes callbacks at various checkpoints during optimization. | 0 or positive integer | Incremented on callback registration, decremented on removal |
 | primary_model | pointer-to-Model | Reference to the "root" model for callback configuration. In typical usage, this points to the model itself; in cloned or concurrent scenarios, it may point to the original model from which callbacks were inherited. | Non-null pointer to a valid Model | Initialized to self at allocation; may be updated for cloned models |
 | self_reference | pointer-to-Model | Set to point to the model itself during optimization, providing a stable reference that callback functions can use to access the model. Cleared after optimization completes. | Null (not optimizing) or pointer to self | Non-null only during an active optimization call |
+
+### Compute Server
+
+| Field | Type | Purpose | Valid Values | Invariants |
+|-------|------|---------|--------------|------------|
+| compute_server_mode | int | Indicates whether optimization should be dispatched to a remote remote solver rather than executed locally | 0 (local) or nonzero (remote remote solver) | When nonzero, optimization is routed through the remote solver subsystem |
 
 ### Matrix Data
 
@@ -230,7 +238,7 @@ Fields are grouped by logical purpose rather than memory layout.
 The Model exposes its properties through a table-driven attribute system that supports three types of attributes:
 
 - **Integer attributes** (e.g., optimization status, variable/constraint counts, model type flags)
-- **Double attributes** (e.g., objective value, objective bound, runtime)
+- **Double attributes** (e.g., objective value, objective bound, runtime, MIP gap)
 - **String attributes** (e.g., model name, variable names, constraint names)
 
 Each attribute can be either **scalar** (one value per model, such as the optimization status) or **array** (one value per element, such as solution values per variable).
@@ -265,7 +273,7 @@ When a scalar attribute value is requested through the public API, the system us
 
 1. **Direct value pointer** (fastest path): If the attribute entry has a non-null direct value pointer, the value is read directly from the pointed-to location. This is used for frequently accessed attributes whose values are stored at fixed locations in the model or matrix data (e.g., variable count, constraint count).
 
-2. **Scalar getter function**: If the direct value pointer is null but a scalar getter function is registered, it is invoked to compute and return the value. This is used for derived or computed attributes (e.g., IsQP, which must inspect the objective structure).
+2. **Scalar getter function**: If the direct value pointer is null but a scalar getter function is registered, it is invoked to compute and return the value. This is used for derived or computed attributes (e.g., IsMIP, which must inspect variable types).
 
 3. **Array getter fallback**: If both the direct value pointer and scalar getter are null, but an array getter is registered, it is invoked with parameters indicating a full-model scope. This is a rare fallback for attributes that are primarily element-level but can also report a model-level aggregate.
 
@@ -318,7 +326,7 @@ Attribute lookup is performed by name: the system searches the entry array for a
 1. The Model is validated by checking the validity sentinel.
 2. modification_blocked is set to a nonzero value; status_code and optimize_in_progress are cleared/set.
 3. self_reference is set to point to the Model.
-4. The optimizer is invoked (dispatching to LP, barrier, or concurrent solvers as appropriate).
+4. The optimizer is invoked (dispatching to LP, MIP, barrier, or concurrent solvers as appropriate).
 5. On completion, modification_blocked and self_reference are cleared.
 6. Solution data is populated if the solve was successful.
 
@@ -377,7 +385,7 @@ Attribute lookup is performed by name: the system searches the entry array for a
 
 ## Purpose
 
-MatrixData is the core constraint matrix representation for a linear programming model. It stores the complete mathematical formulation: the constraint matrix A in sparse format, the objective function coefficients, variable bounds, constraint right-hand sides, constraint senses, and variable types. It also manages auxiliary representations (row-major format), scaling state, and special constraint types (quadratic, piecewise-linear, SOS, and general constraints). A model may maintain two MatrixData instances: a primary (original problem) and a working copy (modified during the solve process).
+MatrixData is the core constraint matrix representation for a linear or mixed-integer programming model. It stores the complete mathematical formulation: the constraint matrix A in sparse format, the objective function coefficients, variable bounds, constraint right-hand sides, constraint senses, and variable types. It also manages auxiliary representations (row-major format), scaling state, and special constraint types (quadratic, piecewise-linear, SOS, and general constraints). A model may maintain two MatrixData instances: a primary (original problem) and a working copy (modified during the solve process).
 
 ## Fields
 
@@ -460,7 +468,7 @@ The CSR cache is invalidated (all CSR arrays freed and set to NULL) whenever the
 
 | Field | Type | Purpose | Valid Values | Invariants |
 |-------|------|---------|--------------|------------|
-| vtype | array-of-char, length numVars | Type code for each variable | 'C' (continuous), 'B' (binary), 'I' (integer), 'S' (semi-continuous), 'N' (semi-integer) | Determines variable handling during optimization |
+| vtype | array-of-char, length numVars | Type code for each variable | 'C' (continuous), 'B' (binary), 'I' (integer), 'S' (semi-continuous), 'N' (semi-integer) | Determines whether the problem is an LP or MIP |
 
 ### Names
 
@@ -579,7 +587,8 @@ The SwapData structure supports the row-major conversion pipeline by:
 | version | int | Internal version number for the matrix data format | Positive integer | Incremented when the internal format changes |
 | modelType | int | Identifies the overall model type (LP, QP, etc.) | Non-negative integer | Derived from the combination of variable types and constraint types |
 | solStatus | int | Solution status from the most recent optimization | Negative when unsolved; non-negative solver-specific status codes | Reset when model is modified |
-| solveActiveFlag | int | Flag set when the solver is actively processing | 0 or 1 | Set to 1 during solve, cleared afterward |
+| integrality | int | Flag indicating the model contains integer variables | 0 (continuous only) or nonzero (has integer/binary/etc.) | Nonzero if any of numBinaryVars, numIntegerVars, numSemiContVars, numSemiIntVars > 0 |
+| mipSolveFlag | int | Flag set when the solver is actively processing | 0 or 1 | Set to 1 during MIP solve, cleared afterward |
 | optimizeFlag | int | Controls whether optimization should proceed | 0 (do not optimize) or positive (proceed) | Also used for multi-objective state |
 | forceNonConvex | int | Forces non-convex problem handling | 0 or nonzero | Overrides default convexity checks |
 | numPWLObjs | int | Count of piecewise-linear objective terms | >= 0 | -- |
@@ -589,7 +598,7 @@ The SwapData structure supports the row-major conversion pipeline by:
 
 - **Owned by CxfModel:** The model holds two pointers to MatrixData instances: the primary matrix (original problem as provided by the user) and a working matrix (a copy that may be modified during the solve process). The model owns both instances.
 - **References CxfEnv:** MatrixData itself does not contain an environment pointer. All memory allocation and error reporting is done through the CxfEnv obtained from the owning model.
-- **Referenced by solver subsystems:** The simplex solver, barrier solver, and presolve routines all read from and (in the case of the working copy) write to MatrixData fields.
+- **Referenced by solver subsystems:** The simplex solver, barrier solver, solver, and presolve routines all read from and (in the case of the working copy) write to MatrixData fields.
 - **Contains SwapData (conditional):** During row-major conversion, a temporary SwapData structure is allocated and pointed to from MatrixData. This is owned by the conversion pipeline and freed after use.
 - **Related to PendingBuffer:** Model modifications are batched in a PendingBuffer and applied to MatrixData in bulk. The PendingBuffer is a separate structure on the model.
 
@@ -679,7 +688,7 @@ During presolve or row-major conversion, removed constraints are partitioned to 
 
 ## Purpose
 
-The Environment structure is the top-level context object for an LP solver session. It holds all global configuration state including solver parameters, error handling state, logging configuration, threading resources, and server connection information. Every model created within the solver must be associated with an environment, which acts as both a configuration provider and a resource manager. The environment owns its parameter table, manages child environments and associated models, and provides thread-safe error reporting.
+The Environment structure is the top-level context object for an LP solver session. It holds all global configuration state including licensing credentials, solver parameters, error handling state, logging configuration, threading resources, and server connection information. Every model created within the solver must be associated with an environment, which acts as both a configuration provider and a resource manager. The environment owns its parameter table, manages child environments and associated models, and provides thread-safe error reporting.
 
 ## Fields
 
@@ -690,6 +699,12 @@ The Environment structure is the top-level context object for an LP solver sessi
 | validationTag | int | Sentinel value for detecting use-after-free and invalid pointers | Implementation-defined constant | Must be set on creation; cleared to zero on destruction |
 | secondaryTag | int64 | Secondary validation sentinel for defense-in-depth pointer checking | Implementation-defined constant | Set once at creation; never modified until destruction |
 | activationState | int | Tracks the environment's lifecycle phase | INACTIVE=0, INITIALIZING=1, ACTIVE=2 | Transitions only forward (0->1->2) on success; reverts to 0 on failure |
+| deploymentType | int | Identifies the licensing backend in use | See License Types enumeration below | Set during initialization; immutable after activation |
+| licenseMode | int | Controls initialization validation strategy | NORMAL=0, ISV variants, WLS variants, SPECIAL modes | Set before initialization validation; read-only after |
+| licensedFlag | bool | Indicates whether initialization validation succeeded | true/false | Must be true before any model can be created |
+| licenseChecksum | int | Integrity check value for the license | Implementation-defined | Set during initialization validation |
+| licenseCode | string (fixed-length) | The configuration key string | Alphanumeric string, up to 10 characters | Set during configuration file parsing |
+| licenseFilePath | string | Filesystem path to the configuration file | Valid file path or empty | Set during initialization from default location or config |
 | versionCode | int | Encoded solver version number | Encoded major.minor.patch | Set once at creation; immutable |
 
 ### Parameter System
@@ -739,6 +754,47 @@ The Environment structure is the top-level context object for an LP solver sessi
 | threadsParameter | int | User-configured thread count from the parameter system | Non-negative integer | 0 means auto-detect; positive means explicit count |
 | cpuFeatureFlags | int | Detected CPU instruction set features (e.g., SIMD support) | Bitmask of supported features | Set once during initialization; read-only after |
 
+### Server Connections
+
+| Field | Type | Purpose | Valid Values | Invariants |
+|-------|------|---------|--------------|------------|
+| computeServerAddress | string | Address of the remote remote solver | Valid hostname/IP or null | Allocated string; freed on destruction |
+| computeServerConnection | pointer-to-ComputeServerConnection | Active connection state for remote solver communication | Valid pointer or null | Non-null only when connected to a remote solver |
+| computeServerQueueTimeout | int | Timeout in seconds for waiting in the remote solver job queue | Non-negative integer | Read from parameter system |
+| tokenServerAddress | string | Address of the token configuration server | Valid hostname/IP or null | Allocated string; freed on destruction |
+| tokenServerPort | int | Port number for the token configuration server | Valid port number | Has a default value; configurable |
+| cloudServerAddress | string | Address of the cloud optimization service | Valid hostname/IP or null | Allocated string; freed on destruction |
+| clusterManagerAddress | string | Address of the cluster manager for distributed computing | Valid hostname/IP or null | Allocated string; freed on destruction |
+
+### Web License Service (WLS)
+
+| Field | Type | Purpose | Valid Values | Invariants |
+|-------|------|---------|--------------|------------|
+| wlsConnection | pointer-to-WLSConnection | Active connection handle for the Web License Service | Valid handle or null | Non-null when WLS licensing is active |
+| wlsThreadData | pointer-to-ThreadData | Synchronization data for WLS background operations | Valid pointer or null | Created alongside wlsConnection |
+| wlsAccessId | pointer | WLS access credential identifier | Valid credential or null | Set during WLS initialization |
+| wlsSecretKey | pointer | WLS secret key for authentication | Valid credential or null | Set during WLS initialization |
+| wlsLicenseType | int | Type code for the WLS license variant | WLS-specific type enumeration | Set during WLS handshake |
+| wlsLicenseData | pointer | Opaque license data received from WLS | Valid pointer or null | Freed on cleanup |
+| wlsLicenseInfo | pointer | Parsed license information structure | Valid pointer or null | Derived from wlsLicenseData |
+| wlsTokenId | string | Token identifier for token-based WLS licensing | Valid token string or null | Set when using WLS+token mode |
+| wlsTokenData | pointer | Opaque token session data | Valid pointer or null | Freed on environment destruction |
+| wlsTokenMode | bool | Indicates whether WLS is operating in token mode | true/false | Set based on deployment type during initialization |
+| wlsTokenSecret | pointer | Secret credential for token refresh operations | Valid pointer or null | Freed on cleanup |
+| wlsHostname | string | Hostname override for WLS identification | Valid hostname or null | Optional; overrides auto-detected hostname |
+| wlsInitialized | bool | Indicates WLS subsystem has completed initialization | true/false | Set after successful WLS handshake |
+| wlsFeatures | int | Bitmask of WLS-licensed feature flags | Bitmask | Set during initialization validation |
+
+### ISV (Independent Software Vendor) Data
+
+| Field | Type | Purpose | Valid Values | Invariants |
+|-------|------|---------|--------------|------------|
+| isvVendorName | string | Name of the ISV embedding the solver | Non-empty string or null | Set by ISV during environment creation; immutable after |
+| isvProductName | string | Name of the ISV's product | Non-empty string or null | Set by ISV during environment creation; immutable after |
+| isvLicenseCode | string | ISV-specific configuration key (up to 9 characters) | Alphanumeric string or null | Set during ISV initialization validation |
+| isvFeatureCount | int | Number of licensed ISV features | Non-negative | Set during ISV initialization validation |
+| isvParameters | array-of-pointer (7 elements) | Opaque ISV configuration parameters passed at creation time | Implementation-defined | Stored at creation; preserved through destruction for potential reuse |
+
 ### Child Management
 
 | Field | Type | Purpose | Valid Values | Invariants |
@@ -754,6 +810,7 @@ The Environment structure is the top-level context object for an LP solver sessi
 | Field | Type | Purpose | Valid Values | Invariants |
 |-------|------|---------|--------------|------------|
 | rootEnvironment | pointer-to-Environment | Points to the root/master environment (self for standalone environments) | Non-null | For standalone: rootEnvironment == self. For children: rootEnvironment == parent |
+| relatedEnvironment | pointer-to-Environment | Pointer to a related environment for license sharing across sessions | Valid pointer or null | Used for WLS and shared licensing scenarios |
 | referenceCount | int | Tracks how many entities (children, models) reference this environment | Positive integer while alive | Starts at 1; incremented by children; environment freed when it reaches 0 |
 
 ### Recording
@@ -803,6 +860,12 @@ The Environment structure is the top-level context object for an LP solver sessi
 | memoryLimit | double | Hard memory limit in GB; solver aborts if exceeded | Non-negative (0 means unlimited) | Read from parameter system or environment variable |
 | softMemoryLimit | double | Soft memory limit in GB; solver may attempt to reduce memory usage | Non-negative (0 means unlimited) | softMemoryLimit <= memoryLimit when both are set |
 
+### License Data
+
+| Field | Type | Purpose | Valid Values | Invariants |
+|-------|------|---------|--------------|------------|
+| licenseData | pointer | Opaque license state data used by the licensing subsystem | Valid pointer or null | Allocated during initialization validation; freed during cleanup |
+
 ### Solver Parameters (Selected Key Parameters)
 
 The environment stores the full set of solver parameters in its parameter table. A few key parameters are accessed frequently enough to warrant direct mention:
@@ -813,20 +876,37 @@ The environment stores the full set of solver parameters in its parameter table.
 | presolveFlag | int | Controls whether presolve is applied | OFF=0, AUTO=-1, or specific level | Read from parameter system |
 | nonConvexSetting | int | Controls handling of non-convex quadratic programs | -1 (auto), 0 (error), 2 (solve) | Required for non-convex QP/QCP models |
 
+## License Types
+
+The environment supports multiple licensing backends, enumerated as follows:
+
+| Name | Description |
+|------|-------------|
+| LOCAL | Standard local configuration file |
+| ISV | Independent Software Vendor embedded license |
+| TOKEN_SERVER | License served from a token server |
+| COMPUTE_SERVER | License managed by a remote remote solver |
+| CLOUD | Cloud-based license service |
+| MANAGER | License managed via a cluster manager |
+| WLS | Web License Service (cloud-based licensing) |
+| WLS_TOKEN | Web License Service with token-based authentication |
+| HYBRID | Hybrid/fallback mode combining multiple licensing backends |
+
 ## Relationships
 
 - **Owns** a ParameterTable structure containing all solver parameter metadata (names, types, bounds, defaults).
-- **Owns** zero or more child Environment instances, which maintain their own parameter state.
+- **Owns** zero or more child Environment instances, which share the parent's license but maintain their own parameter state.
 - **Owns** zero or more Model associations tracked via the model management array.
-- **References** a root Environment (which may be itself for standalone environments) for shared resource management.
+- **References** a root Environment (which may be itself for standalone environments) for shared license resource management.
+- **Optionally references** a related Environment for license sharing across sessions (particularly in WLS scenarios).
 - **Owns** an AsyncState structure when asynchronous operations are in progress.
-- **Owns** ThreadPool resources when the threading subsystem is active.
+- **Owns** ComputeServerConnection, WLSConnection, and ThreadPool resources when those subsystems are active.
 - **Owns** its error buffer, log file handle, and all allocated string fields.
 
 **Ownership semantics:**
 - The environment **owns** (responsible for allocating and freeing) all its child structures, string fields, and connection objects.
 - Models **borrow** a reference to the environment (the model does not own the environment).
-- Child environments are owned by the parent environment.
+- Child environments share the parent's license but are owned by the parent environment.
 
 ## Lifecycle
 
@@ -839,12 +919,13 @@ The environment stores the full set of solver parameters in its parameter table.
 5. **Error buffer allocation:** An error message buffer is allocated (large enough for typical error messages) and initialized to empty.
 6. **System information collection:** CPU info, platform, hostname, and distribution are queried from the operating system.
 7. **Parameter table construction:** The parameter table is built from a static definition table containing parameter names, types, default values, bounds, and flags. Each parameter gets an entry with its metadata and current value (initialized to default). A per-parameter flags array is also allocated.
-8. **Phase 2 initialization:** Additional subsystem initialization is performed.
-9. **Output pointer:** On success, the created environment pointer is returned to the caller.
+8. **ISV parameter handling:** If the environment is configured for ISV mode, ISV-specific parameters are reset to their defaults and marked as protected.
+9. **Phase 2 initialization:** Additional subsystem initialization is performed.
+10. **Output pointer:** On success, the created environment pointer is returned to the caller.
 
 The public API provides two creation paths:
-- **loadenv:** Creates an environment and immediately proceeds to activation.
-- **emptyenv:** Creates an environment allowing configuration before explicit activation.
+- **loadenv:** Creates an environment and immediately initializes licensing (proceeds to activation).
+- **emptyenv:** Creates an environment without licensing, allowing configuration before explicit activation.
 
 ### Activation (Finalization)
 
@@ -853,8 +934,9 @@ After creation, the environment must be activated (finalized) before it can be u
 1. **State transition:** activationState moves from INACTIVE to INITIALIZING.
 2. **Configuration file loading:** If present, the solver configuration file is parsed and parameters are applied.
 3. **Environment variable processing:** System environment variables for core counts, max cores, and memory limits are read and applied.
-4. **Parameter finalization:** Thread counts, memory limits, and other system-dependent parameters are finalized.
-5. **State transition:** On success, activationState moves to ACTIVE. On failure, activationState reverts to INACTIVE.
+4. **initialization validation:** Based on deploymentType, the appropriate license backend is contacted and validated. This may involve file I/O (local license), network communication (token server, WLS, cloud), or ISV credential verification.
+5. **Parameter finalization:** Thread counts, memory limits, and other system-dependent parameters are finalized.
+6. **State transition:** On success, activationState moves to ACTIVE and licensedFlag is set. On failure, activationState reverts to INACTIVE.
 
 ### Mutation
 
@@ -871,19 +953,21 @@ The environment is mutated by the following operations:
 
 Environment destruction follows a strict ordering to avoid resource leaks and dangling references:
 
-1. **Remote solver session termination:** If connected to a remote solver, terminate the session and wait for remote job completion.
+1. **remote solver session termination:** If connected to a remote solver, terminate the session and wait for remote job completion.
 2. **Child environment cleanup:** Recursively free all child environments, decrementing reference counts and freeing parents when counts reach zero.
 3. **Model cleanup:** Free all associated model entries and the model array.
-4. **String and buffer deallocation:** Free all allocated string fields (server addresses, configuration data, etc.).
-5. **Parameter string arrays:** Free both primary and secondary string parameter arrays (root environment only).
-6. **Thread pool destruction:** Destroy thread pools and their associated mutexes.
-7. **Async cleanup:** Clean up any pending asynchronous operation state.
-8. **Parameter table cleanup:** Free the parameter entry array, the parameter table header, and the flags array. Destroy parameter storage memory pools.
-9. **Error buffer deallocation:** Free the error message buffer.
-10. **Mutex destruction:** Destroy the primary critical section.
-11. **Validation tag invalidation:** Clear the validation tag to zero so any subsequent access is detected as use-after-free.
-12. **Log file closure:** Close the log file handle.
-13. **Final deallocation:** Free the environment memory block itself.
+4. **License cleanup:** Release license resources (tokens, WLS connections, server sessions).
+5. **String and buffer deallocation:** Free all allocated string fields (server addresses, ISV data, WLS credentials, etc.).
+6. **Parameter string arrays:** Free both primary and secondary string parameter arrays (root environment only).
+7. **WLS resource cleanup:** Free WLS tokens, credentials, and connection handles.
+8. **Thread pool destruction:** Destroy thread pools and their associated mutexes.
+9. **Async cleanup:** Clean up any pending asynchronous operation state.
+10. **Parameter table cleanup:** Free the parameter entry array, the parameter table header, and the flags array. Destroy parameter storage memory pools.
+11. **Error buffer deallocation:** Free the error message buffer.
+12. **Mutex destruction:** Destroy the primary critical section.
+13. **Validation tag invalidation:** Clear the validation tag to zero so any subsequent access is detected as use-after-free.
+14. **Log file closure:** Close the log file handle.
+15. **Final deallocation:** Free the environment memory block itself.
 
 **Reference counting:** The environment is not freed until its referenceCount reaches zero. If children still reference it when destruction is requested, a warning is logged and the free is deferred until the last reference is released.
 
@@ -897,7 +981,8 @@ Environment destruction follows a strict ordering to avoid resource leaks and da
 6. **Parameter table completeness:** After successful initialization, parameterTable is non-null and contains entries for all solver parameters, each with valid type, bounds, and default values.
 7. **Thread safety of error buffer:** The errorBufferLocked flag is respected by all error-setting functions. When locked, error codes are updated but the message text is preserved.
 8. **Memory limit ordering:** When both are set, softMemoryLimit <= memoryLimit.
-9. **Destruction ordering:** All models must be freed before the environment. All child environments must be freed (or deferred) before the parent.
+9. **License immutability:** deploymentType and licenseMode are not modified after the environment reaches ACTIVE state.
+10. **Destruction ordering:** All models must be freed before the environment. All child environments must be freed (or deferred) before the parent.
 
 ## Thread Safety
 
@@ -916,23 +1001,26 @@ Environment destruction follows a strict ordering to avoid resource leaks and da
 
 **Read-only after initialization:**
 - System information fields (CPU, platform, hostname, distribution) are set once and never modified.
+- License type and mode are immutable after activation.
 - The parameter table structure is immutable after initialization (though parameter values within it are mutable).
 
 ## Design Rationale
 
 **Why a separate Environment structure?**
 
-The environment serves as a "session context" pattern common in solver libraries. Separating global configuration (logging, threading) from per-model state (constraints, variables, solutions) provides several benefits:
+The environment serves as a "session context" pattern common in commercial solver libraries. Separating global configuration (licensing, logging, threading) from per-model state (constraints, variables, solutions) provides several benefits:
 
-1. **Parameter inheritance:** Child environments and models inherit parameter defaults from the parent environment while allowing per-model overrides.
+1. **License management isolation:** A single license can be shared across multiple models without each model needing its own license negotiation.
 
-2. **Resource sharing:** Thread pools and remote solver connections are expensive resources that are amortized across all models in an environment.
+2. **Parameter inheritance:** Child environments and models inherit parameter defaults from the parent environment while allowing per-model overrides.
 
-3. **Error scoping:** Each environment maintains its own error buffer, so multi-model workflows can isolate error reporting.
+3. **Resource sharing:** Thread pools, remote solver connections, and WLS sessions are expensive resources that are amortized across all models in an environment.
+
+4. **Error scoping:** Each environment maintains its own error buffer, so multi-model workflows can isolate error reporting.
 
 **Reference counting for safe deallocation:**
 
-The reference counting scheme allows child environments and models to safely share a parent's resources. This is particularly important for remote solver scenarios where network connections must outlive individual model operations.
+The reference counting scheme allows child environments and models to safely share a parent's resources. This is particularly important for remote solver and WLS scenarios where network connections must outlive individual model operations.
 
 **Error buffer locking pattern:**
 
@@ -1489,6 +1577,8 @@ The callback system supports distinct event types that indicate the solver phase
 | POLLING | Periodic polling during long operations |
 | PRESOLVE | During presolve phase |
 | SIMPLEX | During simplex iterations |
+| MIP_SOLUTION | When a new integer-feasible solution is found |
+| MIP_NODE | At each node of the branch-and-bound tree |
 | BARRIER | During barrier (interior point) iterations |
 | MESSAGE | When a log message is generated |
 
@@ -1537,7 +1627,7 @@ If the allocation fails at step 2, the function returns an out-of-memory error a
 3. The CallbackState memory is freed.
 4. The Environment's pointer to the CallbackState is set to null.
 
-For environments connected to a remote solver, additional cleanup is required before the CallbackState can be freed:
+For environments connected to a remote remote solver, additional cleanup is required before the CallbackState can be freed:
 - If an optimization is in progress on the remote server, the solver attempts to terminate it and waits for the remote operation to complete (with a bounded polling loop).
 - A disconnect message is sent to the remote server.
 - The response is processed, and any remote error conditions are reported through the environment's error handling system.
@@ -2045,7 +2135,7 @@ As eta vectors accumulate, the cost of FTRAN and BTRAN grows linearly with the n
 
 ## Purpose
 
-SolutionData is the model-level container for all optimization output data. **Naming history:** Formerly `WorkArrays`; renamed to better reflect its actual role as a solution data container rather than a scratch buffer structure. This structure stores the results of an optimization call: primal variable values, dual values (for constraints, range constraints, and SOS constraints), objective function values and bounds, iteration and node counts, and solution pool entries. It does not hold scratch buffers for simplex iterations -- that role belongs to SolverState. It is allocated at the beginning of an optimization call, populated by the solver during and after the solve, and retained on the Model so that the user can query solution attributes (such as variable values, objective value, iteration count, and solution pool entries) after the optimization returns. It is freed when the solution is cleared or the model is destroyed.
+WorkArrays is the model-level container for all optimization output data. Despite its name (which derives from the internal allocation and deallocation function names), this structure does not hold scratch buffers for simplex iterations -- that role belongs to SolverState. Instead, WorkArrays stores the results of an optimization call: primal variable values, dual values (for constraints, range constraints, and SOS constraints), objective function values and bounds, iteration and node counts, and solution pool entries. It is allocated at the beginning of an optimization call, populated by the solver during and after the solve, and retained on the Model so that the user can query solution attributes (such as variable values, objective value, iteration count, and solution pool entries) after the optimization returns. It is freed when the solution is cleared or the model is destroyed.
 
 This structure serves as the bridge between the solver's internal state and the public attribute system. After optimization completes, a wiring step connects entries in the model's attribute table to specific fields within this structure, enabling the attribute getter API to return solution data without additional computation.
 
@@ -2055,7 +2145,7 @@ This structure serves as the bridge between the solver's internal state and the 
 
 | Field | Type | Purpose | Valid Values | Invariants |
 |-------|------|---------|--------------|------------|
-| solveMode | int | Records which optimization algorithm produced the solution (e.g., simplex, barrier) and controls how result attributes are wired | Standard solve mode codes | Set by the solver dispatch logic; read during attribute wiring |
+| solveMode | int | Records which optimization algorithm produced the solution (e.g., simplex, barrier, MIP) and controls how result attributes are wired | Standard solve mode codes | Set by the solver dispatch logic; read during attribute wiring |
 
 ### Primal and Dual Solution Arrays
 
@@ -2071,8 +2161,18 @@ This structure serves as the bridge between the solver's internal state and the 
 | Field | Type | Purpose | Valid Values | Invariants |
 |-------|------|---------|--------------|------------|
 | objectiveValue | double | Best objective function value found during optimization; wired to the "ObjVal" attribute | Any finite double when a feasible solution exists; uninitialized otherwise | Updated by the solver upon finding improving solutions |
-| objectiveBound | double | Best proven bound on the optimal objective value; wired to the "ObjBound" attribute | Any finite double | Equals objectiveValue at optimality for LP |
+| objectiveBound | double | Best proven bound on the optimal objective value; wired to the "ObjBound" attribute | Any finite double | For LP: equals objectiveValue at optimality; for MIP: may differ from objectiveValue |
+| objectiveBoundContinuous | double | Objective bound from the continuous relaxation; wired to the "ObjBoundC" attribute | Any finite double | Set during MIP solving from the root relaxation |
 | poolObjectiveBound | double | Objective bound applicable to the solution pool; wired to the "PoolObjBound" attribute | Any finite double | Relevant only when the solution pool is populated |
+| mipGap | double | Relative gap between the best objective value and the best bound; wired to the "MIPGap" attribute | Non-negative double; zero at optimality | Computed as abs(objectiveValue - objectiveBound) / abs(objectiveValue), following standard MIP gap conventions |
+
+### Search Tree Counters
+
+| Field | Type | Purpose | Valid Values | Invariants |
+|-------|------|---------|--------------|------------|
+| nodeCount | double | Total number of branch-and-bound nodes explored; wired to the "NodeCount" attribute | Non-negative | Monotonically non-decreasing during a MIP solve; zero for pure LP |
+| openNodeCount | double | Number of unexplored nodes remaining in the search tree; wired to the "OpenNodeCount" attribute | Non-negative | Zero when the MIP solve is complete |
+| timeOpen | double | Time at which the current node was opened, for progress reporting | Non-negative | Updated during MIP search |
 
 ### Iteration Counters
 
@@ -2135,9 +2235,9 @@ This structure serves as the bridge between the solver's internal state and the 
 
 ## Relationships
 
-- **Owned by** Model. The Model holds a pointer to the SolutionData structure. The Model is responsible for allocating and freeing SolutionData.
+- **Owned by** Model. The Model holds a pointer to the WorkArrays structure. The Model is responsible for allocating and freeing WorkArrays.
 
-- **Owns** primalValues and dualValues arrays. These are separately allocated arrays whose lifetime is managed by the SolutionData allocation and deallocation functions.
+- **Owns** primalValues and dualValues arrays. These are separately allocated arrays whose lifetime is managed by the WorkArrays allocation and deallocation functions.
 
 - **Borrows** rangeDuals and sosDuals. These typically point into the interior of the dualValues allocation rather than being independently allocated. They must not be freed separately.
 
@@ -2145,17 +2245,17 @@ This structure serves as the bridge between the solver's internal state and the 
 
 - **Owns** cutVariableValues and cutObjectiveValues arrays. Similar ownership semantics as the solution pool arrays.
 
-- **Referenced by** the attribute table. After optimization, the attribute wiring step stores pointers into SolutionData fields within the model's attribute table entries. These pointers become invalid when SolutionData is freed, so attribute cache invalidation must precede SolutionData deallocation.
+- **Referenced by** the attribute table. After optimization, the attribute wiring step stores pointers into WorkArrays fields within the model's attribute table entries. These pointers become invalid when WorkArrays is freed, so attribute cache invalidation must precede WorkArrays deallocation.
 
-- **Populated by** the solver (SolverState or barrier state). The solver writes solution data into SolutionData during and after optimization.
+- **Populated by** the solver (SolverState, barrier state, or MIP state). The solver writes solution data into WorkArrays during and after optimization.
 
-- **Read by** the presolve uncrushing step. After solving a presolved model, the uncrush operation reads primal values from SolutionData to map them back to the original variable space.
+- **Read by** the presolve uncrushing step. After solving a presolved model, the uncrush operation reads primal values from WorkArrays to map them back to the original variable space.
 
 ## Lifecycle
 
 ### Creation
 
-1. At the start of an optimization call, the allocation function checks whether the Model already has a SolutionData instance.
+1. At the start of an optimization call, the allocation function checks whether the Model already has a WorkArrays instance.
 2. If not, a zero-initialized block is allocated, large enough to hold all fixed-size fields.
 3. The activeFlag is set to 1, indicating the structure is live.
 4. Scale factors are computed from the model's variable count multiplied by standard algorithmic tolerance and scaling constants.
@@ -2163,30 +2263,31 @@ This structure serves as the bridge between the solver's internal state and the 
 6. History tracking fields (previousEnteringVar, previousLeavingVar, previousPivotRow) are set to -1 (unset).
 7. Threshold values are set to -1.0 (not yet activated).
 8. Auxiliary indices are set to -1 (not active).
-9. If a template SolutionData is provided (e.g., from a scenario model), the non-pointer fields are bulk-copied from the template. After copying, all pointer fields (primalValues, dualValues, rangeDuals, sosDuals) are explicitly set to null to prevent aliasing of the template's owned arrays.
+9. If a template WorkArrays is provided (e.g., from a scenario model), the non-pointer fields are bulk-copied from the template. After copying, all pointer fields (primalValues, dualValues, rangeDuals, sosDuals) are explicitly set to null to prevent aliasing of the template's owned arrays.
 10. Solution pool and cut counters are cleared to zero, and their associated pointer arrays are set to null.
 
 ### Mutation
 
 - **During simplex iterations**: the cycle detection fields, threshold values, and auxiliary indices are updated as the solver progresses. Scale factors may be adjusted. Iteration counters are incremented.
 - **On finding a feasible solution**: primalValues and dualValues arrays are allocated (if not already) and populated. The objectiveValue is set. The solutionCount is incremented.
-- **On solve completion**: the attribute wiring function connects attribute table entries to SolutionData fields. The solveMode is finalized.
+- **During MIP search**: nodeCount, openNodeCount, and timeOpen are updated. Pool solutions are appended by allocating new entries in poolVariableValues and updating poolSolutionCount. objectiveBound and mipGap are updated as the search progresses.
+- **On solve completion**: the attribute wiring function connects attribute table entries to WorkArrays fields. The solveMode is finalized.
 
 ### Destruction
 
-1. The attribute cache on the Model is invalidated, breaking any wired pointers from the attribute table into SolutionData.
+1. The attribute cache on the Model is invalidated, breaking any wired pointers from the attribute table into WorkArrays.
 2. The primalValues array is freed if non-null.
 3. The dualValues array is freed if non-null. Since rangeDuals and sosDuals alias into this allocation, they are not freed separately; they are simply set to null.
 4. Each entry in poolVariableValues (if the pool is active) is freed individually, then the poolVariableValues array itself is freed. poolObjectiveValues and poolObjectiveBounds are freed.
 5. Each entry in cutVariableValues is freed, then the array itself. cutObjectiveValues is freed.
-6. The SolutionData structure itself is freed.
-7. The Model's pointer to SolutionData is set to null.
+6. The WorkArrays structure itself is freed.
+7. The Model's pointer to WorkArrays is set to null.
 
 Deallocation must occur in reverse allocation order to avoid dangling references. In particular, attribute cache invalidation must happen before any field deallocation.
 
 ## Invariants
 
-1. **Active flag consistency**: If activeFlag is 0, no other field should be read or written. Callers must check activeFlag (or the null-ness of the Model's pointer) before accessing SolutionData.
+1. **Active flag consistency**: If activeFlag is 0, no other field should be read or written. Callers must check activeFlag (or the null-ness of the Model's pointer) before accessing WorkArrays.
 
 2. **Array length consistency**: The length of primalValues equals numVars from the model's matrix data. The length of dualValues equals numConstrs plus numRangeConstrs plus numSOSConstraints. Each poolVariableValues entry has length numVars.
 
@@ -2198,23 +2299,23 @@ Deallocation must occur in reverse allocation order to avoid dangling references
 
 6. **Index sentinel**: Any auxiliary index or previous-pivot index equal to -1 indicates "not set" and must not be used as an array index.
 
-7. **Attribute wiring validity**: If attribute table entries have been wired to SolutionData fields, the SolutionData structure must remain allocated and at the same memory address until the attribute cache is invalidated. Freeing or reallocating SolutionData without invalidating the cache produces dangling pointers.
+7. **Attribute wiring validity**: If attribute table entries have been wired to WorkArrays fields, the WorkArrays structure must remain allocated and at the same memory address until the attribute cache is invalidated. Freeing or reallocating WorkArrays without invalidating the cache produces dangling pointers.
 
 ## Thread Safety
 
-SolutionData is **not thread-safe**. It is designed to be accessed by a single thread during and after a single optimization call.
+WorkArrays is **not thread-safe**. It is designed to be accessed by a single thread during and after a single optimization call.
 
 - All fields are read and written without synchronization.
-- Each concurrent optimization (e.g., concurrent LP solves or scenario processing) must operate on its own Model with its own SolutionData instance.
-- After optimization returns, the user's thread may read SolutionData fields (via the attribute API) without locking, since no other thread should be modifying the structure post-solve.
+- Each concurrent optimization (e.g., concurrent LP solves or scenario processing) must operate on its own Model with its own WorkArrays instance.
+- After optimization returns, the user's thread may read WorkArrays fields (via the attribute API) without locking, since no other thread should be modifying the structure post-solve.
 
 ## Design Rationale
 
-**Separation from SolverState**: While SolverState holds the internal working data needed *during* simplex iterations (basis arrays, reduced costs, sparse matrix copies, eta vectors), SolutionData holds the *results* that persist after the solver finishes. This separation means the solver can free all its temporary working data (SolverState) immediately after completing, while the solution data (SolutionData) remains available for the user to query. This is a standard pattern in commercial LP solvers where the solver's internal memory footprint should be reclaimed promptly, but solution attributes must remain accessible.
+**Separation from SolverState**: While SolverState holds the internal working data needed *during* simplex iterations (basis arrays, reduced costs, sparse matrix copies, eta vectors), WorkArrays holds the *results* that persist after the solver finishes. This separation means the solver can free all its temporary working data (SolverState) immediately after completing, while the solution data (WorkArrays) remains available for the user to query. This is a standard pattern in commercial LP solvers where the solver's internal memory footprint should be reclaimed promptly, but solution attributes must remain accessible.
 
 **Dual value aliasing**: Rather than allocating three separate arrays for linear constraint duals, range constraint duals, and SOS constraint duals, a single contiguous allocation is made and the three pointers are set to offsets within it. This reduces the number of allocations and improves cache locality when iterating over all dual values. The trade-off is slightly more complex deallocation logic (only the base array is freed). This is a common memory management optimization in numerical software (Maros, 2003, Section 2.2 on efficient memory management).
 
-**Template copying**: When solving multi-scenario optimization problems, the solver clones the model and solves each scenario independently. After a scenario solve, the scenario model's SolutionData serves as a template for populating the original model's SolutionData. The bulk copy transfers scalar fields (counters, objective values, scale factors, thresholds) efficiently, while pointer fields are cleared afterward to prevent double ownership. This is a standard "copy-then-fixup" pattern for structures containing a mix of value and pointer fields.
+**Template copying**: When solving multi-scenario optimization problems, the solver clones the model and solves each scenario independently. After a scenario solve, the scenario model's WorkArrays serves as a template for populating the original model's WorkArrays. The bulk copy transfers scalar fields (counters, objective values, scale factors, thresholds) efficiently, while pointer fields are cleared afterward to prevent double ownership. This is a standard "copy-then-fixup" pattern for structures containing a mix of value and pointer fields.
 
 **Adaptive thresholds initialized to -1.0**: The threshold array uses -1.0 as a sentinel value meaning "not yet set." Many simplex implementations use adaptive tolerances that are computed lazily on first need, based on problem characteristics observed during the solve (e.g., the magnitude of matrix coefficients or the degree of degeneracy). Initializing to -1.0 allows each consumer to detect "first use" and compute an appropriate initial threshold. This pattern is described in the context of dynamic tolerance adjustment by Maros (2003, Chapter 8).
 
@@ -2657,7 +2758,7 @@ CrossoverState inherits SolverState's thread safety model: **not thread-safe**. 
 
 **Per-variable processing for diagonal Q**: Variables with purely diagonal quadratic terms (no cross-product terms Q_ij with i != j) can be optimized independently in O(1) per variable. This is a standard separability observation for diagonal QP problems. Variables with off-diagonal terms require joint optimization and are deferred to the simplex phase.
 
-**Binary penalty conversion**: The identity x^2 = x for x in {0, 1} is a well-known reformulation technique in quadratic programming. Converting diagonal quadratic terms to linear penalties for binary variables simplifies the effective problem for those variables, enabling more effective presolve and simplex processing. This technique is described in Sherali and Adams, *A Reformulation-Linearization Technique for Solving Discrete and Continuous Nonconvex Problems* (Springer, 1999).
+**Binary penalty conversion**: The identity x^2 = x for x in {0, 1} is a well-known reformulation technique in mixed-integer quadratic programming. Converting diagonal quadratic terms to linear penalties for binary variables reduces the effective problem to a MILP for those variables, enabling more effective presolve and simplex processing. This technique is described in Sherali and Adams, *A Reformulation-Linearization Technique for Solving Discrete and Continuous Nonconvex Problems* (Springer, 1999).
 
 **Bound-snapping heuristic**: The crossover bound-snapping procedure follows the approach described by Megiddo (1991) in "On Finding Primal- and Dual-Optimal Bases," *ORSA Journal on Computing*, 3(1):63-65, and elaborated by Andersen and Ye (1996) in "A Computational Study of the Homogeneous Algorithm for Large-Scale Convex Optimization," *Computational Optimization and Applications*, 5(3):227-247. The core idea is to identify variables whose interior-point values are close to bounds and fix them, progressively reducing the problem to one where the remaining superbasic variables can be resolved by the simplex method.
 
@@ -3172,7 +3273,7 @@ During simplex iterations, implied bounds can be derived from constraint activit
 
 where MinActivity and MaxActivity are the minimum and maximum possible values of the left-hand side excluding x_k's contribution. When these implied bounds are tighter than the current bounds, the working bounds are updated. This is a form of preprocessing that can be applied during simplex iterations, not just as a pre-solve step.
 
-See Savelsbergh (1994) for the theory of bound propagation in LP solvers.
+See Savelsbergh (1994) and Achterberg (2007) for the theory of bound propagation in LP and MIP solvers.
 
 ---
 
@@ -4922,6 +5023,7 @@ After a barrier (interior-point) method solves a linear program, the resulting s
 
 - **Warm-starting**: Subsequent solves (e.g., after adding cuts or changing bounds) are far more efficient when starting from a basis.
 - **Sensitivity analysis**: Post-optimality analysis requires knowledge of which constraints are active, which is encoded in the basis.
+- **Branch-and-bound**: Mixed-integer solvers rely on dual simplex from a basis to process subproblems efficiently.
 - **Uniqueness**: Interior-point solutions are not unique in degenerate problems; a basic solution provides a canonical representation.
 
 The crossover procedure bridges the gap between interior-point and simplex representations by systematically pushing variables to their bounds and constructing a valid basis.
@@ -5190,9 +5292,9 @@ Total additional space beyond the existing solver state: O(n + m).
 
 ## Published Reference
 
-- **Primary:** Savelsbergh, M.W.P. (1994). "Preprocessing and probing techniques for linear programming problems." *ORSA Journal on Computing*, 6(4):445-454. Sections 2.1-2.2 describe the bound-tightening procedure for individual constraints based on activity analysis.
+- **Primary:** Savelsbergh, M.W.P. (1994). "Preprocessing and probing techniques for mixed integer programming problems." *ORSA Journal on Computing*, 6(4):445-454. Sections 2.1-2.2 describe the bound-tightening procedure for individual constraints based on activity analysis.
 - **Foundational:** Brearley, A.L., Mitra, G., and Williams, H.P. (1975). "Analysis of mathematical programming problems prior to applying the simplex algorithm." *Mathematical Programming*, 8(1):54-83. Introduces the concept of deriving variable bounds from constraint structure.
-- **Presolve reductions:** Achterberg, T., Bixby, R.E., Gu, Z., Rothberg, E., and Weninger, D. (2020). "Presolve reductions in linear programming." *INFORMS Journal on Computing*, 32(2):473-506. Comprehensive treatment of bound tightening and other presolve techniques in modern LP solvers, including their application during solving.
+- **Presolve reductions:** Achterberg, T., Bixby, R.E., Gu, Z., Rothberg, E., and Weninger, D. (2020). "Presolve reductions in mixed integer programming." *INFORMS Journal on Computing*, 32(2):473-506. Comprehensive treatment of bound tightening and other presolve techniques in modern LP solvers, including their application during solving.
 - **Convergence theory:** Belotti, P., Cafieri, S., Lee, J., and Liberti, L. (2010). "Feasibility-based bounds tightening via fixed points." In *Combinatorial Optimization and Applications (COCOA 2010)*, Lecture Notes in Computer Science, vol. 6508, pp. 65-76, Springer. Characterizes the fixed-point behavior of FBBT on linear constraints and shows that convergence to the limit may not be finite.
 - **Bound flipping ratio test:** Forrest, J.J.H. and Goldfarb, D. (1992). "Steepest-edge simplex algorithms for linear programming." *Mathematical Programming*, 57(1):341-374. The bound-flipping technique that motivates per-iteration bound propagation during simplex.
 - **Dual simplex bound propagation:** Koberstein, A. (2005). *The dual simplex method, techniques for a fast and stable implementation.* PhD Thesis, University of Paderborn. Discusses integration of bound tightening within the dual simplex iteration loop.
@@ -5309,7 +5411,7 @@ The **lower activity** L_act_i (also called minimum activity) is defined symmetr
 | 3 | BOTH | Both bounds tightened; variable is effectively fixed (bits 0 + 1) |
 | 4 | INFEASIBLE | Implied value contradicts existing bounds beyond tolerance |
 
-When the candidate variable is a piecewise-linear variable, an additional flag (value 8) is added to the violation code to signal downstream processing that piecewise-linear considerations apply.
+When the candidate variable is an integer or piecewise-linear variable, an additional flag (value 8) is added to the violation code to signal downstream processing that integrality considerations apply.
 
 ### Overview
 
@@ -5778,7 +5880,7 @@ The total per-iteration cost is proportional to the number of pricing candidates
 
 10. **Quadratic programs:** Constraint-side propagation (Section 2) is skipped entirely. Variable-side propagation (Section 1) still operates. This is because the quadratic objective introduces nonlinear dependencies that invalidate the linear activity-bound inference used by constraint-side propagation.
 
-11. **Integer and piecewise-linear variables:** These receive an additional flag in the violation classification stored in the eta record. This flag does not affect the propagation logic itself but enables downstream piecewise-linear processing to identify bound changes on variables requiring special breakpoint handling.
+11. **Integer and piecewise-linear variables:** These receive an additional flag in the violation classification stored in the eta record. This flag does not affect the propagation logic itself but enables downstream MIP or piecewise-linear processing to identify bound changes on variables requiring special integrality or breakpoint handling.
 
 ---
 
@@ -5809,7 +5911,7 @@ The total per-iteration cost is proportional to the number of pricing candidates
 
 ## Purpose
 
-This module provides the foundational memory allocation, reallocation, and deallocation functions used throughout the solver. All memory operations are routed through these primitives to enable memory usage tracking against a configurable memory limit, support for custom allocator callbacks (for embedded deployments), and thread-safe usage accounting via thread-local batching. The module also provides the top-level Model allocation function that creates and initializes a Model structure.
+This module provides the foundational memory allocation, reallocation, and deallocation functions used throughout the solver. All memory operations are routed through these primitives to enable memory usage tracking against a configurable memory limit, support for custom allocator callbacks (for ISV/embedded deployments), and thread-safe usage accounting via thread-local batching. The module also provides the top-level Model allocation function that creates and initializes a Model structure.
 
 ## Functions
 
@@ -5912,7 +6014,7 @@ cxf_realloc resizes an existing memory allocation while maintaining memory track
 - The environment's model tracking has been updated to reflect the removal
 
 **Side Effects:**
-- Frees all memory associated with the Model and its owned sub-structures, including: remote solver state, callback state, nested context structures (recursively), timing state, hint arrays, basis and start arrays, matrix scaling data, internal solver state, solution state, vector pairs, hash tables, basis factorization data, solution information structures, SOS constraint data, general constraint data, IIS state, LP state, warm-start data, barrier state, solution pool, and various auxiliary arrays
+- Frees all memory associated with the Model and its owned sub-structures, including: remote solver state, callback state, nested context structures (recursively), timing state, MIP hint arrays, basis and start arrays, matrix scaling data, internal solver state, solution state, vector pairs, hash tables, basis factorization data, solution information structures, SOS constraint data, general constraint data, IIS state, LP state, warm-start data, barrier state, solution pool, and various auxiliary arrays
 - Invalidates the attribute cache before freeing solution data
 - Waits for any active asynchronous thread to complete before freeing
 - Updates the environment's active model tracking
@@ -5923,7 +6025,7 @@ cxf_realloc resizes an existing memory allocation while maintaining memory track
 - Null dereferenced pointer -> safe no-op (returns immediately)
 
 **Behavioral Description:**
-cxf_vector_free performs comprehensive, ordered deallocation of a Model structure and all of its transitively owned resources. The function first extracts the environment pointer from the structure for use in subsequent deallocation calls. It then proceeds through a well-defined sequence of cleanup phases: freeing remote solver and callback state if active, recursively freeing up to seven nested context structures (representing presolve models and sub-problems), freeing simple pointer fields and timing state, iterating over and freeing hint arrays, freeing basis-related arrays, freeing auxiliary structures (matrix scaling, internal solver state, solution state, vector pairs, hash tables, basis factorization), freeing solution information structures with attribute cache invalidation, freeing constraint-related data (SOS, general constraints), freeing IIS and LP state, freeing warm-start data with its own nested sub-structures, freeing remaining fields and waiting for async threads, and finally clearing the validity sentinel, updating the environment's model tracking, and freeing the main structure itself.
+cxf_vector_free performs comprehensive, ordered deallocation of a Model structure and all of its transitively owned resources. The function first extracts the environment pointer from the structure for use in subsequent deallocation calls. It then proceeds through a well-defined sequence of cleanup phases: freeing remote solver and callback state if active, recursively freeing up to seven nested context structures (representing presolve models and sub-problems), freeing simple pointer fields and timing state, iterating over and freeing MIP hint arrays, freeing basis-related arrays, freeing auxiliary structures (matrix scaling, internal solver state, solution state, vector pairs, hash tables, basis factorization), freeing solution information structures with attribute cache invalidation, freeing constraint-related data (SOS, general constraints), freeing IIS and LP state, freeing warm-start data with its own nested sub-structures, freeing remaining fields and waiting for async threads, and finally clearing the validity sentinel, updating the environment's model tracking, and freeing the main structure itself.
 
 **Thread Safety:** unsafe - The function must not be called concurrently on the same structure. It must not be called while an optimization is in progress on the structure.
 
@@ -5943,7 +6045,7 @@ cxf_vector_free performs comprehensive, ordered deallocation of a Model structur
 
 **Preconditions:**
 - environment must be a valid, activated Environment
-- environment must be activated (activation state is ACTIVE)
+- environment must have a valid license (activation state is ACTIVE)
 
 **Postconditions:**
 - On success, the returned Model has:
@@ -5990,7 +6092,7 @@ This architecture follows standard practices for memory-managed runtime systems,
 
 ### Custom Allocator Support
 
-The custom allocator callback mechanism allows embedded deployments to redirect all solver memory allocations through application-provided allocators. When custom allocators are active, a small header is prepended to each allocation to store the allocation size, since custom allocators may not support the platform-specific query for allocation size. The returned pointer is offset past this header, making the header invisible to the caller.
+The custom allocator callback mechanism allows ISV (Independent Software Vendor) deployments to redirect all solver memory allocations through application-provided allocators. When custom allocators are active, a small header is prepended to each allocation to store the allocation size, since custom allocators may not support the platform-specific query for allocation size. The returned pointer is offset past this header, making the header invisible to the caller.
 
 ### Model Deallocation Ordering
 
@@ -6021,7 +6123,7 @@ cxf_vector_free follows a strict deallocation order designed to prevent dangling
 
 ## Purpose
 
-This module provides higher-level allocation functions that build on the memory primitives to allocate and initialize domain-specific solver structures. It includes the arena allocator for eta vectors used in the Product Form of the Inverse and the allocation and initialization of the SolutionData (solution data container). These functions bridge the gap between raw memory allocation and the solver's runtime data structures.
+This module provides higher-level allocation functions that build on the memory primitives to allocate and initialize domain-specific solver structures. It includes the arena allocator for eta vectors used in the Product Form of the Inverse, the allocation and initialization of the WorkArrays (solution data container), and the pre-optimization resource validation function that checks licensing and model size limits. These functions bridge the gap between raw memory allocation and the solver's runtime data structures.
 
 ## Functions
 
@@ -6067,20 +6169,20 @@ cxf_alloc_eta implements a region-based memory allocator (arena allocator) optim
 
 ### cxf_alloc_work_arrays
 
-**Purpose:** Allocate (if necessary) and initialize the SolutionData solution data container on a Model, preparing it for a new optimization call.
+**Purpose:** Allocate (if necessary) and initialize the WorkArrays solution data container on a Model, preparing it for a new optimization call.
 
 **Signature:**
-- Input: model : pointer-to-Model - The model on which to allocate or reinitialize the SolutionData
-- Input: template : pointer-to-SolutionData (nullable) - Optional template from which to copy scalar field values (e.g., from a scenario model); if null, fields are initialized to defaults
+- Input: model : pointer-to-Model - The model on which to allocate or reinitialize the WorkArrays
+- Input: template : pointer-to-WorkArrays (nullable) - Optional template from which to copy scalar field values (e.g., from a scenario model); if null, fields are initialized to defaults
 - Output: int - Error code: zero on success, OUT_OF_MEMORY error code on allocation failure
 
 **Preconditions:**
 - model must be a valid, initialized Model with a valid environment and matrix data
-- If template is non-null, it must point to a valid, initialized SolutionData structure
+- If template is non-null, it must point to a valid, initialized WorkArrays structure
 - The model's matrix data must be populated (the function reads the variable count from it)
 
 **Postconditions:**
-- On success, the model's SolutionData pointer references an initialized structure with:
+- On success, the model's WorkArrays pointer references an initialized structure with:
   - The active flag set to indicate the structure is live
   - Scale factors computed from the model's variable count multiplied by standard algorithmic tolerance and scaling constants
   - The base tolerance stored from the solver's tolerance constant
@@ -6090,23 +6192,67 @@ cxf_alloc_eta implements a region-based memory allocator (arena allocator) optim
   - All solution pool and cut counters cleared to zero
   - All pointer fields for solution arrays (primal values, dual values) set to null
   - If a template was provided, scalar fields (counters, objective values, scale factors, thresholds) have been bulk-copied from the template, with pointer fields subsequently cleared to prevent aliasing
-- Any previously allocated solution arrays (primal values, dual values) within the SolutionData have been freed before reinitialization
+- Any previously allocated solution arrays (primal values, dual values) within the WorkArrays have been freed before reinitialization
 
 **Side Effects:**
-- Allocates the SolutionData structure via cxf_calloc if not already present on the model
-- Frees any existing solution arrays owned by the SolutionData
+- Allocates the WorkArrays structure via cxf_calloc if not already present on the model
+- Frees any existing solution arrays owned by the WorkArrays
 - Clears borrowed pointer fields to prevent aliasing
 - Invokes an internal cleanup routine on the model
 
 **Error Conditions:**
-- Out of memory during SolutionData structure allocation -> returns OUT_OF_MEMORY error code
+- Out of memory during WorkArrays structure allocation -> returns OUT_OF_MEMORY error code
 
 **Behavioral Description:**
-cxf_alloc_work_arrays prepares the model's solution data container for a new optimization run. If the model does not yet have a SolutionData structure, one is allocated as a zero-initialized block. Any existing solution arrays (primal and dual value arrays) are freed to avoid memory leaks from a previous solve. The function then initializes all fields to their default states: the active flag is set, scale factors are computed as the product of the variable count and standard tolerance/scaling constants, anti-cycling indices are set to sentinel values indicating "not set," and adaptive threshold values are set to sentinel values indicating "not yet activated." If a template SolutionData is provided (used in multi-scenario optimization where a scenario model's results are transferred to the original model), the scalar fields are bulk-copied from the template and pointer fields are then explicitly cleared to null to prevent double-ownership of the template's arrays. Finally, additional tracking fields (counters, pool data) are zeroed.
+cxf_alloc_work_arrays prepares the model's solution data container for a new optimization run. If the model does not yet have a WorkArrays structure, one is allocated as a zero-initialized block. Any existing solution arrays (primal and dual value arrays) are freed to avoid memory leaks from a previous solve. The function then initializes all fields to their default states: the active flag is set, scale factors are computed as the product of the variable count and standard tolerance/scaling constants, anti-cycling indices are set to sentinel values indicating "not set," and adaptive threshold values are set to sentinel values indicating "not yet activated." If a template WorkArrays is provided (used in multi-scenario optimization where a scenario model's results are transferred to the original model), the scalar fields are bulk-copied from the template and pointer fields are then explicitly cleared to null to prevent double-ownership of the template's arrays. Finally, additional tracking fields (counters, pool data) are zeroed.
 
 **Thread Safety:** unsafe - Must be called from a single thread. The Model structure is not thread-safe.
 
 **Dependencies:** cxf_calloc (for allocation), system deallocator (for freeing old arrays).
+
+---
+
+### cxf_setup_resources
+
+**Purpose:** Validate the license and check model size against license limits before optimization can proceed.
+
+**Signature:**
+- Input: model : pointer-to-Model - The model to validate
+- Output: int - Error code: zero on success, or a license/resource error code on failure
+
+**Preconditions:**
+- model must be a valid, initialized Model with a valid environment
+- The model's environment must reference a root environment with license data
+
+**Postconditions:**
+- On success (return zero), the license is valid and the model's dimensions (variable count, constraint count, nonzero count, and quadratic term count, including any pending uncommitted modifications) are within the license limits
+- On failure, an appropriate error code is returned and an error message may have been logged on the environment
+
+**Side Effects:**
+- For cloud-based or web license service deployment types: may perform network communication to validate or refresh a license token, protected by a critical section on the root environment
+- May update cached license tokens on the root environment when a fresh token is obtained
+- Logs error messages on the environment when initialization validation fails
+
+**Error Conditions:**
+- Environment relationship invalid (model's initialized environment does not match root environment) -> returns LICENSE_SIZE_EXCEEDED error
+- License suspended -> returns LICENSE_SIZE_EXCEEDED error
+- Cloud/WLS token validation failure (all fallback attempts exhausted) -> returns LICENSE_SIZE_EXCEEDED error
+- Batch mode active on environment -> returns CANNOT_OPTIMIZE_BATCH error (batch-mode models cannot be optimized locally)
+- Model variable count exceeds license limit -> returns LICENSE_LIMIT error
+- Model constraint count (sum of all constraint types plus pending) exceeds license limit -> returns LICENSE_LIMIT error
+- Model nonzero count exceeds license limit -> returns LICENSE_LIMIT error
+- Model quadratic term count exceeds license limit -> returns LICENSE_LIMIT error
+
+**Behavioral Description:**
+cxf_setup_resources performs a multi-tier validation before allowing optimization to proceed. First, it validates the environment chain by confirming that the model's license reference matches the root environment's license reference; if not, or if a basic environment validation fails, it returns an error immediately. If the model has no matrix data (empty model), it returns success since there is nothing to validate. It then checks whether the license has been externally suspended.
+
+For cloud-based and web license service (WLS) deployment types, the function enters a critical section and performs a cascading token validation strategy: it first tries a cached token, then an alternate cached token, then attempts a token refresh from the configuration server, and finally makes a full license service API call. Each successful validation updates the token cache for future calls. This multi-tier caching minimizes network latency during repeated optimization calls.
+
+After license-type-specific validation, the function checks whether the environment is in batch mode (which prohibits local optimization). Finally, it validates the model's dimensions against the license limits. The total constraint count is computed as the sum of all constraint types (linear, quadratic, SOS, general, piecewise-linear, and others), including any pending uncommitted modifications from the lazy update buffer.
+
+**Thread Safety:** conditional - Token validation for cloud and WLS licenses is protected by a critical section on the root environment, serializing concurrent token operations. Model size checks are read-only and safe for concurrent access to different models sharing the same environment.
+
+**Dependencies:** initialization validation functions (for basic environment validations and token validation), system identification functions (for machine/user identification in cloud licensing), error logging (for reporting license failures).
 
 ---
 
@@ -6126,9 +6272,9 @@ The eta vector memory pool uses a region-based (arena) allocator rather than ind
 
 The Product Form of the Inverse (PFI) approach that generates these eta vectors is described in Dantzig and Orchard-Hays (1954), "The Product Form for the Inverse in the Simplex Method," *Mathematical Tables and Other Aids to Computation*.
 
-### SolutionData Initialization Pattern
+### WorkArrays Initialization Pattern
 
-The SolutionData allocation function follows a "create-or-reinitialize" pattern common in solver implementations:
+The WorkArrays allocation function follows a "create-or-reinitialize" pattern common in solver implementations:
 
 - If the structure does not exist, it is allocated.
 - If it already exists from a previous solve, its arrays are freed but the structure itself is reused.
@@ -6136,6 +6282,17 @@ The SolutionData allocation function follows a "create-or-reinitialize" pattern 
 - Template copying supports multi-scenario optimization where results from one solve are used to initialize the next.
 
 The adaptive threshold pattern (initialized to -1.0 meaning "compute on first use") is a standard technique for dynamic tolerance adjustment in LP solvers, as discussed in Maros (2003), *Computational Techniques of the Simplex Method*, Chapter 8.
+
+### License Validation Strategy
+
+The initialization validation function implements a defense-in-depth approach:
+
+1. **Environment chain validation** catches corrupted or detached model-environment relationships.
+2. **License suspension check** supports external administrative control.
+3. **Token caching with cascading fallback** minimizes network latency while ensuring validity.
+4. **Comprehensive size checking** covers all constraint types and pending modifications to prevent license circumvention via lazy updates.
+
+The critical section protecting token operations ensures that concurrent optimizations do not corrupt shared token state, while the model size checks are inherently read-only and safe for concurrent access.
 
 ## References
 
@@ -6164,7 +6321,7 @@ The adaptive threshold pattern (initialized to -1.0 meaning "compute on first us
 
 ## Purpose
 
-This module provides the functions that prepare model-level state at the beginning of an optimization call. It encompasses three concerns: initializing the solver's runtime environment (clearing flags, recording timestamps, adjusting tolerances), freeing stale warm-start basis data when a reset has been requested, and tearing down the solution output container (SolutionData) to prepare for fresh results. Despite the "setup" naming convention in some of these functions, two of the three actually perform cleanup operations that establish a clean slate for the next optimization attempt. This reflects the solver's lifecycle pattern: "initialization" at the optimization boundary often means "clear previous results."
+This module provides the functions that prepare model-level state at the beginning of an optimization call. It encompasses three concerns: initializing the solver's runtime environment (clearing flags, recording timestamps, adjusting tolerances), freeing stale warm-start basis data when a reset has been requested, and tearing down the solution output container (WorkArrays) to prepare for fresh results. Despite the "setup" naming convention in some of these functions, two of the three actually perform cleanup operations that establish a clean slate for the next optimization attempt. This reflects the solver's lifecycle pattern: "initialization" at the optimization boundary often means "clear previous results."
 
 ## Functions
 
@@ -6180,12 +6337,13 @@ This module provides the functions that prepare model-level state at the beginni
 **Preconditions:**
 - The model must be a valid, initialized Model with a non-null environment reference.
 - The model must have passed validation checks (modification not blocked, etc.).
-- The environment must be active.
+- The environment must be active and licensed.
 
 **Postconditions:**
 - The environment's termination flag is cleared (set to zero), allowing the solver to run without a premature stop signal.
 - The model's solve-duration, work-rate, and total-work fields are cleared to zero.
 - If a model manager (callback state container) is present in the environment, its timestamp is set to the current time and its counter is reset to zero.
+- If the model contains integer variables (is a MIP) and has an active solver state with callback timing structures, those timing structures are initialized and reset.
 - The environment's objective offset tolerance is saved (for later restoration) and then adjusted by a small perturbation proportional to the current tolerance magnitude and the number of constraints in the model. This perturbation prevents tolerance drift across repeated solves.
 - If memory counting is disabled in the master environment but a memory limit parameter is set, a warning message is logged indicating the limit cannot be enforced.
 - Thread-local memory tracking is initialized for the current thread.
@@ -6194,6 +6352,7 @@ This module provides the functions that prepare model-level state at the beginni
 - Writes to the environment's termination flag, objective offset tolerance, and saved tolerance fields.
 - Writes to the model's timing/statistics fields.
 - Writes to the model manager's timestamp and counter fields (if present).
+- Initializes and resets MIP callback timing structures (if applicable).
 - May log a warning message to the environment's log output.
 - Initializes thread-local memory pool tracking.
 
@@ -6201,22 +6360,24 @@ This module provides the functions that prepare model-level state at the beginni
 - None. This function does not return an error code. It operates defensively, checking for null pointers before accessing optional structures.
 
 **Behavioral Description:**
-cxf_init_solve_state is called once at the top of each optimization invocation to establish a clean starting state. It clears the user-accessible termination flag so that the solver does not immediately stop. It zeros the model's solve-performance counters (duration, work rate, total work). It records the solve start time in the model manager for progress reporting. It applies a small perturbation to the objective offset tolerance -- a standard numerical hygiene technique that prevents repeated solves from accumulating numerical bias. The perturbation direction depends on whether the model has constraints (positive adjustment) or not (negative adjustment), and a dampening multiplier prevents the tolerance from drifting too far from its original value. Finally, it checks whether the memory limit parameter can actually be enforced and warns the user if not.
+cxf_init_solve_state is called once at the top of each optimization invocation to establish a clean starting state. It clears the user-accessible termination flag so that the solver does not immediately stop. It zeros the model's solve-performance counters (duration, work rate, total work). It records the solve start time in the model manager for progress reporting. For MIP models with active callback infrastructure, it initializes the callback timing subsystem. It applies a small perturbation to the objective offset tolerance -- a standard numerical hygiene technique that prevents repeated solves from accumulating numerical bias. The perturbation direction depends on whether the model has constraints (positive adjustment) or not (negative adjustment), and a dampening multiplier prevents the tolerance from drifting too far from its original value. Finally, it checks whether the memory limit parameter can actually be enforced and warns the user if not.
 
 **Thread Safety:** unsafe -- Must be called from a single thread before the solve begins. The function modifies environment-level state that is not protected by locks.
 
 **Dependencies:**
 - cxf_get_timestamp (timing module) -- retrieves the current timestamp
+- cxf_is_mip_model (model type checking module) -- determines if the model has integer variables
+- cxf_init_callback_timing, cxf_reset_callback_timing (callback module) -- initialize MIP callback timing
 - cxf_log (error/logging module) -- logs warning messages
 - cxf_get_memory_pool_id, cxf_init_thread_memory (memory module) -- thread-local memory setup
 
 ---
 
-### cxf_free_warmstart_basis
+### cxf_setup_basis
 
 **Purpose:** Free the warm-start basis data structure associated with the model, deallocating all owned arrays and nested sub-structures.
 
-**Naming history:** Formerly `cxf_setup_basis`; renamed to better reflect its actual behavior as a destructor rather than an initialization function.
+**Note:** Despite its name suggesting initialization, this function is a destructor. Analysis of the implementation confirms it performs only deallocation operations (no allocations, no field initialization to non-zero values). The name is a historical misnomer; the function is functionally identical to cxf_free_warmstart_basis.
 
 **Signature:**
 - Input: env : pointer-to-Environment - The environment for memory tracking during deallocation
@@ -6244,7 +6405,7 @@ cxf_init_solve_state is called once at the top of each optimization invocation t
 - None. This function does not return an error code. Null pointer inputs are handled gracefully.
 
 **Behavioral Description:**
-cxf_free_warmstart_basis (which is functionally cxf_free_warmstart_basis) performs an inside-out deallocation of the WarmStartData structure. It first frees the leaf-level arrays (variable basis status, primal/dual values, constraint basis status), then frees the nested factorization cache sub-structure (its index array, its value array, then the sub-structure itself), then frees the main WarmStartData structure, and finally nulls the caller's reference pointer. Each pointer is null-checked before freeing, and each pointer is set to null after freeing, following the solver's standard defensive memory management pattern.
+cxf_setup_basis (which is functionally cxf_free_warmstart_basis) performs an inside-out deallocation of the WarmStartData structure. It first frees the leaf-level arrays (variable basis status, primal/dual values, constraint basis status), then frees the nested factorization cache sub-structure (its index array, its value array, then the sub-structure itself), then frees the main WarmStartData structure, and finally nulls the caller's reference pointer. Each pointer is null-checked before freeing, and each pointer is set to null after freeing, following the solver's standard defensive memory management pattern.
 
 **Deallocation Order:**
 1. Variable basis status array (within WarmStartData)
@@ -6263,51 +6424,51 @@ cxf_free_warmstart_basis (which is functionally cxf_free_warmstart_basis) perfor
 
 ---
 
-### cxf_free_work_arrays
+### cxf_setup_work_arrays
 
-**Purpose:** Free the SolutionData (solution output container) structure from the model, invalidating cached attributes and deallocating all owned arrays before removing the structure.
+**Purpose:** Free the WorkArrays (solution output container) structure from the model, invalidating cached attributes and deallocating all owned arrays before removing the structure.
 
-**Naming history:** Formerly `cxf_setup_work_arrays`; renamed to better reflect its actual behavior as a destructor/reset function rather than an initialization function.
+**Note:** Despite its name suggesting initialization, this function is a destructor/reset function. It frees the existing WorkArrays structure and all its owned allocations, preparing the model for either a fresh optimization attempt or final cleanup.
 
 **Signature:**
-- Input: model : pointer-to-Model - The model whose SolutionData structure should be freed
+- Input: model : pointer-to-Model - The model whose WorkArrays structure should be freed
 - Output: void
 
 **Preconditions:**
 - The model may be null; if so, the function returns immediately.
-- If the model is non-null but has no SolutionData structure, the function returns immediately.
+- If the model is non-null but has no WorkArrays structure, the function returns immediately.
 
 **Postconditions:**
-- The model's attribute cache has been invalidated, breaking any wired pointers from the attribute table into SolutionData fields.
-- All owned arrays within the SolutionData structure have been freed (primal solution array, dual solution array).
+- The model's attribute cache has been invalidated, breaking any wired pointers from the attribute table into WorkArrays fields.
+- All owned arrays within the WorkArrays structure have been freed (primal solution array, dual solution array).
 - Borrowed pointers within the structure (e.g., range dual and SOS dual aliases into the dual array) have been cleared without being independently freed.
 - Any unrecoverable error state associated with the model has been cleaned up.
-- The SolutionData structure itself has been freed.
-- The model's reference to the SolutionData structure has been set to null.
+- The WorkArrays structure itself has been freed.
+- The model's reference to the WorkArrays structure has been set to null.
 
 **Side Effects:**
 - Invalidates the model's attribute cache (must occur first, before any field deallocation, to prevent dangling pointers in the attribute table).
 - Deallocates memory through the environment's memory management system.
 - Clears borrowed pointer fields without freeing them (these alias into other allocations).
 - Invokes the unrecoverable state cleanup helper.
-- Nulls the model's SolutionData pointer.
+- Nulls the model's WorkArrays pointer.
 
 **Error Conditions:**
-- None. This function does not return an error code. Null model and null SolutionData cases are handled gracefully.
+- None. This function does not return an error code. Null model and null WorkArrays cases are handled gracefully.
 
 **Behavioral Description:**
-cxf_free_work_arrays performs a controlled teardown of the model's solution output container. The first action is attribute cache invalidation, which must precede any deallocation because the attribute table may hold direct pointers into SolutionData fields. After invalidation, the function frees the two owned arrays (solution index array and solution value array), clears two borrowed pointer fields without freeing them (these are aliases into allocations owned by other structures), invokes the unrecoverable state cleanup helper to handle any orphaned allocations, and finally frees the SolutionData structure itself and nulls the model's reference.
+cxf_setup_work_arrays performs a controlled teardown of the model's solution output container. The first action is attribute cache invalidation, which must precede any deallocation because the attribute table may hold direct pointers into WorkArrays fields. After invalidation, the function frees the two owned arrays (solution index array and solution value array), clears two borrowed pointer fields without freeing them (these are aliases into allocations owned by other structures), invokes the unrecoverable state cleanup helper to handle any orphaned allocations, and finally frees the WorkArrays structure itself and nulls the model's reference.
 
 **Deallocation Order:**
 1. Attribute cache invalidation (must be first)
-2. Owned solution index array (within SolutionData)
-3. Owned solution value array (within SolutionData)
+2. Owned solution index array (within WorkArrays)
+3. Owned solution value array (within WorkArrays)
 4. Borrowed pointers cleared (not freed)
 5. Unrecoverable state cleanup
-6. SolutionData structure itself
-7. Model's SolutionData reference set to null
+6. WorkArrays structure itself
+7. Model's WorkArrays reference set to null
 
-**Thread Safety:** unsafe -- Assumes single-threaded access to the model and its SolutionData.
+**Thread Safety:** unsafe -- Assumes single-threaded access to the model and its WorkArrays.
 
 **Dependencies:**
 - cxf_clear_attr_cache (attribute module) -- invalidates the attribute table's cached pointers
@@ -6318,24 +6479,24 @@ cxf_free_work_arrays performs a controlled teardown of the model's solution outp
 
 ## Module-Level Notes
 
-### Naming History
+### Naming Misnomers
 
-Two of the three functions in this module have been renamed to correct historical misnomers:
+Two of the three functions in this module have names that suggest initialization but actually perform cleanup:
 
-| Current Name | Former Name | Reason for Rename |
-|--------------|-------------|-------------------|
-| cxf_free_warmstart_basis | cxf_setup_basis | Original name suggested initialization but function performs deallocation |
-| cxf_free_work_arrays | cxf_setup_work_arrays | Original name suggested initialization but function performs cleanup |
+| Audit Name | Actual Behavior | Canonical Name |
+|------------|-----------------|----------------|
+| cxf_setup_basis | Frees warm-start basis data | cxf_free_warmstart_basis |
+| cxf_setup_work_arrays | Frees WorkArrays structure | cxf_free_work_arrays |
 
-The original naming reflected the perspective that "setting up" for a new optimization means "clearing out" the previous optimization's residual state. The current names accurately describe the actual behavior.
+These naming misnomers appear to reflect the perspective that "setting up" for a new optimization means "clearing out" the previous optimization's residual state. The behavioral contracts above describe the actual behavior regardless of the name.
 
 ### Calling Context
 
 These three functions are called early in the optimization pipeline:
 
 1. **cxf_init_solve_state** is called at the very beginning of the optimization entry point, after model validation but before solver dispatch.
-2. **cxf_free_warmstart_basis** is called conditionally when an environment parameter indicates that warm-start data should be cleared before re-optimization.
-3. **cxf_free_work_arrays** is called on error recovery paths during optimization and during solution clearing operations.
+2. **cxf_setup_basis** is called conditionally when an environment parameter indicates that warm-start data should be cleared before re-optimization.
+3. **cxf_setup_work_arrays** is called on error recovery paths during optimization and during solution clearing operations.
 
 ### Relationship to Cleanup Module (P3.04)
 
@@ -6368,13 +6529,13 @@ The functions in this module overlap conceptually with the cleanup module (P3.04
 
 ## Purpose
 
-This module provides functions for releasing and resetting model-level state that accumulates during optimization and through the lazy update pattern. It handles three distinct cleanup responsibilities: (1) disconnecting from remote solvers and releasing callback state, (2) releasing concurrent environment pools with reference counting, (3) clearing all solution-related data from a model, (4) performing a deep free of the pending modifications buffer, and (5) performing a soft reset of the pending modifications buffer for reuse. These functions are called during model destruction, solution clearing, and update processing.
+This module provides functions for releasing and resetting model-level state that accumulates during optimization and through the lazy update pattern. It handles three distinct cleanup responsibilities: (1) disconnecting from remote remote solvers and releasing callback state, (2) releasing concurrent environment pools with reference counting, (3) clearing all solution-related data from a model, (4) performing a deep free of the pending modifications buffer, and (5) performing a soft reset of the pending modifications buffer for reuse. These functions are called during model destruction, solution clearing, and update processing.
 
 ## Functions
 
 ### cxf_free_callback_state
 
-**Purpose:** Cleanly disconnects a model from a remote solver and releases the associated callback registration state.
+**Purpose:** Cleanly disconnects a model from a remote remote solver and releases the associated callback registration state.
 
 **Signature:**
 - Input: model : pointer-to-Model - The model whose remote callback state should be freed
@@ -6393,7 +6554,7 @@ This module provides functions for releasing and resetting model-level state tha
 - Any server-side error messages have been propagated to the Environment's error state
 
 **Side Effects:**
-- Sends a termination request to the remote solver if optimization is active
+- Sends a termination request to the remote remote solver if optimization is active
 - Blocks (with bounded polling) until the remote operation completes or the polling limit is reached
 - Sends a disconnect protocol message to the remote server
 - May send a result-fetch protocol message if the disconnect did not complete cleanly
@@ -6407,7 +6568,7 @@ This module provides functions for releasing and resetting model-level state tha
 - If the disconnect returns an unexpected error, the function attempts to wait for any outstanding optimization and fetch results before returning
 
 **Behavioral Description:**
-This function manages the complex cleanup required when a model with registered callbacks is being freed while connected to a remote solver. It first checks whether a remote optimization is still active for this model. If so, it requests termination and polls until the model becomes inactive (with a bounded maximum number of polling iterations to prevent infinite loops). Once the model is inactive, it acquires the remote solver lock, frees any existing connection handle, sends a disconnect message using the remote solver protocol, and releases the lock. The callback registration count on the model is then cleared. If the disconnect completes successfully or times out, the function returns. If the server reports an error, the error is propagated to the Environment. For other error conditions, the function waits for any outstanding remote optimization, then sends a result-fetch request and processes the response, propagating any error information to the Environment.
+This function manages the complex cleanup required when a model with registered callbacks is being freed while connected to a remote remote solver. It first checks whether a remote optimization is still active for this model. If so, it requests termination and polls until the model becomes inactive (with a bounded maximum number of polling iterations to prevent infinite loops). Once the model is inactive, it acquires the remote solver lock, frees any existing connection handle, sends a disconnect message using the remote solver protocol, and releases the lock. The callback registration count on the model is then cleared. If the disconnect completes successfully or times out, the function returns. If the server reports an error, the error is propagated to the Environment. For other error conditions, the function waits for any outstanding remote optimization, then sends a result-fetch request and processes the response, propagating any error information to the Environment.
 
 **Thread Safety:** Conditional. Acquires the remote solver lock for protocol operations. The bounded polling loop for termination does not hold a lock.
 
@@ -6434,7 +6595,7 @@ This function manages the complex cleanup required when a model with registered 
 **Side Effects:**
 - For each environment in the pool: decrements the reference count on the environment's root environment under the root environment's mutex
 - If an environment's reference count reaches zero, recursively frees the environment and (if the root environment also reaches zero) the root environment
-- If an environment's reference count is still positive after decrement, performs deferred cleanup: logs a warning, and if a remote solver job is active, attempts to terminate it (with bounded polling), sends a kill message, and frees the remote solver connection
+- If an environment's reference count is still positive after decrement, performs deferred cleanup: logs a warning, and if a remote remote solver job is active, attempts to terminate it (with bounded polling), sends a kill message, and frees the remote solver connection
 - Frees the pool array using the model's primary environment as the memory context
 - Clears the pool pointer and count on the model
 
@@ -6442,7 +6603,7 @@ This function manages the complex cleanup required when a model with registered 
 - None (void return). Deferred-free conditions are handled gracefully via logging and remote job termination.
 
 **Behavioral Description:**
-This function iterates through the model's concurrent environment pool -- an array of Environment references created for parallel optimization (e.g., concurrent solving with different parameter settings). For each environment, it decrements the root environment's reference count under the root environment's mutex. If the reference count reaches zero, the environment is fully freed via the internal environment destructor. If the reference count is still positive (meaning other code still references this environment), the function performs deferred cleanup: it logs a warning, checks for an active remote solver job associated with the environment, and if found, requests termination with bounded polling and ultimately kills the remote job. After processing all environments, the pool array itself is freed and the model's pool pointer and count are cleared.
+This function iterates through the model's concurrent environment pool -- an array of Environment references created for parallel optimization (e.g., concurrent MIP solving with different parameter settings). For each environment, it decrements the root environment's reference count under the root environment's mutex. If the reference count reaches zero, the environment is fully freed via the internal environment destructor. If the reference count is still positive (meaning other code still references this environment), the function performs deferred cleanup: it logs a warning, checks for an active remote remote solver job associated with the environment, and if found, requests termination with bounded polling and ultimately kills the remote job. After processing all environments, the pool array itself is freed and the model's pool pointer and count are cleared.
 
 **Thread Safety:** Conditional. Reference count decrements are performed under the root environment's mutex. Remote job termination uses bounded polling without holding a lock.
 
@@ -6456,7 +6617,7 @@ This function iterates through the model's concurrent environment pool -- an arr
 
 **Signature:**
 - Input: model : pointer-to-Model - The model to clear
-- Input: clearHints : int - If nonzero, also clear start hints, warm-start data, and user-supplied basis information
+- Input: clearHints : int - If nonzero, also clear MIP start hints, warm-start data, and user-supplied basis information
 - Output: int - Zero on success, nonzero error code on failure
 
 **Preconditions:**
@@ -6470,7 +6631,7 @@ This function iterates through the model's concurrent environment pool -- an arr
 - Basis state has been freed
 - Matrix version and solution status flags have been cleared
 - The model's attribute cache has been invalidated
-- If clearHints was nonzero: start hint arrays, branch priorities, user-supplied basis arrays (variable basis, constraint basis, quadratic constraint basis, SOS basis, PWL basis), start values, partition data, lazy constraint flags, variable hint values, and variable hint priorities have all been freed and their pointers nulled
+- If clearHints was nonzero: MIP start hint arrays, branch priorities, user-supplied basis arrays (variable basis, constraint basis, quadratic constraint basis, SOS basis, PWL basis), start values, partition data, lazy constraint flags, variable hint values, and variable hint priorities have all been freed and their pointers nulled
 - The model's initialized flag is set to 1
 - The environment's thread pool has been freed
 - Asynchronous optimization threads have been joined
@@ -6670,11 +6831,11 @@ cxf_cleanup_solve_state is the cleanup counterpart to cxf_init_solve_state, call
 
 ---
 
-### cxf_free_attribute_table
+### cxf_free_solver_state
 
 **Purpose:** Free the model's attribute table structure and its owned entries array, removing the metadata that supports the model's attribute access API.
 
-**Naming history:** Formerly `cxf_free_solver_state`; renamed to better reflect its specific responsibility of freeing the attribute table structure rather than broader solver state.
+**Note:** Despite the name suggesting it frees "solver state," this function specifically frees the attribute table structure. The naming reflects an earlier architectural phase where this model field held broader solver state.
 
 **Signature:**
 - Input: model : pointer-to-Model - The model whose attribute table should be freed
@@ -6701,7 +6862,7 @@ cxf_cleanup_solve_state is the cleanup counterpart to cxf_init_solve_state, call
 - None. This function does not return an error code. Null attribute table is handled gracefully.
 
 **Behavioral Description:**
-cxf_free_attribute_table performs a two-level deallocation of the model's attribute table. It first frees the nested entries array (which contains the per-attribute metadata descriptors), nulls the entries pointer defensively, and then frees the attribute table wrapper structure itself. The model's reference to the attribute table is set to null to prevent use-after-free. The function re-reads the attribute table pointer after freeing the entries array as a defensive measure against potential side effects.
+cxf_free_solver_state performs a two-level deallocation of the model's attribute table. It first frees the nested entries array (which contains the per-attribute metadata descriptors), nulls the entries pointer defensively, and then frees the attribute table wrapper structure itself. The model's reference to the attribute table is set to null to prevent use-after-free. The function re-reads the attribute table pointer after freeing the entries array as a defensive measure against potential side effects.
 
 **Null Safety:** The function checks for null at every level: if the attribute table pointer is null, it returns immediately; if the entries array is null, it skips to freeing the table structure.
 
@@ -6719,7 +6880,7 @@ cxf_free_attribute_table performs a two-level deallocation of the model's attrib
 
 ### cxf_free_basis_state
 
-**Purpose:** Free the array of concurrent solver environments associated with the model, handling reference counting, deferred cleanup for environments that are still in use by other owners, and termination of active remote solver jobs.
+**Purpose:** Free the array of concurrent solver environments associated with the model, handling reference counting, deferred cleanup for environments that are still in use by other owners, and termination of active remote remote solver jobs.
 
 **Signature:**
 - Input: model : pointer-to-Model - The model whose concurrent environment array should be freed
@@ -6733,7 +6894,7 @@ cxf_free_attribute_table performs a two-level deallocation of the model's attrib
 - Every environment in the concurrent environments array has been processed:
   - Its root environment's reference count has been decremented (under lock).
   - If the reference count reached zero, the environment has been fully freed via the internal environment destruction function.
-  - If the reference count remained positive (environment still in use by another owner), the environment is handled with deferred cleanup: a warning is logged, any active remote solver job is terminated, and the array slot is cleared.
+  - If the reference count remained positive (environment still in use by another owner), the environment is handled with deferred cleanup: a warning is logged, any active remote remote solver job is terminated, and the array slot is cleared.
 - The concurrent environments array itself has been freed.
 - The model's concurrent environments pointer has been set to null.
 - The model's concurrent environment count has been set to zero.
@@ -6742,7 +6903,7 @@ cxf_free_attribute_table performs a two-level deallocation of the model's attrib
 - Decrements reference counts on root environments (under critical section lock for thread safety).
 - May fully destroy environments whose reference counts reach zero.
 - May log warning messages about deferred environment cleanup.
-- May terminate active remote solver jobs by:
+- May terminate active remote remote solver jobs by:
   - Setting a termination flag in the async operation state.
   - Polling the remote job status with a bounded retry loop.
   - Sending a termination message to the remote solver.
@@ -6753,7 +6914,7 @@ cxf_free_attribute_table performs a two-level deallocation of the model's attrib
 - None. This function does not return an error code. Empty arrays and null pointers are handled gracefully. Remote job termination failures are logged but do not cause the function to fail.
 
 **Behavioral Description:**
-cxf_free_basis_state manages the lifecycle of concurrent solver environments created during concurrent optimization (where multiple solver algorithms run in parallel with different parameter settings). For each environment in the array, it locates the root environment (which may be a shared parent) and decrements its reference count under a critical section lock to ensure thread safety. If the reference count reaches zero, the environment is destroyed immediately. If the count remains positive (another owner still needs the environment), the function performs a deferred cleanup: it logs a diagnostic warning, checks for active remote solver jobs associated with the environment, and if found, attempts graceful termination with a bounded polling loop before forcefully killing the job and freeing the connection. After processing all environments, the array itself is freed and the model's tracking fields are cleared.
+cxf_free_basis_state manages the lifecycle of concurrent solver environments created during concurrent optimization (where multiple solver algorithms run in parallel with different parameter settings). For each environment in the array, it locates the root environment (which may be a shared parent) and decrements its reference count under a critical section lock to ensure thread safety. If the reference count reaches zero, the environment is destroyed immediately. If the count remains positive (another owner still needs the environment), the function performs a deferred cleanup: it logs a diagnostic warning, checks for active remote remote solver jobs associated with the environment, and if found, attempts graceful termination with a bounded polling loop before forcefully killing the job and freeing the connection. After processing all environments, the array itself is freed and the model's tracking fields are cleared.
 
 **Reference Counting Protocol:**
 1. Enter critical section on the root environment's mutex
@@ -6943,7 +7104,7 @@ During model destruction (cxf_freemodel), the functions in this module are calle
 2. **cxf_free_basis_state** -- Free concurrent environments (may involve remote job termination)
 3. **cxf_free_iis_state** -- Free IIS diagnostic data
 4. **cxf_free_warmstart_basis** -- Free warm-start data
-5. **cxf_free_attribute_table** -- Free attribute table (last, as other cleanup may query attributes)
+5. **cxf_free_solver_state** -- Free attribute table (last, as other cleanup may query attributes)
 6. **cxf_cleanup_solve_state** -- Finalize timing and callbacks (called at end of each solve, not just destruction)
 
 ### Defensive Memory Patterns
@@ -6962,7 +7123,7 @@ The cleanup functions in this module are the inverse counterparts to initializat
 | Cleanup Function (P3.04) | Initialization Counterpart |
 |--------------------------|---------------------------|
 | cxf_cleanup_solve_state | cxf_init_solve_state (P3.03) |
-| cxf_free_attribute_table | Attribute table creation during model init |
+| cxf_free_solver_state | Attribute table creation during model init |
 | cxf_free_basis_state | Concurrent environment creation during concurrent solve setup |
 | cxf_free_iis_state | IIS computation (cxf_computeIIS) |
 | cxf_free_warmstart_basis | Warm-start creation (via VBasis/CBasis attribute setting) |
@@ -6994,9 +7155,40 @@ The cleanup functions in this module are the inverse counterparts to initializat
 
 ## Purpose
 
-This module provides pure query functions that inspect a model's mathematical structure to determine its problem class and solution availability. The model type checkers classify the problem as LP, QP, or SOCP by examining properties of the model's matrix data (variable types, constraint types, and special structure counts) without modifying any state. Two additional state-checking functions inspect the solver state to determine whether active optimization state or dual solution data is available. All five functions are lightweight, side-effect-free queries used by the solver dispatch logic to route optimization to the appropriate algorithm and by the attribute system to determine what solution data can be reported.
+This module provides pure query functions that inspect a model's mathematical structure to determine its problem class and solution availability. The model type checkers classify the problem as LP, QP, or SOCP by examining properties of the model's matrix data (variable types, constraint types, and special structure counts) without modifying any state. Two additional state-checking functions inspect the solver state to determine whether active optimization state or dual solution data is available. All six functions are lightweight, side-effect-free queries used by the solver dispatch logic to route optimization to the appropriate algorithm and by the attribute system to determine what solution data can be reported.
 
 ## Functions
+
+### cxf_is_mip_model
+
+**Purpose:** Determines whether a model contains any elements that require the mixed-integer programming (MIP) solver rather than a continuous solver.
+
+**Signature:**
+- Input: model : pointer-to-Model - The model to inspect
+- Output: int - 1 if the model is a MIP, 0 if the model is a pure continuous problem (LP or QP)
+
+**Preconditions:**
+- model may be null (returns 0 in that case)
+
+**Postconditions:**
+- The return value accurately reflects whether any MIP-qualifying elements are present in the model's matrix data
+- No state has been modified
+
+**Side Effects:**
+- None. This is a pure query function.
+
+**Error Conditions:**
+- If model is null, returns 0
+- If the model's matrix data pointer is null, returns 0
+
+**Behavioral Description:**
+This function checks whether the model contains any mathematical elements that require branch-and-bound or other MIP-specific solving techniques. It inspects the model's matrix data for the following MIP-qualifying properties: the presence of a direct MIP solve flag, integer variables, binary variables, SOS (Special Ordered Set) constraints, indicator constraints, piecewise-linear objective terms, semi-continuous or semi-integer variables, quadratic constraints (which may indicate non-convex MIQCP), a multi-objective or scenario optimization flag, and a force-non-convex flag. If any of these properties is present (count greater than zero or flag nonzero), the function returns 1. If none are present, the model is a pure continuous problem and the function returns 0. The function performs null-safe access: a null model or null matrix data causes an immediate return of 0.
+
+**Thread Safety:** Safe. Read-only access to model and matrix data fields. No state modification.
+
+**Dependencies:** None. Accesses only the Model's matrix data pointer and fields within MatrixData.
+
+---
 
 ### cxf_is_quadratic
 
@@ -7021,7 +7213,7 @@ This module provides pure query functions that inspect a model's mathematical st
 - If the model's matrix data pointer is null, returns 0
 
 **Behavioral Description:**
-This function determines whether a model has general constraints (such as absolute value, min/max, or piecewise-linear constraints) that can be handled by continuous quadratic optimization, without any discrete elements that would require specialized handling. There are two paths to a positive result: (1) the Environment has a force-QP parameter set, which overrides all other checks and immediately returns 1, or (2) the model has general constraints present AND none of the following disqualifying elements: binary variables, indicator constraints, semi-continuous variables, semi-integer variables, nonlinear programming variables (when NLP mode is enabled in the Environment), other nonlinear elements, or multi-scenario configurations. If general constraints are absent (the model is a pure LP or has only standard linear/quadratic objective terms), the function returns 0 -- the QP classification applies only when general constraints are present that benefit from continuous QP handling.
+This function determines whether a model has general constraints (such as absolute value, min/max, or piecewise-linear constraints) that can be handled by continuous quadratic optimization, without any discrete elements that would require branch-and-bound. There are two paths to a positive result: (1) the Environment has a force-QP parameter set, which overrides all other checks and immediately returns 1, or (2) the model has general constraints present AND none of the following disqualifying elements: binary variables, indicator constraints, semi-continuous variables, semi-integer variables, nonlinear programming variables (when NLP mode is enabled in the Environment), other nonlinear elements, or multi-scenario configurations. If general constraints are absent (the model is a pure LP or has only standard linear/quadratic objective terms), the function returns 0 -- the QP classification applies only when general constraints are present that benefit from continuous QP handling.
 
 **Thread Safety:** Safe. Read-only access to model, matrix data, and environment fields. No state modification.
 
@@ -7155,11 +7347,12 @@ This function determines whether dual solution data (such as shadow prices and r
 
 ### Solver Dispatch Architecture
 
-The three model type checking functions (cxf_is_quadratic, cxf_is_socp_internal, cxf_is_socp) form the classification layer that the optimizer uses to route a problem to the appropriate solver algorithm. The dispatch logic typically evaluates these functions in a priority order:
+The four model type checking functions (cxf_is_mip_model, cxf_is_quadratic, cxf_is_socp_internal, cxf_is_socp) form the classification layer that the optimizer uses to route a problem to the appropriate solver algorithm. The dispatch logic typically evaluates these functions in a priority order:
 
-1. **cxf_is_socp_internal**: If true, route to the SOCP/barrier solver
-2. **cxf_is_quadratic**: If true, route to the QP solver
-3. **Default**: Route to the LP simplex or barrier solver
+1. **cxf_is_mip_model**: If true, route to the MIP branch-and-bound solver
+2. **cxf_is_socp_internal**: If true (and not MIP), route to the SOCP/barrier solver
+3. **cxf_is_quadratic**: If true, route to the QP solver
+4. **Default**: Route to the LP simplex or barrier solver
 
 cxf_is_socp (the public variant) is used for reporting and display rather than dispatch.
 
@@ -7182,20 +7375,21 @@ The type-checking functions inspect the following categories of model properties
 
 | Category | Properties Checked |
 |----------|-------------------|
-| **Discrete variables** | Semi-continuous variable count, semi-integer variable count |
+| **Discrete variables** | Integer variable count, binary variable count, semi-continuous variable count, semi-integer variable count |
 | **Special constraints** | SOS constraint count, indicator constraint count, general constraint count, quadratic constraint count, explicit cone count |
 | **Nonlinear elements** | NLP variable count (conditional on NLP mode), other nonlinear element count, piecewise-linear objective count |
-| **Configuration flags** | Optimization flag, force-non-convex flag, multi-scenario count |
+| **Configuration flags** | MIP solve flag, optimization flag, force-non-convex flag, multi-scenario count |
 | **Solve state** | Solution status, solver active flag, dual data availability, basis factorization availability |
 
 ### Pure Query Guarantee
 
-All five functions in this module are guaranteed to be side-effect free. They perform no memory allocation, no state modification, and no I/O. They read only from existing model structures and return a boolean-like integer. This makes them safe to call from any context, including callbacks, attribute getters, and concurrent read operations.
+All six functions in this module are guaranteed to be side-effect free. They perform no memory allocation, no state modification, and no I/O. They read only from existing model structures and return a boolean-like integer. This makes them safe to call from any context, including callbacks, attribute getters, and concurrent read operations.
 
 ## References
 
 - Dantzig, G.B. (1963). *Linear Programming and Extensions*. Princeton University Press. (LP classification and simplex optimality conditions.)
 - Lobo, M.S., Vandenberghe, L., Boyd, S., and Lebret, H. (1998). "Applications of Second-Order Cone Programming." *Linear Algebra and its Applications*, 284(1-3):193-228. (SOCP problem classification and solver routing.)
+- Wolsey, L.A. (1998). *Integer Programming*. John Wiley & Sons. (integer model classification: integer variables, SOS constraints, indicator constraints.)
 
 ---
 
@@ -7217,7 +7411,7 @@ All five functions in this module are guaranteed to be side-effect free. They pe
 
 ## Purpose
 
-The Input Validation module provides a set of guard functions that verify the correctness and safety of inputs before they are consumed by the solver's core algorithms. These functions protect against null pointers, use-after-free errors, IEEE 754 special floating-point values (NaN, infinity), invalid string labels, multi-objective misconfiguration, and infeasible solution states. They are called at API entry points and internal dispatch boundaries to enforce preconditions and produce meaningful error diagnostics. Most functions in this module are pure or read-only -- they inspect state without modifying it.
+The Input Validation module provides a set of guard functions that verify the correctness and safety of inputs before they are consumed by the solver's core algorithms. These functions protect against null pointers, use-after-free errors, IEEE 754 special floating-point values (NaN, infinity), invalid string labels, licensing precondition violations, multi-objective misconfiguration, and infeasible solution states. They are called at API entry points and internal dispatch boundaries to enforce preconditions and produce meaningful error diagnostics. Most functions in this module are pure or read-only -- they inspect state without modifying it.
 
 ## Functions
 
@@ -7311,7 +7505,7 @@ The function tests for finiteness using a branchless arithmetic technique on the
 
 ---
 
-### cxf_is_finite
+### cxf_check_nan_or_inf
 
 **Purpose:** Determine whether a double-precision floating-point value is finite (neither NaN nor infinity) per the IEEE 754 standard.
 
@@ -7332,9 +7526,7 @@ The function tests for finiteness using a branchless arithmetic technique on the
 - None. The function is total.
 
 **Behavioral Description:**
-This function is identical in behavior to cxf_check_is_finite. Both names refer to the same underlying operation. The implementation uses the same branchless IEEE 754 bit-manipulation technique described in that function's specification.
-
-**Naming history:** Formerly `cxf_check_nan_or_inf`; renamed to better reflect that it returns true for finite values and false for non-finite values (NaN or infinity).
+This function is identical in behavior to cxf_check_is_finite. Both names refer to the same underlying operation. Despite the name suggesting it returns true for NaN/infinity values, the function actually returns true for finite values and false for non-finite values (inverted semantics relative to the name). The name is a historical misnomer preserved for backward compatibility. An implementor should treat this as an alias for cxf_check_is_finite. The implementation uses the same branchless IEEE 754 bit-manipulation technique described in that function's specification.
 
 **Thread Safety:** safe (pure function, no shared state)
 
@@ -7365,14 +7557,42 @@ This function is identical in behavior to cxf_check_is_finite. Both names refer 
 **Error Conditions:**
 - Primary label attribute check fails -> propagated error code from the attribute subsystem
 - Secondary label attribute check fails -> propagated error code
-- Tertiary label attribute check fails -> propagated error code, except that a DATA_NOT_AVAILABLE error on the third (optional) attribute is suppressed and treated as success
+- Tertiary label attribute check fails -> propagated error code, except that a DATA_NOT_LICENSED error on the third (optional) attribute is suppressed and treated as success
 
 **Behavioral Description:**
-The function checks up to three label-related attribute categories on the model, specified by appending different suffixes to the provided base name. It constructs each attribute identifier by formatting the base name with a suffix into a buffer, then invokes the internal attribute checker for that identifier. The checks are sequential with early exit: if the first check fails, the second is not attempted. The third check is conditional on the model having an active attribute table and is lenient -- a data-not-available error on the third attribute is tolerated. Before performing any checks, the function saves and temporarily clears the model's modification-blocked flag to allow attribute reads; this flag is unconditionally restored before returning, regardless of success or failure.
+The function checks up to three label-related attribute categories on the model, specified by appending different suffixes to the provided base name. It constructs each attribute identifier by formatting the base name with a suffix into a buffer, then invokes the internal attribute checker for that identifier. The checks are sequential with early exit: if the first check fails, the second is not attempted. The third check is conditional on the model having an active attribute table and is lenient -- a licensing restriction on the third attribute is tolerated. Before performing any checks, the function saves and temporarily clears the model's modification-blocked flag to allow attribute reads; this flag is unconditionally restored before returning, regardless of success or failure.
 
 **Thread Safety:** unsafe (modifies model modification-blocked flag temporarily; not safe for concurrent access to the same model)
 
 **Dependencies:** String formatting utility (cxf_snprintf), internal attribute file checker.
+
+---
+
+
+**Purpose:** Check whether single-use license restrictions are satisfied.
+
+**Signature:**
+- Input: (none)
+- Output: int - Zero indicating no restriction applies
+
+**Preconditions:**
+- None.
+
+**Postconditions:**
+- Always returns zero (success).
+
+**Side Effects:**
+- None.
+
+**Error Conditions:**
+- None. This function never returns an error.
+
+**Behavioral Description:**
+This is a stub function that unconditionally returns success. It is present in the function table as a placeholder for single-use license enforcement, but the current implementation does not enforce any restriction. The function may exist to maintain a consistent validation call pattern at API entry points, or the enforcement may be handled by a different subsystem. An implementor should provide this as a no-op that returns success.
+
+**Thread Safety:** safe (no state access)
+
+**Dependencies:** None.
 
 ---
 
@@ -7535,11 +7755,15 @@ The function iterates through each element of the array from index 0 to count-1.
 - Unrecognized variable type character -> INVALID_ARGUMENT error, with logged error message
 
 **Behavioral Description:**
-The function iterates through each character in the type array. For each character, it performs case normalization: lowercase ASCII letters are converted to uppercase before comparison. The normalized character is then checked against the recognized LP variable type code:
+The function iterates through each character in the type array. For each character, it performs case normalization: lowercase ASCII letters are converted to uppercase before comparison. The normalized character is then checked against the five recognized LP variable type codes:
 
 - 'C' : Continuous variable
+- 'B' : Binary variable (domain restricted to 0 and 1)
+- 'I' : General integer variable
+- 'S' : Semi-continuous variable (zero or within a continuous range)
+- 'N' : Semi-integer variable (zero or an integer within a range)
 
-If the character does not match the recognized code, the function logs an error through the environment's error logging facility (reporting the original, non-normalized character for diagnostic clarity) and returns an error code immediately. Validation is early-exit: only the first invalid character causes an error return.
+These type codes follow the standard ConvexFeld API convention for the VType attribute. If the character does not match any recognized code, the function logs an error through the environment's error logging facility (reporting the original, non-normalized character for diagnostic clarity) and returns an error code immediately. Validation is early-exit: only the first invalid character causes an error return.
 
 **Thread Safety:** conditional (safe if no other thread is concurrently modifying the error state of the same environment)
 
@@ -7549,7 +7773,7 @@ If the character does not match the recognized code, the function logs an error 
 
 ### cxf_validate_solution
 
-**Purpose:** Comprehensively validate a solution vector against all model constraints, variable bounds, and special constraint types, producing detailed violation metrics and optional diagnostic output.
+**Purpose:** Comprehensively validate a solution vector against all model constraints, variable bounds, integrality requirements, and special constraint types, producing detailed violation metrics and optional diagnostic output.
 
 **Signature:**
 - Input: model : pointer-to-Model - The model against which the solution is validated
@@ -7564,14 +7788,14 @@ If the character does not match the recognized code, the function logs an error 
 - If violation_info is non-null, it must point to a valid, writable ViolationInfo structure.
 
 **Postconditions:**
-- On success, the function has computed violation metrics for all constraint categories. If violation_info is non-null, it is populated with the maximum violation and worst-violating index for each category (constraint, bound). Diagnostic messages may have been printed to the solver log.
+- On success, the function has computed violation metrics for all constraint categories. If violation_info is non-null, it is populated with the maximum violation and worst-violating index for each category (constraint, bound, integrality). Diagnostic messages may have been printed to the solver log.
 - The model's modification control state is restored to its pre-call value.
 - Any internally allocated workspace has been freed.
 
 **Side Effects:**
 - Temporarily modifies and restores the model's modification-blocked flag to allow attribute queries during validation.
 - Allocates temporary workspace for constraint activity computation; this workspace is freed before the function returns.
-- In verbose mode, prints warning messages to the solver log for violations exceeding their respective tolerances (feasibility tolerance for constraint and bound violations). Also prints diagnostic suggestions about possible numerical causes (large coefficients, wide coefficient ranges, large bounds, large right-hand sides) when overall violations are significantly above tolerance.
+- In verbose mode, prints warning messages to the solver log for violations exceeding their respective tolerances (feasibility tolerance for constraint and bound violations, integrality tolerance for integer violations). Also prints diagnostic suggestions about possible numerical causes (large coefficients, wide coefficient ranges, large bounds, large right-hand sides) when overall violations are significantly above tolerance.
 - In silent mode, prints a one-line summary of maximum violations per category.
 
 **Error Conditions:**
@@ -7586,15 +7810,17 @@ The function performs a comprehensive, multi-category solution validation. It pr
 
 3. **Indicator Constraint Feasibility:** For models with indicator constraints, the function validates the implied linear constraints when the indicator variable is active.
 
-4. **Variable Bound Feasibility:** For each variable, the function computes the bound violation as the maximum of (lower bound - x) and (x - upper bound), clamped to zero when feasible.
+4. **Variable Bound Feasibility:** For each variable, the function computes the bound violation as the maximum of (lower bound - x) and (x - upper bound), clamped to zero when feasible. For semi-continuous and semi-integer variables, the violation is computed as the minimum of the standard bound violation and the absolute value of x (since these variable types allow the value zero in addition to their bounded range).
 
-5. **SOS Constraint Feasibility:** For models with SOS (Special Ordered Set) constraints, the function delegates to an internal SOS validation routine that checks SOS1/SOS2 conditions.
+5. **Integrality Feasibility:** For all non-continuous variables (binary, integer, semi-integer), the function computes the distance from the nearest integer by rounding and taking the absolute difference. The maximum integrality violation and sum are tracked. The function also tracks the maximum absolute value of integer variables to warn about very large integer values (above a threshold on the order of two billion), which may cause numerical issues.
 
-6. **General Constraint Feasibility:** For models with general constraints (piecewise-linear, function constraints, etc.), the function delegates to an internal general constraint validation routine.
+6. **SOS Constraint Feasibility:** For models with SOS (Special Ordered Set) constraints, the function delegates to an internal SOS validation routine that checks SOS1/SOS2 conditions.
+
+7. **General Constraint Feasibility:** For models with general constraints (piecewise-linear, function constraints, etc.), the function delegates to an internal general constraint validation routine.
 
 After all validation phases, the function produces output. In verbose mode, it prints warnings for each category whose maximum violation exceeds the relevant tolerance, and suggests possible numerical causes when the overall violation is large. In silent mode, it prints a compact one-line summary. If a violation_info output structure was provided, it is populated with the per-category maximum violations, violation sums, and worst-violating indices.
 
-The ViolationInfo output structure contains fields for: maximum overall violation, maximum bound violation, maximum constraint violation, accumulated bound violation sum, accumulated constraint violation sum, and the indices of the worst-violating bound and constraint entries.
+The ViolationInfo output structure contains fields for: maximum overall violation, maximum bound violation, maximum constraint violation, maximum integrality violation, accumulated bound violation sum, accumulated constraint violation sum, accumulated integrality violation sum, and the indices of the worst-violating bound, constraint, and integrality entries.
 
 **Thread Safety:** unsafe (temporarily modifies model state; allocates and frees workspace; writes to solver log)
 
@@ -7807,7 +8033,7 @@ The standard error codes cover the following categories:
 - Memory and argument errors (null argument, invalid argument, out of memory)
 - Attribute and parameter errors (unknown attribute, unknown parameter, value out of range, data not available)
 - Index errors (index out of range)
-- Size limit errors (size limit exceeded)
+- License errors (no license, size limit exceeded)
 - I/O errors (file read, file write, callback, node file)
 - Numerical errors (numeric error)
 - Model state errors (optimization in progress, duplicates, model modification)
@@ -7851,7 +8077,7 @@ One error code in the standard range (10015) is reserved and has no predefined m
 **Behavioral Description:**
 This function is the environment-level equivalent of cxf_set_error_message. It operates directly on an Environment pointer rather than extracting the environment from a model. After validating the environment pointer and error buffer pointer, it applies the same logic: clearing the buffer for a zero error code, applying the first-error preservation rule (out-of-memory always overwrites; other errors only write to an empty buffer), and mapping the error code to a predefined message string from the same standard error code table. The error code-to-message mapping is identical to cxf_set_error_message.
 
-The key difference from cxf_set_error_message is the entry point: this function does not require a Model and does not perform model validation. It is used by environment-level operations (initialization, parameter configuration) that may need to set error messages before any Model exists.
+The key difference from cxf_set_error_message is the entry point: this function does not require a Model and does not perform model validation. It is used by environment-level operations (initialization, licensing, parameter configuration) that may need to set error messages before any Model exists.
 
 **Thread Safety:** Unsafe. The caller is responsible for thread-safe access to the environment.
 
@@ -7872,7 +8098,7 @@ The four error handling functions form two pairs along two dimensions:
 
 - **Custom message functions** (cxf_error_env, cxf_error_model): Accept a printf-style format string and variadic arguments, producing a context-specific error message. Used for detailed internal error messages that include runtime values (e.g., "Failed to allocate N bytes", "Variable index K out of range").
 - **Predefined message functions** (cxf_set_error_message, cxf_env_set_status): Map a standard error code to a fixed human-readable string from a built-in table. Used at API boundaries and for standard error conditions where a consistent message is preferred.
-- **Environment-entry functions** (cxf_error_env, cxf_env_set_status): Operate directly on an Environment pointer. Used during environment initialization and other operations that do not have a Model context.
+- **Environment-entry functions** (cxf_error_env, cxf_env_set_status): Operate directly on an Environment pointer. Used during environment initialization, licensing, and other operations that do not have a Model context.
 - **Model-entry functions** (cxf_error_model, cxf_set_error_message): Accept a Model pointer and resolve to the Model's associated Environment. Used during model manipulation, optimization, and API functions that operate on models.
 
 ### Error Code Semantics
@@ -7907,7 +8133,7 @@ Error codes are non-negative integers. Zero indicates success and is used as the
 
 ## Purpose
 
-The Logging module provides the solver's output infrastructure, supporting multiple simultaneous output destinations for solver progress messages, diagnostic information, and error reports. It implements a dual output model where log messages can be directed to any combination of standard output, a log file, a user-provided callback function, a session-level callback, and a remote solver channel. The module also provides the mechanism for users to register custom callback functions that receive all log output programmatically, enabling GUI integration, custom log filtering, and remote monitoring. The module handles reentrancy protection to prevent infinite recursion when callbacks themselves trigger logging, and processes output line-by-line to support destination-specific formatting requirements.
+The Logging module provides the solver's output infrastructure, supporting multiple simultaneous output destinations for solver progress messages, diagnostic information, and error reports. It implements a dual output model where log messages can be directed to any combination of standard output, a log file, a user-provided callback function, a session-level callback, and a remote remote solver channel. The module also provides the mechanism for users to register custom callback functions that receive all log output programmatically, enabling GUI integration, custom log filtering, and remote monitoring. The module handles reentrancy protection to prevent infinite recursion when callbacks themselves trigger logging, and processes output line-by-line to support destination-specific formatting requirements.
 
 ## Output Destination Model
 
@@ -7919,7 +8145,7 @@ The solver supports five simultaneous log output destinations, each independentl
 | Log file | Output verbosity is enabled and a log file handle is open | Persistent file-based logging |
 | Session callback | A session reference is registered (active even when verbosity is disabled) | Session-level notification system for framework integration |
 | User callback function | A user callback function pointer is registered | Programmatic log capture for GUI, filtering, or custom routing |
-| Remote server | The environment is connected to a remote solver with remote logging enabled | Log forwarding to a remote solver using a line-based message protocol |
+| Remote server | The environment is connected to a remote solver with remote logging enabled | Log forwarding to a remote remote solver using a line-based message protocol |
 
 ### Verbosity Control
 
@@ -7941,7 +8167,7 @@ Messages that span multiple lines are split at newline characters and each line 
 
 ## Functions
 
-### cxf_set_error_string
+### cxf_errorlog
 
 **Purpose:** Set a predefined error message on the environment's error buffer based on a standard error code, accessed through a Model.
 
@@ -7968,9 +8194,9 @@ Messages that span multiple lines are split at newline characters and each line 
 - Null error buffer pointer (on the environment) -> silent return, no action
 
 **Behavioral Description:**
-This function maps standard solver error codes to predefined human-readable message strings and writes them to the environment's error buffer. It first validates the model structure. Then it extracts the environment and error buffer pointer. If the error code is zero, the buffer is cleared. For nonzero codes, it applies the first-error preservation rule: the out-of-memory error always overwrites (as memory exhaustion is typically the root cause of cascading failures), while all other errors write only to an empty buffer. The error code-to-message mapping covers approximately 30 standard error codes spanning memory errors, argument validation errors, attribute and parameter errors, I/O errors, numerical errors, model state errors, quadratic programming errors, network and server errors, and miscellaneous operational errors. One code in the standard range (10015) is reserved and has no mapping. Unrecognized codes receive a fallback message that includes the numeric value.
+This function maps standard solver error codes to predefined human-readable message strings and writes them to the environment's error buffer. It first validates the model structure. Then it extracts the environment and error buffer pointer. If the error code is zero, the buffer is cleared. For nonzero codes, it applies the first-error preservation rule: the out-of-memory error always overwrites (as memory exhaustion is typically the root cause of cascading failures), while all other errors write only to an empty buffer. The error code-to-message mapping covers approximately 30 standard error codes spanning memory errors, argument validation errors, attribute and parameter errors, license errors, I/O errors, numerical errors, model state errors, quadratic programming errors, network and server errors, and miscellaneous operational errors. One code in the standard range (10015) is reserved and has no mapping. Unrecognized codes receive a fallback message that includes the numeric value.
 
-**Naming history:** Formerly `cxf_errorlog`; renamed to `cxf_set_error_string` to better reflect that it writes to the error message buffer, not to the log output system.
+Note: Despite its name suggesting "error log," this function writes to the error message buffer (the same buffer used by the Error Handling module's cxf_set_error_message), not to the log output system. The naming reflects that it "logs" an error state on the environment for later retrieval, rather than producing log file output.
 
 **Thread Safety:** Unsafe. The caller is responsible for thread-safe access to the environment.
 
@@ -8002,7 +8228,7 @@ This function maps standard solver error codes to predefined human-readable mess
 - Writes to the log file (if the file destination is active)
 - Invokes the session callback (if a session reference is registered)
 - Invokes the user callback function (if registered)
-- Sends data to the remote solver (if the remote destination is active)
+- Sends data to the remote remote solver (if the remote destination is active)
 - Modifies the environment's internal log buffer and log state fields
 - Sets and clears the environment's reentrancy guard flag
 
@@ -8029,7 +8255,7 @@ The function performs the following behavioral steps:
    - **Log file destination:** The line is written to the log file handle and the file is flushed.
    - **Session callback destination:** The line is copied to a callback communication buffer (with bounded length) and the session callback is invoked with a message event type.
    - **User callback destination:** The line is copied to a temporary buffer and passed to the registered user callback function along with the user's data pointer.
-   - **Remote server destination:** The line is formatted with a protocol prefix tag and sent to the remote solver connection.
+   - **Remote server destination:** The line is formatted with a protocol prefix tag and sent to the remote remote solver connection.
 
 7. **Partial line retention:** After processing all complete lines, any remaining partial line (content after the last newline) is shifted to the beginning of the internal log buffer for inclusion in the next cxf_log call.
 
@@ -8104,14 +8330,14 @@ If a model reference is provided, the function inherits callback configuration f
 
 ### Naming Clarification
 
-The function named cxf_set_error_string is somewhat confusingly placed in this Logging module. It sets a predefined error message on the environment's error buffer, which is the same operation performed by cxf_set_error_message and cxf_env_set_status in the Error Handling module. It is included in the Logging module per the project's function-to-module mapping.
+The function named cxf_errorlog is somewhat confusingly placed in this Logging module. Despite its name, cxf_errorlog does not produce log file output; it sets a predefined error message on the environment's error buffer, which is the same operation performed by cxf_set_error_message and cxf_env_set_status in the Error Handling module. It is included in the Logging module per the project's function-to-module mapping. The function's "log" suffix reflects that it "logs" (records) an error state, not that it writes to the log output system.
 
 ### Relationship to Error Handling Module
 
 The Error Handling module (P3.09) and this Logging module share responsibility for the error message buffer:
 
 - **Error Handling** provides cxf_error_env and cxf_error_model (custom formatted messages) and cxf_set_error_message / cxf_env_set_status (predefined messages from codes).
-- **Logging** provides cxf_set_error_string (predefined messages from codes, identical behavior to cxf_set_error_message) and cxf_log / cxf_register_log_callback (log output system, unrelated to the error buffer).
+- **Logging** provides cxf_errorlog (predefined messages from codes, identical behavior to cxf_set_error_message) and cxf_log / cxf_register_log_callback (log output system, unrelated to the error buffer).
 
 The error message buffer and the log output system are entirely separate subsystems: the error buffer holds the most recent error for user retrieval via the API, while the log system produces ongoing progress and diagnostic output.
 
@@ -8138,7 +8364,7 @@ The environment maintains an internal log buffer that accumulates formatted text
 
 | Function | Thread Safety | Notes |
 |----------|---------------|-------|
-| cxf_set_error_string | Unsafe | Caller must synchronize |
+| cxf_errorlog | Unsafe | Caller must synchronize |
 | cxf_log | Conditional | Reentrancy-protected within one thread; caller must synchronize cross-thread |
 | cxf_register_log_callback | Conditional | Must not race with active callback invocations |
 
@@ -8166,19 +8392,17 @@ The Threading & Synchronization module provides the solver's thread resource man
 
 1. **Locale Safety:** Before optimization begins, the solver must ensure that numeric formatting uses the standard "C" locale (period as decimal separator) regardless of the user's system locale. This is critical because LP file formats, coefficient parsing, solution output, and log messages all depend on consistent decimal point formatting. The module provides an acquire/release pair that saves the calling thread's locale, switches to the "C" locale using per-thread locale isolation, and restores the original locale when optimization completes.
 
-2. **Thread Resource Queries:** The module provides functions to query detected hardware parallelism (logical processors and physical cores), compute the effective thread count for parallel operations by reconciling multiple constraints (hardware availability and user configuration), and validate thread count choices by warning when oversubscription is requested.
+2. **Thread Resource Queries:** The module provides functions to query detected hardware parallelism (logical processors and physical cores), compute the effective thread count for parallel operations by reconciling multiple constraints (hardware availability, user configuration, and license limits), and validate thread count choices by warning when oversubscription is requested.
 
 3. **Error Buffer Preparation:** The module includes a function that prepares the environment's error buffer for a new API operation by clearing stale error state, unless the buffer is currently locked for nested error handling.
 
-Despite the module name, none of the functions in this module implement mutual exclusion or thread synchronization primitives. Several functions have been renamed from their original "lock" and "acquire" terminology to better reflect their actual behavior; see the Module-Level Behavioral Notes section for details.
+Despite the module name, none of the functions in this module implement mutual exclusion or thread synchronization primitives. The "lock" and "acquire" terminology in several function names is a historical misnomer; see the Module-Level Behavioral Notes section for details.
 
 ## Functions
 
-### cxf_save_locale_state
+### cxf_acquire_solve_lock
 
 **Purpose:** Save the calling thread's locale state and switch to the standard numeric locale before optimization begins, ensuring consistent decimal point formatting.
-
-**Naming history:** Formerly `cxf_acquire_solve_lock`; renamed to better reflect its actual behavior of managing locale state rather than acquiring a mutex.
 
 **Signature:**
 - Input: `environment` : pointer-to-Environment - The environment controlling the optimization context
@@ -8224,17 +8448,17 @@ The per-thread locale isolation mechanism is critical for correctness in multi-t
 
 ### cxf_release_solve_lock
 
-**Purpose:** Restore the calling thread's original locale state after optimization completes, reversing the locale change made by cxf_save_locale_state.
+**Purpose:** Restore the calling thread's original locale state after optimization completes, reversing the locale change made by cxf_acquire_solve_lock.
 
 **Signature:**
-- Input: `locale_state` : pointer-to-LocaleSaveData - The structure populated by a prior call to cxf_save_locale_state
+- Input: `locale_state` : pointer-to-LocaleSaveData - The structure populated by a prior call to cxf_acquire_solve_lock
 - Output: void
 
 **Preconditions:**
-- The locale_state must have been populated by a prior call to cxf_save_locale_state (or be zero-initialized, in which case this function is a no-op)
+- The locale_state must have been populated by a prior call to cxf_acquire_solve_lock (or be zero-initialized, in which case this function is a no-op)
 
 **Postconditions:**
-- If the locale_state contained saved locale data, the calling thread's locale has been restored to its original setting (the locale that was active before cxf_save_locale_state was called)
+- If the locale_state contained saved locale data, the calling thread's locale has been restored to its original setting (the locale that was active before cxf_acquire_solve_lock was called)
 - All allocated locale data structures have been freed
 - All pointers in the locale_state structure have been set to null
 
@@ -8246,12 +8470,12 @@ The per-thread locale isolation mechanism is critical for correctness in multi-t
 - Clears the pointers in the locale_state structure
 
 **Error Conditions:**
-- None. This function always succeeds. If the locale_state contains null pointers (because cxf_save_locale_state determined no locale change was needed), the function simply returns.
+- None. This function always succeeds. If the locale_state contains null pointers (because cxf_acquire_solve_lock determined no locale change was needed), the function simply returns.
 
 **Behavioral Description:**
-This function is the cleanup companion to cxf_save_locale_state. It first frees the target locale structure (which held the "C" locale configuration) if one was allocated. Then, if a saved locale structure exists, it enables per-thread locale mode, restores the original locale by applying the saved locale category and string, restores the original thread locale mode, and frees the saved locale structure. Both pointers in the locale_state are cleared to null to prevent double-free.
+This function is the cleanup companion to cxf_acquire_solve_lock. It first frees the target locale structure (which held the "C" locale configuration) if one was allocated. Then, if a saved locale structure exists, it enables per-thread locale mode, restores the original locale by applying the saved locale category and string, restores the original thread locale mode, and frees the saved locale structure. Both pointers in the locale_state are cleared to null to prevent double-free.
 
-The function handles partial initialization gracefully: if cxf_save_locale_state returned early (because the locale was already "C" or the environment was already in an optimization context), the locale_state contains null pointers and this function becomes a no-op.
+The function handles partial initialization gracefully: if cxf_acquire_solve_lock returned early (because the locale was already "C" or the environment was already in an optimization context), the locale_state contains null pointers and this function becomes a no-op.
 
 **Thread Safety:** Safe. Operates on per-thread locale state using per-thread locale isolation. The locale_state structure is caller-owned and not shared.
 
@@ -8354,7 +8578,7 @@ The value is detected at environment creation time using platform-specific syste
 **Behavioral Description:**
 This function returns a conservative estimate of physical CPU cores by taking the minimum of two detected values: the logical processor count and the physical core count. Under normal circumstances, the physical core count is always less than or equal to the logical processor count (since simultaneous multithreading adds logical processors beyond the physical count). However, hardware detection APIs can occasionally return inconsistent values if detection fails or returns partial results. By taking the minimum, the function ensures that the returned value never overestimates the available physical parallelism.
 
-For CPU-bound workloads such as LP solving, physical core count is often a better guide for thread allocation than logical processor count, because simultaneous multithreading provides diminishing returns for compute-intensive tasks.
+For CPU-bound workloads such as LP and MIP solving, physical core count is often a better guide for thread allocation than logical processor count, because simultaneous multithreading provides diminishing returns for compute-intensive tasks.
 
 **Thread Safety:** Safe. Reads immutable values set during initialization.
 
@@ -8365,7 +8589,7 @@ For CPU-bound workloads such as LP solving, physical core count is often a bette
 
 ### cxf_get_threads
 
-**Purpose:** Compute the effective thread count for parallel operations by reconciling the model-level override, automatic hardware detection with capping, and the user's Threads parameter.
+**Purpose:** Compute the effective thread count for parallel operations by reconciling the model-level override, automatic hardware detection with capping, the user's Threads parameter, and the license thread limit.
 
 **Signature:**
 - Input: `environment` : pointer-to-Environment - The environment containing thread configuration and hardware info
@@ -8392,20 +8616,20 @@ This function determines the actual number of threads the solver should use for 
 
 3. **User parameter application:** The function reads the user-configured Threads parameter from the environment's parameter system. If this value is less than the auto-detected count, the user's value is used. (A Threads parameter value of zero means "automatic," meaning the auto-detected value is used without further reduction.)
 
+4. **License limit enforcement:** Finally, the function checks the license thread limit stored in the environment. If this limit is less than the current computed count, the license limit takes precedence. This ensures the solver never exceeds the parallelism allowed by the license.
+
 The function always returns the most restrictive of all applicable limits.
 
-**Thread Safety:** Safe. Reads configuration values that are stable during optimization (the Threads parameter is not modified during a solve). The model-level thread override is set before optimization begins.
+**Thread Safety:** Safe. Reads configuration values that are stable during optimization (the Threads parameter and license limit are not modified during a solve). The model-level thread override is set before optimization begins.
 
 **Dependencies:**
 - Parameter system lookup (reads the Threads parameter by name from the environment's parameter table)
 
 ---
 
-### cxf_validate_thread_count
+### cxf_set_thread_count
 
 **Purpose:** Validate a requested thread count against available hardware and emit a warning via the logging system if the thread count exceeds the logical processor count.
-
-**Naming history:** Formerly `cxf_set_thread_count`; renamed to better reflect its actual behavior of validating and warning rather than setting a thread count value.
 
 **Signature:**
 - Input: `environment` : pointer-to-Environment - The environment for log output and hardware info
@@ -8430,6 +8654,8 @@ This function checks whether a requested thread count exceeds the number of logi
 
 The function does not modify the thread count or any thread-related state. It is purely a validation and diagnostic function.
 
+Note: Despite the name "set_thread_count," this function does not set or store any thread count value. It only validates and warns. See the Module-Level Behavioral Notes section for further discussion of this misnomer.
+
 **Thread Safety:** Conditional. Thread safety depends on the logging system's thread safety. If cxf_log is called from multiple threads, the caller must ensure the environment's logging state is properly synchronized. In practice, this function is called during solver initialization when logging is typically single-threaded.
 
 **Dependencies:**
@@ -8439,24 +8665,26 @@ The function does not modify the thread count or any thread-related state. It is
 
 ## Module-Level Behavioral Notes
 
-### Naming History
+### Naming Misnomers
 
-This module contains several functions that have been renamed to correct historical misnomers:
+This module contains several functions whose names are historically misleading. Understanding these misnomers is important for correct usage:
 
-| Current Name | Former Name | Reason for Rename |
-|--------------|-------------|-------------------|
-| cxf_save_locale_state | cxf_acquire_solve_lock | Original name suggested mutex acquisition but function manages locale state |
-| cxf_release_solve_lock | (unchanged) | Counterpart to renamed function; retains "lock" terminology for pairing consistency |
-| cxf_env_acquire_lock | (unchanged) | Despite name suggesting mutex, function clears error buffer state |
-| cxf_validate_thread_count | cxf_set_thread_count | Original name suggested setting a value but function only validates and warns |
+| Function Name | What the Name Suggests | What the Function Actually Does |
+|---------------|----------------------|-------------------------------|
+| cxf_acquire_solve_lock | Acquires a mutex for solving | Saves locale state and switches to "C" locale |
+| cxf_release_solve_lock | Releases a mutex after solving | Restores original locale state |
+| cxf_env_acquire_lock | Acquires a mutex on the environment | Clears the error buffer state |
+| cxf_set_thread_count | Sets the thread count | Validates and warns about thread oversubscription |
 
-The "lock" terminology in cxf_save_locale_state / cxf_release_solve_lock reflects a conceptual "locking" of the numeric locale into the "C" setting for the duration of optimization. The acquire/release pairing follows the RAII-like pattern of save-modify-restore, which is similar to lock/unlock semantics in resource management.
+The "lock" terminology in cxf_acquire_solve_lock / cxf_release_solve_lock may reflect a conceptual "locking" of the numeric locale into the "C" setting for the duration of optimization. The acquire/release pairing follows the RAII-like pattern of save-modify-restore, which is similar to lock/unlock semantics in resource management.
 
-The "lock" in cxf_env_acquire_lock reflects a conceptual "acquisition" of the right to write errors: the function checks whether the error buffer is "locked" (protected by nested error handling) and, if not, clears it for new error reporting.
+The "lock" in cxf_env_acquire_lock may reflect a conceptual "acquisition" of the right to write errors: the function checks whether the error buffer is "locked" (protected by nested error handling) and, if not, clears it for new error reporting. It "acquires" permission to write new error messages.
+
+The "set" in cxf_set_thread_count may reflect an earlier design where the function both set and validated the thread count. In its current form, it only validates and warns.
 
 ### Locale Safety Architecture
 
-The locale acquire/release pair (cxf_save_locale_state / cxf_release_solve_lock) implements a critical safety mechanism for international LP solver deployment. Different system locales use different decimal separators:
+The locale acquire/release pair (cxf_acquire_solve_lock / cxf_release_solve_lock) implements a critical safety mechanism for international LP solver deployment. Different system locales use different decimal separators:
 
 - "C" / "POSIX" locale: period (1234.567)
 - Many European locales: comma (1234,567)
@@ -8469,7 +8697,7 @@ LP and MPS file formats universally use the period as the decimal separator. If 
 3. Using per-thread locale isolation so that other threads in the application (which may need their original locale for GUI display, for example) are not affected
 4. Restoring the user's locale after optimization completes
 
-The optimization-active check at the beginning of cxf_save_locale_state prevents redundant save/restore cycles when the function is called from within an already-active optimization context.
+The optimization-active check at the beginning of cxf_acquire_solve_lock prevents redundant save/restore cycles when the function is called from within an already-active optimization context.
 
 ### Thread Count Resolution Hierarchy
 
@@ -8478,30 +8706,31 @@ The thread count determination (cxf_get_threads) follows a principled hierarchy 
 1. **Model-level override** (highest priority if set): Direct specification, bypasses all auto-detection
 2. **Hardware detection with cap**: Logical processors, reduced by physical cores on large systems, capped at an efficiency threshold
 3. **User Threads parameter**: User's explicit configuration acts as an upper bound
+4. **License limit** (always enforced): Legal constraint that cannot be overridden
 
-This "most restrictive wins" design ensures the solver never exceeds any applicable limit, whether hardware or user preference.
+This "most restrictive wins" design ensures the solver never exceeds any applicable limit, whether hardware, user preference, or license.
 
 ### Relationship to Other Modules
 
 This module interacts with several other modules:
 
 - **Environment Lifecycle (P3.30):** The hardware detection fields (logical processor count, physical core count) are populated during environment initialization. The Threading fields in the Environment data model (Layer 1) document these fields.
-- **Logging (P3.10):** cxf_validate_thread_count uses the logging system to emit oversubscription warnings.
+- **Logging (P3.10):** cxf_set_thread_count uses the logging system to emit oversubscription warnings.
 - **Error Handling (P3.09):** cxf_env_acquire_lock operates on the error buffer, which is shared with the Error Handling module. It clears error state at the start of API operations; the Error Handling module sets error state when errors occur.
-- **Memory Primitives (P3.01):** cxf_save_locale_state / cxf_release_solve_lock allocate and free locale state structures.
+- **Memory Primitives (P3.01):** cxf_acquire_solve_lock / cxf_release_solve_lock allocate and free locale state structures.
 - **Parameter System:** cxf_get_threads reads the Threads parameter from the environment's parameter table.
 
 ### Thread Safety Summary
 
 | Function | Thread Safety | Notes |
 |----------|---------------|-------|
-| cxf_save_locale_state | Safe | Operates on per-thread locale state with per-thread isolation |
+| cxf_acquire_solve_lock | Safe | Operates on per-thread locale state with per-thread isolation |
 | cxf_release_solve_lock | Safe | Operates on per-thread locale state with per-thread isolation |
 | cxf_env_acquire_lock | Unsafe | Caller must synchronize access to environment error buffer |
 | cxf_get_logical_processors | Safe | Returns immutable value set during initialization |
 | cxf_get_physical_cores | Safe | Reads immutable values set during initialization |
 | cxf_get_threads | Safe | Reads stable configuration values |
-| cxf_validate_thread_count | Conditional | Depends on logging system thread safety |
+| cxf_set_thread_count | Conditional | Depends on logging system thread safety |
 
 ---
 
@@ -8671,7 +8900,7 @@ The Callbacks module provides the infrastructure for user callback invocation, s
 This module contains a mix of function types that share the "callback" naming convention but serve distinct architectural roles:
 
 1. **Callback infrastructure** (cxf_init_callback_struct): Allocates and initializes the mutex used to serialize callback invocations.
-2. **Optimization lifecycle hooks** (cxf_pre_optimize_hook, cxf_post_optimize_hook): Internal hooks called before and after optimization to manage error buffer state.
+2. **Optimization lifecycle hooks** (cxf_pre_optimize_callback, cxf_post_optimize_callback): Internal hooks called before and after optimization to manage error buffer state. Despite their names, these are NOT user callbacks.
 3. **User-facing callback operations** (cxf_callback_terminate, cxf_getconstrs_callback): Functions invoked from within a user callback to interact with the solver.
 4. **Callback propagation** (cxf_copy_env_callbacks): Copies callback registration and configuration from one environment to another during environment or model cloning.
 
@@ -8716,7 +8945,7 @@ This function is called during first-time callback registration (either log call
 
 ### cxf_callback_terminate
 
-**Purpose:** Signal the solver to terminate from within a callback context, handling both local and remote solver solves.
+**Purpose:** Signal the solver to terminate from within a callback context, handling both local and remote remote solver solves.
 
 **Signature:**
 - Input: `model` : pointer-to-Model - The model whose optimization should be terminated
@@ -8739,7 +8968,7 @@ This function is called during first-time callback registration (either log call
 - Null asynchronous state (local path) -> silently skips flag setting (no error returned)
 
 **Behavioral Description:**
-The function determines whether the current solve is executing locally or on a remote solver by attempting a non-blocking lock acquisition on the remote solver synchronization primitive:
+The function determines whether the current solve is executing locally or on a remote remote solver by attempting a non-blocking lock acquisition on the remote solver synchronization primitive:
 
 1. **Remote path (remote solver):** If the non-blocking lock test succeeds, the solve is operating through a remote solver. The function acquires the full remote solver lock, constructs and sends a termination request message using the remote solver's message protocol, and releases the lock. The remote server processes the termination request and halts the solve.
 
@@ -8756,7 +8985,7 @@ The non-blocking lock test serves as a discriminator between local and remote op
 
 ---
 
-### cxf_pre_optimize_hook
+### cxf_pre_optimize_callback
 
 **Purpose:** Lock the error buffer before optimization begins to preserve any pre-existing error messages during the solve.
 
@@ -8778,13 +9007,11 @@ The non-blocking lock test serves as a discriminator between local and remote op
 - Invalid model (fails structural validation) -> silent return, no action
 
 **Behavioral Description:**
-This function is an internal optimization lifecycle hook, NOT a user callback. It is called by the optimization infrastructure at the very beginning of an optimization operation, before the solver loop starts.
+This function is an internal optimization lifecycle hook, NOT a user callback. Despite its name suggesting callback behavior, it is called by the optimization infrastructure at the very beginning of an optimization operation, before the solver loop starts.
 
-**Naming history:** Formerly `cxf_pre_optimize_callback`; renamed to `cxf_pre_optimize_hook` to better reflect that it is an internal lifecycle hook, not a user callback.
+The function validates the model using the standard structural validation check (sentinel-based). If validation passes, it sets the error buffer lock flag on the model's environment. This lock causes subsequent error-reporting functions to preserve the existing error message text while still updating the error code. The primary purpose is to ensure that if an error was set before optimization (such as a parameter validation error or license warning), that message is not overwritten by cascading errors that may occur during the solve process.
 
-The function validates the model using the standard structural validation check (sentinel-based). If validation passes, it sets the error buffer lock flag on the model's environment. This lock causes subsequent error-reporting functions to preserve the existing error message text while still updating the error code. The primary purpose is to ensure that if an error was set before optimization (such as a parameter validation error), that message is not overwritten by cascading errors that may occur during the solve process.
-
-This function is always paired with cxf_post_optimize_hook, which clears the lock after optimization completes.
+This function is always paired with cxf_post_optimize_callback, which clears the lock after optimization completes.
 
 **Thread Safety:** Unsafe. The error buffer lock flag is not protected by a mutex. The function is expected to be called from the optimization entry point, which is single-threaded at that stage.
 
@@ -8793,7 +9020,7 @@ This function is always paired with cxf_post_optimize_hook, which clears the loc
 
 ---
 
-### cxf_post_optimize_hook
+### cxf_post_optimize_callback
 
 **Purpose:** Unlock the error buffer after optimization completes, restoring normal error reporting behavior.
 
@@ -8815,9 +9042,7 @@ This function is always paired with cxf_post_optimize_hook, which clears the loc
 - Invalid model (fails structural validation) -> silent return, no action
 
 **Behavioral Description:**
-This function is an internal optimization lifecycle hook, NOT a user callback. It is the complement of cxf_pre_optimize_hook and is called by the optimization infrastructure after the solver loop completes, regardless of the optimization outcome (success, error, user termination, time limit, iteration limit, etc.).
-
-**Naming history:** Formerly `cxf_post_optimize_callback`; renamed to `cxf_post_optimize_hook` to better reflect that it is an internal lifecycle hook, not a user callback.
+This function is an internal optimization lifecycle hook, NOT a user callback. It is the complement of cxf_pre_optimize_callback and is called by the optimization infrastructure after the solver loop completes, regardless of the optimization outcome (success, error, user termination, time limit, iteration limit, etc.).
 
 The function validates the model using the standard structural validation check. If validation passes, it clears the error buffer lock flag on the model's environment, restoring the normal error reporting mode where new error messages overwrite the buffer.
 
@@ -8861,7 +9086,7 @@ The function is idempotent: clearing an already-cleared lock flag has no ill eff
 
 **Error Conditions:**
 - Not in a callback context (no active optimization) -> returns callback error code
-- Server-side error from remote server -> returns the appropriate error code; reports error message from server
+- License error from remote server -> returns license error code; reports error message from server
 - Memory allocation failure on remote server -> returns out-of-memory error code
 - Remote communication failure -> waits for optimization to complete, retrieves and reports error details from the server, returns the original error code
 
@@ -8878,7 +9103,7 @@ The function retrieves constraint matrix data from the solver during an active o
 
 5. **Data copy:** If the request succeeds and the function is not in count-only mode, the response data is copied from the server's response buffers to the user-provided output arrays. The copy handles three data components separately: start indices (as integer arrays), variable indices (as integer arrays), and coefficient values (as floating-point arrays).
 
-6. **Error recovery:** If the remote request fails (for reasons other than out-of-memory or server-side errors), the function enters an error recovery path: it waits for the remote optimization to complete (polling with sleep intervals), then makes a secondary request to retrieve detailed error information from the server, and reports the error through the environment's error reporting system.
+6. **Error recovery:** If the remote request fails (for reasons other than out-of-memory or license errors), the function enters an error recovery path: it waits for the remote optimization to complete (polling with sleep intervals), then makes a secondary request to retrieve detailed error information from the server, and reports the error through the environment's error reporting system.
 
 7. **Lock release:** The remote solver communication lock is released.
 
@@ -8969,21 +9194,21 @@ The term "callback" is overloaded in this module's function names, referring to 
 
 1. **User callbacks** (optimization callbacks, log callbacks): Functions registered by the user that the solver invokes during optimization to report progress or allow intervention. cxf_callback_terminate and cxf_getconstrs_callback operate within this context -- they are called from inside a user callback to interact with the solver.
 
-2. **Lifecycle hooks** (cxf_pre_optimize_hook, cxf_post_optimize_hook): Internal functions called by the optimization infrastructure at the start and end of optimization. They manage the error buffer lock, ensuring that the first error message recorded before optimization is preserved throughout the solve.
+2. **Lifecycle hooks** (cxf_pre_optimize_callback, cxf_post_optimize_callback): Internal functions called by the optimization infrastructure at the start and end of optimization. Despite their "callback" suffix, these have nothing to do with user callbacks. They manage the error buffer lock, ensuring that the first error message recorded before optimization is preserved throughout the solve.
 
 3. **Callback infrastructure** (cxf_init_callback_struct, cxf_copy_env_callbacks): Functions that set up, initialize, and propagate the callback system itself, including mutex allocation and CallbackState configuration.
 
-Users of this specification should be aware that cxf_pre_optimize_hook and cxf_post_optimize_hook are purely internal lifecycle hooks. They do not invoke user callbacks, do not interact with the CallbackState, and do not involve the callback mutex. Their only relationship to "callbacks" is their name and their position in the optimization lifecycle.
+Users of this specification should be aware that cxf_pre_optimize_callback and cxf_post_optimize_callback are purely internal lifecycle hooks. They do not invoke user callbacks, do not interact with the CallbackState, and do not involve the callback mutex. Their only relationship to "callbacks" is their name and their position in the optimization lifecycle.
 
 ### Error Buffer Locking Pattern
 
-The cxf_pre_optimize_hook / cxf_post_optimize_hook pair implements a first-error preservation pattern for optimization. The typical control flow is:
+The cxf_pre_optimize_callback / cxf_post_optimize_callback pair implements a first-error preservation pattern for optimization. The typical control flow is:
 
 1. User calls the optimization entry point.
-2. cxf_pre_optimize_hook sets the error buffer lock.
+2. cxf_pre_optimize_callback sets the error buffer lock.
 3. The optimization loop executes, potentially encountering multiple errors.
 4. Because the lock is set, only error codes are updated but the original error message text is preserved.
-5. cxf_post_optimize_hook clears the lock.
+5. cxf_post_optimize_callback clears the lock.
 6. The original (root cause) error message is available to the user.
 
 This pattern ensures that in cascading error scenarios (common during optimization, where one failure triggers multiple downstream failures), the user sees the original error rather than a secondary symptom.
@@ -8998,14 +9223,21 @@ The CallbackState structure (specified in the CallbackState data model) is lazil
 
 The log callback function pointer and its user data reside in the Environment, not in the CallbackState. The CallbackState provides shared synchronization and timing infrastructure for all callback types.
 
+### Compute Server Considerations
+
+Two functions in this module (cxf_callback_terminate, cxf_getconstrs_callback) have dual code paths for local and remote (remote solver) operation:
+
+- **cxf_callback_terminate** uses a non-blocking lock test to discriminate between modes: if the remote solver lock can be acquired, the solve is remote and a termination message is sent; otherwise, a local termination flag is set.
+- **cxf_getconstrs_callback** is primarily oriented toward remote solver deployments, using RPC protocol messages to request constraint data from the remote server. For local solves, the function's context validation would typically prevent invocation outside the expected callback context.
+
 ### Thread Safety Summary
 
 | Function | Thread Safety | Notes |
 |----------|---------------|-------|
 | cxf_init_callback_struct | Safe | Pure allocation and initialization; no shared state |
 | cxf_callback_terminate | Conditional | Local path uses atomic flag write; remote path acquires remote solver lock |
-| cxf_pre_optimize_hook | Unsafe | Called from single-threaded optimization entry point |
-| cxf_post_optimize_hook | Unsafe | Called from single-threaded optimization cleanup path |
+| cxf_pre_optimize_callback | Unsafe | Called from single-threaded optimization entry point |
+| cxf_post_optimize_callback | Unsafe | Called from single-threaded optimization cleanup path |
 | cxf_getconstrs_callback | Conditional | Acquires remote solver lock; must be called from within a callback context |
 | cxf_copy_env_callbacks | Unsafe | Called during environment/model setup before concurrent access |
 
@@ -9042,7 +9274,7 @@ The conversion pipeline has four stages, three of which are provided by this mod
 | 2 | cxf_build_row_major | Perform two-pass CSC-to-CSR conversion |
 | 3 | cxf_finalize_row_data (external) | Re-apply scaling, restore original arrays |
 
-The fourth function, cxf_sort_by_values, is a general-purpose hybrid sorting utility used throughout the matrix subsystem for ordering sparse index arrays.
+The fourth function, cxf_sort_indices, is a general-purpose hybrid sorting utility used throughout the matrix subsystem for ordering sparse index arrays.
 
 ## Functions
 
@@ -9226,11 +9458,11 @@ The overall time complexity is O(nnz) for the linear CSR construction plus O(nnz
 - Memory allocation and deallocation (Memory Primitives module)
 - Error reporting (Error Handling module)
 - SOS row-major construction helper
-- Quadratic constraint index sorting helper (cxf_sort_by_values or a related sorting utility)
+- Quadratic constraint index sorting helper (cxf_sort_indices or a related sorting utility)
 
 ---
 
-### cxf_sort_by_values
+### cxf_sort_indices
 
 **Purpose:** Sort a pair of parallel sparse arrays (values and associated integer indices) in ascending order of the values, using a hybrid sorting algorithm optimized for the array sizes typical in LP solver operations.
 
@@ -9267,7 +9499,7 @@ The function implements a hybrid sorting algorithm combining quicksort and shell
 
 4. **Parallel array management:** Throughout all sorting operations, whenever two elements are compared and swapped in the values array, the corresponding elements in the indices array are swapped identically, maintaining the value-index correspondence.
 
-**Naming history:** Formerly `cxf_sort_indices`; renamed to better reflect that the primary sort key is the values array, with indices permuted as satellites. This function is used in contexts such as ordering sparse vector entries by coefficient magnitude, sorting pricing candidates by reduced cost, and arranging quadratic constraint terms by constraint index.
+Note: Despite the function name suggesting sorting of indices, the primary sort key is the values array. The indices are permuted as satellites. This function is used in contexts such as ordering sparse vector entries by coefficient magnitude, sorting pricing candidates by reduced cost, and arranging quadratic constraint terms by constraint index.
 
 **Thread Safety:** Safe (operates only on the provided arrays with no shared state).
 
@@ -9299,6 +9531,9 @@ The partitioning performed by cxf_matrix_setup is a critical optimization for pr
 
 The matrix may be stored in scaled form during optimization (where all coefficients have been multiplied by row and column scaling factors to improve numerical conditioning; see Tomlin, 1975; Curtis and Reid, 1972). Row-major access requests from the user API expect unscaled (original) coefficients. The pipeline handles this by unscaling before CSR construction and re-scaling afterward, ensuring that the cached CSR always reflects the appropriate coefficient form for its context.
 
+### Naming Note
+
+The function cxf_sort_indices sorts by values, not by indices, despite its name. The "indices" in the name refers to the fact that integer index arrays are sorted alongside their associated values (as satellites), which is the typical use case in sparse matrix operations.
 
 ### Thread Safety Summary
 
@@ -9307,7 +9542,7 @@ The matrix may be stored in scaled form during optimization (where all coefficie
 | cxf_prepare_row_data | Unsafe | Modifies matrix data in place, releases locks |
 | cxf_matrix_setup | Unsafe | Partitions CSC arrays in place, swaps pointers |
 | cxf_build_row_major | Unsafe | Allocates and stores arrays on the matrix |
-| cxf_sort_by_values | Safe | Operates only on provided arrays, no shared state |
+| cxf_sort_indices | Safe | Operates only on provided arrays, no shared state |
 
 All unsafe functions require the caller to hold the model-level critical section or otherwise ensure exclusive access to the matrix data.
 
@@ -9393,7 +9628,7 @@ If the matrix has zero constraints, the function proceeds directly to finalizati
 
 **Fast-path: Constraint Sense Normalization:**
 
-If certain conditions are met (no penalty terms, no previously computed row-ready state, constraint type flags are available, no quadratic constraints), the function performs a lightweight normalization pass instead of full scaling. For each inequality constraint (identified by the constraint type flag), it negates the constraint coefficients, swaps and negates the row bounds, and negates the right-hand side value. This normalization converts greater-than-or-equal constraints to less-than-or-equal form, which is the internal normal form expected by the simplex solver (see MatrixData Layer 1 specification, Invariant 6). The negation uses an IEEE 754 sign-bit flip, which is exact and handles infinity and NaN correctly.
+If certain conditions are met (no penalty terms, no previously computed row-ready state, constraint type flags are available, no quadratic constraints, and no integrality information), the function performs a lightweight normalization pass instead of full scaling. For each inequality constraint (identified by the constraint type flag), it negates the constraint coefficients, swaps and negates the row bounds, and negates the right-hand side value. This normalization converts greater-than-or-equal constraints to less-than-or-equal form, which is the internal normal form expected by the simplex solver (see MatrixData Layer 1 specification, Invariant 6). The negation uses an IEEE 754 sign-bit flip, which is exact and handles infinity and NaN correctly.
 
 If piecewise-linear constraints exist, the constraint type flags are cleared instead, deferring normalization.
 
@@ -9408,7 +9643,7 @@ If the MatrixData has previously saved scaling factors (from a prior solve on th
 A single contiguous block of memory is allocated to hold both row scaling factors (one per constraint) and column scaling factors (one per variable). The minimum allocation is two entries. If allocation fails, the function returns the out-of-memory error code.
 
 Row scaling factors are initialized based on constraint classification:
-- Constraints in the first partition are initialized to +1.0
+- Constraints in the first partition (up to an index determined by integrality information) are initialized to +1.0
 - Remaining constraints are initialized to -1.0 (the negative sign serves as a processing marker that is resolved to a positive magnitude during the scaling computation)
 
 Column scaling factors are all initialized to +1.0.
@@ -9590,9 +9825,9 @@ The Basis Operations module manages the Product Form of the Inverse (PFI) repres
 
 ## Functions
 
-### cxf_fix_variables_at_bounds
+### cxf_basis_refactor
 
-**Purpose:** Identify and fix variables at their bounds during simplex iterations, creating eta vectors for the PFI representation to reduce the working basis size and improve numerical stability.
+**Purpose:** Identify and fix variables at their bounds during simplex iterations, creating eta vectors for the PFI representation to reduce the working basis size and improve numerical stability. Despite its name, this function does not perform LU refactorization; it performs constraint-driven variable fixing.
 
 **Signature:**
 - Input: `state` : pointer-to-SolverState - The solver's working state containing the basis, constraint matrix, bounds, and objective data
@@ -9653,7 +9888,7 @@ The function processes a list of candidate constraints to identify variables tha
 
 ---
 
-### cxf_progress_snapshot
+### cxf_basis_snapshot
 
 **Purpose:** Capture a lightweight snapshot of the solver's iteration counters and progress metrics, establishing a baseline for subsequent cycling detection via cxf_basis_diff.
 
@@ -9686,7 +9921,7 @@ The function copies a fixed set of integer counter values from the solver state 
 
 The snapshot is extremely lightweight: it consists of exactly SNAPSHOT_SIZE integer copies with no loops over problem data, no memory allocation, and O(1) time complexity. It is designed to be called frequently (e.g., before each batch of simplex iterations) without measurable overhead.
 
-**Naming history:** Formerly `cxf_basis_snapshot`; renamed to clarify that this function captures only scalar counters (not the variable status array, objective value, or any basis matrix data). The companion function cxf_basis_diff computes a weighted difference score from these counters.
+Note on naming: Despite its name suggesting a full basis copy, this function captures only scalar counters -- not the variable status array, not the objective value, and not any basis matrix data. A more descriptive name would be "progress snapshot." The companion function cxf_basis_diff computes a weighted difference score from these counters.
 
 **Thread Safety:** Not thread-safe. The counter values are read without synchronization; must be called from the same thread performing simplex iterations.
 
@@ -9702,12 +9937,12 @@ The snapshot is extremely lightweight: it consists of exactly SNAPSHOT_SIZE inte
 
 **Signature:**
 - Input: `state` : pointer-to-SolverState - The current solver state with updated iteration counters
-- Input: `snapshot` : pointer-to-array-of-int - A previously captured snapshot from cxf_progress_snapshot
+- Input: `snapshot` : pointer-to-array-of-int - A previously captured snapshot from cxf_basis_snapshot
 - Output: double - A non-negative progress score; higher values indicate more progress since the snapshot
 
 **Preconditions:**
 - The solver state must be the same state from which the snapshot was captured (same solve instance)
-- The snapshot must have been populated by a prior call to cxf_progress_snapshot
+- The snapshot must have been populated by a prior call to cxf_basis_snapshot
 
 **Postconditions:**
 - Returns a non-negative double representing the weighted, normalized amount of solver progress since the snapshot
@@ -9744,7 +9979,7 @@ All deltas are clamped to zero (negative progress is treated as no progress), an
 
 **Dependencies:**
 - P1.04 (SolverState) - reads current counter values and the nonzero count for normalization
-- cxf_progress_snapshot (this module) - produces the snapshot array that this function compares against
+- cxf_basis_snapshot (this module) - produces the snapshot array that this function compares against
 - cxf_simplex_perturbation (P3.14) - the anti-cycling action triggered when this function reports low progress
 
 ---
@@ -9780,7 +10015,7 @@ All deltas are clamped to zero (negative progress is treated as no progress), an
 - No Q-matrix contributions for the variable -> returns success immediately (no eta created)
 
 **Behavioral Description:**
-This function is part of the PFI update mechanism for problems with quadratic objectives. When a variable with nonzero Q-matrix entries is being fixed at a bound (typically called from cxf_fix_variables_at_bounds), the solver must record the quadratic contributions so that reduced costs of neighboring variables can be correctly maintained during warm-start restoration or crossover.
+This function is part of the PFI update mechanism for problems with quadratic objectives. When a variable with nonzero Q-matrix entries is being fixed at a bound (typically called from cxf_basis_refactor), the solver must record the quadratic contributions so that reduced costs of neighboring variables can be correctly maintained during warm-start restoration or crossover.
 
 The function proceeds as follows:
 
@@ -9804,7 +10039,7 @@ The function proceeds as follows:
 - P1.04 (SolverState) - reads Q-matrix data, bounds, and eta management fields
 - P1.08 (EtaVector) - creates Variant 3 (WARM_START) eta vector
 - P2.01 (Product Form of the Inverse) - memory pool allocation and eta chain management
-- cxf_fix_variables_at_bounds (this module) - primary caller during variable fixing with quadratic objectives
+- cxf_basis_refactor (this module) - primary caller during variable fixing with quadratic objectives
 
 ---
 
@@ -9878,23 +10113,27 @@ After each extraction phase, the performance counter is incremented proportional
 
 ### Naming Clarifications
 
-**Naming history:** Formerly `cxf_basis_refactor`; renamed to `cxf_fix_variables_at_bounds` to clarify that this function identifies and fixes variables at bounds to reduce the working basis size, rather than performing LU refactorization. The actual benefit is a smaller effective basis, which speeds up subsequent FTRAN/BTRAN operations. True LU refactorization of the basis matrix is a separate operation (see P2.01, Step 6: Refactorization).
+Several function names in this module are historically misleading:
+
+- **cxf_basis_refactor** does not perform LU refactorization. It identifies and fixes variables at bounds to reduce the working basis size. The actual benefit is a smaller effective basis, which speeds up subsequent FTRAN/BTRAN operations. True LU refactorization of the basis matrix is a separate operation (see P2.01, Step 6: Refactorization).
+
+- **cxf_basis_snapshot** does not capture the actual basis (variable status array, LU factors, or solution vector). It captures only a fixed-size set of scalar iteration counters. A more descriptive name would be "progress counter snapshot."
 
 ### Relationships Between Functions
 
 The five functions in this module interact as follows:
 
-1. **cxf_fix_variables_at_bounds** is the primary variable-fixing function. During its fixing phase, it may call **cxf_basis_warm** to record quadratic objective contributions for variables that have Q-matrix entries. Both functions create eta vectors that are prepended to the same eta chain managed by the SolverState.
+1. **cxf_basis_refactor** is the primary variable-fixing function. During its fixing phase, it may call **cxf_basis_warm** to record quadratic objective contributions for variables that have Q-matrix entries. Both functions create eta vectors that are prepended to the same eta chain managed by the SolverState.
 
-2. **cxf_pivot_with_eta** is called independently from the simplex iteration loop (not from this module's other functions). It records standard pivot operations, while cxf_fix_variables_at_bounds records variable-fixing operations. Both contribute to the same eta chain, and both types of records must be processed during FTRAN and BTRAN.
+2. **cxf_pivot_with_eta** is called independently from the simplex iteration loop (not from this module's other functions). It records standard pivot operations, while cxf_basis_refactor records variable-fixing operations. Both contribute to the same eta chain, and both types of records must be processed during FTRAN and BTRAN.
 
-3. **cxf_progress_snapshot** and **cxf_basis_diff** form a matched pair for cycling detection. The snapshot captures a baseline, and the diff measures progress against that baseline. They are called from the main LP solve driver (cxf_solve_lp), not from other functions in this module.
+3. **cxf_basis_snapshot** and **cxf_basis_diff** form a matched pair for cycling detection. The snapshot captures a baseline, and the diff measures progress against that baseline. They are called from the main LP solve driver (cxf_solve_lp), not from other functions in this module.
 
 ### Eta Vector Types Created by This Module
 
 | Function | Eta Type | Variant (P1.08) | Purpose |
 |----------|----------|------------------|---------|
-| cxf_fix_variables_at_bounds | VARIABLE_FIX | Variant 2 (compact or full) | Records variable fixed at bound |
+| cxf_basis_refactor | VARIABLE_FIX | Variant 2 (compact or full) | Records variable fixed at bound |
 | cxf_basis_warm | WARM_START | Variant 3 | Records quadratic objective contributions |
 | cxf_pivot_with_eta | PIVOT | Variant 1 (with optional column data) | Records simplex pivot transformation |
 
@@ -9904,14 +10143,14 @@ All eta vectors created by this module are allocated from the SolverState's aren
 
 ### Interaction with the Pricing Subsystem
 
-cxf_fix_variables_at_bounds is the only function in this module that interacts with the pricing subsystem. When a variable is fixed, the function invalidates the pricing cache entry for that variable (so the pricer does not consider it for future pivot selection) and sends an update notification so the pricing state reflects the reduced problem size. cxf_pivot_with_eta does not interact with pricing directly; pricing updates after a pivot are handled by the calling simplex step function.
+cxf_basis_refactor is the only function in this module that interacts with the pricing subsystem. When a variable is fixed, the function invalidates the pricing cache entry for that variable (so the pricer does not consider it for future pivot selection) and sends an update notification so the pricing state reflects the reduced problem size. cxf_pivot_with_eta does not interact with pricing directly; pricing updates after a pivot are handled by the calling simplex step function.
 
 ### Thread Safety Summary
 
 | Function | Thread Safety | Notes |
 |----------|---------------|-------|
-| cxf_fix_variables_at_bounds | Not thread-safe | Modifies solver state, eta chain, pricing state, and constraint matrix |
-| cxf_progress_snapshot | Not thread-safe | Reads solver counters without synchronization |
+| cxf_basis_refactor | Not thread-safe | Modifies solver state, eta chain, pricing state, and constraint matrix |
+| cxf_basis_snapshot | Not thread-safe | Reads solver counters without synchronization |
 | cxf_basis_diff | Not thread-safe | Reads solver counters without synchronization |
 | cxf_basis_warm | Not thread-safe | Modifies eta chain and allocates from memory pool |
 | cxf_pivot_with_eta | Not thread-safe | Modifies eta chain, eta counts, and allocates from memory pool |
@@ -11293,14 +11532,14 @@ All functions operate within a single-threaded simplex solve. Thread safety for 
 
 ## References
 
-- Achterberg, T., Bixby, R.E., Gu, Z., Rothberg, E., and Weninger, D. (2020). "Presolve Reductions in Linear Programming." *INFORMS Journal on Computing*, 32(2):473-506.
+- Achterberg, T., Bixby, R.E., Gu, Z., Rothberg, E., and Weninger, D. (2020). "Presolve Reductions in Mixed Integer Programming." *INFORMS Journal on Computing*, 32(2):473-506.
 - Andersen, E.D. and Andersen, K.D. (1995). "Presolving in Linear Programming." *Mathematical Programming*, 71(2):221-245.
 - Dantzig, G.B. (1963). *Linear Programming and Extensions*. Princeton University Press.
 - Forrest, J.J.H. and Goldfarb, D. (1992). "Steepest-edge simplex algorithms for linear programming." *Mathematical Programming*, 57(1):341-374.
 - Harris, P.M.J. (1973). "Pivot selection methods of the Devex LP code." *Mathematical Programming*, 5(1):1-28.
 - Higham, N.J. (2002). *Accuracy and Stability of Numerical Algorithms*. Second Edition. SIAM.
 - Maros, I. (2003). *Computational Techniques of the Simplex Method*. Springer. International Series in Operations Research and Management Science, Vol. 61.
-- Savelsbergh, M.W.P. (1994). "Preprocessing and Probing Techniques for Linear Programming Problems." *ORSA Journal on Computing*, 6(4):445-454.
+- Savelsbergh, M.W.P. (1994). "Preprocessing and Probing Techniques for Mixed Integer Programming Problems." *ORSA Journal on Computing*, 6(4):445-454.
 
 ---
 
@@ -11312,9 +11551,9 @@ The Simplex Iteration module contains the core functions that execute within the
 
 ## Functions
 
-### cxf_log_iteration_progress
+### cxf_simplex_iterate
 
-**Purpose:** Report presolve and iteration progress to the user log and invoke the external monitoring callback.
+**Purpose:** Report presolve and iteration progress to the user log and invoke the external monitoring callback. Despite its name, this function does not perform simplex iterations — it is a progress logging and callback notification function.
 
 **Signature:**
 - Input: `model` : pointer-to-Model - The model containing logging configuration, solve mode, and thread count
@@ -11347,11 +11586,11 @@ This function provides progress reporting during the LP solve. It is called once
 
 **Step 3: Format and emit message.** The message format depends on the current solve mode:
 - During general constraint preprocessing: reports the preprocessing phase and elapsed time.
-- During standard presolve: reports the number of rows and columns removed and the elapsed time. The message prefix varies depending on whether this is the initial presolve or a subsequent presolve phase.
+- During standard presolve: reports the number of rows and columns removed and the elapsed time. The message prefix varies depending on whether this is the initial presolve or a root relaxation presolve within a MIP solve.
 
 **Step 4: Callback invocation.** The external logging callback is always invoked, regardless of whether a message was printed. This ensures that external monitoring systems (GUI progress bars, distributed computing managers) receive regular heartbeat notifications even when console output is suppressed.
 
-**Naming history:** Formerly `cxf_simplex_iterate`; renamed to better reflect that this function performs progress logging and callback notification, not simplex iteration logic (which resides in cxf_simplex_step, cxf_simplex_step2, and cxf_simplex_step3).
+**Naming note:** Despite its name suggesting iteration logic, this function is purely a logging and notification utility. The actual simplex iteration logic resides in cxf_simplex_step, cxf_simplex_step2, and cxf_simplex_step3 (all in this module).
 
 **Thread Safety:** Not thread-safe. Must be called from the main solve thread.
 
@@ -11503,7 +11742,7 @@ This function processes the secondary pricing queue populated during cxf_simplex
 
 6. **Infeasibility handling.** Infeasibility detection uses a two-stage procedure: the initial ratio check is confirmed against dual activity bounds before returning the infeasibility code. If confirmation fails, the candidate entry is restored and processing continues. This prevents false infeasibility alarms caused by numerical noise.
 
-7. **Bound-change eta record creation.** A lightweight bound-change eta record is created for each processed candidate (when eta tracking is active). This record stores the variable index, constraint index, flip classification, pivot coefficient, and ratio value.
+7. **Bound-change eta record creation.** A lightweight bound-change eta record is created for each processed candidate (when eta tracking is active). This record stores the variable index, constraint index, flip classification, pivot coefficient, and ratio value. For integer variables, the flip classification includes an additional flag to enable downstream MIP processing.
 
 8. **Bound update and notification.** New bounds are written to the variable's working bound arrays, cxf_pivot_update (P3.19) is called to incrementally update constraint activity bounds, and the pricing subsystem is notified via dirty-marking. If the flip type indicates both bounds are tightened (variable fixed), cxf_pivot_bound (P3.19) is called to fully fix the variable.
 
@@ -11581,7 +11820,7 @@ This technique is a standard LP presolve reduction also applicable during simple
 
 6. **Infeasibility handling.** As in step2, a two-stage procedure confirms infeasibility before reporting: the initial implication is verified against the constraint's minimum and maximum activity bounds. Unconfirmed infeasibilities are treated as false alarms (the constraint entry is restored and processing continues).
 
-7. **Bound-change eta record creation.** A lightweight bound-change eta record is created for each processed constraint (same format as step2). The record stores the variable index, constraint index, violation flags, coefficient, and implied value. Piecewise-linear variables receive additional flags.
+7. **Bound-change eta record creation.** A lightweight bound-change eta record is created for each processed constraint (same format as step2). The record stores the variable index, constraint index, violation flags, coefficient, and implied value. Piecewise-linear and integer variables receive additional flags.
 
 8. **Bound update and notification.** New bounds are applied, activity bounds are updated via cxf_pivot_update (P3.19), and the pricing subsystem is notified. If both bounds are tightened, cxf_pivot_bound (P3.19) fixes the variable.
 
@@ -11695,8 +11934,8 @@ This single-interval comparison (rather than tracking progress over multiple int
 
 The five functions in this module are called in a specific order within the main LP solve driver (cxf_solve_lp, P3.25). The typical per-iteration sequence is:
 
-1. **cxf_progress_snapshot** (P3.16) — capture progress baseline
-2. **cxf_log_iteration_progress** (this module) — progress logging and callback
+1. **cxf_basis_snapshot** (P3.16) — capture progress baseline
+2. **cxf_simplex_iterate** (this module) — progress logging and callback
 3. **cxf_simplex_phase_end** (P3.21) — check for phase transition
 4. **cxf_simplex_perturbation** (P3.21) — anti-cycling perturbation if needed
 5. **cxf_simplex_step** (this module) — primary simplex pivot
@@ -11710,7 +11949,11 @@ This sequence repeats until termination. The post_iterate function's return code
 
 ### Naming Clarifications
 
-**cxf_simplex_step2** and **cxf_simplex_step3** are not sequential steps of a single operation. They are complementary bound propagation passes that operate on different candidate queues (variable-side and constraint-side, respectively). They can be thought of as "variable_bound_propagation" and "constraint_bound_propagation."
+Several function names in this module are historically misleading:
+
+- **cxf_simplex_iterate** does not perform simplex iterations. It reports presolve progress and invokes the logging callback. A more descriptive name would be "progress_report" or "log_iteration_progress."
+
+- **cxf_simplex_step2** and **cxf_simplex_step3** are not sequential steps of a single operation. They are complementary bound propagation passes that operate on different candidate queues (variable-side and constraint-side, respectively). They can be thought of as "variable_bound_propagation" and "constraint_bound_propagation."
 
 ### Bidirectional Bound Propagation (step2 + step3)
 
@@ -11736,7 +11979,7 @@ The constraint-side propagation (step3) is the standard implied-bound technique 
 | cxf_simplex_step2 | BOUND_CHANGE | Lightweight bound-change record for variable-side flips |
 | cxf_simplex_step3 | BOUND_CHANGE | Lightweight bound-change record for constraint-side propagation |
 
-The bound-change eta records created by step2 and step3 are a lightweight variant distinct from the full pivot eta records (Variant 1) and the variable-fixing records (Variant 2) created by cxf_pivot_bound (P3.19). They store only the variable index, constraint index, classification flags, pivot coefficient, and ratio/implied value. For piecewise-linear variables, an additional flag is included in the classification to enable downstream PWL processing.
+The bound-change eta records created by step2 and step3 are a lightweight variant distinct from the full pivot eta records (Variant 1) and the variable-fixing records (Variant 2) created by cxf_pivot_bound (P3.19). They store only the variable index, constraint index, classification flags, pivot coefficient, and ratio/implied value. For integer and piecewise-linear variables, an additional flag is included in the classification to enable downstream MIP or PWL processing.
 
 All eta records are allocated from the SolverState's memory pool via bump allocation and are freed in bulk during basis refactorization.
 
@@ -11753,7 +11996,7 @@ This conservative approach prevents false infeasibility reports caused by accumu
 
 The five functions in this module use two different parameter patterns:
 
-- **cxf_log_iteration_progress** and **cxf_simplex_post_iterate** accept a model pointer and a solver state pointer. They require model-level information (logging configuration, stall detection settings, thread count) that is not available in the solver state alone.
+- **cxf_simplex_iterate** and **cxf_simplex_post_iterate** accept a model pointer and a solver state pointer. They require model-level information (logging configuration, stall detection settings, thread count) that is not available in the solver state alone.
 
 - **cxf_simplex_step**, **cxf_simplex_step2**, and **cxf_simplex_step3** accept a solver state pointer and an environment pointer. They require solver-level tolerances and algorithm parameters but do not need model-level logging or configuration data.
 
@@ -11773,7 +12016,7 @@ This distinction reflects the separation of concerns between monitoring/logging 
 
 | Function | Thread Safety | Notes |
 |----------|---------------|-------|
-| cxf_log_iteration_progress | Not thread-safe | Writes to log, invokes callback |
+| cxf_simplex_iterate | Not thread-safe | Writes to log, invokes callback |
 | cxf_simplex_step | Not thread-safe | Modifies basis, eta chain, pricing, objective, constraint matrix |
 | cxf_simplex_step2 | Not thread-safe | Modifies bounds, pricing, eta chain, activity bounds |
 | cxf_simplex_step3 | Not thread-safe | Modifies bounds, pricing, eta chain, activity bounds |
@@ -11793,7 +12036,7 @@ All functions operate within a single-threaded simplex solve. Thread safety for 
 [x] All descriptions are behavioral, not implementational
 [x] All data structures described semantically using Layer 1/2 references
 [x] Explicit cross-references to P1.03, P1.04, P2.01, P2.1, P2.4 (algorithm specs) and P3.16-P3.19 (module specs)
-[x] Naming misnomers documented (cxf_log_iteration_progress is logging, not iteration)
+[x] Naming misnomers documented (cxf_simplex_iterate is logging, not iteration)
 [x] Passes the Clean Room Test: could be written without seeing the binary
 ```
 
@@ -11957,7 +12200,7 @@ This function performs a lightweight preprocessing pass that reduces the effecti
 
 **Step 1: Candidate identification.** The function scans all variables and collects those whose bound range (upper bound minus lower bound) is below a tightness threshold. The threshold is a multiple of the feasibility tolerance. A minimum candidate count is enforced to prevent degenerate preprocessing on very small problems.
 
-**Step 2: Candidate sorting.** The candidates are sorted by bound width (tightest first) using cxf_sort_by_values (P3.14). This ordering ensures that the most constrained variables are fixed first, maximizing the chance that each fixing remains feasible.
+**Step 2: Candidate sorting.** The candidates are sorted by bound width (tightest first) using cxf_sort_indices (P3.14). This ordering ensures that the most constrained variables are fixed first, maximizing the chance that each fixing remains feasible.
 
 **Step 3: Activity initialization.** The constraint activity arrays are cleared (or initialized from current activity bounds) to provide a clean baseline for tracking the cumulative effect of variable fixings.
 
@@ -11977,7 +12220,7 @@ This function performs a lightweight preprocessing pass that reduces the effecti
 
 **Dependencies:**
 - P3.02 (Allocation Helpers) - cxf_alloc_eta for eta vector allocation
-- P3.14 (Matrix Core) - cxf_sort_by_values for candidate sorting
+- P3.14 (Matrix Core) - cxf_sort_indices for candidate sorting
 - P1.04 (SolverState) - reads bounds, constraint matrix; modifies activity arrays, objective, eta chain
 - P1.05 (BasisState) - eta chain management for fixing records
 
@@ -12100,7 +12343,7 @@ The two-phase simplex method (Dantzig, 1963; Chvatal, 1983) separates feasibilit
 
 4. **Constraint cleanup.** Inactive constraints identified during Phase I processing (those whose activity bounds indicate they are not binding at the current solution) are removed from the active set. This cleanup, performed by the sparse removal mechanism described above, reduces the effective problem size entering Phase II.
 
-5. **Basis preservation.** The basis itself (the set of basic variables and their positions) is carried forward from Phase I to Phase II unchanged. The Phase I solution is a basic feasible solution, and Phase II begins from this vertex of the feasible polyhedron. The basis factorization may be refreshed (via cxf_fix_variables_at_bounds, P3.16) to ensure numerical accuracy for Phase II iterations, since the objective change can affect the conditioning of subsequent operations.
+5. **Basis preservation.** The basis itself (the set of basic variables and their positions) is carried forward from Phase I to Phase II unchanged. The Phase I solution is a basic feasible solution, and Phase II begins from this vertex of the feasible polyhedron. The basis factorization may be refreshed (via cxf_basis_refactor, P3.16) to ensure numerical accuracy for Phase II iterations, since the objective change can affect the conditioning of subsequent operations.
 
 6. **Tolerance adjustment.** The optimality tolerance used for Phase II termination may differ from the feasibility tolerance used for Phase I. Phase I uses the primal feasibility tolerance to determine when constraint violations are acceptable; Phase II uses the dual feasibility (optimality) tolerance to determine when reduced costs are small enough to declare optimality. These are typically configured as separate environment parameters.
 
@@ -12192,10 +12435,10 @@ The six functions in this module bracket and condition the main simplex iteratio
 2. **cxf_simplex_crash** (this module) — construct initial basis
 3. **cxf_simplex_preprocess** (this module) — fix near-bound variables
 4. **cxf_simplex_setup** (this module) — compute activity bounds
-5. cxf_fix_variables_at_bounds (P3.16) — initial basis factorization
+5. cxf_basis_refactor (P3.16) — initial basis factorization
 
 **Within the iteration loop:**
-6. cxf_log_iteration_progress (P3.20) — progress logging
+6. cxf_simplex_iterate (P3.20) — progress logging
 7. **cxf_simplex_phase_end** (this module) — phase transition and constraint cleanup
 8. **cxf_simplex_perturbation** (this module) — anti-cycling when stalling detected
 9. cxf_simplex_step/step2/step3 (P3.20) — main pivot and bound propagation
@@ -12205,7 +12448,7 @@ The six functions in this module bracket and condition the main simplex iteratio
 **Post-iteration cleanup:**
 12. **cxf_simplex_refine** (this module) — solution refinement
 13. cxf_simplex_final (P3.22) — solution extraction
-14. cxf_simplex_postsolve (P3.22) — resource deallocation
+14. cxf_simplex_cleanup (P3.22) — resource deallocation
 
 ### Relationship to Algorithm Specifications
 
@@ -12291,14 +12534,14 @@ All functions operate within a single-threaded simplex solve. Thread safety for 
 
 ## References
 
-- Achterberg, T., Bixby, R.E., Gu, Z., Rothberg, E., and Weninger, D. (2020). "Presolve Reductions in Linear Programming." *INFORMS Journal on Computing*, 32(2):473-506.
+- Achterberg, T., Bixby, R.E., Gu, Z., Rothberg, E., and Weninger, D. (2020). "Presolve Reductions in Mixed Integer Programming." *INFORMS Journal on Computing*, 32(2):473-506.
 - Chvatal, V. (1983). *Linear Programming*. W.H. Freeman.
 - Dantzig, G.B. (1963). *Linear Programming and Extensions*. Princeton University Press.
 - Gill, P.E., Murray, W., Saunders, M.A., and Wright, M.H. (1989). "A practical anti-cycling procedure for linearly constrained optimization." *Mathematical Programming*, 45(1-3):437-474.
 - Gleixner, A.M., Steffy, D.E., and Wolter, K. (2016). "Iterative refinement for linear programming." *INFORMS Journal on Computing*, 28(3):449-464.
 - Gould, N.I.M. and Reid, J.K. (1989). "New crash procedures for large systems of linear constraints." *Mathematical Programming*, 45(1-3):475-501.
 - Maros, I. (2003). *Computational Techniques of the Simplex Method*. Springer. International Series in Operations Research and Management Science, Vol. 61.
-- Savelsbergh, M.W.P. (1994). "Preprocessing and Probing Techniques for Linear Programming Problems." *ORSA Journal on Computing*, 6(4):445-454.
+- Savelsbergh, M.W.P. (1994). "Preprocessing and Probing Techniques for Mixed Integer Programming Problems." *ORSA Journal on Computing*, 6(4):445-454.
 - Vanderbei, R.J. (2014). *Linear Programming: Foundations and Extensions*. 4th ed. Springer.
 
 ---
@@ -12307,7 +12550,7 @@ All functions operate within a single-threaded simplex solve. Thread safety for 
 
 ## Purpose
 
-The Simplex Lifecycle module contains the three functions that bracket the entire simplex solve: initialization before the iteration loop begins, post-solve variable fixing after it terminates, and post-solve bound tightening with resource deallocation. Together these functions manage the creation, population, and destruction of the SolverState (P1.04), the central data structure through which all simplex functions communicate. cxf_simplex_init allocates and populates the SolverState from the model's problem data. cxf_simplex_final performs dual-feasibility-based variable fixing to simplify the solution. cxf_simplex_postsolve performs implied-bound propagation, additional variable fixing, and frees all temporary working memory. These lifecycle functions implement the initialization and cleanup phases of the revised simplex method described in P2.1 (Revised Simplex Method).
+The Simplex Lifecycle module contains the three functions that bracket the entire simplex solve: initialization before the iteration loop begins, post-solve variable fixing after it terminates, and post-solve bound tightening with resource deallocation. Together these functions manage the creation, population, and destruction of the SolverState (P1.04), the central data structure through which all simplex functions communicate. cxf_simplex_init allocates and populates the SolverState from the model's problem data. cxf_simplex_final performs dual-feasibility-based variable fixing to simplify the solution. cxf_simplex_cleanup performs implied-bound propagation, additional variable fixing, and frees all temporary working memory. These lifecycle functions implement the initialization and cleanup phases of the revised simplex method described in P2.1 (Revised Simplex Method).
 
 ## Functions
 
@@ -12325,7 +12568,7 @@ The Simplex Lifecycle module contains the three functions that bracket the entir
 
 **Preconditions:**
 - The model must have a valid constraint matrix with consistent dimensions (number of variables, constraints, and nonzeros)
-- The model's environment must be active and initialized
+- The model's environment must be active (licensed and initialized)
 - If `initMode` is non-zero, the model must have valid variable type information for semi-continuous and semi-integer variable detection
 - If `altModel` is non-null, it must contain valid warm-start data
 
@@ -12460,7 +12703,7 @@ The rationale follows standard practice for revised simplex implementations: the
 - Constraint activity verification detects a violated constraint -> applies partial fixings and returns success (not an error, but fewer variables are fixed)
 
 **Behavioral Description:**
-This function performs post-solve solution cleanup by fixing variables at their bounds when dual feasibility conditions guarantee that the fixing does not change the optimal objective value. Fixing reduces the effective problem dimension and improves numerical stability for subsequent operations such as barrier crossover or sensitivity analysis. The approach is based on the standard complementary slackness conditions of linear programming (Dantzig, 1963).
+This function performs post-solve solution cleanup by fixing variables at their bounds when dual feasibility conditions guarantee that the fixing does not change the optimal objective value. Fixing reduces the effective problem dimension and improves numerical stability for subsequent operations such as barrier crossover, MIP branching, or sensitivity analysis. The approach is based on the standard complementary slackness conditions of linear programming (Dantzig, 1963).
 
 **Phase 1: Target value determination.** The function scans all variables with non-negative status (active, unfixed variables). For each variable, it evaluates the dual value (reduced cost) to determine the appropriate fixing target:
 
@@ -12494,7 +12737,7 @@ All temporary arrays (target values, constraint queue, visited flags) are freed 
 
 ---
 
-### cxf_simplex_postsolve
+### cxf_simplex_cleanup
 
 **Purpose:** Perform constraint-based implied bound tightening and variable fixing after the simplex solve, then free all temporary working arrays.
 
@@ -12526,9 +12769,7 @@ All temporary arrays (target values, constraint queue, visited flags) are freed 
 - Errors from the core bound propagation helper are propagated
 
 **Behavioral Description:**
-This function performs substantial post-solve analysis before freeing memory. It implements constraint-based bound propagation -- the standard implied-bound tightening technique from LP presolve (Savelsbergh, 1994) -- applied to the post-solve state to identify variables that can be fixed at their bounds.
-
-**Naming history:** Formerly `cxf_simplex_cleanup`; renamed to `cxf_simplex_postsolve` to better reflect its substantial post-solve analysis beyond simple resource cleanup.
+Despite its name suggesting simple resource cleanup, this function performs substantial post-solve analysis before freeing memory. It implements constraint-based bound propagation -- the standard implied-bound tightening technique from LP presolve (Savelsbergh, 1994) -- applied to the post-solve state to identify variables that can be fixed at their bounds.
 
 **Phase 1: Basis index adjustment.** For variables with special flags (quadratic, semi-continuous, general constraint, piecewise-linear, or ranged), the function temporarily adjusts basis header indices by subtracting an offset. This normalization enables uniform processing of all variables regardless of their special-handling requirements. The adjustment is reversed in Phase 6.
 
@@ -12589,15 +12830,15 @@ The three functions in this module define the outermost brackets of a simplex so
 2. cxf_simplex_crash (P3.21) -- construct initial basis
 3. cxf_simplex_preprocess (P3.21) -- fix near-bound variables
 4. cxf_simplex_setup (P3.21) -- compute activity bounds
-5. cxf_fix_variables_at_bounds (P3.16) -- initial basis factorization
+5. cxf_basis_refactor (P3.16) -- initial basis factorization
 
 **The iteration loop:**
-6. cxf_log_iteration_progress through cxf_simplex_post_iterate (P3.20) -- repeated until termination
+6. cxf_simplex_iterate through cxf_simplex_post_iterate (P3.20) -- repeated until termination
 
 **After the iteration loop:**
 7. cxf_simplex_refine (P3.21) -- solution refinement
 8. **cxf_simplex_final** (this module) -- dual-feasibility variable fixing
-9. **cxf_simplex_postsolve** (this module) -- implied-bound tightening and resource deallocation
+9. **cxf_simplex_cleanup** (this module) -- implied-bound tightening and resource deallocation
 
 ### Relationship to Data Model Specifications
 
@@ -12605,11 +12846,11 @@ The three functions in this module define the outermost brackets of a simplex so
 |----------|------------------------|-----------------|
 | cxf_simplex_init | P1.04 (SolverState) - Creation | Allocates and populates all fields described in P1.04 |
 | cxf_simplex_final | P1.04 (SolverState) - Mutation | Modifies variable status and bounds via pivot operations |
-| cxf_simplex_postsolve | P1.04 (SolverState) - Destruction | Frees all working arrays; corresponds to the Destruction lifecycle phase of P1.04 |
+| cxf_simplex_cleanup | P1.04 (SolverState) - Destruction | Frees all working arrays; corresponds to the Destruction lifecycle phase of P1.04 |
 
 cxf_simplex_init is the sole creator of the SolverState structure. The lifecycle described in P1.04 (SolverState, Lifecycle section) maps directly to the initialization phases of this function: zero-initialized allocation, dimension copying, working array sizing, array allocation, data copying, and special variable processing.
 
-cxf_simplex_postsolve is the primary destructor. While it does not free every array (the solve driver handles some cleanup), it frees the temporary working arrays and performs the bulk of the implied-bound analysis before other cleanup functions handle the remaining arrays and the SolverState structure itself.
+cxf_simplex_cleanup is the primary destructor. While it does not free every array (the solve driver handles some cleanup), it frees the temporary working arrays and performs the bulk of the implied-bound analysis before other cleanup functions handle the remaining arrays and the SolverState structure itself.
 
 ### Initialization Complexity
 
@@ -12642,7 +12883,7 @@ cxf_simplex_init populates a per-variable flags array that marks variables requi
 | PIECEWISE_LINEAR | Variable with multi-segment PWL function | Phase 7 (PWL processing) |
 | RANGED | Ranged constraint slack variable | Phase 8 (finalization) |
 
-These flags are read by the simplex iteration functions (P3.20) and the pivot operations (P3.19) to apply appropriate special-case handling. cxf_simplex_postsolve also reads the flags to adjust basis header indices during its temporary normalization step.
+These flags are read by the simplex iteration functions (P3.20) and the pivot operations (P3.19) to apply appropriate special-case handling. cxf_simplex_cleanup also reads the flags to adjust basis header indices during its temporary normalization step.
 
 ### Allocation Strategy
 
@@ -12658,22 +12899,22 @@ The initialization function follows a strict allocation discipline:
 
 ### Post-Solve Analysis Pipeline
 
-cxf_simplex_final and cxf_simplex_postsolve form a two-stage post-solve analysis pipeline:
+cxf_simplex_final and cxf_simplex_cleanup form a two-stage post-solve analysis pipeline:
 
 | Stage | Function | Technique | Purpose |
 |-------|----------|-----------|---------|
 | 1 | cxf_simplex_final | Dual feasibility analysis | Fix variables at bounds based on reduced cost signs |
-| 2 | cxf_simplex_postsolve | Implied bound propagation | Tighten variable bounds using constraint activity analysis, then fix at bounds |
+| 2 | cxf_simplex_cleanup | Implied bound propagation | Tighten variable bounds using constraint activity analysis, then fix at bounds |
 
-Stage 1 (cxf_simplex_final) uses a local criterion: each variable is evaluated independently based on its dual value and bounds. Stage 2 (cxf_simplex_postsolve) uses a global criterion: constraint activities propagate information across variables, enabling fixings that require knowledge of the full constraint structure.
+Stage 1 (cxf_simplex_final) uses a local criterion: each variable is evaluated independently based on its dual value and bounds. Stage 2 (cxf_simplex_cleanup) uses a global criterion: constraint activities propagate information across variables, enabling fixings that require knowledge of the full constraint structure.
 
 ### Numerical Stability Techniques
 
-Both cxf_simplex_final and cxf_simplex_postsolve use the same numerically stable addition technique when accumulating constraint activities. When the magnitudes of the two operands differ significantly, floating-point addition can lose precision. The functions detect this by checking whether the reverse subtraction recovers the original operand. If precision loss is detected, the result is multiplied by a conservative rounding factor (slightly above 1.0 for positive results, slightly below 1.0 for negative results) to ensure that activity bounds remain conservative. This prevents false infeasibility or false tightness from accumulated rounding errors. The technique is a simplified variant of compensated summation (Kahan, 1965), adapted for the specific needs of bound propagation where conservative over-estimation is preferred over exact summation.
+Both cxf_simplex_final and cxf_simplex_cleanup use the same numerically stable addition technique when accumulating constraint activities. When the magnitudes of the two operands differ significantly, floating-point addition can lose precision. The functions detect this by checking whether the reverse subtraction recovers the original operand. If precision loss is detected, the result is multiplied by a conservative rounding factor (slightly above 1.0 for positive results, slightly below 1.0 for negative results) to ensure that activity bounds remain conservative. This prevents false infeasibility or false tightness from accumulated rounding errors. The technique is a simplified variant of compensated summation (Kahan, 1965), adapted for the specific needs of bound propagation where conservative over-estimation is preferred over exact summation.
 
 ### Work Estimation
 
-cxf_simplex_final supports optional work estimation via the `workOut` parameter. When non-null, the function accumulates a weighted estimate of computational work at each phase transition, using per-operation cost multipliers scaled by a problem-dependent work multiplier stored in the SolverState. This estimate is used by the outer solve driver for progress prediction and time-limit enforcement. cxf_simplex_postsolve uses a similar mechanism via the timing pointer stored in the SolverState.
+cxf_simplex_final supports optional work estimation via the `workOut` parameter. When non-null, the function accumulates a weighted estimate of computational work at each phase transition, using per-operation cost multipliers scaled by a problem-dependent work multiplier stored in the SolverState. This estimate is used by the outer solve driver for progress prediction and time-limit enforcement. cxf_simplex_cleanup uses a similar mechanism via the timing pointer stored in the SolverState.
 
 ### Return Code Conventions
 
@@ -12690,7 +12931,7 @@ cxf_simplex_final supports optional work estimation via the `workOut` parameter.
 |----------|---------------|-------|
 | cxf_simplex_init | Not thread-safe | Allocates and populates a single-threaded SolverState |
 | cxf_simplex_final | Not thread-safe | Modifies variable status, bounds, and pricing state |
-| cxf_simplex_postsolve | Not thread-safe | Modifies bounds, constraint senses, pricing state; frees arrays |
+| cxf_simplex_cleanup | Not thread-safe | Modifies bounds, constraint senses, pricing state; frees arrays |
 
 All functions operate within a single-threaded simplex solve. Thread safety for concurrent solves is achieved at the model level by creating independent solver instances, each with its own SolverState.
 
@@ -12715,7 +12956,7 @@ All functions operate within a single-threaded simplex solve. Thread safety for 
 - Dantzig, G.B. (1963). *Linear Programming and Extensions*. Princeton University Press.
 - Kahan, W. (1965). "Further remarks on reducing truncation errors." *Communications of the ACM*, 8(1):40.
 - Maros, I. (2003). *Computational Techniques of the Simplex Method*. Springer. International Series in Operations Research and Management Science, Vol. 61.
-- Savelsbergh, M.W.P. (1994). "Preprocessing and Probing Techniques for Linear Programming Problems." *ORSA Journal on Computing*, 6(4):445-454.
+- Savelsbergh, M.W.P. (1994). "Preprocessing and Probing Techniques for Mixed Integer Programming Problems." *ORSA Journal on Computing*, 6(4):445-454.
 
 ---
 
@@ -13023,7 +13264,7 @@ Both functions operate within a single-threaded crossover context. Thread safety
 
 ## Purpose
 
-The Solve Entry & Dispatch module contains the six functions that form the top-level optimization call chain, from the public API entry point through internal dispatch to the appropriate solver. This module is the gateway through which every optimization request flows: it validates the model, acquires the necessary locale safety state, initializes message buffers and logging, determines whether to use the callback or non-callback execution path, applies pending model modifications, detects the model's problem type (LP, QP), handles multi-scenario routing, and ultimately delegates to the solver algorithm modules (P3.25 Solve LP Core, P3.26 Solve Barrier & Concurrent) for actual computation.
+The Solve Entry & Dispatch module contains the six functions that form the top-level optimization call chain, from the public API entry point through internal dispatch to the appropriate solver. This module is the gateway through which every optimization request flows: it validates the model, acquires the necessary locale safety state, initializes message buffers and logging, determines whether to use the callback or non-callback execution path, applies pending model modifications, detects the model's problem type (LP, QP), handles multi-scenario routing, and ultimately delegates to the solver algorithm modules (P3.25 Solve LP Core, P3.26 Solve Barrier & Concurrent, P3.27 [out of scope: MIP]) for actual computation.
 
 The six functions form a strict call chain:
 
@@ -13070,7 +13311,7 @@ This module does not contain any solver algorithms. Its role is purely organizat
 **Side Effects:**
 - Validates the model via the structural validation check (P3.07)
 - Sets up a signal handler for interrupt handling on applicable deployment types
-- Acquires the locale safety state (cxf_save_locale_state, P3.11), ensuring the "C" locale for consistent numeric formatting
+- Acquires the locale safety state (cxf_acquire_solve_lock, P3.11), ensuring the "C" locale for consistent numeric formatting
 - Clears the environment's message buffers and resets message state
 - Sets the model's modification-blocked flag to prevent concurrent modifications
 - Clears the model's status code
@@ -13078,6 +13319,7 @@ This module does not contain any solver algorithms. Its role is purely organizat
 - Delegates to remote solver if the model is configured for remote computation
 - Registers a log callback relay if a logging path is configured
 - Invokes cxf_optimize_internal for the actual optimization
+- Validates single-use license restrictions after optimization
 - Logs callback invocation statistics (call count and cumulative time) if callbacks were used
 - Invokes the pre-optimize and post-optimize lifecycle hooks (P3.13) to manage the error buffer lock
 - Writes result files (solution or IIS) if a result file path is configured and the optimization status is optimal or suboptimal
@@ -13088,6 +13330,7 @@ This module does not contain any solver algorithms. Its role is purely organizat
 - Locale safety acquisition failure (memory allocation) -> out-of-memory error code
 - remote solver synchronization failure -> propagated error code
 - Internal optimization failure -> propagated error code from cxf_optimize_internal
+- Single-use license violation -> error code with diagnostic message
 - Out-of-memory at any stage -> out-of-memory error code with message an appropriate out-of-memory error message
 
 **Behavioral Description:**
@@ -13095,7 +13338,7 @@ This function is the sole public entry point for optimization. It wraps the enti
 
 **Step 1: Model validation.** The function validates the model using the standard structural validation check. If validation fails with an out-of-memory error, a specific diagnostic message is set. For other validation failures, the error is returned directly.
 
-**Step 2: Signal handler setup.** For deployment types that support interrupt handling, the function registers a signal handler to allow graceful interruption of long-running optimizations via operating system signals.
+**Step 2: Signal handler setup.** For deployment types that support interrupt handling (local file and web license service), the function registers a signal handler to allow graceful interruption of long-running optimizations via operating system signals.
 
 **Step 3: Locale safety.** The function acquires the locale safety state (P3.11), saving the calling thread's locale and switching to the standard "C" locale. This ensures consistent decimal point formatting throughout the optimization.
 
@@ -13109,7 +13352,7 @@ This function is the sole public entry point for optimization. It wraps the enti
 
 **Step 8: Internal optimization.** The function delegates to cxf_optimize_internal for the actual optimization work.
 
-**Step 9: Callback cleanup.** If callbacks were used and the deployment type permits callback statistics logging, the function logs the total callback invocation count and cumulative time spent in user callbacks.
+**Step 9: License and callback cleanup.** After optimization, the function validates single-use license restrictions. If callbacks were used and the deployment type permits callback statistics logging, the function logs the total callback invocation count and cumulative time spent in user callbacks.
 
 **Step 10: Lifecycle callbacks.** The pre-optimize callback (error buffer lock) is invoked on the error path; the post-optimize callback (error buffer unlock) is invoked on all paths (P3.13).
 
@@ -13121,8 +13364,8 @@ This function is the sole public entry point for optimization. It wraps the enti
 
 **Dependencies:**
 - P3.07 (Input Validation) - cxf_checkmodel for model validation
-- P3.11 (Threading & Synchronization) - cxf_save_locale_state / cxf_release_solve_lock for locale safety; cxf_get_threads, cxf_get_physical_cores, cxf_get_logical_processors, cxf_validate_thread_count for hardware logging
-- P3.13 (Callbacks) - cxf_pre_optimize_hook / cxf_post_optimize_hook for error buffer lifecycle
+- P3.11 (Threading & Synchronization) - cxf_acquire_solve_lock / cxf_release_solve_lock for locale safety; cxf_get_threads, cxf_get_physical_cores, cxf_get_logical_processors, cxf_set_thread_count for hardware logging
+- P3.13 (Callbacks) - cxf_pre_optimize_callback / cxf_post_optimize_callback for error buffer lifecycle
 - P3.09 (Error Handling) - cxf_error_model, cxf_set_error_message for error reporting
 - P1.01 (Environment) - environment state fields (message buffers, output flag, session reference, callback state)
 - P1.02 (Model) - model state fields (modification-blocked, status code, callback count, remote solver flag)
@@ -13155,14 +13398,15 @@ This function is the sole public entry point for optimization. It wraps the enti
 - For concurrent optimization: caches and clamps tolerance parameters on all concurrent environments, restoring them after optimization
 - Saves and restores solver focus and fingerprint flags across the optimization
 - Sets the model's self-reference pointer for callback access during optimization
-- Detects the model type; for continuous models with solver focus or NLP mode, marks the model for special treatment
+- Detects whether the model is a MIP or continuous model; for continuous models with solver focus or NLP mode, marks the model for MIP-like or NLP-like treatment
+- Clears existing solution data for MIP models with quadratic terms
 - Validates model labels if label checking is enabled
 - Logs model dimensions (row count, column count, nonzero count)
 - Computes model fingerprint for determinism verification (controlled by fingerprint mode parameter)
-- Logs presolve statistics
+- Logs presolve statistics and performs MIP-specific presolve analysis
 - Analyzes coefficient ranges and logs warnings for numerically challenging matrices
 - Dispatches to the solve chain (cxf_solve_entry or directly to cxf_solver_dispatch depending on problem size)
-- Handles non-convex QP detection: when the solver returns a non-positive-semidefinite error for a continuous model, the function may apply non-convex handling based on the non-convex handling parameter
+- Handles non-convex QP detection: when the solver returns a non-positive-semidefinite error for a continuous model, the function may automatically convert it to a MIP formulation based on the non-convex handling parameter
 - Checks for asynchronous completion when in remote solver mode
 - Cleans up solve state and frees cached parameter arrays
 
@@ -13192,23 +13436,26 @@ This function is the central routing point for optimization. It bridges the gap 
 
 **Phase 4: Concurrent environment parameter management.** For concurrent optimization (where multiple solver instances run in parallel with different parameter settings), the function caches tolerance parameters from all concurrent environments. The tolerance values are clamped to safe ranges to prevent numerical instability. These cached values are restored after optimization completes, ensuring that the concurrent environments' parameter state is preserved across solves.
 
-**Phase 5: Solver focus and model type detection.** The function saves the solver focus and fingerprint flags, then determines the model type. For continuous models that have the solver focus flag set or NLP mode enabled, the model is marked for special treatment.
+**Phase 5: Solver focus and model type detection.** The function saves the solver focus and fingerprint flags, then determines the model type. For continuous models that have the solver focus flag set (indicating the user wants MIP-like treatment of a continuous model) or NLP mode enabled, the model is marked for special treatment.
 
-**Phase 6: Model analysis and logging.** The function logs model dimensions, computes the model fingerprint (for determinism verification), logs presolve statistics, and analyzes coefficient ranges for numerical warnings.
+**Phase 6: Solution clearing for MIP with quadratic terms.** If the model is classified as MIP and contains quadratic terms or integer variables, any existing solution data is cleared to prevent stale results from a previous solve.
 
-**Phase 7: Solver dispatch.** The function dispatches to the appropriate solver through either cxf_solve_entry (for models with multi-scenario support) or directly to cxf_solver_dispatch (P3.25) for single-model optimization.
+**Phase 7: Model analysis and logging.** The function logs model dimensions, computes the model fingerprint (for determinism verification), logs presolve statistics, performs MIP-specific presolve analysis, and analyzes coefficient ranges for numerical warnings.
 
-**Phase 8: Non-convex QP handling.** If the solver returns a non-positive-semidefinite error (indicating the quadratic objective or constraints are non-convex), the function consults the non-convex handling parameter:
-- If the parameter indicates automatic non-convex handling (value >= 2), the model is marked as non-convex and re-dispatched.
-- If the parameter indicates automatic handling with a check for QCP dual requests (value == -1), and QCP duals are not requested, the model is converted for non-convex handling. If QCP duals are requested, an error is logged with guidance.
+**Phase 8: Solver dispatch.** The function dispatches to the appropriate solver through either cxf_solve_entry (for models with multi-scenario support) or directly to cxf_solver_dispatch (P3.25) for single-model optimization.
+
+**Phase 9: Non-convex QP handling.** If the solver returns a non-positive-semidefinite error (indicating the quadratic objective or constraints are non-convex) and the model is not already classified as MIP, the function consults the non-convex handling parameter:
+- If the parameter indicates automatic MIP conversion (value >= 2), the model is marked as non-convex and re-dispatched as a MIP.
+- If the parameter indicates automatic handling with a check for QCP dual requests (value == -1), and QCP duals are not requested, the model is converted to MIP. If QCP duals are requested, an error is logged with guidance.
 - Otherwise, the non-positive-semidefinite error is returned as-is.
 
-**Phase 9: State restoration and cleanup.** Solver focus and fingerprint flags are restored. Concurrent environment parameters are restored from their cached values. Thread-local and solve state are cleaned up.
+**Phase 10: State restoration and cleanup.** Solver focus and fingerprint flags are restored. Concurrent environment parameters are restored from their cached values. Thread-local and solve state are cleaned up.
 
 **Thread Safety:** Not thread-safe. Must be called from a single thread per model. Concurrent optimization uses internal threading managed by the solver.
 
 **Dependencies:**
 - P3.07 (Input Validation) - cxf_check_label for label validation
+- P3.06 (Model Type Checking) - cxf_is_mip_model for MIP detection
 - P3.33 (Statistics & Diagnostics) - cxf_presolve_stats, cxf_coefficient_stats for model analysis
 - P3.25 (Solve LP Core) - cxf_solver_dispatch for algorithm routing
 - P3.28 (Multi-Objective & Scenario) - multi-scenario support
@@ -13245,6 +13492,7 @@ This function is the central routing point for optimization. It bridges the gap 
 - Updates the model manager state
 - Clears the solver focus flag during optimization (the saved value is used for mode detection)
 - For continuous models with solver focus or NLP mode: sets the solver execution flag, disables fingerprinting in NLP mode, and logs the special solve mode
+- Clears existing solution data for MIP models with quadratic terms or integer variables
 - Validates model labels if label checking is enabled
 - For single models: dispatches to cxf_solver_dispatch (P3.25) and handles non-convex QP conversion
 - For multi-scenario models: logs model dimensions, computes fingerprint, logs presolve statistics, analyzes coefficient ranges, and dispatches to cxf_solve_dispatch
@@ -13254,7 +13502,7 @@ This function is the central routing point for optimization. It bridges the gap 
 - Model modification application failure -> propagated error code
 - Label validation failure -> propagated error code
 - Solver dispatch failure -> propagated error code
-- Non-positive-semidefinite error for non-convex QP -> may apply non-convex handling or return error (see behavioral description)
+- Non-positive-semidefinite error for non-convex QP -> may convert to MIP or return error (see behavioral description)
 - Fingerprint computation failure -> propagated error code
 - Coefficient analysis failure -> propagated error code
 
@@ -13267,21 +13515,24 @@ This function serves as the decision point between single-model optimization and
 
 **Step 3: Model modification flush.** Pending modifications are applied to the matrix data.
 
-**Step 4: Model type detection and mode setup.** The function determines the model type. For continuous models with the solver focus flag or NLP mode enabled, the model is marked for special treatment (NLP solve of a convex model, or special-focus solve of a continuous model).
+**Step 4: Model type detection and mode setup.** The function determines whether the model is a MIP. For continuous models with the solver focus flag or NLP mode enabled, the model is marked for special treatment (MIP-like solve of a continuous model, or NLP solve of a convex model).
 
-**Step 5: Label validation.** If label checking is enabled on the environment and the model is not in asynchronous mode, label attributes are validated.
+**Step 5: Solution clearing.** For MIP models with quadratic terms or integer variables, existing solution data is cleared.
 
-**Step 6: Routing decision.** The function examines the model's scenario count:
+**Step 6: Label validation.** If label checking is enabled on the environment and the model is not in asynchronous mode, label attributes are validated.
 
-- **Single model (scenario count < 1):** The function dispatches directly to cxf_solver_dispatch (P3.25) with the model and thread-local data. If the solver returns a non-positive-semidefinite error and the model is continuous, the non-convex handling logic (identical to cxf_optimize_internal Phase 8) is applied, potentially re-dispatching with non-convex handling enabled.
+**Step 7: Routing decision.** The function examines the model's scenario count:
 
-- **Multi-scenario model (scenario count >= 1):** The function logs model dimensions, computes the model fingerprint (gated by the fingerprint mode parameter), logs presolve statistics, analyzes coefficient ranges, and then dispatches to cxf_solve_dispatch for multi-scenario handling.
+- **Single model (scenario count < 1):** The function dispatches directly to cxf_solver_dispatch (P3.25) with the model and thread-local data. If the solver returns a non-positive-semidefinite error and the model is continuous, the non-convex handling logic (identical to cxf_optimize_internal Phase 9) is applied, potentially converting the model to MIP and retrying.
 
-**Step 7: State restoration.** The model manager state is updated, the solver execution flag is cleared, and the saved solver focus and fingerprint flags are restored.
+- **Multi-scenario model (scenario count >= 1):** The function logs model dimensions, computes the model fingerprint (gated by the fingerprint mode parameter), logs presolve statistics and MIP presolve analysis, analyzes coefficient ranges, and then dispatches to cxf_solve_dispatch for multi-scenario handling.
+
+**Step 8: State restoration.** The model manager state is updated, the solver execution flag is cleared, and the saved solver focus and fingerprint flags are restored.
 
 **Thread Safety:** Not thread-safe. Must be called from a single thread per model.
 
 **Dependencies:**
+- P3.06 (Model Type Checking) - cxf_is_mip_model for MIP classification
 - P3.07 (Input Validation) - cxf_check_label for label validation
 - P3.25 (Solve LP Core) - cxf_solver_dispatch for algorithm routing
 - P3.31 (Model Lifecycle) - cxf_model_apply_modifications for modification flush; cxf_update_model_manager
@@ -13425,7 +13676,7 @@ This function provides the fast path for optimization when no user callbacks are
 
 **Preconditions:**
 - The model must have registered callbacks or be configured for remote solver / asynchronous operation
-- The model's environment must be valid with an active callback communication channel
+- The model's environment must be valid with an active license information structure containing a callback communication channel
 
 **Postconditions:**
 - On success: The optimization has been performed (either locally or remotely through the callback channel). Any results from the callback thread have been processed and errors propagated.
@@ -13484,7 +13735,7 @@ This function manages the full callback communication lifecycle for optimization
 - P3.07 (Input Validation) - cxf_validate_model_state for model validation; cxf_check_attr_names for variable name validation
 - P3.09 (Error Handling) - cxf_error_with_info for detailed error reporting
 - P3.11 (Threading & Synchronization) - cxf_sleep for polling during error recovery
-- P1.01 (Environment) - callback communication channel, error suppression flag
+- P1.01 (Environment) - license information, callback communication channel, error suppression flag
 - P1.02 (Model) - async flag, modification-blocked flag, model identifier
 - P1.07 (CallbackState) - callback result structure with primary and secondary error codes
 
@@ -13524,10 +13775,10 @@ Both cxf_optimize_internal and cxf_solve_entry implement identical non-convex QP
 | Parameter Value | Behavior |
 |----------------|----------|
 | 0 (default) | Return the error as-is |
-| -1 (auto) | Apply non-convex handling unless QCP duals are requested |
-| >= 2 (explicit) | Always apply non-convex handling |
+| -1 (auto) | Convert to MIP unless QCP duals are requested |
+| >= 2 (explicit) | Always convert to MIP |
 
-The conversion involves clearing any presolved model, setting the non-convex flag on the matrix data, and retrying the solve through cxf_solver_dispatch with non-convex treatment. This behavior follows the standard approach for non-convex quadratic programs described in commercial solver documentation: when a QP is detected as non-convex (the Q matrix is not positive semidefinite), it can be reformulated using spatial branching techniques (Belotti et al., 2013).
+The conversion involves clearing any presolved model, setting the non-convex flag on the matrix data, and retrying the solve through cxf_solver_dispatch with MIP treatment. This behavior follows the standard approach for non-convex quadratic programs described in commercial solver documentation: when a QP is detected as non-convex (the Q matrix is not positive semidefinite), it can be reformulated as a mixed-integer program using spatial branch-and-bound techniques (Belotti et al., "Mixed-Integer Nonlinear Optimization," Acta Numerica, 2013).
 
 ### Lazy Update Pattern
 
@@ -13549,6 +13800,7 @@ cxf_optimize_internal implements a save/clamp/restore pattern for tolerance para
 |------------------|-------------|---------|
 | P3.25 (Solve LP Core) | cxf_solver_dispatch | Routes to simplex, barrier, or concurrent solver |
 | P3.26 (Solve Barrier & Concurrent) | cxf_solve_barrier, cxf_solve_concurrent | Barrier and concurrent solve algorithms |
+| P3.27 (Solve MIP) | cxf_solve_mip | Branch-and-bound solver |
 | P3.28 (Multi-Objective & Scenario) | cxf_solve_multiscenario | Multi-scenario optimization |
 | P3.29 (Solution Processing) | cxf_wire_result_attributes | Solution data access setup |
 
@@ -13557,7 +13809,7 @@ cxf_optimize_internal implements a save/clamp/restore pattern for tolerance para
 The state tracker allocated by cxf_solve_no_callbacks provides a lightweight mechanism for monitoring optimization progress across the thread boundary. It caches attribute indices (resolved at initialization time) so that the worker thread can update progress fields by direct array access rather than name-based attribute lookup. The tracked metrics include:
 
 - **Model dimensions:** Constraint count, variable count, SOS count, quadratic constraint count, general constraint count, objective count, scenario count
-- **Optimization progress:** Status, objective value, objective bound, runtime, iteration count, barrier iteration count
+- **Optimization progress:** Status, objective value, objective bound, objective bound (continuous relaxation), runtime, node count, open node count, iteration count, barrier iteration count
 - **Completion:** A completion flag set by the worker thread when optimization finishes
 
 ### Error Handling Patterns
@@ -13577,7 +13829,7 @@ The module uses several error handling patterns from P3.09:
 | Out-of-memory code | Memory allocation failed | All six functions |
 | Lock failure code | Callback synchronization lock could not be acquired | cxf_solve_with_callbacks |
 | User interrupt code | User requested termination via callback or signal | cxf_solve_with_callbacks |
-| Non-PSD code | Quadratic objective/constraints not positive semidefinite | cxf_optimize_internal, cxf_solve_entry (may trigger non-convex retry) |
+| Non-PSD code | Quadratic objective/constraints not positive semidefinite | cxf_optimize_internal, cxf_solve_entry (may be converted to MIP retry) |
 | Multi-scenario incompatibility code | Multi-objective combined with multi-scenario | cxf_solve_dispatch |
 | Other error codes | Propagated from downstream modules | All six functions |
 
@@ -13603,7 +13855,7 @@ The module uses several error handling patterns from P3.09:
 [x] No copied code fragments from analyzed source
 [x] All descriptions are behavioral, not implementational
 [x] All data structures described semantically using Layer 1/2 references
-[x] Explicit cross-references to P1.01, P1.02, P1.07 (data model) and P3.01, P3.07, P3.09, P3.11, P3.13, P3.25, P3.28, P3.29, P3.31, P3.32, P3.33 (module specs)
+[x] Explicit cross-references to P1.01, P1.02, P1.07 (data model) and P3.01, P3.06, P3.07, P3.09, P3.11, P3.13, P3.25, P3.28, P3.29, P3.31, P3.32, P3.33 (module specs)
 [x] Passes the Clean Room Test: could be written without seeing the binary
 ```
 
@@ -13621,7 +13873,7 @@ The module uses several error handling patterns from P3.09:
 
 The Solve LP Core module contains the two central orchestration functions for LP solving: the LP solve pipeline and the solver algorithm dispatch. Together they form the heart of the optimization flow, sitting between the entry chain (P3.24) and the simplex iteration engine (P3.20). The LP solve pipeline manages the complete lifecycle of an LP solve from initialization through solution extraction, coordinating the crash basis construction, crossover from barrier solutions, the two-level simplex iteration loop, piecewise-linear constraint handling, and result status mapping. The solver algorithm dispatch determines which algorithm to apply (simplex, barrier, concurrent, or first-order method) based on model structure and user parameters, manages the presolve-solve-uncrush cycle, and handles parameter backup and restore to protect the environment from solver-internal modifications.
 
-These two functions are the most complex in the LP subsystem and implement the orchestration aspects of the revised simplex method (Dantzig, 1963; Maros, 2003), barrier-to-simplex crossover (Megiddo, 1991; Bixby and Saltzman, 1994), and the general algorithm selection logic for LP and QP problems.
+These two functions are the most complex in the LP subsystem and implement the orchestration aspects of the revised simplex method (Dantzig, 1963; Maros, 2003), barrier-to-simplex crossover (Megiddo, 1991; Bixby and Saltzman, 1994), and the general algorithm selection logic for LP, QP, and MIP problems.
 
 ## Functions
 
@@ -13692,8 +13944,8 @@ This crossover procedure converts the interior-point solution to a basic feasibl
 
 *Inner loop:* Within each outer round, the function executes the following sequence repeatedly until the basis stabilizes:
 
-1. **Basis snapshot** (cxf_progress_snapshot, P3.16): Capture the current basis state for later comparison.
-2. **Simplex iterate** (cxf_log_iteration_progress, P3.20): Execute progress logging and bookkeeping for the current iteration batch.
+1. **Basis snapshot** (cxf_basis_snapshot, P3.16): Capture the current basis state for later comparison.
+2. **Simplex iterate** (cxf_simplex_iterate, P3.20): Execute progress logging and bookkeeping for the current iteration batch.
 3. **Iterate variant**: Execute a post-iteration variant for additional processing (phase transition checks).
 4. **Perturbation** (cxf_simplex_perturbation, P3.21): On early iterations only, apply anti-cycling perturbation if the EXPAND procedure (Gill, Murray, Saunders, and Wright, 1989) determines that the solver is stalling.
 5. **Step** (cxf_simplex_step, P3.20): Execute the primary simplex pivot operation (pricing, ratio test, basis update).
@@ -13743,11 +13995,11 @@ The PWL coefficient updates use a batch processing approach for efficiency, proc
 **Thread Safety:** Not thread-safe. Each concurrent solve must use an independent model with its own solver state. Thread safety for concurrent LP solving is achieved at the model level (P3.24, P3.25 cxf_solver_dispatch concurrent dispatch).
 
 **Dependencies:**
-- P3.22 (Simplex Lifecycle) - cxf_simplex_init for state allocation, cxf_simplex_postsolve for bound tightening and deallocation, cxf_solver_state_cleanup for state deallocation
+- P3.22 (Simplex Lifecycle) - cxf_simplex_init for state allocation, cxf_simplex_cleanup for bound tightening and deallocation, cxf_solver_state_cleanup for state deallocation
 - P3.21 (Simplex Phases) - cxf_simplex_crash for crash basis, cxf_simplex_perturbation for anti-cycling, cxf_simplex_phase_end for phase transition processing
-- P3.20 (Simplex Iteration) - cxf_log_iteration_progress for logging, cxf_simplex_step/step2/step3 for pivoting and bound propagation, cxf_simplex_post_iterate for stall detection
+- P3.20 (Simplex Iteration) - cxf_simplex_iterate for logging, cxf_simplex_step/step2/step3 for pivoting and bound propagation, cxf_simplex_post_iterate for stall detection
 - P3.23 (Crossover) - cxf_crossover and cxf_crossover_bounds for barrier-to-simplex crossover
-- P3.16 (Basis Factorization) - cxf_fix_variables_at_bounds for LU factorization, cxf_progress_snapshot and cxf_basis_diff for convergence detection
+- P3.16 (Basis Factorization) - cxf_basis_refactor for LU factorization, cxf_basis_snapshot and cxf_basis_diff for convergence detection
 - P1.02 (Model) - model structure access for matrix data, environment, solution data
 - P1.04 (SolverState) - solver state structure for all working data
 - P1.01 (Environment) - parameter access for solver configuration
@@ -13756,7 +14008,7 @@ The PWL coefficient updates use a batch processing approach for efficiency, proc
 
 ### cxf_solver_dispatch
 
-**Purpose:** Determine the appropriate solving algorithm for the model based on its structure (LP, QP, SOCP) and user parameters, dispatch to the selected solver, manage the presolve-solve-uncrush cycle, and report optimization results.
+**Purpose:** Determine the appropriate solving algorithm for the model based on its structure (LP, QP, SOCP, MIP) and user parameters, dispatch to the selected solver, manage the presolve-solve-uncrush cycle, and report optimization results.
 
 **Signature:**
 - Input: `model` : pointer-to-Model - The model to solve, with valid matrix data, environment, and optional warm-start or hint information
@@ -13766,21 +14018,24 @@ The PWL coefficient updates use a batch processing approach for efficiency, proc
 **Preconditions:**
 - The model must be valid (validity sentinel verified by caller in P3.24)
 - The model's matrix data must be fully populated
-- The model's environment must have configured parameters
+- The model's environment must have a valid license and configured parameters
+- For MIP models: integer variable types must be set in the matrix data
 - For QP models: the Q matrix must be populated
 - For concurrent solving: concurrent environment count must be set
 
 **Postconditions:**
-- On success: the model's status has been set, solution data has been populated (primal values, objective value, iteration count), timing accumulators have been updated, result summary has been logged, and all environment parameters have been restored to their pre-dispatch values
+- On success: the model's status has been set, solution data has been populated (primal values, objective value, iteration count, node count for MIP), timing accumulators have been updated, result summary has been logged, and all environment parameters have been restored to their pre-dispatch values
 - On error: partial cleanup has been performed, the error code has been propagated, and environment parameters have been restored
 
 **Side Effects:**
 - Backs up approximately 30 environment parameters to local storage and restores them before return
 - Initializes and clears solve state fields on the model (status, method indicator, warm-start state)
 - May allocate a presolved model (stored at the model's presolve model field) and deallocate it before return
+- May allocate SolutionInfo structure for MIP solving
 - Modifies model's solution arrays (primal, dual, slack, reduced costs, objective, bounds)
 - Computes and stores a model fingerprint (hash) for change detection
 - Logs detailed optimization results (iterations, nodes, time, objective, gap, status)
+- Issues callbacks for MIP progress and solution events
 - May create and destroy concurrent solver threads
 
 **Error Conditions:**
@@ -13793,7 +14048,7 @@ The PWL coefficient updates use a batch processing approach for efficiency, proc
 
 This function is the algorithm routing and lifecycle management layer, sitting between the solve entry chain (P3.24) and the individual solver implementations (cxf_solve_lp for simplex, cxf_solve_barrier for interior point, and others). It handles the complexity of selecting the right algorithm, managing presolve, and extracting solutions for all model types.
 
-**Phase 1: Parameter backup.** The function saves approximately 30 environment parameters to a local backup structure. These parameters span method selection, tolerances, heuristic settings, thread counts, and algorithm tuning. This backup is essential because solver sub-functions may modify environment parameters during the solve (for example, adjusting tolerances when encountering numerical difficulty or overriding method selection for sub-problems). All parameters are restored from this backup before the function returns, regardless of success or failure.
+**Phase 1: Parameter backup.** The function saves approximately 30 environment parameters to a local backup structure. These parameters span method selection, tolerances, cut control, branching strategy, heuristic settings, thread counts, and algorithm tuning. This backup is essential because solver sub-functions may modify environment parameters during the solve (for example, adjusting tolerances when encountering numerical difficulty or overriding method selection for sub-problems). All parameters are restored from this backup before the function returns, regardless of success or failure.
 
 **Phase 2: Solve state initialization.** The function clears and initializes solve state fields on the model:
 - The Q-matrix positive-semidefiniteness adjustment flag is cleared
@@ -13803,13 +14058,15 @@ This function is the algorithm routing and lifecycle management layer, sitting b
 
 **Phase 3: Model type detection.** The function inspects the model to determine its structure and select the appropriate solving algorithm:
 
-1. **Quadratic detection.** If the model has a quadratic objective (Q matrix with nonzero terms), it is classified as QP. For QP models, the default method is barrier (interior point), since simplex methods for QP require specialized extensions. If the user requested PDHG (first-order method) for a QP, a warning is logged and the method is adjusted.
+1. **MIP detection.** The function checks whether the model contains integer variables (binary, integer, semi-continuous, or semi-integer types), SOS constraints, or other integrality features. If so, the model is classified as MIP, and concurrent environment setup is performed if concurrent MIP solving is configured.
 
-2. **SOCP detection.** If the model contains second-order cone constraints, it is classified as SOCP. SOCP models are restricted to the barrier method, since simplex and first-order methods do not natively handle conic constraints.
+2. **Quadratic detection.** If the model has a quadratic objective (Q matrix with nonzero terms), it is classified as QP. For QP models, the default method is barrier (interior point), since simplex methods for QP require specialized extensions. If the user requested PDHG (first-order method) for a QP, a warning is logged and the method is adjusted.
 
-3. **Non-convex QP handling.** If the model is a non-convex QP (the Q matrix is indefinite), the function checks the NonConvex parameter. If non-convex solving is not enabled, the function returns the Q-not-PSD error with a diagnostic message. If enabled, the function adjusts the solving strategy (typically linearizing the quadratic terms via the PreQLinearize parameter).
+3. **SOCP detection.** If the model contains second-order cone constraints, it is classified as SOCP. SOCP models are restricted to the barrier method, since simplex and first-order methods do not natively handle conic constraints.
 
-4. **Concurrent restrictions.** Concurrent solving is restricted for certain model types: QP models cannot use concurrent simplex (only concurrent barrier variants), and SOCP models cannot use concurrent solving at all.
+4. **Non-convex QP handling.** If the model is a non-convex QP (the Q matrix is indefinite), the function checks the NonConvex parameter. If non-convex solving is not enabled, the function returns the Q-not-PSD error with a diagnostic message. If enabled, the function adjusts the solving strategy (typically linearizing the quadratic terms via the PreQLinearize parameter).
+
+5. **Concurrent restrictions.** Concurrent solving is restricted for certain model types: QP models cannot use concurrent simplex (only concurrent barrier variants), and SOCP models cannot use concurrent solving at all.
 
 **Phase 4: Method selection.** For LP models with AUTO method selection, the function applies a heuristic scoring procedure to choose between simplex and barrier:
 - Problem structure indicators (sparsity, dimension ratio, constraint types) are evaluated via a multi-factor scoring system
@@ -13829,27 +14086,39 @@ This function is the algorithm routing and lifecycle management layer, sitting b
 
 - **Barrier (method 2):** Dispatches to the barrier (interior point) solver. If crossover is enabled (the default), the barrier result is followed by a crossover phase to obtain a vertex solution.
 
-- **PDHG (method 6):** Dispatches to the primal-dual hybrid gradient solver, a first-order method suitable for large LP problems where moderate accuracy is acceptable. This method is LP-only and does not support QP.
+- **PDHG (method 6):** Dispatches to the primal-dual hybrid gradient solver, a first-order method suitable for large LP problems where moderate accuracy is acceptable. This method is LP-only and does not support QP or MIP.
 
 - **Simplex (methods 0, 1):** Dispatches to the simplex solver (cxf_solve_lp, this module). Method 0 selects primal simplex and method 1 selects dual simplex. If warm-start information or variable hints are available, they are passed to the simplex solver for initialization.
+
+- **MIP dispatch:** For MIP models, the function first allocates a SolutionInfo structure for tracking incumbent solutions, then dispatches to the solver (which internally uses branch-and-bound with LP relaxations). The solver may create a presolved model and solve it instead of the original.
 
 **Phase 7: Warm-start and hint processing.** Before dispatching simplex solves, the function processes available warm-start information:
 - If a previous basis is available, it is passed as the starting basis
 - If variable hints are provided (hint values and hint validity indicators), they are used to guide the initial solution
+- If branch priorities are set, they are passed to the solver for branching decisions
 - If partition data is available, it is used by the concurrent solver for workload distribution
 
-**Phase 8: Solution extraction and uncrushing.** After the solver returns:
+**Phase 8: Presolve and MIP handling.** For MIP models:
+1. The solver may create a presolved (reduced) copy of the model at the model's presolve model field
+2. The presolved model is solved instead of the original
+3. After the presolved model is solved, the solution must be "uncrushed" — mapped back from the presolved variable space to the original variable space
+4. Solution uncrushing copies the primal and dual values, adjusting for variable fixings, bound tightenings, and constraint eliminations that occurred during presolve
+5. MIP result processing adjusts the status if needed (for example, if presolve detected infeasibility without calling the solver)
+
+**Phase 9: Solution extraction and uncrushing.** After the solver returns:
 1. Statistics (iteration count, node count, runtime) are copied from the solver's internal accounting to the model
 2. For presolved models, the solution is uncrushed to the original variable space
 3. Primal solution values are allocated (if not already) and populated
 4. The objective value is computed from the primal solution and the original objective coefficients (as a verification against the solver's reported objective)
+5. If the model has a solution pool (multiple solutions from MIP), the pool entries are also extracted
 
-**Phase 9: Result reporting.** The function logs a detailed summary of the optimization results:
+**Phase 10: Result reporting.** The function logs a detailed summary of the optimization results:
 - For LP: iteration count, runtime, objective value, and status message
+- For MIP: additionally reports node count, thread count, solution count, best objective, best bound, optimality gap (as a percentage), and gap computation details
 - Q-not-PSD errors receive a specific diagnostic message explaining the issue
 - The status is translated to a human-readable message (Optimal, Infeasible, Unbounded, Time limit, etc.)
 
-**Phase 10: Parameter restore.** All approximately 30 environment parameters saved in Phase 1 are restored from the backup structure. This occurs on both the success and error paths, ensuring the environment is always returned to its pre-dispatch state.
+**Phase 11: Parameter restore.** All approximately 30 environment parameters saved in Phase 1 are restored from the backup structure. This occurs on both the success and error paths, ensuring the environment is always returned to its pre-dispatch state.
 
 **Thread Safety:** Not thread-safe at the function level. However, the function may internally launch concurrent solver threads when concurrent methods are selected. Thread safety for the concurrent solvers is managed internally by creating independent model copies for each thread. The caller must ensure that the model is not modified by other threads during the dispatch.
 
@@ -13882,14 +14151,14 @@ cxf_optimize (P3.24, public API)
               -> cxf_simplex_crash (P3.21) -- crash basis
               -> cxf_crossover (P3.23) -- barrier crossover
               -> [iteration loop]:
-                -> cxf_log_iteration_progress (P3.20)
+                -> cxf_simplex_iterate (P3.20)
                 -> cxf_simplex_step (P3.20)
                 -> cxf_simplex_step2 (P3.20)
                 -> cxf_simplex_step3 (P3.20)
                 -> cxf_simplex_phase_end (P3.21)
                 -> cxf_simplex_perturbation (P3.21)
               -> cxf_solution_extract
-              -> cxf_simplex_postsolve (P3.22)
+              -> cxf_simplex_cleanup (P3.22)
 ```
 
 cxf_solver_dispatch handles the branching point where the solve flow splits by algorithm type (simplex vs. barrier vs. concurrent vs. PDHG). cxf_solve_lp handles the LP-specific pipeline after the algorithm has been selected.
@@ -13900,7 +14169,7 @@ Both functions implement a parameter save/restore pattern to protect the environ
 
 - **cxf_solve_lp** saves and restores a small set of LP-specific parameters (iteration limits, tolerances, mode flags) that may be modified by the inner loop or sub-functions.
 
-- **cxf_solver_dispatch** saves and restores approximately 30 parameters spanning the full range of solver configuration (method, tolerances, threading, heuristics, presolve settings). This broader backup is necessary because the dispatch function may invoke solvers that modify any of these settings.
+- **cxf_solver_dispatch** saves and restores approximately 30 parameters spanning the full range of solver configuration (method, tolerances, cuts, branching, threading, heuristics, presolve settings). This broader backup is necessary because the dispatch function may invoke solvers that modify any of these settings.
 
 Both functions restore parameters on all exit paths (success, error, early termination), ensuring the environment is never left in a modified state after a solve completes. This invariant is critical for users who call cxf_optimize repeatedly on the same model.
 
@@ -13920,7 +14189,7 @@ This two-level structure is related to the long-step/short-step pivot strategies
 
 cxf_solver_dispatch implements a multi-factor heuristic for automatic method selection when the user specifies Method=AUTO:
 
-1. **Model type constraints:** SOCP forces barrier; QP defaults to barrier.
+1. **Model type constraints:** SOCP forces barrier; QP defaults to barrier; MIP uses branch-and-bound with LP relaxation method determined recursively.
 
 2. **Problem size and structure:** For LP models, the heuristic evaluates multiple problem characteristics and computes an aggregate score. The scoring system works as follows:
 
@@ -13937,7 +14206,7 @@ cxf_solver_dispatch implements a multi-factor heuristic for automatic method sel
 
 3. **Warm-start availability:** Warm-start information (a previous basis or variable hints) strongly favors simplex selection, since interior-point methods cannot directly exploit warm-start data. When a warm start is available and the thread count is below a moderate threshold, the system may additionally adjust the concurrent configuration to include a warm-started simplex instance (Bixby, 2002).
 
-4. **Concurrent fallback:** When concurrent methods are available (sufficient thread count), the dispatch may select concurrent solving to hedge between methods, running simplex and barrier simultaneously and returning whichever finishes first. The concurrent option is preferred when the scoring is ambiguous (no strong preference for either method), since it hedges against the risk of choosing the slower algorithm.
+4. **Concurrent fallback:** When concurrent methods are available (sufficient thread count and appropriate license), the dispatch may select concurrent solving to hedge between methods, running simplex and barrier simultaneously and returning whichever finishes first. The concurrent option is preferred when the scoring is ambiguous (no strong preference for either method), since it hedges against the risk of choosing the slower algorithm.
 
 The specific scoring weights and thresholds for the auto-selection heuristic are solver-tuning decisions that vary across solver versions. The general framework of evaluating problem structure to select between simplex and barrier is a well-established practice in the LP solver literature (Bixby, 2002; Maros, 2003).
 
@@ -13989,17 +14258,17 @@ This PWL handling extends the standard simplex method to handle piecewise-linear
 
 ### Presolve-Solve-Uncrush Cycle
 
-cxf_solver_dispatch manages the full presolve cycle:
+cxf_solver_dispatch manages the full presolve cycle for MIP models:
 
 1. **Presolve:** The presolve phase creates a reduced copy of the model by applying reductions (variable fixing, constraint elimination, bound tightening, coefficient strengthening). The reduced model is stored at the model's presolve model field.
 
-2. **Solve:** The reduced model is solved instead of the original.
+2. **Solve:** The reduced model is solved instead of the original. For MIP, this involves branch-and-bound with LP relaxations at each node.
 
 3. **Uncrush:** The solution from the reduced model is mapped back to the original model's variable space. This uncrushing reverses each presolve reduction in reverse order: re-introducing eliminated variables by computing their values from the remaining solution, relaxing tightened bounds, and restoring eliminated constraints.
 
 4. **Verification:** The objective value is recomputed from the original model's coefficients and the uncrushed solution as a consistency check.
 
-This three-phase pattern is standard in modern LP solvers (Andersen and Andersen, 1995).
+This three-phase pattern is standard in modern LP solvers (Achterberg et al., 2020).
 
 ### Concurrent Solving Architecture
 
@@ -14066,19 +14335,24 @@ Both functions require exclusive access to the model during the solve. Concurren
 
 The presolve system is **outside the scope of this specification**. While cxf_solver_dispatch orchestrates the presolve-solve-uncrush cycle (creating a reduced model, solving it, and mapping the solution back to the original variable space), the presolve reduction techniques themselves -- the specific transformations that simplify the model before solving -- are not specified here.
 
-Presolve for LP problems encompasses a wide range of reduction techniques including:
+Presolve for LP and MIP problems encompasses a wide range of reduction techniques including:
 - Bound tightening (variable and constraint)
 - Redundant constraint detection and removal
 - Variable fixing (singleton columns, forcing constraints)
 - Coefficient strengthening
+- Probing (for MIP)
+- Clique and set-packing detection
 - Substitution of implied free variables
 - Parallel row and column detection
 
 These techniques are extensively documented in the published literature:
 - Andersen, E.D. and Andersen, K.D. (1995). "Presolving in Linear Programming." *Mathematical Programming*, 71(2):221-245. (Foundational LP presolve techniques.)
+- Achterberg, T., Bixby, R.E., Gu, Z., Rothberg, E., and Weninger, D. (2020). "Presolve Reductions in Mixed Integer Programming." *INFORMS Journal on Computing*, 32(2):473-506. (Comprehensive survey of MIP presolve techniques.)
+- Savelsbergh, M.W.P. (1994). "Preprocessing and Probing Techniques for Mixed Integer Programming Problems." *ORSA Journal on Computing*, 6(4):445-454. (Probing and preprocessing for MIP.)
 
 The solve pipeline's interaction with presolve is documented in this specification:
-- cxf_solver_dispatch Phase 8 describes solution uncrushing (reversing presolve reductions to recover the original-space solution).
+- cxf_solver_dispatch Phase 8 describes the presolve-solve-uncrush cycle for MIP models.
+- cxf_solver_dispatch Phase 9 describes solution uncrushing (reversing presolve reductions to recover the original-space solution).
 - cxf_solve_lp Phase 9 describes status code remapping that accounts for presolve's potential to interchange infeasible and unbounded statuses.
 
 A separate presolve module specification would be required to cover the reduction techniques in detail.
@@ -14101,6 +14375,7 @@ A separate presolve module specification would be required to cover the reductio
 
 ## References
 
+- Achterberg, T., Bixby, R.E., Gu, Z., Rothberg, E., and Weninger, D. (2020). "Presolve Reductions in Mixed Integer Programming." *INFORMS Journal on Computing*, 32(2):473-506.
 - Andersen, E.D. and Andersen, K.D. (1995). "Presolving in Linear Programming." *Mathematical Programming*, 71(2):221-245.
 - Bixby, R.E. (2002). "Solving Real-World Linear Programs: A Decade and More of Progress." *Operations Research*, 50(1):3-15.
 - Bixby, R.E. and Saltzman, M.J. (1994). "Recovering an Optimal LP Basis from an Interior Point Solution." *Operations Research Letters*, 15(4):169-178.
@@ -14111,6 +14386,7 @@ A separate presolve module specification would be required to cover the reductio
 - Gould, N.I.M. and Reid, J.K. (1989). "New crash procedures for large systems of linear constraints." *Mathematical Programming*, 45(1-3):475-501.
 - Maros, I. (2003). *Computational Techniques of the Simplex Method*. Springer. International Series in Operations Research and Management Science, Vol. 61.
 - Megiddo, N. (1991). "On Finding Primal- and Dual-Optimal Bases." *ORSA Journal on Computing*, 3(1):63-65.
+- Savelsbergh, M.W.P. (1994). "Preprocessing and Probing Techniques for Mixed Integer Programming Problems." *ORSA Journal on Computing*, 6(4):445-454.
 
 ---
 
@@ -14118,7 +14394,7 @@ A separate presolve module specification would be required to cover the reductio
 
 ## Purpose
 
-The Solve Barrier & Concurrent module contains the functions that implement non-simplex solving strategies: the interior-point (barrier) method entry point with quadratic convexity validation and the distributed concurrent LP optimizer that races solver algorithms across remote solvers. These functions provide alternative solving paths to the simplex method and implement the concurrent optimization pattern described in the published ConvexFeld documentation, where multiple algorithms or parameter configurations compete in parallel and the first to produce a valid result wins. The barrier entry point additionally handles quadratic objective validation, a prerequisite for interior-point convergence on QP problems (Nocedal and Wright, 2006, Chapter 14).
+The Solve Barrier & Concurrent module contains the four functions that implement non-simplex solving strategies: the interior-point (barrier) method entry point with quadratic convexity validation, the local concurrent optimizer that races multiple solver instances on shared-memory threads, the distributed concurrent LP optimizer that races solver algorithms across remote remote solvers, and the distributed concurrent MIP optimizer. These functions provide alternative solving paths to the simplex method and implement the concurrent optimization pattern described in the published ConvexFeld documentation, where multiple algorithms or parameter configurations compete in parallel and the first to produce a valid result wins. The barrier entry point additionally handles quadratic objective validation, a prerequisite for interior-point convergence on QP problems (Nocedal and Wright, 2006, Chapter 14).
 
 ## Functions
 
@@ -14193,6 +14469,85 @@ This function serves as the convexity gatekeeper for the barrier (interior-point
 
 ---
 
+### cxf_solve_concurrent
+
+**Purpose:** Run multiple solver instances in parallel on shared-memory threads, racing for the best MIP solution using a "first to complete wins" strategy with configurable determinism control.
+
+**Signature:**
+- Input: `model` : pointer-to-Model - The source model to solve concurrently
+- Input: `callbackContext` : pointer - Callback context for user callbacks, passed to each solver instance
+- Output: int - Zero on success, or an error code
+
+**Preconditions:**
+- The model must be valid with matrix data populated
+- The model must not have multiple scenarios (multi-scenario concurrent is not supported)
+- The environment must have sufficient threads available for the requested number of concurrent instances
+- If user-provided concurrent environments are configured on the model, each must be non-null and valid
+
+**Postconditions:**
+- On success with a valid winner: the model's solution info contains the status, objective value, objective bound, and gap from the winning instance; all solutions from all instances have been added to the parent model's solution pool; the winning instance index is recorded; and statistics have been merged
+- On success with no winner: the solution status from the first instance is copied to the parent, or INTERRUPTED status is set if no instance produced any result
+- On error: the concurrent state is cleared and any partial results are discarded
+- In all cases: all cloned models have been freed, all worker threads have been joined, and the concurrent state fields on the parent model have been reset
+
+**Side Effects:**
+- Clones the model once for each concurrent instance (allocates per-instance model copies)
+- Creates worker threads for instances 1 through N (instance 0 runs on the calling thread's scheduling)
+- Copies MIP start hints to each cloned instance
+- Copies solver parameters and logging configuration to each instance environment
+- Sets per-instance thread counts and instance offsets for search diversification
+- Marks non-primary instances as quiet (suppressed output)
+- Logs the concurrent setup (instance count, threads per instance)
+- Logs the winning instance index on completion
+- Modifies the parent model's solution pool by adding solutions from all instances
+- Merges timing statistics from the primary instance into the parent
+
+**Error Conditions:**
+- Model has multiple scenarios -> returns the scenario conflict error code with INTERRUPTED status
+- Insufficient threads for the requested concurrent instance count -> returns the concurrent setup error code with a diagnostic message including the thread limit and requested count
+- A user-provided concurrent environment is null -> returns the concurrent setup error code
+- Model cloning fails for any instance -> returns the error from clone
+- Thread creation fails in non-deterministic mode -> returns out-of-memory
+- Solution validation fails -> propagated from the validation check
+- Memory allocation fails for solution buffers -> returns out-of-memory
+
+**Behavioral Description:**
+This function implements the concurrent MIP optimization pattern, where multiple solver instances with different configurations race in parallel. The first instance to find a good solution wins, reducing overall wall-clock time when the best algorithm variant is unknown a priori. This is a standard portfolio strategy for combinatorial optimization (Xu, Hutter, Hoos, and Leyton-Brown, 2008).
+
+**Phase 1: Validation.** The function validates that concurrent solving is feasible: no multi-scenario conflicts, sufficient threads, and valid concurrent environments. It computes the thread allocation, dividing available threads evenly among instances when in automatic mode, or respecting user-specified per-instance thread counts when concurrent environments are provided.
+
+**Phase 2: Instance spawning.** For each concurrent instance, the function:
+1. Clones the source model, creating an independent copy that can solve in parallel.
+2. Copies MIP start hints from the parent to the clone, enabling each instance to benefit from user-provided warm-start information.
+3. Configures the instance environment: the first instance inherits full logging and parameter setup; subsequent instances run in quiet mode with suppressed output.
+4. Sets per-instance search diversification via the instance offset parameter, so each instance explores a different portion of the search space.
+5. Creates a worker thread for each instance beyond the first.
+
+**Phase 3: Execution and collection.** The function triggers all instances and then polls their completion flags in a busy-wait loop. The polling loop:
+- Yields the thread between checks to avoid excessive CPU consumption.
+- Periodically checks for user interrupts (e.g., Ctrl+C).
+- Transitions to a sleep-based polling strategy after a threshold number of yield iterations.
+- Joins each completed thread and records its objective value and status.
+
+**Phase 4: Winner selection.** The winner is selected based on the determinism mode parameter:
+- **Opportunistic mode:** The instance with the best objective value wins, regardless of completion order. This is non-deterministic because thread scheduling affects which instance completes first.
+- **First-error mode:** Error-free instances are preferred over instances that encountered out-of-memory errors. A warning is logged if both error and success instances exist, as the winner may differ across runs.
+- **Deterministic mode:** A strict preference ordering ensures reproducible results: success instances are preferred, and ties are broken by objective value. Non-determinism warnings are issued when error instances have better objectives than success instances.
+
+**Phase 5: Solution aggregation.** All solutions from all instances are copied to the parent model's solution pool, not just the winner's. This maximizes the number of feasible solutions available for analysis. The function also computes the best primal bound, dual bound, and gap across all instances.
+
+**Phase 6: Cleanup.** All cloned models are freed, worker threads are joined, temporary buffers are deallocated, and the concurrent state fields on the parent model are reset to zero.
+
+**Thread Safety:** The function itself is called from a single thread but creates and manages multiple worker threads internally. Each worker thread operates on its own independent model clone and environment. The parent model is not modified concurrently; all writes to the parent occur after all workers have been joined. Callback state and completion flags use lock-free polling for thread coordination.
+
+**Dependencies:**
+- P1.02 (Model) - model cloning, solution info, concurrent environment configuration
+- P1.01 (Environment) - thread limits, determinism mode, concurrent parameters
+- P3.11 (Threading & Synchronization) - thread creation, joining, yielding, sleep
+- P3.10 (Callbacks) - callback initialization and clearing for concurrent instances
+
+---
+
 ### cxf_solve_concurrent_distributed
 
 **Purpose:** Run multiple LP solver instances across distributed remote solvers, each using a different solving method (barrier, dual simplex, primal simplex), and apply the winning basis to the parent model with a simplex cleanup pass.
@@ -14205,7 +14560,7 @@ This function serves as the convexity gatekeeper for the barrier (interior-point
 **Preconditions:**
 - The model must be valid with matrix data populated
 - The environment must have distributed remote solver connectivity configured
-- The distributed jobs parameter must be set to a positive value
+- The DistributedMIPJobs parameter must be set to a positive value
 - If user-provided concurrent environments exist on the model, they must be valid
 
 **Postconditions:**
@@ -14215,7 +14570,7 @@ This function serves as the convexity gatekeeper for the barrier (interior-point
 - In all cases: all worker models and environments have been freed, the callback critical section has been released, and all allocated arrays have been deallocated
 
 **Side Effects:**
-- Creates up to three separate worker environments by connecting to remote solvers
+- Creates up to three separate worker environments by connecting to remote remote solvers
 - Clones the model to each worker environment
 - Registers a log callback on each worker that relays log messages to the parent through a critical section for thread safety
 - Starts asynchronous optimization on each worker
@@ -14228,7 +14583,7 @@ This function serves as the convexity gatekeeper for the barrier (interior-point
 - Finalizes the solve state on the parent model
 
 **Error Conditions:**
-- No distributed workers can be established -> returns the distributed setup error code
+- No distributed workers can be established -> returns the distributed license error code
 - Worker environment creation or parameter copy fails -> propagated immediately
 - Model cloning or log callback registration fails -> sets early error flag and terminates all workers
 - Asynchronous optimization start fails -> sets early error flag and terminates all workers
@@ -14238,11 +14593,11 @@ This function serves as the convexity gatekeeper for the barrier (interior-point
 - Memory allocation fails for basis buffer or worker arrays -> returns out-of-memory
 
 **Behavioral Description:**
-This function implements distributed concurrent LP solving, where fundamentally different LP algorithms race on separate remote solvers. It leverages distributed computing to run algorithms that would otherwise be mutually exclusive.
+This function implements distributed concurrent LP solving, where fundamentally different LP algorithms race on separate remote solvers. Unlike the local concurrent optimizer (cxf_solve_concurrent) which uses threads on a single machine for MIP, this function targets LP problems and leverages distributed computing to run algorithms that would otherwise be mutually exclusive.
 
 **Phase 1: Worker count determination.** The function determines how many workers to create. In automatic mode (no user-provided concurrent environments), the count is capped at three, corresponding to the three fundamentally different LP solving methods. With user-provided environments, the count is the minimum of the available distributed jobs and the user's concurrent count.
 
-**Phase 2: Worker environment setup.** For each worker, the function connects to a remote solver via the distributed worker setup mechanism, copies parameters from the parent environment, and assigns a solving method:
+**Phase 2: Worker environment setup.** For each worker, the function connects to a remote remote solver via the distributed worker setup mechanism, copies parameters from the parent environment, and assigns a solving method:
 - Worker 0: Barrier (interior-point) method, which is often fastest for dense LP problems.
 - Worker 1: Dual simplex, which is effective for sparse and well-conditioned problems.
 - Worker 2 and beyond: Primal simplex, as a numerically robust fallback.
@@ -14270,40 +14625,121 @@ Each worker also has nested concurrent jobs disabled and output suppressed.
 
 ---
 
+### cxf_solve_concurrent_mip
+
+**Purpose:** Run multiple solver instances across distributed remote solvers with parameter diversification, aggregate solutions and statistics from all workers, and select the best result based on objective value and optimality gap analysis.
+
+**Signature:**
+- Input: `model` : pointer-to-Model - The source model to solve via distributed concurrent MIP
+- Input: `callbackContext` : pointer - Callback context for user callbacks
+- Output: int - Zero on success, or an error code
+
+**Preconditions:**
+- The model must be valid with matrix data populated
+- The environment must have distributed remote solver connectivity or a valid license for distributed solving
+- The DistributedMIPJobs parameter must be set to a positive value
+- No active distributed solve may already be in progress (license lock must be available)
+- The model must not have multiple scenarios (multi-scenario distributed concurrent MIP is not supported)
+
+**Postconditions:**
+- On success: the solution info contains the aggregated status, objective value, objective bound, optimality gap, solution count, worker count, and winning instance index; statistics (node count, open node count, iteration count, barrier iteration count, and first-order method iteration count) have been summed across all workers; all feasible solutions have been collected; and the best bound across workers has been recorded
+- On early exit (error or unsupported configuration): the status is set to INTERRUPTED, any partially started workers have been terminated and synchronized, and the license lock has been released
+- In all cases: all worker models and environments have been freed, the license lock has been released, and all allocated arrays have been deallocated
+
+**Side Effects:**
+- Acquires a distributed license lock at the beginning and releases it during cleanup
+- Creates separate worker environments by connecting to remote remote solvers
+- For the first worker, may use the current remote solver as the first distributed worker
+- Copies parameters to each worker environment
+- Assigns per-worker diversification via the seed parameter (base instance offset plus worker index)
+- For the last worker (when six or more workers are configured), sets aggressive MIP parameters: MIPFocus set to prove optimality, increased cutting plane passes, aggressive presolve level, and pseudocost variable branching
+- Disables nested distributed and concurrent jobs on all workers
+- Delegates the actual distributed execution to the distributed worker dispatch function
+- Aggregates statistics by summing across all workers (not just the winner)
+- Performs optimality gap checking: compares the relative and absolute gaps against the MIPGap tolerances, and upgrades the status to optimal if the gap is within tolerance
+- Copies the winning solution and solution pool to the parent model
+- Logs duplicate server warnings, worker count, and winning instance information
+- Warns if the PoolSearchMode parameter is set (not supported in distributed concurrent mode)
+
+**Error Conditions:**
+- License does not support distributed algorithms -> returns the distributed license error code
+- A distributed solve is already in progress (license lock conflict) -> returns an error with a diagnostic message
+- Multi-scenario model -> returns the scenario conflict error code
+- First worker fails to start -> returns the distributed license error code (fatal: no workers available)
+- Later worker fails to start -> continues with fewer workers
+- Worker parameter copy fails -> propagated
+- Solution validation fails -> propagated
+- Distributed worker dispatch fails -> propagated
+- Memory allocation fails for worker arrays or solution buffer -> returns out-of-memory
+
+**Behavioral Description:**
+This function implements distributed concurrent MIP solving, where multiple solver instances with different parameter configurations race across remote remote solvers. Each worker explores the same search space but with different search strategies, increasing the probability that at least one worker finds a good solution quickly. This is the distributed counterpart of cxf_solve_concurrent, trading shared-memory threading for remote remote solver execution.
+
+**Phase 1: Validation and setup.** The function validates the license, checks for multi-scenario conflicts, and determines the worker count based on the DistributedMIPJobs parameter and the available distributed workers. A solution buffer is allocated for copying solutions. If the PoolSearchMode parameter is set, a warning is logged that it is not supported in this mode.
+
+**Phase 2: Worker environment creation.** For each worker, the function creates a separate environment and connects to a remote remote solver. The first worker may use the current remote solver if the model already has remote solver data. Parameters are copied from the parent to each worker, and search diversification is configured:
+
+- **Standard workers** receive the parent's parameters with a per-worker seed offset (base instance offset plus worker index) for search diversification.
+- **The last worker** (when six or more workers are configured) receives aggressive parameter settings designed to complement the standard workers: MIPFocus is set to emphasize proving optimality, cutting plane passes are increased, presolve is set to its most aggressive level, and variable branching uses pseudocost branching. This aggressive-last-worker strategy creates a specialized explorer that may find tighter bounds or prove optimality faster than the standard workers.
+
+All workers have nested distributed jobs, concurrent jobs, and pool search mode disabled.
+
+**Phase 3: Distributed execution.** The function delegates to the distributed worker dispatch function, which clones the model to each worker, starts distributed optimization, coordinates execution, and collects results. This dispatch function handles the actual polling, termination, and solution collection.
+
+**Phase 4: Statistics aggregation.** After all workers complete, the function sums statistics across all workers: node count, open node count, first-order method iteration count, simplex iteration count, and barrier iteration count. The best bound is taken as the minimum across all workers.
+
+**Phase 5: Optimality gap analysis.** The function checks whether the current solution satisfies the optimality gap tolerances (relative and absolute MIPGap parameters). If the gap between the best objective and best bound is within either tolerance, the status is upgraded to OPTIMAL. This handles the case where the distributed solve was interrupted or timed out but the existing solution is provably optimal or near-optimal.
+
+**Phase 6: Result finalization.** The solution info is populated with the final status, scaled objective value, scaled bound, gap, solution count, and worker count. The winning solution values are copied to the parent model's solution buffer.
+
+**Thread Safety:** The function manages distributed workers that run on remote servers. The parent model is only modified after all workers have been terminated and synchronized. A license lock prevents concurrent distributed solves from the same environment.
+
+**Dependencies:**
+- P1.02 (Model) - solution info, matrix data, concurrent environment configuration
+- P1.01 (Environment) - distributed jobs parameter, MIPGap tolerances, license state, remote solver configuration
+- P3.10 (Callbacks) - error callback pre/post processing
+- Distributed worker subsystem (not separately specified) - worker environment setup, distributed worker dispatch, license lock management
+
+---
+
 ## Module-Level Behavioral Notes
 
-### Relationship Between the Functions
+### Relationship Between the Four Functions
 
-The functions in this module serve complementary roles in the solver's algorithm portfolio:
+The four functions in this module serve complementary roles in the solver's algorithm portfolio:
 
 | Function | Problem Type | Execution Model | Result Type |
 |----------|-------------|-----------------|-------------|
 | cxf_solve_barrier | LP/QP | Single-threaded entry | Barrier-ready model |
+| cxf_solve_concurrent | MIP | Local shared-memory threads | Solution pool |
 | cxf_solve_concurrent_distributed | LP | Remote remote solvers | Basis status arrays |
+| cxf_solve_concurrent_mip | MIP | Remote remote solvers | Solution pool |
 
-cxf_solve_barrier performs algorithmic preprocessing (PSD validation and binary linearization); cxf_solve_concurrent_distributed is an execution orchestrator that coordinates multiple solver instances.
+cxf_solve_barrier is the only function that performs algorithmic preprocessing (PSD validation and binary linearization); the three concurrent functions are execution orchestrators that coordinate multiple solver instances.
 
 ### Concurrent Optimization Pattern
 
-The concurrent function follows this common pattern:
+All three concurrent functions follow a common pattern:
 
-1. **Validate:** Check preconditions (scenarios, worker availability).
+1. **Validate:** Check preconditions (license, scenarios, thread/worker availability).
 2. **Spawn:** Create independent solver instances with diversified parameters.
-3. **Execute:** Run instances in parallel on remote servers.
+3. **Execute:** Run instances in parallel (threads or remote servers).
 4. **Collect:** Poll for completion and gather results.
 5. **Select:** Choose the best result based on objective value and determinism rules.
 6. **Aggregate:** Merge solutions and statistics from all instances.
 7. **Cleanup:** Free all cloned models, environments, and temporary resources.
 
-This portfolio-based approach is a well-established technique in optimization, where the best algorithm for a given instance is often unknown a priori (Rice, 1976; Xu, Hutter, Hoos, and Leyton-Brown, 2008).
+This portfolio-based approach is a well-established technique in combinatorial optimization, where the best algorithm for a given instance is often unknown a priori (Rice, 1976; Xu, Hutter, Hoos, and Leyton-Brown, 2008).
 
 ### Diversification Strategies
 
 | Function | Diversification Method |
 |----------|----------------------|
+| cxf_solve_concurrent | Per-instance seed offset, user-configurable per-environment parameters |
 | cxf_solve_concurrent_distributed | Fixed method assignment (barrier/dual/primal) |
+| cxf_solve_concurrent_mip | Per-worker seed offset plus aggressive parameters on the last worker (with 6+ workers) |
 
-The LP distributed function uses fundamentally different algorithms (interior-point versus simplex variants) because there are only a few structurally different LP methods.
+The LP distributed function uses fundamentally different algorithms (interior-point versus simplex variants) because there are only a few structurally different LP methods. The MIP functions use seed-based diversification because MIP solving is inherently randomized (e.g., tie-breaking, heuristic selection), so different seeds explore different parts of the search tree.
 
 ### Barrier Method Context
 
@@ -14313,43 +14749,58 @@ cxf_solve_barrier is called before the actual interior-point iterations begin. I
 
 The algebraic identity x-squared = x for x in {0,1} allows quadratic diagonal terms involving binary variables to be converted to linear terms. For a binary variable x with Q diagonal entry q, the quadratic contribution (1/2) * q * x-squared becomes (1/2) * q * x, which is added directly to the linear objective coefficient. This standard simplification (Boros and Hammer, 2002) reduces the problem's quadratic complexity and can eliminate the need for PSD validation entirely if all Q diagonal entries involve binary variables.
 
+### LP vs MIP Concurrent Result Handling
+
+A key difference between the distributed LP and distributed MIP functions is the result type:
+
+- **LP (cxf_solve_concurrent_distributed):** Extracts basis status arrays (VBasis/CBasis) from the winner and applies them to the parent model with a simplex cleanup pass. This is appropriate because LP solutions are defined by their basis, and applying the optimal basis allows local simplex iterations to verify and refine the solution.
+
+- **MIP (cxf_solve_concurrent and cxf_solve_concurrent_mip):** Collects solution values and adds them to a solution pool. MIP solutions are defined by their variable values (not a basis), so the natural aggregation is to pool all feasible solutions found by any worker.
+
 ### Determinism Considerations
 
-The distributed function does not expose a determinism parameter because remote solvers execute independently and determinism is not guaranteed at the distributed level.
+The local concurrent optimizer (cxf_solve_concurrent) provides three determinism modes because thread scheduling on shared-memory systems is inherently non-deterministic. The distributed functions do not expose this parameter because remote remote solvers execute independently and determinism is not guaranteed at the distributed level.
 
 ### Error Handling Patterns
 
 | Function | Fatal Error Handling | Graceful Degradation |
 |----------|---------------------|---------------------|
 | cxf_solve_barrier | Immediate return on Q_NOT_PSD or OOM | N/A |
+| cxf_solve_concurrent | Thread creation failure is fatal in non-deterministic mode | In deterministic mode, marks failed instance and continues |
 | cxf_solve_concurrent_distributed | First worker failure is fatal | Later worker failures reduce count and continue |
+| cxf_solve_concurrent_mip | First worker failure is fatal | Later worker failures reduce count and continue |
 
-The distributed function follows the pattern: if the first worker fails, the solve cannot proceed (there is no baseline); if a later worker fails, the function continues with fewer workers.
+Both distributed functions follow the pattern: if the first worker fails, the solve cannot proceed (there is no baseline); if a later worker fails, the function continues with fewer workers.
 
 ### Resource Management
 
-All functions follow strict resource cleanup:
+All concurrent functions follow strict resource cleanup:
 
 1. Worker threads/processes are joined or synchronized before any model is freed.
 2. Worker models are freed before worker environments.
-3. Temporary buffers (solution arrays, basis arrays) are freed last.
-4. Parent model concurrent state fields are reset to zero.
+3. License locks are released in cleanup, regardless of success or failure.
+4. Temporary buffers (solution arrays, basis arrays) are freed last.
+5. Parent model concurrent state fields are reset to zero.
 
 ### Return Code Conventions
 
 | Code | Meaning | Functions |
 |------|---------|-----------|
-| Success (zero) | Operation completed normally | Both |
-| Out-of-memory | Memory allocation failed | Both |
+| Success (zero) | Operation completed normally | All four |
+| Out-of-memory | Memory allocation failed | All four |
 | Q_NOT_PSD | Quadratic matrix not positive semi-definite | cxf_solve_barrier only |
-| Distributed setup error | No distributed workers available | cxf_solve_concurrent_distributed only |
+| Concurrent setup error | Insufficient threads or invalid environments | cxf_solve_concurrent only |
+| Distributed license error | No distributed workers or license conflict | Both distributed functions |
+| Scenario conflict | Multi-scenario not supported with concurrent | cxf_solve_concurrent, cxf_solve_concurrent_mip |
 
 ### Thread Safety Summary
 
 | Function | Thread Safety | Notes |
 |----------|---------------|-------|
 | cxf_solve_barrier | Not thread-safe | Single-threaded barrier entry |
+| cxf_solve_concurrent | Creates internal threads; caller must be single-threaded | Workers use independent model clones |
 | cxf_solve_concurrent_distributed | Manages remote workers; uses critical section for log relay | Parent modifications occur after all workers complete |
+| cxf_solve_concurrent_mip | Manages remote workers; uses license lock | Parent modifications occur after all workers complete |
 
 ---
 
@@ -14376,15 +14827,851 @@ All functions follow strict resource cleanup:
 
 ---
 
+# P3.27 -- Module: Solve MIP
+
+## Purpose
+
+The [LP-only: MIP module not included] contains the functions that support mixed-integer programming (MIP) solve operations: the MIP solve entry wrapper with quadratic program recovery, variable type statistics logging, branching preference cleanup, and multi-phase MIP solution polishing. These four functions serve as the MIP-specific layer between the general optimization dispatch (P3.24, Solve Entry) and the internal branch-and-bound solver. They provide entry-point error recovery for quadratic MIPs, pre-solve diagnostics, parameter cleanup, and a six-phase post-solve solution improvement pipeline that refines the raw branch-and-bound output into a numerically clean solution.
+
+The solution processing pipeline implements standard MIP solution polishing techniques drawn from the operations research literature: adaptive integer rounding, zero-objective variable minimization, constraint-slack-based bound tightening, and local search via a fixed-variable subproblem (Fischetti and Lodi, 2003; Achterberg, 2007). Together, these techniques improve the numerical quality and interpretability of MIP solutions without degrading the objective value.
+
+## Functions
+
+### cxf_solve_mip
+
+**Purpose:** Invoke the internal solver with automatic recovery from non-positive-semidefinite (non-PSD) quadratic matrix errors caused by presolve variable substitutions.
+
+**Signature:**
+- Input: `model` : pointer-to-Model - The model containing the MIP to solve
+- Input: `passthrough_params` : opaque - Additional solver parameters forwarded unchanged to the internal solver
+- Output: void - Solve status is communicated through model state, not through a return value
+
+**Preconditions:**
+- The model must be valid (sentinel check passed) and have its modification lock set
+- The model must contain integer variables (the dispatch layer routes only MIP models here)
+- The environment must be initialized and active
+
+**Postconditions:**
+- On success: the internal solver has completed (either finding a solution or reaching a termination condition), and the model's solve status reflects the outcome
+- On Q matrix recovery: if the first solve attempt failed due to a non-PSD Q matrix, a second attempt was made with quadratic substitutions disabled; the final solve status reflects the outcome of the second attempt
+- In all cases: the presolve iteration mode and quadratic substitution parameters on the environment have been restored to their original values
+
+**Side Effects:**
+- Temporarily modifies the presolve iteration mode on the environment (normalized from auto-detect to disabled for the duration of the solve)
+- On Q matrix error: temporarily disables quadratic matrix substitutions, logs a warning message, and retries the solve
+- All temporary parameter modifications are restored before return
+- The internal solver modifies the model's solve state, solution data, and bound tracking
+
+**Error Conditions:**
+- None returned directly (void function). Errors are communicated through the model's status code and the environment's error buffer.
+
+**Behavioral Description:**
+This function is a thin wrapper around the internal MIP branch-and-bound solver that handles a specific failure mode related to quadratic programming. It implements a try-retry pattern for non-PSD Q matrix errors.
+
+**Step 1: Parameter normalization.** The function reads the presolve iteration mode from the environment. If the mode is set to the auto-detect sentinel value, it is temporarily normalized to the disabled value. This ensures deterministic behavior during the potential retry sequence.
+
+**Step 2: First solve attempt.** The internal solver is invoked with all parameters forwarded. The solve status is captured in a local status variable.
+
+**Step 3: Non-PSD Q matrix recovery.** If the status indicates a non-PSD Q matrix error, the function performs recovery:
+
+1. **Logging.** A warning is logged indicating that the Q matrix became non-PSD after presolve substitutions and that a retry without substitutions will be attempted. This warning is visually delimited with separator lines in the solver log.
+
+2. **Parameter adjustment.** The quadratic matrix substitution parameter on the environment is saved and then disabled. This prevents the presolve phase from performing variable substitutions within quadratic terms (e.g., replacing x with y + z), which can introduce cross-terms that destroy the positive-semidefinite property of the Q matrix.
+
+3. **Retry.** The internal solver is invoked again with the same parameters. Without Q substitutions, the original quadratic structure is preserved, ensuring the Q matrix remains PSD at the cost of a potentially less effective presolve.
+
+4. **Restoration.** The quadratic substitution parameter is restored to its original value.
+
+**Step 4: Parameter restoration.** The presolve iteration mode is restored to its original value, regardless of whether a retry was needed.
+
+This recovery mechanism addresses a well-known issue in quadratic MIP presolve: variable substitutions in quadratic terms can transform a convex (PSD) quadratic into a non-convex one, making the problem unsolvable by standard convex QP methods (Bonami et al., 2012). The trade-off is reduced presolve effectiveness in exchange for numerical correctness.
+
+**Thread Safety:** Not thread-safe at the model level. Thread safety for concurrent model solves is managed by the solve entry layer (P3.24).
+
+**Dependencies:**
+- Internal solver (branch-and-bound engine, not part of this module)
+- P3.08 (Logging) - log separator and message output
+- P1.01 (Environment) - presolve iteration mode and quadratic substitution parameters
+
+---
+
+### cxf_presolve_mip
+
+**Purpose:** Log a summary of variable type composition for a integer model, providing diagnostic visibility into the problem structure before optimization begins.
+
+**Signature:**
+- Input: `model` : pointer-to-Model - The model whose variable types are to be counted and logged
+- Output: void
+
+**Preconditions:**
+- The model must have valid matrix data with a populated variable type array
+- The environment must be accessible via the model for logging
+
+**Postconditions:**
+- A variable type summary has been written to the solver log
+- No model state has been modified
+
+**Side Effects:**
+- Writes one or two lines to the solver log via the environment's logging facility
+- No memory allocation, no modification to model data
+
+**Error Conditions:**
+- None. This function always succeeds.
+
+**Behavioral Description:**
+Despite its name suggesting presolve activity, this function is purely a diagnostic logging function. It scans the variable type array and counts variables by category, then outputs a formatted summary to the solver log.
+
+**Step 1: Variable type scan.** The function iterates over all variables in the model's matrix data, reading each variable's type code. Variables are counted into five categories:
+
+| Category | Description |
+|----------|-------------|
+| Binary | Variables restricted to values 0 or 1 |
+| General integer | Variables restricted to integer values within their bounds |
+| Continuous | Variables that can take any real value within their bounds |
+| Semi-continuous | Variables that are either exactly zero or within their bounds |
+| Semi-integer | Variables that are either exactly zero or an integer within their bounds; also includes any unrecognized type codes |
+
+**Step 2: Standard type summary.** The function logs a line in the format: "Variable types: N continuous, M integer (K binary)" where M includes both general integer and binary variables (binary variables are a subset of integers).
+
+**Step 3: Semi-variable summary (conditional).** If any semi-continuous or semi-integer variables are present (combined count greater than zero), a second line is logged: "Semi-Variable types: N continuous, M integer".
+
+This output matches the standard diagnostic format used by commercial MIP solvers to give users immediate visibility into the variable composition of their model. The scan is O(n) where n is the number of variables, with negligible overhead.
+
+**Thread Safety:** Not thread-safe. Called during single-threaded pre-optimization setup.
+
+**Dependencies:**
+- P3.08 (Logging) - message output
+- P1.02 (Model) - matrix data, variable type array
+- P1.01 (Environment) - logging context
+
+---
+
+### cxf_setup_mip_params
+
+**Purpose:** Optimize memory usage by detecting and freeing the branching direction preference array when all entries are at their default (no-preference) values.
+
+**Signature:**
+- Input: `model` : pointer-to-Model - The model whose branching direction array is to be checked and potentially freed
+- Output: void
+
+**Preconditions:**
+- The model must have valid matrix data (for determining the array size)
+- The branching direction array, if present, must have one entry per variable
+
+**Postconditions:**
+- If the branching direction array existed and all entries were at the default (no-preference) value: the array has been freed and the model's branching direction pointer has been set to null
+- If the branching direction array was null: no action taken
+- If any entry had a non-default value: the array is preserved unchanged
+
+**Side Effects:**
+- May free the branching direction array and null the corresponding pointer on the model
+- No other model state is modified
+
+**Error Conditions:**
+- None. This function always succeeds.
+
+**Behavioral Description:**
+This function implements a memory optimization for the branching direction attribute. In MIP branch-and-bound, users can specify per-variable branching preferences (branch down first, branch up first, or no preference). The no-preference value is the default. When no user has set any branching preferences, the entire array contains only default values and serves no purpose; a null pointer can represent the same semantics more efficiently.
+
+**Step 1: Null check.** If the branching direction array pointer is null, the function returns immediately (already in the optimized state).
+
+**Step 2: All-default scan.** The function scans the branching direction array, checking each entry for a non-default value. If any non-default value is found, the function returns immediately (the array must be preserved). The scan uses early termination, so it exits on the first non-default entry found.
+
+**Step 3: Array deallocation.** If all entries are at the default value, the array is freed via the environment's memory allocator, and the model's branching direction pointer is set to null. During MIP solving, the null pointer is interpreted as "use default branching heuristics for all variables," which is functionally identical to an all-default array.
+
+The branching direction attribute values in MIP solvers follow a standard convention:
+- Negative: Branch toward the floor (down) first
+- Zero: No preference (solver heuristics decide)
+- Positive: Branch toward the ceiling (up) first
+
+This cleanup saves N integers of memory (where N is the variable count) for the common case where users rely entirely on the solver's built-in branching heuristics.
+
+**Thread Safety:** Not thread-safe. Called during single-threaded MIP setup.
+
+**Dependencies:**
+- P3.06 (Memory Primitives) - memory deallocation
+- P1.02 (Model) - matrix data for variable count, branching direction array
+
+---
+
+### cxf_process_mip_solution
+
+**Purpose:** Improve the numerical quality and interpretability of a raw MIP solution through a six-phase polishing pipeline: adaptive rounding, feasibility-gated initialization, zero-objective variable minimization, constraint-slack-based bound tightening, sub-MIP local search, and solution finalization with callback dispatch.
+
+**Signature:**
+- Input: `model` : pointer-to-Model - The model containing the raw MIP solution to be polished
+- Input: `cutoff` : pointer-to-double - Optional objective cutoff bound; null if no cutoff is active
+- Output: int - Zero on success, or the out-of-memory error code if memory allocation fails
+
+**Preconditions:**
+- The model must have a valid MIP solution (the branch-and-bound solver must have found at least one feasible solution)
+- The model's matrix data, solution data, and environment must be valid and consistent
+- The solution data must contain the primal solution vector, objective value, and best bound
+
+**Postconditions:**
+- On success: the model's solution data has been updated with a polished solution that has equal or better numerical properties than the original; integer variables are at exact integer values; the objective value has been recomputed to reflect any changes; if the solution improved, solution callbacks have been triggered
+- On out-of-memory: the function returns the out-of-memory error code; any partial modifications to the solution remain in effect (the solution may be partially polished)
+
+**Side Effects:**
+- Modifies the solution vector in the model's solution data
+- Updates the stored objective value and potentially the best bound
+- Allocates and frees working memory (slack buffers, solution copies, constraint tracking arrays)
+- May create and solve a sub-integer model (allocating a temporary model clone)
+- Writes improvement or warning messages to the solver log
+- Triggers solution callbacks if the solution was improved and callbacks are registered
+- Handles presolve uncrushing if the model was presolved (maps the improved solution back to the original variable space)
+
+**Error Conditions:**
+- Memory allocation failure for working buffers -> returns the out-of-memory error code
+
+**Behavioral Description:**
+This function implements a multi-phase MIP solution polishing pipeline. Each phase targets a specific aspect of solution quality, and later phases build on the improvements made by earlier ones. The pipeline is designed to be conservative: it never accepts a modification that would degrade the objective value or feasibility.
+
+#### Phase 1: Adaptive Solution Rounding
+
+The first phase addresses the fundamental numerical issue in MIP solving: the branch-and-bound solver produces solutions where integer variables may have values like 0.999999 or 3.000001 due to floating-point arithmetic. These near-integer values need to be rounded to exact integers without violating feasibility or degrading the objective.
+
+**Step 1.1: Rounding distance analysis.** The function scans all variables and computes each variable's distance to the nearest integer using standard rounding (nearest-integer rounding). Two statistics are tracked:
+- The smallest positive rounding distance (tightest case)
+- The largest rounding distance below the primary feasibility tolerance (loosest case within tolerance)
+
+These statistics determine the tolerance range for the adaptive rounding strategy.
+
+**Step 1.2: Tolerance selection.** An initial rounding tolerance is selected based on the distance distribution. The function starts with a tight tolerance (on the order of the integer feasibility tolerance) and determines whether the distribution of rounding distances requires a looser starting point. If all variables are already at exact integers (no rounding needed), this phase exits immediately.
+
+**Step 1.3: Iterative rounding with validation.** For each tolerance level in a geometric progression (each level approximately ten times the previous):
+
+1. A working copy of the solution is created.
+2. Variables whose rounding distance falls within the current tolerance are rounded to their nearest integer.
+3. The objective is recomputed on the rounded solution.
+4. The solution is validated for feasibility.
+5. The rounding is accepted only if the objective does not degrade beyond a tolerance-scaled threshold. The acceptance criterion is: the post-rounding objective must not exceed the pre-rounding objective plus a small fraction (proportional to the tolerance level) of the objective magnitude.
+6. If accepted, the rounded solution replaces the current solution.
+
+The tolerance progression continues until it exceeds the largest observed rounding distance. This adaptive strategy ensures that easy roundings (very close to integer) are applied first, and progressively harder roundings are attempted only if they pass the quality checks.
+
+This approach is related to the ZI-Round heuristic (Wallace, 2010) but uses a simpler feasibility check rather than full constraint propagation.
+
+#### Phase 2: Initialization and Feasibility Gating
+
+The remaining cleanup phases (3-5) require working buffers and are subject to applicability checks. This phase determines whether the model qualifies for advanced cleanup and initializes the necessary data structures.
+
+**Step 2.1: Applicability check.** The advanced cleanup phases are skipped if any of the following conditions hold:
+- The model contains special constraint types (SOS1/SOS2, general constraints, piecewise-linear constraints, or indicator constraints) that complicate feasibility tracking
+- Lazy constraints are enabled, meaning the solution may not yet be final
+- The MIP focus parameter is set to a mode that disables heuristic improvement
+- All integer variables are already at their bounds (no room for improvement)
+
+These skip conditions ensure that the cleanup is applied only to models where the ratio-test-based adjustment logic can correctly track constraint feasibility through a simple linear model.
+
+**Step 2.2: SOS constraint validation.** If the model has SOS constraints, the function validates that the current solution respects them. If SOS constraints are violated, cleanup is skipped to avoid making the violation worse.
+
+**Step 2.3: Working buffer allocation.** Three working arrays are allocated:
+- **Constraint slack lower bounds:** One entry per constraint, initialized based on constraint sense. Equality constraints have zero slack bounds; inequality constraints have zero lower slack and infinity upper slack.
+- **Constraint slack upper bounds:** Same dimensioning and initialization.
+- **Variable markers:** One integer entry per variable, initialized to a sentinel value indicating no constraint association. Used to track which constraint most recently affected each variable.
+
+**Step 2.4: QCP feasibility check.** If the model has quadratic constraints (QCP), the current solution is validated for quadratic constraint feasibility.
+
+#### Phase 3: Zero-Objective Variable Minimization
+
+Variables with zero objective coefficient do not affect the objective value, but their magnitudes affect solution interpretability and numerical conditioning. This phase minimizes the absolute values of zero-objective variables, reducing "trickle flow" in network models and eliminating modeling artifacts.
+
+**Step 3.1: Maximum value scan.** The function scans all continuous variables with zero objective coefficient and computes the maximum absolute value among them. If this maximum is below a small amplitude threshold, no cleanup is needed.
+
+**Step 3.2: Per-variable adjustment.** For each zero-objective continuous variable with a significant absolute value:
+
+1. **Direction selection.** If the variable is positive, the adjustment direction is toward zero (decrease). If negative, the adjustment direction is toward zero (increase).
+
+2. **Ratio test.** The maximum safe adjustment is computed via a ratio test across all constraints involving the variable. For each constraint i with coefficient a_ij:
+   - If the adjustment would increase the row activity: the maximum adjustment is bounded by the available upper slack divided by the coefficient magnitude
+   - If the adjustment would decrease the row activity: the maximum adjustment is bounded by the available lower slack divided by the coefficient magnitude
+
+   The adjustment is the minimum of the bound-limited amount and the ratio-test-limited amount.
+
+3. **Integer rounding.** For integer-typed variables, the adjustment is further constrained to produce an integer result (rounded toward zero).
+
+4. **Application.** If the adjusted value is closer to zero than the original (by at least a factor of two), the adjustment is applied and the constraint slack arrays are updated to reflect the change.
+
+**Step 3.3: Constrained variable second pass.** After the initial adjustments, variables that were marked as associated with specific constraints are revisited. If their associated constraint's slack is below a threshold, a corrective adjustment is applied to restore feasibility.
+
+This phase implements the standard zero-objective minimization technique used in MIP solution polishing (Achterberg, Koch, and Martin, 2005).
+
+#### Phase 4: Constraint-Slack-Based Bound Tightening
+
+This phase exploits constraint slack to move variables toward their bounds, improving the tightness of the solution.
+
+**Step 4.1: Row activity computation.** The constraint activity vector (Ax) is computed by accumulating column contributions across all variables. This is done using the CSC (compressed sparse column) matrix representation: for each variable, the function walks its column entries and adds the product of the coefficient and the variable's current value to the corresponding row's activity accumulator. Row nonzero counts are tracked simultaneously.
+
+**Step 4.2: Slack computation.** The right-hand side vector is subtracted from the activity vector to produce the constraint slack: slack_i = activity_i - rhs_i. For less-than-or-equal constraints, positive slack indicates feasibility with room for adjustment.
+
+**Step 4.3: Violation counting.** Constraints are categorized as violated or satisfied based on the feasibility tolerance:
+- For equality constraints: violated if |slack| exceeds the tolerance
+- For inequality constraints: violated if slack exceeds the tolerance
+
+**Step 4.4: Two-pass variable improvement.** Variables are improved in two passes:
+
+**Pass 1 (continuous variables):** For each continuous variable, the function evaluates whether moving the variable toward a bound would improve the solution. The improvement direction depends on the objective coefficient: variables with small or zero objective coefficients are moved toward the bound that reduces their magnitude; variables with significant objective coefficients are moved toward the bound that improves the objective. The maximum safe adjustment is computed via a ratio test across all constraints containing the variable, ensuring that no constraint becomes violated.
+
+**Pass 2 (integer variables):** The same procedure is applied to integer variables, with the additional constraint that adjustments must result in integer values. Integer variables are rounded to the nearest integer in the improvement direction.
+
+After each variable adjustment, the slack vector is updated incrementally by subtracting the coefficient-times-adjustment product for each constraint containing the variable. This incremental update avoids recomputing the full activity vector.
+
+This approach is an instance of the general LP rounding and tightening technique described in the MIP polishing literature (Berthold, 2006).
+
+#### Phase 5: Sub-MIP Local Search (Conditional)
+
+This phase optionally creates a fixed-variable subproblem and solves it to potentially find a locally improved solution. It is conceptually related to the RINS (Relaxation Induced Neighborhood Search) heuristic (Danna, Rothberg, and Le Pape, 2005) and solution polishing techniques used in modern MIP solvers.
+
+**Step 5.1: Subproblem creation.** A subproblem is created by fixing a subset of variables to their current values and freeing the remaining variables. The subproblem construction is delegated to an external subproblem creation function. If all variables are fixed (no free variables), no subproblem is created and this phase is skipped.
+
+**Step 5.2: Time limit computation.** A time limit for the subproblem solve is computed based on the problem dimensions and the MIP focus setting:
+- **Optimality focus:** A shorter time limit is used, scaled by the variable and constraint counts
+- **Feasibility or balanced focus:** A more generous time limit is used, providing more exploration time
+The time limit ensures that the subproblem solve does not dominate the total optimization time.
+
+**Step 5.3: Subproblem configuration.** The subproblem's environment is configured with appropriate solver parameters: the solve method is set to automatic, presolve is enabled, and the time limit is applied. For quadratic constraint programs (QCP), the barrier method is selected instead of simplex, with appropriate barrier-specific parameter adjustments.
+
+**Step 5.4: Subproblem solve.** The subproblem is solved using simplex (for linear subproblems) or barrier (for QCP subproblems).
+
+**Step 5.5: Solution extraction and validation.** If the subproblem is solved to optimality, the solution is extracted and validated:
+1. The new solution's maximum constraint infeasibility is computed
+2. The new solution's objective value is computed
+3. The new solution is accepted if both conditions hold:
+   - The maximum infeasibility does not exceed the original solution's infeasibility (or is within the feasibility tolerance)
+   - The objective value does not degrade beyond a small tolerance-scaled threshold
+
+If the subproblem solution is accepted, it replaces the current best solution and the stored objective value is updated. If rejected, the original solution is restored.
+
+#### Phase 6: Finalization and Callback Dispatch
+
+The final phase validates the overall improvement, performs last-pass cleanup, and triggers callbacks.
+
+**Step 6.1: Improvement validation and logging.** The function recomputes the objective value on the polished solution and compares it to the pre-polishing objective. If the objective has improved, a log message is emitted. If the objective appears to have improved beyond what the bound tracking would predict (indicating numerical instability in earlier phases), a warning is logged instead.
+
+**Step 6.2: Best bound update.** If the gap between the objective and best bound was zero before polishing, the best bound is updated to track the new objective. Otherwise, the bound is updated conservatively based on the sign of the objective change relative to the optimization direction (minimization or maximization).
+
+**Step 6.3: Final integer rounding.** A final pass rounds all integer and binary variables to exact integer values using nearest-integer rounding. This ensures that even small residual fractional components (below the integer feasibility tolerance) are eliminated. Continuous and semi-continuous variables are left unchanged.
+
+**Step 6.4: Solution callback dispatch.** If the solution was improved and callbacks are registered, the function triggers solution callbacks. Two paths are handled:
+- **No presolve:** The solution callback is dispatched directly on the original model.
+- **With presolve:** The solution is first "uncrushed" (mapped from the presolved variable space back to the original variable space), then the callback is dispatched on the original model. The presolve model's solution data (objective, bounds, solution count) is synchronized with the main model.
+
+**Step 6.5: Memory cleanup.** All working arrays allocated during the pipeline (slack buffers, solution copies, row nonzero counts, variable markers) are freed. Memory cleanup is performed on all exit paths, including error paths.
+
+**Thread Safety:** Not thread-safe. Called during single-threaded post-MIP-solve processing.
+
+**Dependencies:**
+- P3.06 (Memory Primitives) - memory allocation and deallocation for working buffers
+- P3.08 (Logging) - solver log output for improvement messages and warnings
+- P3.07 (Data Validation) - solution validation (feasibility checking, objective computation)
+- P3.09 (Model Type Checking) - SOS constraint detection, QCP model detection
+- P1.01 (Environment) - feasibility tolerance, integer feasibility tolerance, MIP focus, output flag, presolve and lazy constraint settings
+- P1.02 (Model) - matrix data, solution data, presolve model, callback system
+- P3.10 (Callbacks) - solution callback dispatch
+- Internal solver infrastructure - model cloning, subproblem creation, simplex solve, barrier solve, solution extraction, presolve uncrushing
+
+---
+
+## Module-Level Behavioral Notes
+
+### Role in the MIP Solve Lifecycle
+
+The four functions in this module serve distinct roles in the MIP optimization pipeline:
+
+**Pre-solve diagnostics (called before branch-and-bound):**
+1. **cxf_presolve_mip** - Logs variable type statistics for user visibility
+2. **cxf_setup_mip_params** - Cleans up default-valued branching arrays to save memory
+
+**MIP solve entry (wraps the branch-and-bound engine):**
+3. **cxf_solve_mip** - Invokes the internal solver with Q matrix error recovery
+
+**Post-solve polishing (called after branch-and-bound finds a solution):**
+4. **cxf_process_mip_solution** - Six-phase solution improvement pipeline
+
+### Relationship to the Optimization Dispatch Chain
+
+```
+cxf_optimize (P3.24)
+    |
+    +-> cxf_optimize_internal (P3.24)
+            |
+            +-> cxf_presolve_mip (this module) -- log variable types
+            +-> cxf_setup_mip_params (this module) -- cleanup branch array
+            |
+            +-> cxf_solve_mip (this module) -- MIP solve wrapper
+            |       |
+            |       +-> Internal solver (branch-and-bound)
+            |       |       |
+            |       |       +-> [on Q_NOT_PSD: retry without Q substitutions]
+            |       |
+            |       +-> (solve completes)
+            |
+            +-> cxf_process_mip_solution (this module) -- solution polishing
+                    |
+                    +-> Phase 1: Adaptive rounding
+                    +-> Phase 2: Initialization & gating
+                    +-> Phase 3: Zero-objective cleanup
+                    +-> Phase 4: Bound tightening
+                    +-> Phase 5: Sub-MIP local search
+                    +-> Phase 6: Finalization & callbacks
+```
+
+### Relationship to Algorithm Specifications
+
+| Function | Algorithm Technique | Published Reference |
+|----------|-------------------|---------------------|
+| cxf_solve_mip | Q matrix convexity recovery via presolve parameter adjustment | Bonami et al. (2012) on MIQCP presolve |
+| cxf_presolve_mip | Diagnostic logging (no algorithmic content) | - |
+| cxf_setup_mip_params | Memory optimization via default detection | Standard engineering practice |
+| cxf_process_mip_solution Phase 1 | Adaptive integer rounding with objective validation | Wallace (2010), ZI-Round |
+| cxf_process_mip_solution Phase 3 | Zero-objective variable minimization via ratio test | Achterberg, Koch, Martin (2005) |
+| cxf_process_mip_solution Phase 4 | Constraint-slack-based bound tightening | Berthold (2006) |
+| cxf_process_mip_solution Phase 5 | Fixed-variable subproblem local search | Danna, Rothberg, Le Pape (2005), RINS |
+
+### Skip Conditions for Solution Polishing
+
+The advanced phases (3-5) of cxf_process_mip_solution are skipped under conditions where the ratio-test-based adjustment logic cannot reliably track constraint feasibility:
+
+| Condition | Reason for Skipping |
+|-----------|-------------------|
+| SOS1/SOS2 constraints present | SOS constraints impose combinatorial requirements that the linear ratio test cannot enforce |
+| General constraints present | Non-linear constraint types are not handled by the slack tracking |
+| Piecewise-linear constraints present | Piecewise-linear feasibility requires segment tracking |
+| Indicator constraints present | Indicator activation logic is not modeled in the slack arrays |
+| Lazy constraints enabled | The solution may trigger lazy constraint generation, invalidating the current constraint set |
+| All integers at bounds | No room for improvement (variables are already at their tightest feasible values) |
+| MIP focus disables heuristics | User has explicitly disabled heuristic improvement |
+
+### Misnomer Documentation
+
+Two functions in this module have names that do not accurately describe their behavior:
+
+| Function | Name Suggests | Actual Behavior |
+|----------|--------------|-----------------|
+| cxf_presolve_mip | MIP presolve reduction | Variable type statistics logging |
+| cxf_setup_mip_params | MIP parameter configuration | Branching direction array memory cleanup |
+
+These names are preserved from the original naming convention but should be understood in terms of their actual behavior as documented above.
+
+### Variable Type Handling in Solution Polishing
+
+| Variable Type | Phase 1 (Rounding) | Phase 3 (Zero-Obj) | Phase 4 (Bound Tighten) | Phase 5 (Sub-MIP) |
+|--------------|--------------------|--------------------|------------------------|-------------------|
+| Continuous | Rounded if near-integer | Adjusted toward zero | Moved toward bounds | Freed in subproblem |
+| Binary | Rounded to 0 or 1 | Skipped | Rounded to nearer bound | Fixed or freed |
+| General integer | Rounded to nearest integer | Adjusted toward zero (with integer rounding) | Rounded to nearer integer bound | Fixed or freed |
+| Semi-continuous | Skipped | Skipped | Special handling (zero or in-bounds) | [UNDETERMINED] |
+| Semi-integer | Skipped | Skipped | Special handling (zero or integer in-bounds) | [UNDETERMINED] |
+
+### Numerical Considerations
+
+- **Rounding tolerance progression:** Phase 1 uses a geometric sequence of tolerances, typically spanning from approximately the integer feasibility tolerance to the primary feasibility tolerance (e.g., 1e-9 to 1e-6). Each level is approximately ten times the previous.
+- **Objective degradation threshold:** The acceptance criterion for rounding and adjustment compares the new objective against the old objective plus a tolerance-scaled fraction of the objective magnitude plus a small constant. This prevents rejecting numerically insignificant changes while protecting against meaningful degradation.
+- **Ratio test precision:** The constraint-based adjustment phases use ratio tests (slack divided by coefficient) that are subject to numerical cancellation when coefficients are very small. Variables with very small coefficients effectively have unconstrained adjustments.
+- **Subproblem time limit scaling:** The sub-MIP time limit is proportional to the problem dimensions (variable and constraint counts) to ensure that larger problems get proportionally more subproblem solve time.
+- **Infinity threshold:** Variables with bounds at or beyond the solver's infinity threshold are treated as unbounded in the corresponding direction.
+- **Feasibility tolerance:** All feasibility comparisons use the environment's primal feasibility tolerance. Integer feasibility uses the integer feasibility tolerance.
+
+### Return Code Conventions
+
+| Code | Meaning | Functions |
+|------|---------|-----------|
+| Success (zero) | Operation completed normally | cxf_process_mip_solution |
+| Out-of-memory code | Working buffer allocation failed | cxf_process_mip_solution |
+| (void) | Status communicated via model state | cxf_solve_mip, cxf_presolve_mip, cxf_setup_mip_params |
+
+### Thread Safety Summary
+
+| Function | Thread Safety | Notes |
+|----------|---------------|-------|
+| cxf_solve_mip | Not thread-safe | Modifies environment parameters, invokes solver |
+| cxf_presolve_mip | Not thread-safe | Reads model data, writes to log |
+| cxf_setup_mip_params | Not thread-safe | May free model arrays |
+| cxf_process_mip_solution | Not thread-safe | Modifies solution data, creates submodels, triggers callbacks |
+
+All functions operate within the single-threaded post-dispatch phase of MIP optimization. Thread safety for concurrent model solves is achieved at the model level through independent solver instances.
+
+---
+
+## Verification Checklist
+
+```
+[x] No hex addresses or offsets
+[x] No Ghidra artifacts (param_, local_, iVar, DAT_, FUN_)
+[x] No binary-specific constants or magic numbers
+[x] No copied code fragments from analyzed source
+[x] All descriptions are behavioral, not implementational
+[x] All data structures described semantically using Layer 1/2 references
+[x] Explicit cross-references to P1.01, P1.02 (data model), P3.06-P3.10 (support modules), P3.24 (solve entry)
+[x] All algorithms cite published sources (Fischetti & Lodi, Achterberg et al., Danna et al., Wallace, Berthold, Bonami et al.)
+[x] Passes the Clean Room Test: could be written without seeing the binary
+```
+
+## References
+
+- Achterberg, T. (2007). "Constraint Integer Programming." PhD thesis, Technische Universitat Berlin.
+- Achterberg, T., Koch, T., and Martin, A. (2005). "Branching rules revisited." *Operations Research Letters*, 33(1):42-54.
+- Berthold, T. (2006). "Primal Heuristics for Mixed Integer Programs." Diploma thesis, Technische Universitat Berlin.
+- Bonami, P., Kilinc, M., and Linderoth, J. (2012). "Algorithms and Software for Convex Mixed Integer Nonlinear Programs." *Mixed Integer Nonlinear Programming*, IMA Volumes in Mathematics and its Applications, 154:1-39.
+- Danna, E., Rothberg, E., and Le Pape, C. (2005). "Exploring relaxation induced neighborhoods to improve MIP solutions." *Mathematical Programming*, 102(1):71-90.
+- Fischetti, M. and Lodi, A. (2003). "Local branching." *Mathematical Programming*, 98(1-3):23-47.
+- Wallace, C. (2010). "ZI-Round, a MIP rounding heuristic." *Journal of Heuristics*, 16(5):715-722.
+
+---
+
+# P3.28 -- Module: Multi-Objective & Scenario
+
+## Purpose
+
+The Multi-Objective & Scenario module provides the top-level orchestration for two advanced optimization modes: multi-objective optimization (solving a model with multiple objective functions) and multi-scenario optimization (solving a model across multiple parameter scenarios in a single invocation). These features extend the core LP solver to handle richer problem formulations without requiring the user to manually decompose the problem into multiple separate solves.
+
+Multi-objective optimization supports two approaches: hierarchical (lexicographic) optimization, where objectives are solved in priority order with degradation tolerances, and blended optimization, where objectives with equal priority are combined into a weighted sum. Multi-scenario optimization transforms a model with scenario-specific data (RHS values, variable bounds) into a single MIP using binary selector variables and indicator constraints, enabling the solver to exploit shared structure across scenarios.
+
+These techniques are well-established in the operations research literature. Hierarchical multi-objective optimization follows the lexicographic approach described by Ehrgott (2005). Blended multi-objective is a standard scalarization technique (Miettinen, 1999). The multi-scenario reformulation using indicator constraints avoids the numerical difficulties of Big-M formulations and leverages the branch-and-bound infrastructure of the solver (Beale and Tomlin, 1970).
+
+## Functions
+
+### cxf_solve_multiobj
+
+**Purpose:** Orchestrate multi-objective optimization by validating the model, cloning it for isolated solving, dispatching to the appropriate optimization strategy (hierarchical or blended), extracting the solution back to the original model, and reporting statistics.
+
+**Signature:**
+- Input: `model` : pointer-to-Model - The model with multiple objective functions defined
+- Input: `timing` : pointer-to-double-array - Optional two-element timing array for work unit and elapsed time tracking; null if timing is not collected
+- Output: int - Zero on success, or an error code on failure
+
+**Preconditions:**
+- The model must have multiple objectives defined (objective count greater than one)
+- The model must be valid and have a valid environment
+- The model must have been updated (no pending modifications)
+
+**Postconditions:**
+- On success: the model's solution data contains the multi-objective solution, the solution status reflects the outcome of the composite solve, objective values have been scaled according to the model sense, and solve statistics have been logged
+- On error: the model's solution data may be partially populated; all temporary resources (clone, control structure) have been freed; modified parameters have been restored
+
+**Side Effects:**
+- Creates and destroys a model clone for isolated solving
+- Allocates and frees a multi-objective control structure for callback coordination
+- Registers and deregisters with the callback system
+- Resets the solution pool search mode parameter to zero if it was non-zero (with a logged warning)
+- Modifies the model's solution data with the multi-objective result
+- Logs solve progress, timing, and termination status
+- Clears the model's status code before solving (sets to an uninitialized sentinel)
+- Copies callback configuration to the clone model
+- Restores modified parameters on all exit paths
+
+**Error Conditions:**
+- The model has quadratic objective terms -> returns the not-supported error code with a diagnostic message
+- The model has piecewise-linear objective terms -> returns the not-supported error code with a diagnostic message
+- Memory allocation for the control structure fails -> returns the out-of-memory error code
+- Model cloning fails -> propagates the clone error
+- Callback registration fails -> propagates the registration error
+- The dispatched sub-solver (blended or hierarchical) fails -> propagates the sub-solver error
+- Memory allocation for solution arrays fails -> returns the out-of-memory error code
+
+**Behavioral Description:**
+This function is the main entry point for multi-objective optimization. It manages the complete lifecycle of a multi-objective solve, from validation through solution extraction.
+
+**Phase 1: Validation.** The function checks for unsupported feature combinations. Quadratic objective terms and piecewise-linear objective terms are incompatible with multi-objective optimization; if either is present, the function returns a not-supported error. The solution pool search mode parameter is also incompatible; if set, it is reset to zero with a logged warning (and restored on cleanup).
+
+**Phase 2: Model cloning.** The function creates an isolated copy of the model for solving. Any existing clone from a previous solve is freed first. The solution cache is cleared. To avoid special quadratic constraint handling during the clone operation, the quadratic constraint count is temporarily cleared and restored after cloning. The clone inherits the callback configuration from the original model.
+
+**Phase 3: Control structure setup.** A multi-objective control structure is allocated and initialized. This structure coordinates callback reporting during the multi-objective solve by tracking the currently active objective index and the original model reference. The control structure is registered with the callback system on both the clone and the original model's callback state. If a session reference indicates an ongoing hierarchical solve coordination, the control structure starts in a paused state.
+
+**Phase 4: Dispatch.** The function determines the optimization strategy based on the objectives' priority structure:
+- If all objectives have different priorities: hierarchical (lexicographic) optimization is used, solving each objective in priority order while constraining higher-priority objectives within their degradation tolerances.
+- If all objectives share the same priority: blended optimization is used, forming a weighted combination of the objectives.
+- A secondary check distinguishes between the two modes when priorities are identical (checking whether the objectives are explicitly configured for blending).
+
+The appropriate sub-solver function is invoked on the clone model.
+
+**Phase 5: Solution extraction.** After the sub-solver returns successfully, the function extracts the solution from the original model's solution data (which has been populated during the solve). It computes the scaled objective value using the model sense (minimize or maximize), allocates solution arrays for constraint slack and general constraint values, and copies the solution components. The solution is finalized through a post-processing step.
+
+**Phase 6: Statistics reporting.** The function logs the final solve statistics: elapsed time, work units, and solution count. It reports the termination reason based on the optimization status (optimal, infeasible, unbounded, time/work/memory limit, interrupted, numeric issues, or suboptimal).
+
+**Phase 7: Cleanup.** On all exit paths, the function frees the control structure, deregisters from the callback system, frees the model clone, restores the solution pool search mode parameter, and clears the multi-objective control reference from the environment.
+
+**Thread Safety:** Not thread-safe. Must be called within a single-threaded optimization context. The clone model is used exclusively by this function.
+
+**Dependencies:**
+- P1.02 (Model) - model structure, solution data, matrix data, clone management
+- P1.01 (Environment) - callback state, parameter storage, logging configuration
+- P3.13 (Callbacks) - callback registration and deregistration for multi-objective progress tracking
+
+---
+
+### cxf_solve_multiscenario
+
+**Purpose:** Orchestrate multi-scenario optimization by validating compatibility, cloning and transforming the model for scenario processing, solving the transformed model, and copying the solution (including solution pool and cut data) back to the original model.
+
+**Signature:**
+- Input: `model` : pointer-to-Model - The model with multiple scenarios defined
+- Input: `thread_data` : pointer - Thread-local data passed through to the solver entry point
+- Output: int - Zero on success, or an error code on failure
+
+**Preconditions:**
+- The model must have scenarios defined (scenario count greater than zero)
+- The model must not be a multi-objective model (multi-scenario and multi-objective are mutually exclusive)
+- The model must be valid and have a valid environment
+
+**Postconditions:**
+- On success: the original model's solution data has been populated with the scenario solve results including primal values, constraint duals, range constraint duals, SOS duals, solution pool entries (with variable values, objective values, and objective bounds per pool solution), and cut data (if any); the multi-scenario results have been finalized
+- On error: the error code is returned; partial solution data may remain
+
+**Side Effects:**
+- Creates a scenario-transformed clone of the model via the scenario setup pipeline
+- Copies callback configuration to the clone
+- Allocates solution arrays on the original model for primal values, dual values, solution pool data, and cut data
+- Invokes the solver entry point on the transformed model
+- Calls the multi-scenario finalization routine
+
+**Error Conditions:**
+- The model has multiple objectives defined -> returns the not-supported error code with a diagnostic message
+- Model cloning for scenario transformation fails -> propagates the clone error
+- Label validation fails (when label checking is enabled) -> propagates the validation error
+- Environment validation fails -> propagates the validation error
+- The solve entry point fails -> propagates the solver error
+- Solution copy initialization fails -> propagates the copy error
+- Memory allocation for solution arrays fails -> returns the out-of-memory error code
+
+**Behavioral Description:**
+This function manages the complete lifecycle of a multi-scenario solve. It coordinates the transformation of a multi-scenario problem into a single solvable model and the extraction of per-scenario results.
+
+**Phase 1: Compatibility validation.** The function checks whether the model has multiple objectives. Multi-scenario optimization and multi-objective optimization are mutually exclusive features; if the model has multiple objectives, the function returns a not-supported error with a diagnostic message.
+
+**Phase 2: Logging.** The function logs the start of multi-scenario solving, including the number of scenarios.
+
+**Phase 3: Model cloning and transformation.** The function delegates to a specialized cloning routine that creates a scenario-specific model clone. This clone is transformed from a multi-scenario model into a standard MIP suitable for the main solver. The callback configuration (callback count and callback data) is copied from the original model to the clone.
+
+**Phase 4: Label validation.** If the environment has label checking enabled, the clone model's labels are validated. This ensures scenario-specific names and identifiers conform to the solver's naming rules.
+
+**Phase 5: Environment validation.** The function validates compatibility between the original environment and the clone's environment, ensuring consistent parameter state.
+
+**Phase 6: Solve.** The transformed model is solved via the standard solver entry point. The solver treats the transformed model as a regular MIP, with scenario selection handled through indicator constraints and binary variables.
+
+**Phase 7: Solution transfer.** After a successful solve, the function copies solution data from the clone back to the original model in several stages:
+
+1. **Basic solution arrays.** Primal variable values, constraint dual values, range constraint duals, and SOS constraint duals are allocated on the original model and populated from the clone's solution. Dual value arrays are laid out contiguously: constraint duals first, then range duals, then SOS duals.
+
+2. **Solution pool.** If the clone produced multiple solutions (solution pool), each pool entry's variable values are allocated and copied. Objective values and objective bounds for each pool entry are also transferred.
+
+3. **Cut data.** If the clone produced cuts, each cut's variable values and objective values are allocated and copied.
+
+**Phase 8: Finalization.** A multi-scenario finalization routine processes the solution data, computing per-scenario results from the composite solution.
+
+**Thread Safety:** Not thread-safe. Must be called within a single-threaded optimization context.
+
+**Dependencies:**
+- P1.02 (Model) - model structure, solution data, matrix data, scenario model storage
+- P1.01 (Environment) - label checking flag, environment validation
+- P3.24 (Solve Entry & Dispatch) - solver entry point for the transformed model
+- P3.28 (this module) - cxf_setup_scenario for model transformation (invoked indirectly through the cloning routine)
+
+---
+
+### cxf_setup_scenario
+
+**Purpose:** Transform a multi-scenario model into a single MIP by cloning the master model, identifying scenario-specific modifications to variable bounds and constraint RHS values, adding binary selector variables and indicator constraints that conditionally enforce each scenario's modifications, and producing a standard integer model that the solver can optimize directly.
+
+**Signature:**
+- Input: `model` : pointer-to-Model - The master model with scenario data defined
+- Input: `out_model` : pointer-to-pointer-to-Model - Output parameter receiving the transformed scenario model; must point to a null pointer on entry
+- Input: `work_count` : pointer-to-double - Optional work counter for profiling; null if profiling is not active
+- Output: int - Zero on success, or an error code on failure
+
+**Preconditions:**
+- The model must have a valid matrix with scenario data, variable bounds, constraint RHS, constraint sense, and variable type arrays populated
+- The output model pointer must be initialized to null
+- The model must have been updated (no pending modifications)
+
+**Postconditions:**
+- On success: the output model pointer contains a newly created model that encodes all scenarios as a single MIP with binary selector variables and indicator constraints; the original model is not modified; the output model has scenario count set to zero (single-scenario); the output model's matrix data stores the new constraint count base and scenario count for later result extraction
+- On error: any partially created model has been freed; all temporary memory has been released; the output model pointer remains null
+
+**Side Effects:**
+- Allocates a new model (clone of the master)
+- Adds binary selector variables to the clone
+- Adds indicator constraints to the clone
+- Deletes original constraints that have been replaced by indicator-controlled versions
+- Calls model update to finalize modifications at multiple stages
+- Copies solver parameters from the master environment to the clone environment
+- Allocates and frees numerous temporary working arrays (bound tracking, constraint markers, indicator index arrays, result arrays)
+- Optionally increments a work counter for profiling
+
+**Error Conditions:**
+- Memory allocation fails at any stage -> returns the out-of-memory error code; all allocated resources are freed
+- A scenario specifies an invalid infinity value for a constraint RHS (e.g., positive infinity for a less-than-or-equal constraint, or negative infinity for a greater-than-or-equal constraint) -> returns the invalid argument error code with a diagnostic message identifying the constraint sense and scenario index
+- Master model RHS contains an invalid infinity value for a constraint -> returns the invalid argument error code with a diagnostic message
+- Model cloning fails -> propagates the clone error
+- Model update fails -> propagates the update error
+- Adding variables or constraints fails -> propagates the error
+
+**Behavioral Description:**
+This function implements the core scenario-to-MIP transformation. The approach reformulates a multi-scenario problem as a single MIP by introducing binary "selector" variables that control which scenario's constraints are active. This technique leverages the solver's branch-and-bound infrastructure to efficiently explore scenarios, sharing LP relaxation information and cuts across related subproblems (Beale and Tomlin, 1970).
+
+**Phase 1: Model clone and initialization.** The function clones the master model and marks the clone as a single-scenario model (setting the scenario count attribute to zero). The clone is then updated to finalize this initial state. A working RHS array is allocated and populated: for greater-than-or-equal constraints, the RHS values are negated to convert to a canonical less-than-or-equal form.
+
+**Phase 2: Binary variable bound processing.** The function scans all variables for binary type. Binary variables with invalid bounds (e.g., negative lower bound or excessively large upper bound) are corrected. A copy-on-write pattern is used: modified bound arrays are only allocated when the first modification is detected, and the original bounds are copied into the new array at that point. This minimizes memory usage when few variables require correction.
+
+**Phase 3: Scenario bound initialization.** The function allocates tracking arrays for constraint change markers, lower-bound change values and flags, upper-bound change values and flags, and RHS bound values and flags. A scenario bounds initialization helper is invoked to populate these arrays by comparing the scenario-specific data against the master model's data, identifying which constraints and variable bounds differ across scenarios. The constraint markers indicate which constraints need scenario-specific treatment. After initialization, a synchronization pass updates the working RHS array based on the constraint markers.
+
+**Phase 4: Indicator variable creation.** The function detects bound changes that cross a significance threshold (finite-to-infinite or infinite-to-finite transitions) for both constraint RHS values and variable bounds. For each such crossing:
+1. A binary selector variable is added to the clone model.
+2. The index of the new binary variable is recorded in an indicator tracking array (one array for row indicators, one for lower-bound indicators, one for upper-bound indicators).
+
+Additionally, explicit bound constraints are added for variable bound changes that are finite but differ from the master: lower-bound constraints in the form "negative coefficient times variable is less than or equal to negated lower bound" and upper-bound constraints in the form "coefficient times variable is less than or equal to upper bound."
+
+**Phase 5: Per-scenario constraint processing.** For each scenario, the function extracts scenario-specific constraint data and processes each modified constraint:
+1. The RHS value is validated against the constraint sense (infinity is invalid for certain constraint types).
+2. If the RHS differs significantly from the master's value, a result entry is created recording the constraint index and the delta (difference or replacement value).
+3. If the constraint has an associated indicator variable, the indicator's activation value is recorded.
+
+This phase also processes variable bound modifications for binary variables, normalizing values as needed.
+
+**Phase 6: Indicator constraint generation.** The function converts the collected indicator information into general indicator constraints using the solver's indicator constraint API. For each constraint with a row indicator, the original constraint's coefficients are retrieved, an indicator constraint is created (binary variable equals one implies the linear constraint holds), and the original constraint is deleted. The same process is applied to lower-bound and upper-bound indicators.
+
+**Phase 7: Finalization.** A scenario summation constraint may be added to enforce that exactly one scenario is active. The clone model is updated to finalize all modifications. Final counts (new constraint count base and scenario count) are stored in the clone's matrix data for later use during result extraction. Solver parameters are copied from the master environment to the clone environment.
+
+**Phase 8: Cleanup.** All temporary arrays are freed (working RHS, constraint markers, bound change arrays, bound change flags, modified bound arrays, indicator index arrays, result arrays, sparse working storage). On the error path, the clone model is also freed. On the success path, the output model pointer is set to the clone.
+
+**Thread Safety:** Not thread-safe. Must be called within a single-threaded context during optimization preparation.
+
+**Dependencies:**
+- P1.02 (Model) - model structure, matrix data, variable types, constraint data, bound arrays
+- P1.01 (Environment) - memory allocation, parameter copying
+- P3.31 (Model Lifecycle) - model cloning, model update, model destruction
+
+---
+
+## Module-Level Behavioral Notes
+
+### Role in the Solve Chain
+
+The three functions in this module sit at the top of the solve chain, alongside the LP and MIP solvers. They are invoked from the optimization dispatcher (P3.25) when the model has multiple objectives or multiple scenarios:
+
+**Dispatch decision tree:**
+1. If the model has multiple objectives -> cxf_solve_multiobj (this module)
+2. If the model has multiple scenarios -> cxf_solve_multiscenario (this module)
+3. Otherwise -> standard LP/barrier solve (P3.25, P3.27)
+
+cxf_setup_scenario is invoked indirectly as part of the multi-scenario pipeline: cxf_solve_multiscenario delegates to a scenario-specific cloning routine, which calls cxf_setup_scenario to perform the MIP transformation.
+
+### Multi-Objective Optimization Modes
+
+Multi-objective optimization supports two modes, selected based on the priority structure of the objectives:
+
+**Hierarchical (lexicographic) mode:**
+- Objectives have different priority values.
+- Objectives are solved sequentially in descending priority order.
+- After optimizing each objective, a constraint is added that preserves the achieved value within the objective's degradation tolerance (ObjNAbsTol, ObjNRelTol).
+- This implements the lexicographic optimization approach (Ehrgott, 2005, Chapter 4).
+
+**Blended (weighted) mode:**
+- Objectives share the same priority value.
+- A single weighted combination of the objectives is optimized.
+- Weights are specified per objective (ObjNWeight).
+- This implements the weighted sum scalarization method (Miettinen, 1999, Section 3.1).
+
+When objectives share the same priority, an additional check determines whether to use blended mode (treating them as a single combined objective) or hierarchical mode (treating them as separate levels). The dispatch logic first checks for same-priority, then checks for explicit blending configuration.
+
+### Multi-Scenario Reformulation Strategy
+
+The scenario reformulation converts a problem with K scenarios into a single MIP by introducing:
+1. **Binary selector variables** (one per scenario-modified bound or constraint that crosses a finite/infinite threshold).
+2. **Indicator constraints** of the form: "selector = 1 implies linear constraint."
+3. An optional **sum constraint** ensuring exactly one scenario is active.
+
+This approach has several advantages over alternative formulations:
+- **Compared to Big-M:** Indicator constraints avoid choosing a Big-M coefficient, eliminating a common source of numerical instability (Bonami et al., 2015).
+- **Compared to separate solves:** The solver can share LP relaxation information, cutting planes, and branching history across scenarios.
+- **Copy-on-write arrays:** Memory is allocated only for bounds that actually differ from the master, minimizing overhead for scenarios with few modifications.
+
+### Feature Incompatibilities
+
+| Feature | Multi-Objective | Multi-Scenario |
+|---------|----------------|----------------|
+| Quadratic objectives | Not supported | [UNDETERMINED] |
+| Piecewise-linear objectives | Not supported | [UNDETERMINED] |
+| Solution pool search mode | Reset to zero (warning logged) | [UNDETERMINED] |
+| Multi-objective | N/A (self) | Not supported |
+| Multi-scenario | [UNDETERMINED] | N/A (self) |
+
+### Control Structure for Callback Coordination
+
+cxf_solve_multiobj allocates a multi-objective control structure that coordinates callback reporting during the solve. This structure tracks:
+- Whether the solve is currently active or paused (for hierarchical solving coordination).
+- The index of the currently active objective (or a sentinel value for blended mode).
+- A back-reference to the original model.
+
+The control structure is registered with both the clone's callback system and the original model's callback state, enabling user callbacks to query multi-objective progress information. It is deregistered and freed on all exit paths.
+
+### Constraint Sense Normalization
+
+cxf_setup_scenario normalizes constraint senses during RHS processing. Greater-than-or-equal constraints have their RHS values negated to convert them to the canonical less-than-or-equal form. This normalization simplifies the subsequent bound comparison and indicator constraint generation logic, which only needs to handle one constraint direction. The negation is performed at the bit level (sign bit flip) to preserve exact floating-point representation.
+
+### Solution Data Transfer Pattern
+
+Both cxf_solve_multiobj and cxf_solve_multiscenario follow a common pattern for transferring solution data from a clone model back to the original:
+1. Allocate solution arrays on the original model.
+2. Copy primal values, dual values, and auxiliary solution components.
+3. Finalize the solution through a post-processing step.
+
+cxf_solve_multiscenario additionally transfers solution pool data (multiple solutions per scenario) and cut data, which requires per-entry allocation and copying.
+
+### Return Code Conventions
+
+| Code | Meaning | Functions |
+|------|---------|-----------|
+| Success (zero) | Operation completed normally | All three functions |
+| Not-supported error code | Incompatible feature combination | cxf_solve_multiobj (quad/PWL objectives), cxf_solve_multiscenario (multi-objective) |
+| Out-of-memory error code | Memory allocation failed | All three functions |
+| Invalid-argument error code | Invalid infinity in scenario RHS | cxf_setup_scenario |
+
+### Thread Safety Summary
+
+| Function | Thread Safety | Notes |
+|----------|---------------|-------|
+| cxf_solve_multiobj | Not thread-safe | Operates on model clone; modifies callback state |
+| cxf_solve_multiscenario | Not thread-safe | Operates on scenario clone; modifies solution data |
+| cxf_setup_scenario | Not thread-safe | Creates and modifies clone model; allocates temporary arrays |
+
+All functions operate within a single-threaded optimization context. Thread safety for concurrent model solves is achieved at the model level by creating independent solver instances.
+
+---
+
+## Verification Checklist
+
+```
+[x] No hex addresses or offsets
+[x] No Ghidra artifacts (param_, local_, iVar, DAT_, FUN_)
+[x] No binary-specific constants or magic numbers
+[x] No copied code fragments from analyzed source
+[x] All descriptions are behavioral, not implementational
+[x] All data structures described semantically using Layer 1/2 references
+[x] Explicit cross-references to P1.01, P1.02 (data model), P3.13, P3.24, P3.25, P3.31 (module specs)
+[x] All algorithms cite published sources (Ehrgott, Miettinen, Beale & Tomlin, Bonami et al.)
+[x] Passes the Clean Room Test: could be written without seeing the binary
+```
+
+## References
+
+- Beale, E.M.L. and Tomlin, J.A. (1970). "Special facilities in a general mathematical programming system for non-convex problems using ordered sets of variables." In: *Proceedings of the Fifth International Conference on Operational Research*, pp. 447-454.
+- Bonami, P., Lodi, A., Tramontani, A., and Wiese, S. (2015). "On mathematical programming with indicator constraints." *Mathematical Programming*, 151(1):191-223.
+- Ehrgott, M. (2005). *Multicriteria Optimization*. 2nd ed. Springer. Lecture Notes in Economics and Mathematical Systems.
+- Miettinen, K. (1999). *Nonlinear Multiobjective Optimization*. Springer. International Series in Operations Research and Management Science, Vol. 12.
+
+---
+
 # P3.29 -- Module: Solution Processing
 
 ## Purpose
 
-The Solution Processing module implements the post-solve pipeline that transforms raw solver output into user-accessible result data. After an LP or barrier solver method has found a solution (or determined infeasibility/unboundedness), this module performs all steps necessary to make solution information available through the solver's public attribute API: binding result attributes to their storage locations, reversing presolve transformations, computing derived quantities such as optimality gaps and objective values, and managing the solution pool.
+The Solution Processing module implements the post-solve pipeline that transforms raw solver output into user-accessible result data. After an LP, MIP, or barrier solver method has found a solution (or determined infeasibility/unboundedness), this module performs all steps necessary to make solution information available through the solver's public attribute API: binding result attributes to their storage locations, reversing presolve transformations, computing derived quantities such as optimality gaps and objective values, and managing the MIP solution pool.
 
-The module embodies two key design patterns. First, it uses a **direct-pointer wiring pattern** in which attribute entries are linked to the memory locations where result values reside, enabling attribute queries to read solution data without function-call dispatch overhead. This wiring must be reconfigured after each solve because the storage locations may differ depending on the solve outcome (optimal, infeasible, multiple solutions, etc.). Second, it implements a **presolve reversal pattern** through which solutions obtained in the reduced (presolved) variable space are mapped back to the original problem's variable space, restoring values for variables that were eliminated, substituted, or aggregated during presolve. This reversal is a standard postsolve operation (Andersen and Andersen, 1995; Gondzio, 1997) that every LP solver with a presolve phase must provide.
+The module embodies two key design patterns. First, it uses a **direct-pointer wiring pattern** in which attribute entries are linked to the memory locations where result values reside, enabling attribute queries to read solution data without function-call dispatch overhead. This wiring must be reconfigured after each solve because the storage locations may differ depending on the solve outcome (optimal, infeasible, MIP with multiple solutions, etc.). Second, it implements a **presolve reversal pattern** through which solutions obtained in the reduced (presolved) variable space are mapped back to the original problem's variable space, restoring values for variables that were eliminated, substituted, or aggregated during presolve. This reversal is a standard postsolve operation (Andersen and Andersen, 1995; Gondzio, 1997) that every LP solver with a presolve phase must provide.
 
-The six functions span the full post-solve pipeline: attribute wiring for LP results (cxf_process_lp_solution), attribute wiring for general results (cxf_wire_result_attributes), presolve reversal (cxf_uncrush_solution), objective value evaluation (cxf_scale_objval), optimality gap computation (cxf_compute_gap), and solution pool management (cxf_copy_solution).
+The six functions span the full post-solve pipeline: attribute wiring for LP results (cxf_process_lp_solution), attribute wiring for MIP/general results (cxf_wire_result_attributes), presolve reversal (cxf_uncrush_solution), objective value evaluation (cxf_scale_objval), optimality gap computation (cxf_compute_gap), and solution pool management (cxf_copy_solution).
 
 ## Functions
 
@@ -14424,14 +15711,14 @@ The function proceeds through four phases:
 
 2. **Iteration and node count wiring.** The function wires six attributes to their backing storage:
    - Three iteration count attributes (simplex iteration count, barrier iteration count, and first-order method iteration count) are each wired to the corresponding field in the solution information structure.
-   - Three node count attributes (node count, open node count, and time-open) are all wired to the same location on the model, since LP solves always report zero nodes.
-   - Two solution count attributes (solution count and first solution node) are set to unavailable (null pointer), indicating that no multi-solution pool entries have been recorded.
+   - Three node count attributes (node count, open node count, and time-open) are all wired to the same location on the model, since LP solves do not explore branch-and-bound nodes.
+   - Two solution count attributes (solution count and first solution node) are set to unavailable (null pointer), indicating that no MIP-style solutions have been recorded.
 
 3. **Status-dependent objective wiring (solution available).** If the optimization status indicates a valid solution exists (any status other than loaded, infeasible, infeasible-or-unbounded, or unbounded), the objective value, objective bound, and continuous objective bound attributes are all wired to their respective fields in the solution information structure. For LP results, the objective bound and continuous objective bound share the same field.
 
 4. **Status-dependent objective wiring (no solution).** If the status indicates no valid solution, the function checks whether an objective value can be computed from presolve data for diagnostic purposes. This diagnostic computation requires all of the following conditions:
    - The infeasibility/unboundedness diagnostic parameter is enabled on the environment
-   - The model is a pure continuous LP
+   - The model has no integer variables (pure continuous LP)
    - No reduced (presolved) model copy exists
    - Presolve data is available and indicates an infeasible status
    - Presolve solution arrays are populated
@@ -14443,7 +15730,7 @@ The attribute wiring pattern used throughout is: look up the attribute by name i
 
 **Thread Safety:** Unsafe. Must be called from a single thread; the model must not be accessed concurrently.
 
-**Dependencies:** Attribute table lookup and name initialization helpers; cxf_scale_objval (for diagnostic objective computation).
+**Dependencies:** Attribute table lookup and name initialization helpers; cxf_scale_objval (for diagnostic objective computation); a helper that checks whether the model contains integer variables.
 
 ---
 
@@ -14496,7 +15783,7 @@ The function handles the edge case of an empty model (zero original variables) b
 
 ### cxf_wire_result_attributes
 
-**Purpose:** Connect optimization result attributes to their storage locations in the solver result state after general optimization completes, enabling direct-pointer attribute access.
+**Purpose:** Connect optimization result attributes to their storage locations in the solver result state after MIP or general optimization completes, enabling direct-pointer attribute access.
 
 **Signature:**
 - Input: `model` : pointer-to-Model - The model whose optimization has completed
@@ -14510,12 +15797,12 @@ The function handles the edge case of an empty model (zero original variables) b
 - All standard result attributes are wired to their backing storage locations
 - Objective-related attributes are wired differently depending on the solve outcome mode (see behavioral description)
 - For the infeasible/unbounded mode, objective bound fields are initialized to a direction-dependent infinity value (positive infinity times the optimization direction, so that minimization gets positive infinity and maximization gets negative infinity)
-- For modes with a solution count available, the optimality gap is computed and stored
+- For modes with a solution count available, the MIP gap is computed and stored
 
 **Side Effects:**
 - Modifies the direct-value pointer (and for array attributes, the size pointer) of multiple attribute entries in the model's attribute table
-- May modify objective bound and optimality gap fields in the solver result state
-- Calls the optimality gap computation function
+- May modify objective bound and MIP gap fields in the solver result state
+- Calls the MIP gap computation function
 
 **Error Conditions:**
 - Null attribute table -> returns uninitialized marker
@@ -14523,13 +15810,13 @@ The function handles the edge case of an empty model (zero original variables) b
 
 **Behavioral Description:**
 
-This function is the general counterpart to cxf_process_lp_solution. While cxf_process_lp_solution handles the simpler LP case (binding iteration counts and a single objective value), cxf_wire_result_attributes handles the full result set including solution arrays, optimality gap, solution pool bounds, and mode-dependent objective attribute wiring. The function proceeds through seven phases:
+This function is the MIP/general counterpart to cxf_process_lp_solution. While cxf_process_lp_solution handles the simpler LP case (binding iteration counts and a single objective value), cxf_wire_result_attributes handles the full result set including solution arrays, MIP gap, solution pool bounds, and mode-dependent objective attribute wiring. The function proceeds through seven phases:
 
 1. **Validation.** Checks that the attribute table and solver result state are both present; returns an uninitialized marker if either is missing.
 
 2. **Iteration count wiring.** Wires four iteration count attributes: simplex iteration count, initial iteration count (for reoptimization tracking), barrier iteration count, and first-order method iteration count. Each is wired to its dedicated field in the solver result state.
 
-3. **Node count wiring.** Wires three attributes (node count, open node count, and time-open) to their respective fields in the solver result state. Unlike cxf_process_lp_solution (which shares a single backing location), each node count attribute here has its own field.
+3. **Node count wiring.** Wires three attributes (node count, open node count, and time-open) to their respective fields in the solver result state. Unlike cxf_process_lp_solution (which shares a single backing location), each node count attribute here has its own field, reflecting the meaningful node tracking that occurs during MIP optimization.
 
 4. **Solution count initialization.** Wires the solution count and first-solution-node attributes to unavailable (null pointer), as these will be populated later during solution pool management.
 
@@ -14539,22 +15826,22 @@ This function is the general counterpart to cxf_process_lp_solution. While cxf_p
 
    **Mode: Optimal / Cutoff / Iteration-Limit** (solve modes 1, 4, or 5):
    - Objective value is wired to the solver result state's objective field if at least one solution exists; otherwise wired to unavailable
-   - Objective bound, continuous objective bound, and pool objective bound are all wired to the model's own bound field (a single shared location, as these are identical for trivially-bounded results)
+   - Objective bound, continuous objective bound, and pool objective bound are all wired to the model's own bound field (a single shared location, as these are identical for non-MIP or trivially-bounded results)
 
    **Mode: Infeasible/Unbounded** (solve mode 3):
    - Three objective bound fields on the solver result state are initialized to a direction-dependent infinity value (the product of the optimization direction and a large constant representing solver infinity), ensuring that the bound reflects the worst-case value for the given optimization direction
    - Objective value is wired to unavailable (no solution exists)
    - Objective bound, continuous objective bound, and pool objective bound are each wired to their distinct fields in the solver result state
-   - Optimality gap is wired to the model's bound field
+   - MIP gap is wired to the model's bound field
 
-   **Mode: General** (all other solve modes):
-   - The optimality gap is computed by calling cxf_compute_gap with the optimization direction, the objective bound, and the objective value from the solver result state; the computed gap is stored in the solver result state
+   **Mode: General MIP** (all other solve modes):
+   - The MIP gap is computed by calling cxf_compute_gap with the optimization direction, the objective bound, and the objective value from the solver result state; the computed gap is stored in the solver result state
    - Objective value, objective bound, continuous objective bound, and pool objective bound are each wired to their respective fields in the solver result state
-   - Optimality gap is wired to the computed gap field in the solver result state
+   - MIP gap is wired to the computed gap field in the solver result state
 
 **Thread Safety:** Unsafe. Must be called from a single thread after optimization completes.
 
-**Dependencies:** Attribute table lookup and name initialization helpers; cxf_compute_gap (for optimality gap computation in the general mode).
+**Dependencies:** Attribute table lookup and name initialization helpers; cxf_compute_gap (for MIP gap computation in the general MIP mode).
 
 ---
 
@@ -14564,7 +15851,7 @@ This function is the general counterpart to cxf_process_lp_solution. While cxf_p
 
 **Signature:**
 - Input: `optimization_direction` : double - The optimization direction: positive for minimization, negative for maximization
-- Input: `best_bound` : double - The best dual bound (lower bound for minimization, upper bound for maximization)
+- Input: `best_bound` : double - The best dual bound from the branch-and-bound tree (lower bound for minimization, upper bound for maximization)
 - Input: `objective_value` : double - The incumbent solution's objective value
 - Output: double - The relative optimality gap as a non-negative fraction, or solver infinity if the gap is undefined or unbounded
 
@@ -14584,17 +15871,17 @@ This function is the general counterpart to cxf_process_lp_solution. While cxf_p
 
 **Behavioral Description:**
 
-This function computes the standard optimality gap as documented in the ConvexFeld Reference Manual. The gap measures how far the current best solution (incumbent) is from being provably optimal, expressed as a fraction of the objective value. The formula is:
+This function computes the standard MIP optimality gap as documented in the ConvexFeld Reference Manual. The gap measures how far the current best solution (incumbent) is from being provably optimal, expressed as a fraction of the objective value. The formula is:
 
 ```
 gap = |objective_value - best_bound| / |objective_value|
 ```
 
-This is the standard relative gap formula used in optimization algorithms (Wolsey, 1998; Nemhauser and Wolsey, 1988). It provides a scale-invariant measure of solution quality that is comparable across problems of different magnitudes.
+This is the standard relative gap formula used in branch-and-bound algorithms (Wolsey, 1998; Nemhauser and Wolsey, 1988). It provides a scale-invariant measure of solution quality that is comparable across problems of different magnitudes.
 
 The function handles five cases in priority order:
 
-1. **Infinite bound:** If the best bound equals solver infinity (indicating that no valid bound has been established yet), the function returns solver infinity.
+1. **Infinite bound:** If the best bound equals solver infinity (indicating that no valid bound has been established yet, as happens early in MIP optimization before any nodes are processed), the function returns solver infinity.
 
 2. **Infinite objective or bound:** If the absolute value of either the objective value or the best bound is at or above the solver infinity threshold, the function returns solver infinity. This handles cases where the problem is unbounded or the values are numerically unreliable.
 
@@ -14674,7 +15961,7 @@ where each component accounts for column scaling as appropriate.
 
 ### cxf_copy_solution
 
-**Purpose:** Add a new feasible solution to the solution pool, maintaining solutions in sorted order by objective value with deterministic tie-breaking, and enforcing pool size and gap limits.
+**Purpose:** Add a new feasible solution to the MIP solution pool, maintaining solutions in sorted order by objective value with deterministic tie-breaking, and enforcing pool size and gap limits.
 
 **Signature:**
 - Input: `model` : pointer-to-Model - The model whose solution pool is being managed
@@ -14697,6 +15984,7 @@ where each component accounts for column scaling as appropriate.
 - May reallocate pool arrays when capacity is exceeded
 - May free solution vectors that are pruned by size or gap limits
 - Updates the pool's best objective metric for pruning decisions
+- May update integer solution tracking arrays
 
 **Error Conditions:**
 - Memory allocation failure during pool initialization -> returns out-of-memory error code
@@ -14705,11 +15993,11 @@ where each component accounts for column scaling as appropriate.
 
 **Behavioral Description:**
 
-This function manages the solution pool, a sorted collection of feasible solutions discovered during the optimization process. The pool supports the ConvexFeld PoolSolutions, PoolGap, and PoolGapAbs parameters, enabling users to collect multiple high-quality solutions rather than just the single best. Solutions are maintained in ascending objective order (for minimization) to enable efficient pruning of suboptimal solutions. The function implements the solution pool management pattern described in the ConvexFeld documentation for the PoolSolutions parameter.
+This function manages the MIP solution pool, a sorted collection of feasible solutions discovered during branch-and-bound search. The pool supports the ConvexFeld PoolSolutions, PoolGap, and PoolGapAbs parameters, enabling users to collect multiple high-quality solutions rather than just the single best. Solutions are maintained in ascending objective order (for minimization) to enable efficient pruning of suboptimal solutions. The function implements the solution pool management pattern described in the ConvexFeld documentation for the PoolSolutions parameter.
 
 The function proceeds through eleven phases:
 
-1. **Pool initialization (lazy).** If the pool's allocated capacity is zero (indicating first use), the function performs full initialization: frees any stale pool data from a previous solve, and allocates fresh arrays for solution vector pointers, weighted metrics, and objective values with a default initial capacity.
+1. **Pool initialization (lazy).** If the pool's allocated capacity is zero (indicating first use), the function performs full initialization: frees any stale pool data from a previous solve, allocates fresh arrays for solution vector pointers, weighted metrics, and objective values with a default initial capacity, and optionally allocates integer solution tracking arrays if the model has integer variables. Integer solution objective values are initialized with a sentinel marker indicating they have not yet been populated.
 
 2. **Objective computation.** The solution's objective value is computed by calling cxf_scale_objval, which evaluates the full objective function (linear, quadratic, piecewise-linear terms with scaling).
 
@@ -14729,6 +16017,8 @@ The function proceeds through eleven phases:
 
 10. **Gap-based pruning.** When the PoolGap or PoolGapAbs parameter is set to a finite value, the function computes a cutoff threshold based on the best objective value and the gap parameters. Solutions whose objective values exceed the cutoff are removed from the pool. The cutoff computation accounts for the optimization direction and combines relative and absolute gap tolerances. This pruning is triggered only when a new best solution is found (insertion at position zero) or when a solution is added at the end of the pool, avoiding unnecessary pruning overhead on interior insertions.
 
+11. **Integer solution tracking.** If the model has integer variables and the pool has integer tracking arrays, the function checks whether the new solution represents a better objective for its integer variable configuration. If so, the solution is recorded (or updated) in the integer tracking arrays, supporting solution pool diversity across different integer assignments.
+
 Throughout the function, the `solution_added` output flag is set to 1 only if the solution was actually inserted (not rejected as a duplicate). Before returning, the pool's final count field is synchronized with the current solution count.
 
 **Thread Safety:** Unsafe. Must be called from a single thread; solution pool state is not protected by synchronization.
@@ -14744,7 +16034,7 @@ Throughout the function, the `solution_added` output flag is set to 1 only if th
 The six functions form a pipeline that can be organized into three functional groups:
 
 **Result attribute wiring** (cxf_process_lp_solution, cxf_wire_result_attributes):
-These two functions serve the same purpose -- connecting result attributes to their storage locations -- but for different solve contexts. cxf_process_lp_solution handles the LP case, wiring a smaller set of attributes (iteration counts, node counts, objective values) using the LP-specific solution information structure. cxf_wire_result_attributes handles the general case (concurrent, multi-scenario), wiring a broader set of attributes including solution arrays (X, Slack, QCSlack), optimality gap, solution pool bounds, and multiple iteration counters, using the general solver result state. Both functions use the identical attribute wiring pattern: look up the attribute by name, find the entry, set the direct-value pointer.
+These two functions serve the same purpose -- connecting result attributes to their storage locations -- but for different solve contexts. cxf_process_lp_solution handles the LP case, wiring a smaller set of attributes (iteration counts, node counts, objective values) using the LP-specific solution information structure. cxf_wire_result_attributes handles the general case (MIP, concurrent, multi-scenario), wiring a broader set of attributes including solution arrays (X, Slack, QCSlack), MIP gap, solution pool bounds, and multiple iteration counters, using the general solver result state. Both functions use the identical attribute wiring pattern: look up the attribute by name, find the entry, set the direct-value pointer.
 
 **Solution transformation** (cxf_uncrush_solution, cxf_scale_objval):
 These functions transform solution data from the solver's internal representation back to the user's problem space. cxf_uncrush_solution reverses presolve transformations on the variable values. cxf_scale_objval reverses scaling transformations on the objective function. Together they ensure that solution data returned to the user accurately reflects the original problem formulation, even though the solver may have heavily transformed the problem for numerical stability and efficiency.
@@ -14763,9 +16053,15 @@ cxf_solve_lp / cxf_solver_dispatch (callers)
     |       |
     |       +-> cxf_scale_objval  (compute objective for infeasibility diagnostic)
     |
-    +-> cxf_wire_result_attributes  (wire general attributes)
+    +-> cxf_wire_result_attributes  (wire MIP/general attributes)
             |
-            +-> cxf_compute_gap  (compute optimality gap)
+            +-> cxf_compute_gap  (compute MIP optimality gap)
+
+cxf_solve_mip (caller)
+    |
+    +-> cxf_copy_solution  (add solution to pool)
+            |
+            +-> cxf_scale_objval  (compute objective value for pool)
 ```
 
 ### Attribute Wiring Pattern
@@ -14776,7 +16072,7 @@ Both cxf_process_lp_solution and cxf_wire_result_attributes use a consistent pat
 2. Retrieve the attribute entry from the entries array at the found index
 3. Set the entry's direct-value pointer to the address of the value to expose
 
-For scalar result attributes (e.g., ObjVal, Gap), the direct-value pointer points to a double in the solution state. For array result attributes (e.g., X, Slack), the direct-value pointer points to an array, and an additional size pointer is set to point to the dimension count (enabling bounds checking on array access). Setting the direct-value pointer to null marks the attribute as unavailable, causing queries to return a "data not available" error.
+For scalar result attributes (e.g., ObjVal, MIPGap), the direct-value pointer points to a double in the solution state. For array result attributes (e.g., X, Slack), the direct-value pointer points to an array, and an additional size pointer is set to point to the dimension count (enabling bounds checking on array access). Setting the direct-value pointer to null marks the attribute as unavailable, causing queries to return a "data not available" error.
 
 ### Solve Mode Classification
 
@@ -14786,7 +16082,7 @@ cxf_wire_result_attributes classifies solve outcomes into three categories that 
 |----------|-------|-----------------|
 | Optimal/Limited | Optimal, Cutoff, Iteration Limit | Solution may exist; objective bound from model |
 | Infeasible/Unbounded | Infeasible or Unbounded | No solution; bounds initialized to infinity |
-| General | All others | Solution exists; optimality gap computed; full bound set |
+| General MIP | All others | Solution exists; MIP gap computed; full bound set |
 
 ### Solution Pool Ordering
 
@@ -14841,9 +16137,9 @@ If the objective value changes significantly during uncrushing (due to accumulat
 
 ## Purpose
 
-The Environment Lifecycle module manages the complete lifecycle of the Environment structure, from initial allocation through activation to eventual destruction. The Environment is the top-level context object for an LP solver session, and its lifecycle involves five distinct operations: creating the raw structure with default values, finalizing it into an active session, initializing the logging subsystem, tracking which model is currently active, and releasing all owned resources on destruction.
+The Environment Lifecycle module manages the complete lifecycle of the Environment structure, from initial allocation through activation to eventual destruction. The Environment is the top-level context object for an LP solver session, and its lifecycle involves five distinct operations: creating the raw structure with default values, finalizing it into an active licensed session, initializing the logging subsystem, tracking which model is currently active, and releasing all owned resources on destruction.
 
-The creation and destruction operations form a symmetrical pair: creation allocates and initializes a zeroed Environment with parameter defaults, system information, and a mutex, while destruction systematically releases every owned resource in reverse allocation order. Between these, the finalization operation is the most complex: it transitions the Environment from its initial inactive state to an active state by validating hardware capabilities, detecting system resources, and reading configuration files. The log file and active model tracking functions provide narrower lifecycle management for specific subsystems owned by the Environment.
+The creation and destruction operations form a symmetrical pair: creation allocates and initializes a zeroed Environment with parameter defaults, system information, and a mutex, while destruction systematically releases every owned resource in reverse allocation order. Between these, the finalization operation is the most complex: it transitions the Environment from its initial inactive state to an active, licensed state by validating hardware capabilities, detecting system resources, reading configuration files, and acquiring a license through a priority-ordered chain of licensing backends. The log file and active model tracking functions provide narrower lifecycle management for specific subsystems owned by the Environment.
 
 ## Functions
 
@@ -14852,8 +16148,10 @@ The creation and destruction operations form a symmetrical pair: creation alloca
 **Purpose:** Allocate and initialize an Environment structure with default parameter values, system information, and threading primitives.
 
 **Signature:**
+- Input: `license_mode` : int - Selects the licensing strategy (normal, ISV, WLS, or special modes)
 - Input: `extra_flags` : int - Additional configuration flags affecting initialization behavior
 - Input: `parent_environment` : pointer-to-Environment or null - Parent environment from which to inherit parameter defaults; null for standalone environments
+- Input: `isv_parameters` : array of 7 opaque pointers - ISV configuration parameters for vendor licensing; passed through unchanged and stored for later use during initialization validation
 - Output: `created_environment` : pointer-to-pointer-to-Environment - On success, receives the newly created Environment pointer; on failure, set to null
 - Output: int - Zero on success, or an error code (OUT_OF_MEMORY, INVALID_ARGUMENT, UNKNOWN_PARAMETER)
 
@@ -14872,32 +16170,37 @@ The creation and destruction operations form a symmetrical pair: creation alloca
 - Queries the operating system for CPU information, platform details, hostname, and OS distribution
 - Allocates and populates the parameter table from a static definition table containing parameter names, types, default values, minimum/maximum bounds, and flags
 - When a parent environment is provided, inherits current parameter values from the parent's parameter table instead of using the static defaults
+- When the license mode indicates ISV licensing, iterates through ISV-specific parameters, resets each to its default value if it differs from the default, and marks each as ISV-protected in the parameter flags array
 
 **Error Conditions:**
 - Memory allocation failure at any stage -> OUT_OF_MEMORY; all partially allocated resources are cleaned up before returning
 - Parameter registration failure during table construction -> propagated error code; parameter table resources are freed
+- ISV parameter lookup failure (parameter not found in table) -> UNKNOWN_PARAMETER
+- Environment validation failure during ISV processing -> propagated error code
 
 **Behavioral Description:**
 
 1. Set the output pointer to null.
 2. Allocate a zeroed block of memory for the Environment structure. If allocation fails, return OUT_OF_MEMORY.
 3. Write both validation sentinels (primary and secondary) into the structure to enable integrity checking.
-4. Initialize internal bookkeeping pointers, including a circular linked list for internal tracking and the extra flags field.
-5. Set the batch size limit to its large default value.
-6. Initialize the process-level global state (idempotent; safe to call multiple times).
-7. Allocate and initialize a mutex for thread-safe reference count manipulation. If this fails, clean up and return the error.
-8. Set the root environment pointer to self (for standalone environments) and initialize the reference count to one.
-9. Allocate the error message buffer. If allocation fails, clean up and return OUT_OF_MEMORY. Initialize the buffer to an empty string.
-10. Query the operating system for CPU information, platform details, OS distribution, and hostname, storing each in fixed-size buffers within the Environment.
-11. If the parameter table has not already been allocated, build it:
+4. Store the ISV configuration parameters for later use during initialization validation.
+5. Initialize internal bookkeeping pointers, including a circular linked list for internal tracking and the license mode and extra flags fields.
+6. Set the batch size limit to its large default value.
+7. Initialize the process-level global state (idempotent; safe to call multiple times).
+8. Allocate and initialize a mutex for thread-safe reference count manipulation. If this fails, clean up and return the error.
+9. Set the root environment pointer to self (for standalone environments) and initialize the reference count to one.
+10. Allocate the error message buffer. If allocation fails, clean up and return OUT_OF_MEMORY. Initialize the buffer to an empty string.
+11. Query the operating system for CPU information, platform details, OS distribution, and hostname, storing each in fixed-size buffers within the Environment.
+12. If the parameter table has not already been allocated, build it:
     a. Count the number of parameters in the static definition table by scanning for the end-of-public-parameters marker and the overall end sentinel.
     b. Allocate the parameter entry array and per-parameter flags array.
     c. For each parameter, copy its metadata (name, type, minimum, maximum, default) from the static definition to the entry array. If a parent environment is provided, inherit the current value from the parent; otherwise use the static default. String-type parameters receive a default empty string, with one specific directory parameter receiving a platform-appropriate default path.
     d. Register each parameter name (converted to uppercase) in a lookup structure for efficient name-based access.
-12. Execute a secondary initialization phase that configures additional Environment subsystems.
-13. Execute a final initialization step.
-14. On success, store the Environment pointer in the output and return zero.
-15. On any failure during steps 7-13, perform cleanup: decrement the reference count under the mutex, and if the count reaches zero, free the Environment via the internal destructor. Return the error code.
+13. Execute a secondary initialization phase that configures additional Environment subsystems.
+14. If the license mode indicates ISV licensing: for each of the four ISV-specific parameters (key, vendor name, application name, expiration), look up the parameter by name, compare its current value to its default, and if they differ, log a warning and reset it to the default using the appropriate typed parameter setter. Mark each ISV parameter as protected in the flags array.
+15. Execute a final initialization step.
+16. On success, store the Environment pointer in the output and return zero.
+17. On any failure during steps 8-15, perform cleanup: decrement the reference count under the mutex, and if the count reaches zero, free the Environment via the internal destructor. Return the error code.
 
 **Thread Safety:** Unsafe. This function allocates new resources and is not designed for concurrent invocation. The resulting Environment, once created, supports thread-safe reference count manipulation through its mutex.
 
@@ -14907,16 +16210,19 @@ The creation and destruction operations form a symmetrical pair: creation alloca
 - System information queries (CPU, platform, hostname, distribution)
 - Parameter table construction from static definitions
 - Parameter setter functions (int, double, string variants)
+- Environment validation function
 
 ---
 
 ### cxf_env_finalize
 
-**Purpose:** Transition an Environment from the INACTIVE state to the ACTIVE state by validating hardware capabilities, initializing subsystems, loading configuration files, and finalizing system-dependent parameters.
+**Purpose:** Transition an Environment from the INACTIVE state to the ACTIVE state by validating hardware capabilities, initializing subsystems, acquiring a license through a priority-ordered chain of licensing backends, loading configuration files, and finalizing system-dependent parameters.
 
 **Signature:**
 - Input: `environment` : pointer-to-Environment - The environment to finalize
+- Input: `auxiliary_parameter` : opaque - Additional parameter passed through to server connection functions
 - Input: `read_config_file` : bool - Whether to load the optional configuration file
+- Input: `server_parameter` : int - Additional server configuration parameter
 - Output: int - Zero on success, or an error code
 
 **Preconditions:**
@@ -14924,20 +16230,24 @@ The creation and destruction operations form a symmetrical pair: creation alloca
 - The environment must be in the INACTIVE state (activation state equals zero); attempting to finalize an already-started environment is an error
 
 **Postconditions:**
-- On success: the environment's activation state is ACTIVE, all subsystems are initialized, and the environment is ready to create models
+- On success: the environment's activation state is ACTIVE, the licensed flag is set, all subsystems are initialized, and the environment is ready to create models
 - On failure: all resources allocated during finalization are freed, the environment's state is fully rolled back to its pre-finalization state using a snapshot/restore mechanism, and the environment remains in the INACTIVE state
 
 **Side Effects:**
 - Takes a snapshot of the entire Environment state at the beginning of finalization to enable atomic rollback on failure
-- Checks hardware capabilities (requires SIMD instruction support; fails with an error if not available)
+- Allocates a large license data structure used to hold parsed configuration file contents and server configuration
+- Checks hardware capabilities (requires SIMD instruction support; fails with a license error if not available)
 - Detects logical and physical CPU core counts from the operating system
 - Reads and applies system environment variable overrides for core counts, maximum cores, and memory limits
 - Initializes core affinity data
 - Initializes four subsystem phases (memory management, parameter handling, logging infrastructure, and solver configuration)
 - Reads parameters from the previously saved backup to restore any programmatic settings
 - Processes the no-local-disk flag if set
-- Discovers and parses the configuration file, extracting configuration parameters into the environment's parameter table
+- Discovers and parses the configuration file, extracting server addresses, credentials, and configuration parameters into the environment's parameter table
 - Loads the optional configuration file if requested, applying parameter overrides from it
+- Acquires a license through the appropriate backend (see License Acquisition below)
+- Validates thread count and other license-constrained parameters
+- Checks for license expiration warnings
 - Initializes the recording subsystem if enabled
 - Applies memory limits from environment variables
 - Initializes thread pool infrastructure
@@ -14946,35 +16256,61 @@ The creation and destruction operations form a symmetrical pair: creation alloca
 **Error Conditions:**
 - Environment validation failure -> INVALID_ARGUMENT
 - Environment already started -> INVALID_ARGUMENT with error message
-- Memory allocation failure (buffers) -> OUT_OF_MEMORY
-- Hardware capability check failure (missing required SIMD instructions) -> error with descriptive message
-- Configuration file not found or unreadable -> error with descriptive message
+- Memory allocation failure (license data, buffers) -> OUT_OF_MEMORY
+- Hardware capability check failure (missing required SIMD instructions) -> NO_LICENSE with descriptive message
+- License file not found or unreadable -> NO_LICENSE with descriptive message
+- initialization validation failure (expired, wrong type, corrupted) -> NO_LICENSE with descriptive message
+- Server connection failure (token server, remote solver, cloud, cluster manager) -> NO_LICENSE or NETWORK error
+- WLS initialization failure -> NOT_SUPPORTED or NO_LICENSE
+- Single-use license conflict (another process already holds the lock) -> error with conflicting process information
+- ISV key validation failure -> NO_LICENSE with an appropriate ISV key validation failure message
 - Version mismatch between client and library -> warning logged (not an error)
 
 **Behavioral Description:**
 
-The finalization process proceeds through seven behavioral stages. If any stage fails, execution jumps to the cleanup stage, which rolls back the environment to its pre-finalization state.
+The finalization process proceeds through eight behavioral stages. If any stage fails, execution jumps to the cleanup stage, which rolls back the environment to its pre-finalization state.
 
 **Stage 1 -- Validation and State Backup:**
-Validate the environment pointer using the structural validation check. Verify that the activation state is INACTIVE; if not, report an error. Take a full snapshot of the current environment state (all fields) into a backup buffer. Set the activation state to INITIALIZING.
+Validate the environment pointer using the structural validation check. Verify that the activation state is INACTIVE; if not, report an error. Take a full snapshot of the current environment state (all fields) into a backup buffer. Set the activation state to INITIALIZING. Allocate and initialize the license data structure.
 
 **Stage 2 -- Hardware and System Resource Detection:**
-Verify that the CPU supports the required SIMD instruction set. If not, report an error indicating the processor is unsupported. Detect the CPU feature flags. Query the operating system for the logical and physical core counts. Read system environment variables that override the detected core counts (valid range: 1 to 1024 for each). Read the max-cores environment variable and apply it as an upper bound. Initialize the core affinity data structure, marking all cores as available.
+Verify that the CPU supports the required SIMD instruction set. If not, report a license error indicating the processor is unsupported. Detect the CPU feature flags. Query the operating system for the logical and physical core counts. Read system environment variables that override the detected core counts (valid range: 1 to 1024 for each). Read the max-cores environment variable and apply it as an upper bound, subject to the license limit. Initialize the core affinity data structure, marking all cores as available.
 
 **Stage 3 -- Subsystem and Parameter Initialization:**
 Execute four sequential subsystem initialization phases, each of which configures a different aspect of the environment (memory management, secondary initialization, logging, and solver configuration). Restore parameter values from the backup to preserve any programmatic settings that were made between creation and finalization, with special handling for the log file parameter to avoid overwriting an existing log file setting. Process the no-local-disk flag if it is set, propagating it to all parameters that depend on local disk availability. Initialize a mutex for the first thread pool.
 
-**Stage 4 -- Configuration Loading:**
-Discover the configuration file path. If no path was set programmatically, search for the configuration file in the standard platform-specific locations. Parse the configuration file and extract all configuration parameters into the environment's parameter table, setting each only if it has a non-default value in the configuration file. If the read-config-file flag is set, attempt to load the optional solver configuration file from the current working directory; silently ignore if the file is not found.
+**Stage 4 -- License File Discovery and Configuration Loading:**
+Unless the deployment type is one that does not use a file (remote solver or embedded), discover the configuration file path. If no path was set programmatically, search for the configuration file in the standard platform-specific locations. Parse the configuration file and extract all configuration parameters (server addresses, credentials, timeouts, ports, access IDs, secret keys, and other licensing parameters) into the environment's parameter table, setting each only if it has a non-default value in the configuration file. If the read-config-file flag is set, attempt to load the optional solver configuration file from the current working directory; silently ignore if the file is not found.
 
-**Stage 5 -- Post-Configuration Validation:**
-Check the version code and display a warning if the client version differs from the library version. Check batch mode restrictions.
+**Stage 5 -- License Acquisition:**
+Based on the deployment type stored on the environment, acquire a license through the appropriate backend. The deployment types and their handling form a priority chain:
 
-**Stage 6 -- Final Configuration:**
-Initialize the recording subsystem if the recording flag is set. Read and apply the memory limit environment variable, setting either the hard or soft memory limit depending on the sign of the value. Initialize the second thread pool mutex. Transition the activation state to ACTIVE. Open the log file if configured.
+- **Local file license:** Read and validate the configuration file. Determine the license subtype (standard, limited, restricted, academic). Apply the corresponding model size limits. For single-use licenses, attempt to acquire a system-wide exclusive lock; if another solver process holds the lock, report an error with the conflicting process identifier if available. Display informational messages for academic and restricted licenses, including expiration dates where applicable.
 
-**Stage 7 -- Error Cleanup (on failure only):**
-Free the configuration file path. Destroy the first thread pool mutex. Free parameter storage pools. Close the log file if it was opened. Free all string parameter values that were allocated during initialization. Free the parameter flags array. Restore the environment state from the snapshot taken in Stage 1, returning the environment to its pre-finalization state. Report the final error through the error handling subsystem.
+- **ISV embedded license:** Validate the vendor name and product name. Check for special vendor-specific handling. Determine if the product is size-limited (by product name suffix conventions). Compute a license integrity value from the vendor name, product name, and feature count. Validate the license code against this integrity value. If validation requires an unlock key not present, attempt a fallback cascade through server-based licensing backends (remote solver, cloud, token server, local file) before failing. Check for distributed computing feature enablement. Display the ISV license identification message.
+
+- **Token server:** Validate that a token server address is configured. Connect to the token server using the configured address, port, and credentials. Token servers implement a checkout/checkin model for floating licenses, as described in standard floating license architectures (see ConvexFeld documentation on token server licensing).
+
+- **remote solver:** Validate that a remote solver address is configured. Apply unrestricted model size limits. Connect to the remote solver for remote optimization.
+
+- **Cloud service:** Validate that a cloud server address is configured. Initialize the cloud connection with appropriate authentication. Connect via the standard server protocol.
+
+- **Cluster manager:** Validate that a cluster manager address is configured. Apply unrestricted model size limits. Connect to the cluster manager. Mark the license as validated.
+
+- **Web License Service (WLS):** Initialize the WLS connection. Verify the server's identity using standard public-key authentication (JWT-based verification with an RSA public key). Two authentication modes are supported: direct mode (using access credentials) and token mode (using a pre-generated token, suitable for containers and CI/CD environments). Retrieve license limits (single-use flag, core limit, thread limit, and any server-configured parameter overrides) from the WLS service. Apply core and thread limits. Enforce single-use restrictions if indicated. Start a background thread for automatic token renewal.
+
+- **Embedded/special mode:** Apply unrestricted model size limits and mark the license as validated. This mode is used for internal development and testing.
+
+- **Auto-detect mode:** Attempt each available licensing backend in priority order: cloud service, remote solver, token server, cluster manager, and finally local file. The first backend that succeeds is used. If all fail, report the error from the final (local file) attempt. After successful local file validation in auto-detect mode, the deployment type is updated to reflect that a local file license is in use.
+
+**Stage 6 -- Post-License Validation:**
+Verify that a license handle was successfully obtained. For ISV licenses, check for usage restrictions that prohibit certain tool combinations. Validate the Threads parameter against the license limits. Check the version code and display a warning if the client version differs from the library version. Check batch mode restrictions.
+
+**Stage 7 -- Final Configuration:**
+Check for impending license expiration and display a warning if the license expires within a configurable threshold (on the order of weeks). Log configuration file and configuration file usage for certain license modes. Initialize the recording subsystem if the recording flag is set. Read and apply the memory limit environment variable, setting either the hard or soft memory limit depending on the sign of the value. Initialize the second thread pool mutex. Transition the activation state to ACTIVE. Open the log file if configured.
+
+**Stage 8 -- Error Cleanup (on failure only):**
+Free the configuration file path. Destroy the first thread pool mutex. Free parameter storage pools. If a license handle was obtained, signal any associated background thread to stop, wait for the thread to complete, release license resources, and free the license handle. Close the log file if it was opened. Free all string parameter values that were allocated during initialization. Free the parameter flags array. Restore the environment state from the snapshot taken in Stage 1, returning the environment to its pre-finalization state. Free the license data structure. Report the final error through the error handling subsystem.
 
 **Thread Safety:** Unsafe. Finalization must be called from a single thread before the environment is shared. After successful finalization, the environment supports concurrent access through its mutex.
 
@@ -14983,6 +16319,8 @@ Free the configuration file path. Destroy the first thread pool mutex. Free para
 - Hardware capability detection (SIMD check, CPU feature detection, core count detection)
 - Memory allocation subsystem
 - Parameter setter and getter functions
+- License file discovery and parsing
+- Server connection functions (token server, remote solver, cloud, WLS)
 - Configuration file reader
 - Mutex initialization and destruction
 - Thread creation and synchronization
@@ -15117,7 +16455,7 @@ Free the configuration file path. Destroy the first thread pool mutex. Free para
 
 ### cxf_env_free_internal
 
-**Purpose:** Deallocate an Environment structure and all resources it owns, including child environments, associated models, server connections, thread pools, mutexes, parameter storage, and allocated string fields.
+**Purpose:** Deallocate an Environment structure and all resources it owns, including child environments, associated models, server connections, license resources, thread pools, mutexes, parameter storage, and allocated string fields.
 
 **Signature:**
 - Input: `environment_ptr` : pointer-to-pointer-to-Environment - Double pointer to the environment to free; set to null on return
@@ -15137,20 +16475,21 @@ Free the configuration file path. Destroy the first thread pool mutex. Free para
 - Cleans up asynchronous operation state
 - Recursively frees all child environments, managing reference counts under the parent's mutex
 - Frees all associated model entries and the model array
-- Frees all allocated string fields (covering system info, server addresses, and other configuration)
+- Releases license resources (tokens, WLS connections, server sessions)
+- Frees all allocated string fields (approximately 35 individual pointer fields covering system info, server addresses, ISV data, WLS credentials, and other configuration)
 - Frees parameter string arrays (root environment only)
 - Destroys thread pools and their mutexes
 - Cleans up callback state
 - Frees parameter storage memory pools and the parameter table
 - Frees the error message buffer
-- Destroys all mutexes (thread pool, main critical section)
+- Destroys all mutexes (thread pool, WLS, main critical section)
 - Closes the log file
 - Clears the validation sentinel
 - Frees the environment memory block itself
 
 **Error Conditions:**
 - Null pointer input (either level of the double pointer) -> returns immediately with no action
-- Child environment still referenced (reference count > 0 after decrement) -> logs a warning about deferred free; if the child has an active remote solver job, attempts to terminate it with a bounded polling loop, then sends a termination message and logs a warning
+- Child environment still referenced (reference count > 0 after decrement) -> logs a warning about deferred free; if the child has an active remote remote solver job, attempts to terminate it with a bounded polling loop, then sends a termination message and logs a warning
 
 **Behavioral Description:**
 
@@ -15163,18 +16502,21 @@ Free the configuration file path. Destroy the first thread pool mutex. Free para
    c. Otherwise, recursively call this function on the child. If the parent's reference count reached zero and the parent is a different object from the child, recursively free the parent as well.
    d. After processing all children, clear the child count and free the child array.
 5. **Model cleanup:** Iterate through the model entry array, freeing each model pointer within each entry. Free the model array itself and any additional model data.
-6. **String field deallocation:** Free each of the individually allocated string fields, covering system information strings, server address strings, and other configuration strings.
-7. **Parameter string arrays (root environment only):** Iterate through both string parameter arrays, freeing each allocated string. Free the arrays themselves.
-8. **Thread pool and async cleanup:** Destroy the thread pool region, clean up asynchronous state, and destroy the thread pool mutex. For the root environment with specific CPU feature flags, finalize thread pools and destroy parameter storage memory pools.
-9. **Final field cleanup:** Free the parameter flags array. Clean up callback state. Destroy the thread pool mutex and main critical section mutex.
-10. **Invalidate the environment:** Clear the validation sentinel to zero, preventing any future use-after-free from passing validation checks.
-11. **Close log file:** If a log file handle is open, close it.
-12. **Final deallocation:** If this is the root environment (or the root is null), free the environment memory block using a temporary zeroed context for the allocator. If this is a child environment, free the memory using the root environment as the allocator context.
+6. **License cleanup:** Call the license cleanup function. If this is the root environment, free the license data structure.
+7. **String field deallocation:** Free each of the approximately 35 individually allocated string fields, covering system information strings, remote solver strings, ISV strings, WLS strings, and server address strings.
+8. **Parameter string arrays (root environment only):** Iterate through both string parameter arrays, freeing each allocated string. Free the arrays themselves.
+9. **Additional buffer fields:** Free WLS credential buffers, token data, and any special structures.
+10. **Thread pool and async cleanup:** Destroy the thread pool region, clean up asynchronous state, and destroy the thread pool mutex. For the root environment with specific CPU feature flags, finalize thread pools and destroy parameter storage memory pools.
+11. **Final field cleanup:** Free the parameter flags array and WLS token data. Clean up callback state. Destroy the WLS mutex, thread pool mutex, and main critical section mutex.
+12. **Invalidate the environment:** Clear the validation sentinel to zero, preventing any future use-after-free from passing validation checks.
+13. **Close log file:** If a log file handle is open, close it.
+14. **Final deallocation:** If this is the root environment (or the root is null), preserve the ISV parameter pointers, then free the environment memory block using a temporary zeroed context for the allocator. If this is a child environment, free the memory using the root environment as the allocator context.
 
 **Thread Safety:** Conditional. The function acquires the parent environment's mutex when manipulating reference counts for child environment cleanup. The function itself should not be called concurrently on the same environment from multiple threads.
 
 **Dependencies:**
-- Remote solver session management (terminate, cleanup async, send terminate, free connection)
+- remote solver session management (terminate, cleanup async, send terminate, free connection)
+- License cleanup and license data free functions
 - Memory deallocation function
 - Thread pool destruction
 - Async state cleanup
@@ -15207,15 +16549,28 @@ The finalization function implements an atomic-like initialization pattern: the 
 
 Environments use reference counting to manage shared lifetime across parent-child relationships. When a child environment is created, the parent's reference count is incremented. When the child is freed, the parent's count is decremented under the parent's mutex. The parent is only freed when its count reaches zero. If destruction is requested while the count is still positive, a warning is logged and the free is deferred until the last reference is released.
 
+### License Acquisition Priority
+
+The auto-detect license mode implements a priority chain that reflects common deployment patterns:
+
+1. Cloud service (highest priority -- preferred for cloud-native deployments)
+2. remote solver (on-premise enterprise deployments)
+3. Token server (floating initialized environments)
+4. Cluster manager (distributed computing setups)
+5. Local configuration file (standalone workstations -- fallback)
+
+Each backend is attempted only if its required configuration (server address) is present and non-empty. The first successful backend is used. This priority order ensures that enterprise and cloud deployments, which typically have the most flexible licensing, are tried before falling back to single-machine licensing.
+
 ### Parameter Initialization Precedence
 
 During finalization, parameters are resolved through a layered system where later layers override earlier ones:
 
 1. Built-in defaults (from the static parameter definition table, established during creation)
-2. Configuration file parameters (loaded from the optional solver configuration file)
-3. Programmatic settings (preserved through the snapshot/restore mechanism)
+2. License file parameters (extracted during Stage 4 of finalization)
+3. Configuration file parameters (loaded from the optional solver configuration file)
+4. Programmatic settings (preserved through the snapshot/restore mechanism)
 
-This precedence system ensures that programmatic settings always take priority, while configuration file settings override defaults without overriding explicit user choices.
+This precedence system ensures that programmatic settings always take priority, while configuration file and configuration file settings override defaults without overriding explicit user choices.
 
 ### Resource Cleanup Ordering
 
@@ -15223,12 +16578,13 @@ The destruction function follows a strict ordering that mirrors the reverse of c
 
 1. Active connections first (remote solver sessions, remote jobs)
 2. Dependent structures (child environments via recursive descent, then models)
-3. Allocated string fields and parameter arrays
-4. Threading infrastructure (thread pools, async state, mutexes)
-5. Core infrastructure (parameter table, error buffer, main mutex)
-6. Validation sentinel invalidation
-7. Log file closure
-8. Final memory deallocation
+3. License resources
+4. Allocated string fields and parameter arrays
+5. Threading infrastructure (thread pools, async state, mutexes)
+6. Core infrastructure (parameter table, error buffer, main mutex)
+7. Validation sentinel invalidation
+8. Log file closure
+9. Final memory deallocation
 
 This ordering prevents dangling references: connections are terminated before the environment state they depend on is freed, child environments are freed before their parent's shared resources, and the validation sentinel is cleared before the memory block is freed so that any subsequent use-after-free attempt fails validation.
 
@@ -15253,6 +16609,8 @@ This ordering prevents dangling references: connections are terminated before th
 [x] No copied code fragments
 [x] All descriptions are behavioral, not implementational
 [x] All data structures described semantically using Layer 1 types
+[x] License acquisition described as priority chain without protocol details, server URLs, file paths, or binary constants
+[x] No ISV hash formula, WLS public keys, JWT UUIDs, or verification codes
 [x] No version-specific packed encoding values
 [x] No structure sizes in bytes or field offsets
 [x] Passes the Clean Room Test: someone who never saw the binary could write this from public ConvexFeld documentation and standard solver architecture knowledge
@@ -15297,7 +16655,7 @@ The most complex function in this module is the lazy modification applicator. Co
 
 **Side Effects:**
 - Allocates memory for the Model structure and its internal data storage
-- If create_child_environment is nonzero, creates a child environment (which may involve parameter table duplication)
+- If create_child_environment is nonzero, creates a child environment (which may involve license inheritance and parameter table duplication)
 - Performs initial model setup (attribute table construction, internal vector initialization)
 
 **Error Conditions:**
@@ -15335,7 +16693,7 @@ If any step fails, the function invokes a cleanup routine that frees all previou
 
 ### cxf_env_model_cleanup
 
-**Purpose:** Clean up all child environments associated with a parent environment, handling reference counting, deferred frees for still-referenced environments, and termination of remote solver jobs.
+**Purpose:** Clean up all child environments associated with a parent environment, handling reference counting, deferred frees for still-referenced environments, and termination of remote remote solver jobs.
 
 **Signature:**
 - Input: `parent_environment` : pointer-to-Environment -- The parent environment whose child environment array should be cleaned up
@@ -15347,7 +16705,7 @@ If any step fails, the function invokes a cleanup routine that frees all previou
 **Postconditions:**
 - All child environments that can be immediately freed have been freed via the internal environment destructor
 - Child environments that are still referenced by other entities (reference count has not reached zero) have been logged with a warning and their slots cleared; the actual free is deferred until the reference count reaches zero
-- Any active remote solver jobs associated with child environments have been terminated
+- Any active remote remote solver jobs associated with child environments have been terminated
 - The parent's child environment count is set to zero
 - The parent's child environment array is freed and its pointer set to null
 
@@ -15357,7 +16715,7 @@ If any step fails, the function invokes a cleanup routine that frees all previou
 - May free root environments whose reference counts reach zero
 - Logs warning messages when environments cannot be immediately freed (still referenced)
 - Logs warning messages when remote jobs are killed
-- Terminates remote solver jobs (sends termination signals over the network)
+- Terminates remote remote solver jobs (sends termination signals over the network)
 - Frees the child environment array itself
 
 **Error Conditions:**
@@ -15378,9 +16736,9 @@ The function processes all child environments registered with the parent environ
       - If the child is a different object from its root, or the root's reference count reached zero, free the child environment immediately using the internal environment destructor. If the root is a different object and its reference count also reached zero, free the root as well.
       - If the child is the same as its root and the reference count is still positive (other entities still hold references), the environment cannot be freed yet. Log a warning indicating the free is deferred.
 
-   c. **Handle deferred-free environments:** For environments that cannot be freed immediately, log appropriate warnings.
+   c. **Handle deferred-free environments:** For environments that cannot be freed immediately, check for special license service connections that may need to continue operating. Log appropriate warnings.
 
-   d. **Terminate remote solver jobs:** If the deferred-free environment has an active remote solver connection with a valid server address and job identifier:
+   d. **Terminate remote remote solver jobs:** If the deferred-free environment has an active remote solver connection with a valid server address and job identifier:
       - Check if the remote job is still active.
       - If active, set a termination flag on the environment's async state to signal the job.
       - Poll for graceful job completion, yielding and sleeping between polls, up to a maximum poll count (on the order of hundreds of thousands of iterations).
@@ -15464,7 +16822,7 @@ The function performs a clean teardown of the model management structure:
   - All pending modifications have been applied to the model's matrix data
   - The pending modifications buffer has been cleared and reset
   - Warm-start data has been validated, downgraded, or discarded as appropriate based on compatibility with the modifications
-  - Cached data structures that are invalidated by the modifications (solution data, row-major representation, presolve state, basis data, solver state) have been freed
+  - Cached data structures that are invalidated by the modifications (solution data, row-major representation, presolve state, basis data, solver state, MIP data) have been freed
   - Name uniqueness has been validated (duplicate variable, constraint, or range constraint names produce an error)
   - Variable type counts (binary, integer, continuous) have been updated
   - The model's state flags have been updated to reflect the modification
@@ -15508,7 +16866,7 @@ If the model has warm-start data (primal start, dual start, or basis start):
 If the pending modifications buffer is not active (no modifications pending), skip to cleanup. Otherwise:
 
 - Cache the current matrix dimensions (number of variables, number of constraints).
-- Check if dimensions have decreased (indicating deletions). If so, invoke the dimension reduction handler, which compacts the matrix and updates all dependent structures. This involves freeing numerous cached structures (solution cache, callback state, internal vectors, solver state, presolve state), recalculating the nonzero count from the sparse column start array, and recomputing variable type counts.
+- Check if dimensions have decreased (indicating deletions). If so, invoke the dimension reduction handler, which compacts the matrix and updates all dependent structures. This involves freeing numerous cached structures (solution cache, callback state, internal vectors, solver state, presolve state, MIP data), recalculating the nonzero count from the sparse column start array, and recomputing variable type counts.
 
 - **Variable modification flag counting:** If variable modifications exist, iterate through the per-variable modification flags array, counting modifications by category: bound changes, objective coefficient changes, variable type changes, name changes, and several other per-variable attribute changes. Update the name change counter on the model.
 
@@ -15533,7 +16891,7 @@ For substantive modifications:
 
 - **Modification tracking allocation:** Allocate a modification tracking structure if one does not exist, recording summary counts of additions, deletions, and other changes.
 
-- **Cache invalidation:** Free all cached derived data that is invalidated by the modifications. The set of caches freed depends on the modification categories: constraint changes invalidate solution-related caches, variable/constraint additions or deletions invalidate objective and bound caches, and any structural change invalidates internal vectors, solver state, presolve state, and global caches.
+- **Cache invalidation:** Free all cached derived data that is invalidated by the modifications. The set of caches freed depends on the modification categories: constraint changes invalidate solution-related caches, variable/constraint additions or deletions invalidate objective and bound caches, and any structural change invalidates internal vectors, solver state, presolve state, MIP data, and global caches.
 
 - **Basis transfer:** If a prior basis exists and the modifications are compatible with incremental basis reuse, transfer the basis from the old structure to a new one, skipping entries for deleted variables/constraints and appending space for new ones. This avoids a full basis recomputation on the next solve.
 
@@ -15578,7 +16936,7 @@ Throughout all phases, a work counter on the model is incremented by the number 
 **Dependencies:**
 - SOS validation function
 - Dimension reduction handler
-- Various cache invalidation and cleanup functions (solution cache, callback state, internal vectors, solver state, presolve state)
+- Various cache invalidation and cleanup functions (solution cache, callback state, internal vectors, solver state, presolve state, MIP data)
 - Memory allocation and deallocation (via the environment's allocator)
 - Hash table creation, lookup, insertion, and destruction (for name uniqueness checking)
 - String pool management (creation, allocation from pool, freeing)
@@ -15634,6 +16992,10 @@ The modification applicator recognizes and handles the following categories of c
 
 The child environment cleanup function uses a reference counting scheme to safely manage shared environments. When a child environment is created, it increments the reference count on its root environment. During cleanup, the reference count is decremented under mutex protection. The environment is only freed when its reference count reaches zero, ensuring that no other entity holds a dangling reference. Environments that are still referenced when cleanup is requested have their cleanup deferred with a logged warning.
 
+### Compute Server Job Termination
+
+When an environment with an active remote remote solver job is being cleaned up, the function follows a graceful shutdown protocol: set a termination flag, poll for the job to stop, and if the job does not stop within the polling limit, send an explicit termination message. This ensures that remote resources are released even if the local environment is being destroyed unexpectedly.
+
 ### Internal Storage Convention for Constraint Senses
 
 The solver internally normalizes all constraints to '<=' form. When a user specifies a '>=' constraint, the coefficients and RHS for that constraint are stored in negated form. The sense array preserves the user's original direction. When constraint senses are changed via modification, the affected coefficients and RHS values must be negated or un-negated accordingly. This negation uses the IEEE 754 sign-bit flip (XOR with the sign bit), which is exact, handles infinity and NaN correctly, and is computationally cheaper than floating-point multiplication. This technique is standard in numerical software (see Goldberg, "What Every Computer Scientist Should Know About Floating-Point Arithmetic", ACM Computing Surveys, 1991).
@@ -15664,7 +17026,7 @@ After many name modifications, the solver may have many small, scattered string 
 
 ## Purpose
 
-The Optimization Preparation module contains the three functions that handle pre-optimization setup, remote solver delegation, and asynchronous result delivery. These functions support the Solve Entry & Dispatch module (P3.24) by providing infrastructure that operates at the boundary between the local solver and external execution contexts.
+The Optimization Preparation module contains the three functions that handle pre-optimization setup, remote remote solver delegation, and asynchronous result delivery. These functions support the Solve Entry & Dispatch module (P3.24) by providing infrastructure that operates at the boundary between the local solver and external execution contexts.
 
 
 Together, these functions form the "edges" of the optimization lifecycle: preparing the execution context before the solve begins, delegating work to remote infrastructure when configured, and delivering results back through the remote solver communication layer when the solve completes.
@@ -15681,7 +17043,7 @@ Together, these functions form the "edges" of the optimization lifecycle: prepar
 
 **Preconditions:**
 - The model must be valid and have a non-null Environment reference
-- The model's Environment must be in an active, initialized state
+- The model's Environment must be in an active state
 
 **Postconditions:**
 - If the solve lock was acquired successfully and the Environment is not in silent mode: the interrupt signal handler has been installed, the model's interrupt-enabled flag is set, the previous signal handler has been saved on the model for later restoration, and the model reference has been stored in a module-level location accessible to the signal handler
@@ -15721,7 +17083,7 @@ This function prepares the signal-based interrupt mechanism that allows the user
 ---
 
 
-**Purpose:** Delegate an optimization request to a remote solver, handling both standard and callback-aware execution modes through the server's remote procedure call interface.
+**Purpose:** Delegate an optimization request to a remote remote solver, handling both standard and callback-aware execution modes through the server's remote procedure call interface.
 
 **Signature:**
 - Input: `model` : pointer-to-Model - The model to optimize remotely
@@ -15732,7 +17094,7 @@ This function prepares the signal-based interrupt mechanism that allows the user
 - The model's Environment must have an active remote solver connection
 
 **Postconditions:**
-- An optimization request has been sent to the remote solver through the Environment's server connection
+- An optimization request has been sent to the remote remote solver through the Environment's server connection
 - If the model has registered callbacks, a callback-aware job submission request was sent before the optimization request, enabling the server to relay callback events back to the client
 - The function does not wait for the optimization to complete; the result is received asynchronously through the remote solver communication layer
 
@@ -15748,7 +17110,7 @@ This function prepares the signal-based interrupt mechanism that allows the user
 - Server communication failure during optimization request -> handled by the remote solver communication layer
 
 **Behavioral Description:**
-This function implements the client-side logic for delegating an optimization to a remote solver. Commercial optimization solvers commonly support a client-server architecture where the client constructs the optimization problem locally, serializes it, and sends it to a remote server for execution. This allows computational resources to be shared across multiple users or applications.
+This function implements the client-side logic for delegating an optimization to a remote remote solver. Commercial optimization solvers commonly support a client-server architecture where the client constructs the optimization problem locally, serializes it, and sends it to a remote server for execution. This allows computational resources to be shared across multiple users or applications.
 
 The function operates in two modes, determined by whether the model has user-registered callbacks:
 
@@ -15866,6 +17228,29 @@ This lifecycle ensures that the solver intercepts the interrupt signal only duri
 
 The silent mode check in cxf_prepare_optimization supports embedded usage scenarios. When a solver library is embedded in a larger application (e.g., a web server, a GUI application, or an automated pipeline), the application may already have its own signal handlers or may need signals for other purposes. Silent mode prevents the solver from interfering with the host application's signal management.
 
+### Compute Server Communication Model
+
+
+```
+Client Side                         Server Side
+-----------                         -----------
+  (sends optimization request)       |
+                                     v
+                                  [run solver]
+                                     |
+                                     v
+                                  cxf_wait_async
+                                    (sends results)
+[receive results]  <--------------
+```
+
+
+This client-server delegation pattern is well-established in commercial optimization software, enabling scenarios such as:
+
+- **Shared compute resources:** Multiple users or applications submit optimization requests to a central server pool.
+- **Cloud computing:** Optimization problems are sent to cloud instances with more computational resources.
+- **Distributed solving:** Large problems are delegated to dedicated high-performance servers.
+
 ### Callback-Aware Remote Execution
 
 
@@ -15930,7 +17315,7 @@ The Statistics & Diagnostics module provides functions that compute, report, and
 
 2. **Numerical conditioning analysis**: The module computes the ranges (minimum and maximum absolute values) of coefficients across the constraint matrix, objective function, variable bounds, right-hand sides, and specialized constraint types. Wide coefficient ranges indicate potential numerical difficulties, and the module issues warnings when ranges exceed well-known thresholds from the optimization literature. These statistics are also exposed as queryable model attributes for programmatic access.
 
-3. **Solution validation**: After optimization, the module evaluates a candidate solution against all constraint types, computing violation metrics (maximum and sum of violations) for linear constraints, quadratic constraints, variable bounds, SOS constraints, general constraints, and nonlinear constraints. These violation reports help users assess solution quality and diagnose infeasibility.
+3. **Solution validation**: After optimization, the module evaluates a candidate solution against all constraint types, computing violation metrics (maximum and sum of violations) for linear constraints, quadratic constraints, variable bounds, integrality requirements, SOS constraints, general constraints, and nonlinear constraints. These violation reports help users assess solution quality and diagnose infeasibility.
 
 4. **Model identity and timing**: The module provides a model fingerprinting function that computes a hash digest of the entire problem formulation for cache invalidation and change detection, and a timestamp/session-identifier function for logging and correlation purposes.
 
@@ -16238,20 +17623,22 @@ The function evaluates solution quality through the following phases:
 
 7. **Bound violations**: For each variable, computes the violation of lower and upper bounds. Semi-continuous and semi-integer variables receive special treatment: if the absolute value of the variable is smaller than the lower bound violation, the absolute value is used instead (reflecting the semi-continuous domain where the variable must be either zero or within bounds). The function tracks maximum and sum of bound violations, the worst-violating variable index, and the maximum absolute value of non-continuous variables (for large-integer warnings).
 
-8. **SOS constraint violations**: For each SOS constraint:
+8. **Integrality violations**: For each integer, binary, or semi-integer variable, computes the distance to the nearest integer value: violation = |x - round(x)|, where round(x) = floor(x + 0.5). Continuous and semi-continuous variables are skipped. The function tracks maximum and sum of integrality violations and the worst-violating variable index.
+
+9. **SOS constraint violations**: For each SOS constraint:
    - SOS1 (at most one nonzero): The violation is the second-largest absolute value in the set. If only one variable is nonzero, the violation is zero.
    - SOS2 (at most two adjacent nonzeros): The violation is the largest absolute value of a set member that is not adjacent to the member with the largest absolute value. Adjacency is determined by position in the ordered set.
 
-9. **General and nonlinear constraint violations**: Delegates to specialized helper functions that evaluate general constraints (indicator, PWL, etc.) and nonlinear constraints against the solution. Results are merged into the overall constraint violation tracking.
+10. **General and nonlinear constraint violations**: Delegates to specialized helper functions that evaluate general constraints (indicator, PWL, etc.) and nonlinear constraints against the solution. Results are merged into the overall constraint violation tracking.
 
-10. **Reporting**: Depending on the verbosity setting:
-    - *Compact mode (verbosity zero)*: A single summary line is logged showing maximum violations for constraints and bounds, with optional SOS, general constraint, and nonlinear constraint components appended when those constraint types are present. For models with quadratic constraints, the quadratic violation is shown separately.
-    - *Verbose mode (verbosity nonzero)*: Individual warnings are logged for each violation category that exceeds the corresponding solver tolerance (feasibility tolerance for constraints and bounds). Additional diagnostic hints are provided:
+11. **Reporting**: Depending on the verbosity setting:
+    - *Compact mode (verbosity zero)*: A single summary line is logged showing maximum violations for constraints, bounds, and integrality, with optional SOS, general constraint, and nonlinear constraint components appended when those constraint types are present. For models with quadratic constraints, the quadratic violation is shown separately.
+    - *Verbose mode (verbosity nonzero)*: Individual warnings are logged for each violation category that exceeds the corresponding solver tolerance (feasibility tolerance for constraints and bounds, integrality tolerance for integer variables). Additional diagnostic hints are provided:
       - Large integer values exceeding a warning limit trigger an advisory.
       - PWL-related general constraint violations trigger specific advice about adjusting PWL approximation parameters or enabling presolve.
       - When violations significantly exceed tolerances (by a factor of ten or more), the function queries model coefficient attributes to suggest possible numerical causes (large matrix coefficients, large coefficient range, large variable bounds, large RHS values, or possible infeasibility).
 
-11. **Output population**: If the output structure is non-null, it is populated with: overall maximum violation (the maximum across constraint and bound violations), maximum bound violation, maximum constraint violation, sums of bound/constraint violations, and the indices of the worst-violating elements in each category.
+12. **Output population**: If the output structure is non-null, it is populated with: overall maximum violation (the maximum across constraint, bound, and integrality violations), maximum bound violation, maximum constraint violation, maximum integrality violation, sums of bound/constraint/integrality violations, and the indices of the worst-violating elements in each category.
 
 **Thread Safety:** Unsafe. Requires exclusive access to the model. Temporarily modifies and restores a model validation field.
 
@@ -16311,7 +17698,7 @@ The function computes a hash of the model using a polynomial rolling hash algori
    - **Piecewise-linear constraints**: Delegated to a PWL hashing helper.
    - **General constraint data**: Delegated to a general constraint data hashing helper.
    - **Function constraint data**: Sparse array data for each function constraint.
-   - **Optional model-level arrays**: Each optional array uses a distinct marker value to prevent collisions between absent and empty data. The optional arrays include: variable basis status, start hints, branching priorities, start values (with validity flags), partition data, lazy constraint flags, variable hint values, variable hint priorities, constraint basis status, quadratic constraint basis status, SOS basis status, and PWL basis status.
+   - **Optional model-level arrays**: Each optional array uses a distinct marker value to prevent collisions between absent and empty data. The optional arrays include: variable basis status, MIP start hints, branching priorities, start values (with validity flags), partition data, lazy constraint flags, variable hint values, variable hint priorities, constraint basis status, quadratic constraint basis status, SOS basis status, and PWL basis status.
    - **Warm start data**: Solution values (scoped by warm start type: full, variables-only, or constraints-only), basis status, and dual values for basic variables.
 
 3. **Determinism guarantees**: The same model data always produces the same fingerprint. The sign normalization for greater-than-or-equal constraints ensures that models stored with different internal conventions hash identically. The zero normalization prevents negative zero from producing a different hash than positive zero.
@@ -16415,6 +17802,7 @@ The violation categories computed by cxf_compute_violations correspond to standa
 
 - **Primal feasibility violation**: max_i |a_i^T x - b_i| for equality constraints, max(0, a_i^T x - b_i) for inequality constraints. This is compared against the solver's feasibility tolerance (typically 1e-6).
 - **Bound violation**: max_j max(0, lb_j - x_j, x_j - ub_j). Also compared against the feasibility tolerance.
+- **Integrality violation**: max_j |x_j - round(x_j)| for integer variables. Compared against the integrality feasibility tolerance (typically 1e-5).
 - **SOS violations**: Based on the defining property of each SOS type (at most k nonzeros in a prescribed order).
 
 These definitions are standard across commercial LP solvers (see Achterberg, 2007; Koch et al., 2011).
@@ -16447,9 +17835,9 @@ The fingerprint algorithm uses a polynomial rolling hash, a well-known family of
 
 The Cleanup Utilities module contains functions responsible for restoring solver and model state after various operations complete. These functions serve three distinct purposes: (1) releasing temporary data structures used to batch model modifications, (2) restoring signal handling state after optimization completes, and (3) performing constraint-based bound tightening during the simplex cleanup phase.
 
-Despite the module's name, its most algorithmically significant member is the bound propagation function (also known as the cleanup helper), which implements Feasibility-Based Bound Tightening (FBBT) -- a standard preprocessing technique described by Savelsbergh (1994) and Brearley, Mitra, and Williams (1975). This function derives tighter variable bounds from constraint activity analysis and detects hidden infeasibilities. The remaining functions handle resource cleanup for coefficient change tracking structures and signal handler restoration.
+Despite the module's name, its most algorithmically significant member is the bound propagation function (also known as the cleanup helper), which implements Feasibility-Based Bound Tightening (FBBT) -- a standard preprocessing technique described by Savelsbergh (1994) and Brearley, Mitra, and Williams (1975). This function derives tighter variable bounds from constraint activity analysis, detects hidden infeasibilities, and improves the quality of the solution for downstream processing such as MIP branching. The remaining functions handle resource cleanup for coefficient change tracking structures and signal handler restoration.
 
-Two of the four function names in this module -- cxf_propagate_bounds and cxf_propagate_bounds -- refer to the same underlying function. cxf_propagate_bounds is the algorithmically descriptive name; cxf_propagate_bounds reflects its calling context (invoked during the simplex cleanup phase). Both names are documented here, with cxf_propagate_bounds as the primary specification and cxf_propagate_bounds as an alias.
+Two of the four function names in this module -- cxf_cleanup_helper and cxf_propagate_bounds -- refer to the same underlying function. cxf_propagate_bounds is the algorithmically descriptive name; cxf_cleanup_helper reflects its calling context (invoked during the simplex cleanup phase). Both names are documented here, with cxf_propagate_bounds as the primary specification and cxf_cleanup_helper as an alias.
 
 ## Functions
 
@@ -16507,7 +17895,7 @@ This function participates in the solver's lazy update pattern: coefficient chan
 
 **Postconditions:**
 - If the model is valid and a custom signal handler was installed for this optimization, the default signal handler is restored, the global model reference used by the handler is cleared, and the model's signal-handler-active flag is reset
-- If the model is invalid, no handler was installed, or the environment uses a remote deployment mode, no state is modified
+- If the model is invalid, no handler was installed, or the environment uses a remote license mode, no state is modified
 
 **Side Effects:**
 - Restores the operating system's default interrupt signal (SIGINT) handler
@@ -16517,16 +17905,16 @@ This function participates in the solver's lazy update pattern: coefficient chan
 **Error Conditions:**
 - Invalid model (fails structural validation) -> silent return, no action
 - Signal handler not active (flag not set on model) -> silent return, no action
-- Remote deployment mode (remote solver, cloud, or cluster manager) -> silent return, no action (remote deployments use a different interrupt mechanism)
+- Remote license mode (remote solver, cloud, or cluster manager) -> silent return, no action (remote licenses use a different interrupt mechanism)
 
 **Behavioral Description:**
 The function first validates the model using the standard structural validation check. If the model is invalid, it returns immediately.
 
 Next, it checks the model's signal-handler-active flag. If this flag is not set, it means no custom signal handler was installed for this optimization (or cleanup has already been performed), so the function returns.
 
-The function then checks the environment's deployment mode. For remote deployment types (remote solver, cloud, cluster manager), signal handling is managed through the remote protocol rather than through local OS signals, so the function returns without modifying signal state.
+The function then checks the environment's license mode. For remote deployment types (remote solver, cloud, cluster manager), signal handling is managed through the remote protocol rather than through local OS signals, so the function returns without modifying signal state.
 
-If all three checks pass -- valid model, handler active, local deployment -- the function performs three cleanup actions in order:
+If all three checks pass -- valid model, handler active, local license -- the function performs three cleanup actions in order:
 
 1. Restores the default interrupt signal handler by calling the operating system's signal registration function for the interrupt signal (SIGINT) with the default handler disposition.
 2. Clears the module-level global model pointer to null. This pointer is set by the counterpart setup function (invoked before optimization) and allows the custom signal handler to access the model being optimized. Clearing it prevents dangling references after the model might be freed.
@@ -16546,7 +17934,7 @@ This function is the cleanup counterpart to a setup function that is called befo
 
 **Purpose:** Perform iterative constraint-based bound tightening using a worklist-driven propagation algorithm, deriving tighter variable bounds from constraint activity analysis and detecting infeasibilities.
 
-**Aliases:** cxf_propagate_bounds (reflects the calling context: invoked during the simplex cleanup phase)
+**Aliases:** cxf_cleanup_helper (reflects the calling context: invoked during the simplex cleanup phase)
 
 **Signature:**
 - Input: `environment` : pointer-to-Environment -- The environment providing memory allocation services
@@ -16644,11 +18032,11 @@ The algorithm proceeds in the following phases:
 
 ---
 
-### cxf_propagate_bounds
+### cxf_cleanup_helper
 
 **Purpose:** Alias for cxf_propagate_bounds. See cxf_propagate_bounds for the complete behavioral specification.
 
-**Naming history:** Formerly `cxf_cleanup_helper`; renamed to `cxf_propagate_bounds` to better reflect its actual behavior of performing iterative constraint-based bound tightening.
+**Note on naming:** The name "cleanup_helper" reflects the calling context: this function is invoked during the simplex cleanup phase by cxf_simplex_cleanup. Despite its name suggesting a simple utility, it performs the most algorithmically complex operation in this module -- iterative constraint-based bound tightening. The name cxf_propagate_bounds more accurately describes the function's behavior.
 
 **Signature:** Identical to cxf_propagate_bounds.
 
@@ -16666,11 +18054,11 @@ The four functions in this module serve three distinct purposes:
 |----------|----------|------------|-------------|
 | cxf_cleanup_coeff_change | Resource cleanup | Simple (leaf function) | Model destruction, model update, pending buffer cleanup |
 | cxf_cleanup_optimization | Signal restoration | Simple (leaf function) | Optimization dispatch (after optimization completes) |
-| cxf_propagate_bounds / cxf_propagate_bounds | Bound tightening algorithm | Complex (iterative, allocates working memory) | Simplex cleanup phase |
+| cxf_propagate_bounds / cxf_cleanup_helper | Bound tightening algorithm | Complex (iterative, allocates working memory) | Simplex cleanup phase |
 
 ### Naming Convention
 
-Two of the four listed function names -- cxf_propagate_bounds and cxf_propagate_bounds -- are aliases for the same underlying function. The name cxf_propagate_bounds was assigned during early analysis based on its call site (the simplex cleanup function). The name cxf_propagate_bounds was assigned during deeper analysis when the function's algorithm was understood. Both names appear in the function map for traceability. In this specification, cxf_propagate_bounds is the primary name and cxf_propagate_bounds is documented as an alias.
+Two of the four listed function names -- cxf_cleanup_helper and cxf_propagate_bounds -- are aliases for the same underlying function. The name cxf_cleanup_helper was assigned during early analysis based on its call site (the simplex cleanup function). The name cxf_propagate_bounds was assigned during deeper analysis when the function's algorithm was understood. Both names appear in the function map for traceability. In this specification, cxf_propagate_bounds is the primary name and cxf_cleanup_helper is documented as an alias.
 
 ### Common Patterns
 
@@ -16685,7 +18073,7 @@ Two of the four listed function names -- cxf_propagate_bounds and cxf_propagate_
 
 cxf_propagate_bounds operates in a phase where the simplex solver has completed its main iterations. The caller (the simplex cleanup function) is responsible for:
 1. Initializing the activity arrays (lower_activity, upper_activity) and unbounded count arrays (positive_unbounded_count, negative_unbounded_count) from the current variable bounds and constraint matrix before calling this function.
-2. Interpreting the return status: if infeasible, the solver reports the problem as infeasible; if successful, the tightened bounds may detect variables that can be fixed.
+2. Interpreting the return status: if infeasible, the solver reports the problem as infeasible; if successful, the tightened bounds may improve subsequent MIP branching decisions or detect variables that can be fixed.
 
 The bound propagation algorithm references the Layer 2 algorithm specification on Feasibility-Based Bound Tightening, which provides the full mathematical derivation, convergence theory, and numerical considerations.
 
@@ -16695,7 +18083,7 @@ cxf_cleanup_optimization is part of a setup/cleanup pair:
 - **Before optimization:** A setup function installs a custom interrupt signal handler that enables graceful termination. It stores a reference to the model being optimized in a module-level global variable, sets the model's signal-handler-active flag, and saves the previous signal handler.
 - **After optimization:** cxf_cleanup_optimization reverses these actions: restores the default signal handler, clears the global model reference, and resets the active flag.
 
-This pair ensures that during optimization the user can request graceful termination (e.g., via Ctrl-C), while outside of optimization the default signal behavior is in effect. Remote deployment modes (remote solver, cloud, cluster manager) bypass this mechanism because they use protocol-level termination signaling rather than local OS signals.
+This pair ensures that during optimization the user can request graceful termination (e.g., via Ctrl-C), while outside of optimization the default signal behavior is in effect. Remote license modes (remote solver, cloud, cluster manager) bypass this mechanism because they use protocol-level termination signaling rather than local OS signals.
 
 ### Lazy Update Pattern
 
@@ -17090,6 +18478,7 @@ The optimization pipeline involves the following modules, listed in approximate 
 | Pivot Operations | P3.19 | Ratio test, bound flips, variable fixing |
 | Crossover | P3.23 | Barrier-to-simplex solution conversion |
 | Barrier & Concurrent | P3.26 | Interior-point method, concurrent solver racing |
+| MIP Solver | P3.27 | Branch-and-bound for integer programs |
 | Solution Processing | P3.29 | Uncrush, attribute wiring, gap computation, solution pool |
 | Callbacks | P3.13 | User callbacks, lifecycle hooks |
 | Error Handling | P3.09 | Error state management, message propagation |
@@ -17123,7 +18512,7 @@ USER CODE
     v                    v                     v
 +--[3. cxf_solve_entry]-----------------------------------------------+
 |  Model type detection | Scenario routing                            |
-|  Non-convex QP handling (retry with non-convex treatment if needed) |
+|  Non-convex QP handling (retry as MIP if needed)                    |
 +---------------------------------------------------------------------+
     |                              |
     v                              v
@@ -17135,12 +18524,12 @@ USER CODE
 |  Parameter backup | Method selection heuristic                      |
 |  Presolve-solve-uncrush cycle | Result reporting                    |
 +---------------------------------------------------------------------+
-    |            |            |            |
-    v            v            v            v
- Simplex     Barrier     Concurrent    PDHG
- (0,1)       (2)         (3,4,5)       (6)
-    |            |            |            |
-    v            v            v            v
+    |            |            |            |           |
+    v            v            v            v           v
+ Simplex     Barrier     Concurrent    PDHG        MIP
+ (0,1)       (2)         (3,4,5)       (6)         (B&B)
+    |            |            |            |           |
+    v            v            v            v           v
 +--[5. Solver Algorithm Execution]------------------------------------+
 |  (Details per algorithm path below)                                 |
 +---------------------------------------------------------------------+
@@ -17148,7 +18537,7 @@ USER CODE
     v
 +--[6. Solution Processing]------------------------------------------+
 |  Uncrush presolved solution | Evaluate objective                    |
-|  Wire result attributes | Compute optimality gap                   |
+|  Wire result attributes | Compute MIP gap                          |
 +---------------------------------------------------------------------+
     |
     v
@@ -17219,7 +18608,7 @@ The no-callback path spawns a worker thread and monitors progress via a state tr
 
 This function routes between single-model and multi-scenario optimization.
 
-**Step 3.1: Model type detection.** Determines the model type. For continuous models with solver focus or NLP mode, marks the model for special treatment.
+**Step 3.1: Model type detection.** Determines whether the model is MIP or continuous. For continuous models with solver focus or NLP mode, marks the model for special treatment.
 
 **Step 3.2: Routing decision.**
 
@@ -17242,7 +18631,7 @@ This function routes between single-model and multi-scenario optimization.
                            results back
 ```
 
-**Step 3.3: Non-convex QP handling.** If the solver returns a non-positive-semidefinite error for a continuous model, the non-convex handling parameter is consulted. If automatic conversion is enabled, the model is marked as non-convex and re-dispatched through the solver with non-convex treatment. This creates a retry loop within the solve chain.
+**Step 3.3: Non-convex QP handling.** If the solver returns a non-positive-semidefinite error for a continuous model, the non-convex handling parameter is consulted. If automatic conversion is enabled, the model is marked as non-convex and re-dispatched through the solver as a MIP. This creates a retry loop within the solve chain.
 
 **State handed to Phase 4:** A single model (or scenario clone) ready for algorithm dispatch.
 
@@ -17250,20 +18639,20 @@ This function routes between single-model and multi-scenario optimization.
 
 This is the central branching point where the solve flow splits by algorithm type.
 
-**Step 4.1: Parameter backup.** Saves approximately 30 environment parameters to local storage. These span method selection, tolerances, threading, and heuristics. All are restored before return, regardless of outcome.
+**Step 4.1: Parameter backup.** Saves approximately 30 environment parameters to local storage. These span method selection, tolerances, cuts, branching, threading, and heuristics. All are restored before return, regardless of outcome.
 
-**Step 4.2: Model type detection and method selection.** Determines the model structure (LP, QP, SOCP) and selects the solving algorithm:
+**Step 4.2: Model type detection and method selection.** Determines the model structure (LP, QP, SOCP, MIP) and selects the solving algorithm:
 
 ```
                 cxf_solver_dispatch
                        |
         +--------------+--------------+
         |              |              |
-     [LP/QP]        [SOCP]         [Non-convex QP]
+     [LP/QP]        [SOCP]         [MIP]
         |              |              |
         v              v              v
-  Method selection  Force barrier  Non-convex
-  heuristic                        handling
+  Method selection  Force barrier  Branch-and-bound
+  heuristic                        with LP relaxation
         |
    +----+----+----+----+----+
    |    |    |    |    |    |
@@ -17348,14 +18737,14 @@ This is the core of the LP solver. The two-level structure prevents cycling whil
 ```
 OUTER LOOP (round control, max ~5/10/100 rounds depending on mode)
   |
-  +-- Take outer basis snapshot (cxf_progress_snapshot, P3.16)
+  +-- Take outer basis snapshot (cxf_basis_snapshot, P3.16)
   |
   +-- INNER LOOP (basis stabilization)
   |     |
-  |     +--[1] cxf_progress_snapshot (P3.16)
+  |     +--[1] cxf_basis_snapshot (P3.16)
   |     |       Capture current basis state
   |     |
-  |     +--[2] cxf_log_iteration_progress (P3.20)
+  |     +--[2] cxf_simplex_iterate (P3.20)
   |     |       Progress logging and callback notification
   |     |       (Naming misnomer: does NOT perform iterations)
   |     |
@@ -17416,7 +18805,7 @@ cxf_simplex_final (P3.22)
     Complementary slackness analysis
     |
     v
-cxf_simplex_postsolve (P3.22)
+cxf_simplex_cleanup (P3.22)
     Implied bound propagation (FBBT)
     -> Delegates to cxf_propagate_bounds (P3.34)
     Convert tight inequality constraints to equalities
@@ -17485,6 +18874,38 @@ cxf_solver_dispatch
     |   -> Apply basis to parent model
     |   -> Run simplex cleanup pass
     |
+    +--[Distributed concurrent MIP]
+        cxf_solve_concurrent_mip (P3.26)
+        -> Create worker environments on remote servers
+        -> Assign diversified seeds, aggressive params on last worker
+        -> Delegate to distributed worker dispatch
+        -> Sum statistics across all workers
+        -> Perform optimality gap analysis
+        -> Copy winning solution to parent
+```
+
+### Phase 5d: MIP Path
+
+```
+cxf_solver_dispatch
+    |
+    v
+Allocate SolutionInfo structure
+    |
+    v
+cxf_solve_mip (P3.27)
+    -> Presolve: create reduced model copy
+    -> Branch-and-bound with LP relaxations at each node
+       (each node solves an LP via cxf_solve_lp)
+    -> Solution pool management via cxf_copy_solution (P3.29)
+    -> Track incumbent, bounds, and gap
+    |
+    v
+Uncrush solution from presolved space
+    -> cxf_uncrush_solution (P3.29)
+    |
+    v
+Verify objective via cxf_scale_objval (P3.29)
 ```
 
 ### Phase 6: Solution Processing
@@ -17511,7 +18932,7 @@ After any algorithm path completes, solution processing transforms raw solver ou
     |       |
     |   +---+---+
     |   |       |
-    |  [LP]   [General]
+    |  [LP]   [MIP/General]
     |   |       |
     |   v       v
     |  cxf_process_lp_solution    cxf_wire_result_attributes
@@ -17519,8 +18940,14 @@ After any algorithm path completes, solution processing transforms raw solver ou
     |  Wire iteration counts,    Wire iteration counts,
     |  node counts, objective    node counts, solution
     |  (status-dependent)        arrays (X, Slack, QCSlack),
-    |                            compute optimality gap via
+    |                            compute MIP gap via
     |                            cxf_compute_gap (P3.29)
+    |
+    +--[Solution pool (MIP only)]
+        cxf_copy_solution (P3.29)
+        Maintain sorted pool by objective
+        Enforce PoolSolutions, PoolGap limits
+        Deterministic ordering via weighted fingerprint
 ```
 
 ### Phase 7: Cleanup and Result Delivery
@@ -17540,6 +18967,9 @@ The cleanup phase reverses all setup operations performed in Phase 1, restoring 
     |
     +--[Solver focus and fingerprint restore]
     |   (in cxf_solve_entry and cxf_optimize_internal)
+    |
+    +--[Validate single-use license restrictions]
+    |   (in cxf_optimize)
     |
     +--[Log callback statistics]
     |   If callbacks were used: log invocation count and cumulative time
@@ -17589,6 +19019,8 @@ SOLVING (internal, not user-visible)
     +---> UNBOUNDED        (objective improvable without bound)
     +---> ITERATION_LIMIT  (iteration limit reached, best solution if any)
     +---> TIME_LIMIT       (time limit reached, best solution if any)
+    +---> NODE_LIMIT       (MIP node limit reached)
+    +---> SOLUTION_LIMIT   (MIP solution count limit reached)
     +---> INTERRUPTED      (user abort via signal or callback)
     +---> NUMERIC          (numerical difficulties, solution unreliable)
     +---> SUBOPTIMAL       (feasible but not proven optimal)
@@ -17643,7 +19075,7 @@ cxf_solver_dispatch:  ~30 parameters (method, tolerances, cuts, branching,
                        tolerances, mode flags)
 ```
 
-Both levels restore on all exit paths. This two-level backup is necessary because cxf_solve_lp may be called multiple times within a single cxf_solver_dispatch invocation (e.g., for concurrent solver instances or crossover cleanup passes).
+Both levels restore on all exit paths. This two-level backup is necessary because cxf_solve_lp may be called multiple times within a single cxf_solver_dispatch invocation (e.g., for LP relaxations at MIP nodes).
 
 ## Error Handling
 
@@ -17664,10 +19096,10 @@ cxf_solve_entry
 cxf_solver_dispatch
     |  propagates errors, ensures parameter restore on all paths
     v
-cxf_solve_lp / cxf_solve_barrier / cxf_solve_concurrent
+cxf_solve_lp / cxf_solve_barrier / cxf_solve_concurrent / cxf_solve_mip
     |  propagates errors from sub-functions
     v
-Simplex iteration functions / Barrier subsystem
+Simplex iteration functions / Barrier subsystem / MIP B&B
     |  return error codes for specific conditions
     v
 Leaf functions (pricing, pivot, eta allocation, etc.)
@@ -17689,7 +19121,7 @@ Leaf functions (pricing, pivot, eta allocation, etc.)
 | Error | Origin | Propagation | Recovery |
 |-------|--------|-------------|----------|
 | Out-of-memory | Any allocation | Propagates to cxf_optimize, sets "exhausted available memory" message | None; solve aborted |
-| Q-not-PSD | cxf_solve_barrier | May trigger non-convex QP retry in cxf_solve_entry | Apply non-convex handling if NonConvex enabled |
+| Q-not-PSD | cxf_solve_barrier | May trigger non-convex QP retry in cxf_solve_entry | Convert to MIP if NonConvex enabled |
 | Infeasibility (in iteration) | step/step2/step3 | Sets INFEASIBLE status, zero return | Status communicated to user |
 | Unboundedness (in iteration) | step | Sets UNBOUNDED status, zero return | Status communicated to user |
 | User interrupt | post_iterate or callback | Sets INTERRUPTED status | Graceful termination with best solution |
@@ -17725,8 +19157,8 @@ The callback path (cxf_solve_with_callbacks) implements a specialized error reco
 | OutputFlag | Controls logging verbosity | cxf_optimize Phase 1 |
 | ResultFile | Triggers post-solve result file writing | cxf_optimize Phase 7 |
 | NumericFocus | Controls numerical precision emphasis | cxf_coefficient_stats |
-| PoolSolutions | Maximum solution pool size | cxf_copy_solution |
-| PoolGap/PoolGapAbs | Solution pool quality threshold | cxf_copy_solution |
+| PoolSolutions | Maximum solution pool size (MIP) | cxf_copy_solution |
+| PoolGap/PoolGapAbs | Solution pool quality threshold (MIP) | cxf_copy_solution |
 | FeasibilityTol | Primal feasibility tolerance | Throughout simplex |
 | OptimalityTol | Dual feasibility tolerance | Throughout simplex |
 | MarkowitzTol | Basis factorization stability control | cxf_solver_dispatch |
@@ -17735,7 +19167,9 @@ The callback path (cxf_solve_with_callbacks) implements a specialized error reco
 
 cxf_solver_dispatch backs up approximately 30 parameters spanning:
 - Method selection and algorithm control
-- Tolerances (feasibility, optimality, Markowitz)
+- Tolerances (feasibility, optimality, integrality, Markowitz)
+- Cut control parameters
+- Branching strategy parameters
 - Heuristic settings
 - Thread counts
 - Presolve settings
@@ -17855,15 +19289,16 @@ The parameter system spans the following modules and data structures:
 |-----------|---------------|--------------------------|
 | Environment (data model) | P1.01 | Owns the parameter table, parameter storage, and per-parameter flags |
 | Model (data model) | P1.02 | References an environment (shared or private child) for parameter access |
-| Environment Lifecycle | P3.30 | Creates parameter table, sets defaults, applies config overrides during finalization |
+| Environment Lifecycle | P3.30 | Creates parameter table, sets defaults, applies license/config overrides during finalization |
 | Solve Entry & Dispatch | P3.24 | Reads parameters for execution path selection, concurrent parameter management |
 | Solve LP Core | P3.25 | Reads method, tolerances, limits; backs up and restores ~30 parameters around solve |
 | Simplex Lifecycle | P3.22 | Copies tolerances, iteration limits, and mode parameters into SolverState at init time |
 | Simplex Phases | P3.21 | Reads feasibility tolerance, perturbation parameters |
 | Pricing Core | P3.17 | Reads pricing strategy parameter indirectly via SolverState mode |
 | Solve Barrier & Concurrent | P3.26 | Reads barrier parameters, thread counts, concurrent method settings |
+| Solve MIP | P3.27 | Reads MIP strategy, cut, heuristic, and branching parameters |
 | Multi-Objective & Scenario | P3.28 | Reads multi-objective settings; may reset solution pool parameters |
-| Threading & Synchronization | P3.11 | Reads Threads parameter, hardware limits |
+| Threading & Synchronization | P3.11 | Reads Threads parameter, hardware limits, license thread limit |
 | Parameters & Defaults (reference) | P5.2 | Catalogs all parameters, types, defaults, and valid ranges |
 | Tolerances & Constants (reference) | P5.3 | Documents numerical tolerances and their algorithmic roles |
 
@@ -17883,6 +19318,8 @@ When an environment is created (P3.30 cxf_env_create_internal), the parameter sy
 
 4. **Parent inheritance.** If the environment is created as a child of an existing environment, current parameter values are inherited from the parent's parameter table instead of using the static defaults. This is the mechanism by which model-level environments inherit from the session environment.
 
+5. **ISV protection.** For environments configured with ISV (Independent Software Vendor) licensing, ISV-specific parameters are reset to their defaults and marked as protected in the flags array, preventing user modification.
+
 **Result:** An environment with all parameters set to their defaults (or inherited values), ready for further configuration.
 
 ### Phase 2: Parameter Overrides During Finalization
@@ -17891,13 +19328,17 @@ When the environment is finalized (P3.30 cxf_env_finalize), parameters undergo a
 
 **Layer 1 -- Built-in defaults.** Already established during creation (Phase 1).
 
-**Layer 2 -- Configuration file parameters.** If the configuration file loading flag is set, the optional solver configuration file (typically in the current working directory) is loaded and its parameter settings are applied. This allows per-project parameter customization without code changes.
+**Layer 2 -- License file parameters.** During finalization Stage 4, the configuration file is parsed and any configuration parameters it contains (server addresses, credentials, timeouts, feature flags) are extracted into the parameter table. Each parameter is set only if it has a non-default value in the configuration file. This allows license administrators to enforce organizational defaults.
 
-**Layer 3 -- Programmatic settings.** The finalization process uses a snapshot/restore mechanism to preserve any parameter values that were set programmatically between environment creation and finalization. Specifically, the environment state is snapshotted at the start of finalization, and after config file parameters are applied, the programmatic settings are restored from the snapshot. This ensures that explicit API calls always take precedence over file-based settings.
+**Layer 3 -- Configuration file parameters.** If the configuration file loading flag is set, the optional solver configuration file (typically in the current working directory) is loaded and its parameter settings are applied. This allows per-project parameter customization without code changes.
+
+**Layer 4 -- Programmatic settings.** The finalization process uses a snapshot/restore mechanism to preserve any parameter values that were set programmatically between environment creation and finalization. Specifically, the environment state is snapshotted at the start of finalization, and after license and config file parameters are applied, the programmatic settings are restored from the snapshot. This ensures that explicit API calls always take precedence over file-based settings.
 
 **Additional overrides during finalization:**
 - System environment variables override core counts and memory limits (CXF_CORES, CXF_PHYSICALCORES, CXF_MAXCORES, CXF_MEMLIMIT).
-**Result:** An active environment with all parameter layers resolved. The final parameter values reflect the precedence: programmatic > config file > defaults.
+- initialization validation may impose thread limits and model size limits that constrain parameter-controlled behavior.
+
+**Result:** An active environment with all parameter layers resolved. The final parameter values reflect the precedence: programmatic > config file > configuration file > defaults.
 
 ### Phase 3: Model-Level Parameter Inheritance
 
@@ -17918,17 +19359,17 @@ When optimization begins (P3.24 cxf_optimize through cxf_solver_dispatch in P3.2
 **4a. Entry validation and logging (P3.24 cxf_optimize).**
 - OutputFlag is read to determine whether to log version and hardware information.
 - ResultFile is read to determine whether to write result files after optimization.
-- The thread count is computed by reconciling the Threads parameter and hardware detection (P3.11 cxf_get_threads).
+- The thread count is computed by reconciling the Threads parameter, hardware detection, and license limits (P3.11 cxf_get_threads).
 
 **4b. Model analysis and path selection (P3.24 cxf_optimize_internal).**
 - The callback count and async mode determine the execution path (normal, callback, or no-callback fast path).
 - For concurrent optimization: tolerance parameters from all concurrent environments are cached and clamped to safe ranges before optimization begins. The cached values are restored after optimization, ensuring that the user's original settings are preserved.
 
 **4c. Algorithm dispatch (P3.25 cxf_solver_dispatch).**
-- Approximately 30 parameters are backed up to local storage at the start of dispatch. These span method selection, tolerances, thread counts, and algorithm tuning. All are restored before the function returns, regardless of success or failure.
+- Approximately 30 parameters are backed up to local storage at the start of dispatch. These span method selection, tolerances, cut control, branching strategy, heuristic settings, thread counts, and algorithm tuning. All are restored before the function returns, regardless of success or failure.
 - **Method** determines the solving algorithm (simplex, barrier, concurrent, PDHG).
 - **NonConvex** controls handling of non-convex quadratic programs.
-- **ConcurrentMethod**, **Threads** affect concurrent solver configuration.
+- **ConcurrentMethod**, **ConcurrentMIP**, **Threads** affect concurrent solver configuration.
 - **Presolve** and related parameters control the presolve-solve-uncrush cycle.
 - Problem structure and warm-start availability influence automatic method selection when Method is set to AUTO (-1).
 
@@ -17976,8 +19417,9 @@ For concurrent optimization, the restore extends to all concurrent environments:
       |
       v
 [Environment Finalization]
-      |  Config file overrides (Layer 2)
-      |  Programmatic settings restored (Layer 3, highest precedence)
+      |  License file overrides (Layer 2)
+      |  Config file overrides (Layer 3)
+      |  Programmatic settings restored (Layer 4, highest precedence)
       |  System env var overrides for hardware/memory
       v
 [Active Environment]  -- final resolved values
@@ -18009,6 +19451,8 @@ During optimization, the parameter system exists in a temporarily modified state
 | LP-specific backup | LP params saved | cxf_solve_lp | After LP solve returns |
 | SolverState copy | Tolerances/limits copied to SolverState | cxf_simplex_init | N/A (SolverState is destroyed) |
 | Concurrent clamping | Tolerance params on concurrent envs clamped | cxf_optimize_internal | After optimization returns |
+| MIP parameter normalization | Presolve mode normalized | cxf_solve_mip | After MIP solve returns |
+| Multi-objective reset | PoolSearchMode reset to 0 | cxf_solve_multiobj | After multi-obj returns |
 
 ---
 
@@ -18021,12 +19465,13 @@ Parameter validation occurs at multiple points:
 1. **At set time.** When a parameter is set via the public API, the value is checked against the parameter's minimum and maximum bounds (as defined in the parameter table). Out-of-range values are rejected with an INVALID_ARGUMENT error.
 
 2. **At finalization.** During environment finalization, certain parameters are validated against system capabilities:
+   - The Threads parameter is validated against the license thread limit.
    - Hardware-dependent parameters (core counts, memory limits) are reconciled with detected capabilities.
 
 3. **At solve time.** During solver dispatch, parameters are checked for consistency with the model type:
    - PDHG method requested for a QP model generates a warning and method adjustment.
    - Concurrent methods are restricted for SOCP and certain QP models.
-   - NonConvex parameter determines whether non-PSD Q matrix errors are treated as terminal.
+   - NonConvex parameter determines whether non-PSD Q matrix errors are treated as terminal or trigger MIP conversion.
 
 ### Parameter-Related Error Codes
 
@@ -18035,6 +19480,8 @@ Parameter validation occurs at multiple points:
 | Invalid parameter name | UNKNOWN_PARAMETER | Parameter name not found in the lookup structure |
 | Value out of range | INVALID_ARGUMENT | Value violates the parameter's min/max bounds |
 | Wrong type | INVALID_ARGUMENT | Attempt to set a double value on an int parameter, etc. |
+| ISV-protected parameter | INVALID_ARGUMENT | Attempt to modify an ISV-protected parameter |
+| License thread limit exceeded | Warning logged | Thread count reduced to license limit (not an error) |
 | Unsupported method for model type | Warning + adjustment | Method adjusted to a compatible selection |
 
 ### Restore-on-Error Guarantee
@@ -18054,6 +19501,7 @@ Parameters are organized into functional categories, each affecting different as
 | Parameter | Read By | Effect |
 |-----------|---------|--------|
 | Method | cxf_solver_dispatch (P3.25) | Selects the root LP algorithm: simplex, barrier, concurrent, or PDHG |
+| NodeMethod | solver (P3.27) | Selects the LP algorithm for MIP node relaxations |
 | SiftMethod | Simplex subsystem | Selects the LP algorithm for sifting sub-problems |
 | SimplexPricing | cxf_simplex_init (P3.22) | Selects the variable pricing strategy (partial, steepest edge, Devex) |
 | Crossover | cxf_solve_lp (P3.25) | Controls barrier-to-simplex crossover strategy |
@@ -18067,6 +19515,8 @@ Parameters are organized into functional categories, each affecting different as
 | OptimalityTol | cxf_simplex_init (P3.22), pricing (P3.17) | Dual feasibility / reduced cost threshold for optimality declaration |
 | MarkowitzTol | Basis factorization (P3.16) | Pivot selection stability/sparsity trade-off |
 | BarConvTol | Barrier solver (P3.26) | Interior-point convergence threshold |
+| IntFeasTol | solver (P3.27) | Integer variable integrality threshold |
+| MIPGap, MIPGapAbs | solver (P3.27) | MIP termination gap thresholds |
 | PerturbValue | cxf_simplex_perturbation (P3.21) | Anti-cycling perturbation magnitude |
 
 #### Termination Parameters
@@ -18077,6 +19527,9 @@ Parameters are organized into functional categories, each affecting different as
 | TimeLimit | Solve entry (P3.24), all solver modules | Wall-clock time bound |
 | WorkLimit | Solve entry (P3.24), all solver modules | Deterministic work bound |
 | BarIterLimit | Barrier solver (P3.26) | Maximum barrier iterations |
+| NodeLimit | solver (P3.27) | Maximum branch-and-bound nodes |
+| SolutionLimit | solver (P3.27) | Stop after finding this many feasible solutions |
+| Cutoff | solver (P3.27) | Objective value cutoff for node fathoming |
 
 #### Output and Logging Parameters
 
@@ -18092,6 +19545,7 @@ Parameters are organized into functional categories, each affecting different as
 | Parameter | Read By | Effect |
 |-----------|---------|--------|
 | Threads | cxf_get_threads (P3.11), cxf_solver_dispatch (P3.25) | Parallel thread count |
+| ConcurrentMIP | cxf_solver_dispatch (P3.25) | Number of concurrent MIP instances |
 | InheritParams | Concurrent/multi-obj subsystems | Whether sub-environments inherit parent parameters |
 
 #### Algorithmic Tuning Parameters
@@ -18111,20 +19565,21 @@ Parameters are organized into functional categories, each affecting different as
 
 The following table maps each major solver module to the parameter categories it reads:
 
-| Module | Method | Tolerances | Limits | Output | Threading | Tuning | Presolve |
-|--------|--------|-----------|--------|--------|-----------|--------|----------|
-| Solve Entry (P3.24) | | | x | x | x | | |
-| Solver Dispatch (P3.25) | x | x | x | x | x | x | x |
-| Solve LP (P3.25) | x | x | x | | | x | |
-| Simplex Init (P3.22) | x | x | x | | | x | |
-| Simplex Phases (P3.21) | | x | | | | x | |
-| Pricing Core (P3.17) | | x | | | | | |
-| Basis Factorization (P3.16) | | x | | | | | |
-| Barrier (P3.26) | x | x | x | | x | | |
-| Concurrent (P3.26) | x | x | | | x | | |
-| Multi-Objective (P3.28) | | | | | | | |
-| Threading (P3.11) | | | | | x | | |
-| Env Lifecycle (P3.30) | | | | x | x | | |
+| Module | Method | Tolerances | Limits | Output | Threading | Tuning | MIP | Cuts | Presolve |
+|--------|--------|-----------|--------|--------|-----------|--------|-----|------|----------|
+| Solve Entry (P3.24) | | | x | x | x | | | | |
+| Solver Dispatch (P3.25) | x | x | x | x | x | x | x | x | x |
+| Solve LP (P3.25) | x | x | x | | | x | | | |
+| Simplex Init (P3.22) | x | x | x | | | x | | | |
+| Simplex Phases (P3.21) | | x | | | | x | | | |
+| Pricing Core (P3.17) | | x | | | | | | | |
+| Basis Factorization (P3.16) | | x | | | | | | | |
+| Barrier (P3.26) | x | x | x | | x | | | | |
+| Concurrent (P3.26) | x | x | | | x | | | | |
+| MIP Solver (P3.27) | x | x | x | | x | x | x | x | x |
+| Multi-Objective (P3.28) | | | | | | | x | | |
+| Threading (P3.11) | | | | | x | | | | |
+| Env Lifecycle (P3.30) | | | | x | x | | | | |
 
 ---
 
@@ -18190,10 +19645,12 @@ When the solver resolves an AUTO parameter, the resolved value may or may not be
 
 ### Parameter Save/Restore Scope
 
-cxf_solver_dispatch backs up approximately 30 parameters -- a broad set spanning method, tolerances, threading, and presolve. This broad scope reflects the reality that the solver may modify any of these parameters during a solve:
+cxf_solver_dispatch backs up approximately 30 parameters -- a broad set spanning method, tolerances, cuts, branching, heuristics, threading, and presolve. This broad scope reflects the reality that the solver may modify any of these parameters during a solve:
 
 - Tolerances may be adjusted for numerical recovery.
 - Method may be overridden for sub-problems or crossover.
+- Cut aggressiveness may be increased if the initial root relaxation is weak.
+- Thread counts may be reduced for sub-MIP heuristics.
 - Presolve may be disabled for retry after a presolve-related failure.
 
 The cost of this broad backup (saving ~30 typed values to local storage) is negligible compared to the solve itself, making the inclusive approach preferable to a minimal backup that risks missing a parameter the solver modifies in an unexpected code path.
@@ -18213,12 +19670,13 @@ The Method parameter interacts with the detected problem type to determine the a
 | LP (with warm start) | Typically simplex | Warm start not useful for barrier |
 | QP | Barrier (default) | PDHG not available for QP |
 | SOCP | Barrier (forced) | Only barrier supports conic constraints |
+| MIP | Branch-and-bound with LP relaxation | NodeMethod controls relaxation method |
 
 ### Thread Count and Concurrent Methods
 
 The effective thread count (computed by cxf_get_threads, P3.11) constrains which concurrent methods are available:
 
-1. The Threads parameter is reconciled with hardware detection.
+1. The Threads parameter is reconciled with hardware detection and the license limit.
 2. Concurrent methods require sufficient threads to run multiple solvers in parallel.
 3. The thread count is divided among concurrent instances, with each instance receiving a share.
 4. If the effective thread count is too low for meaningful concurrency, the dispatch falls back to a non-concurrent method.
@@ -18229,6 +19687,7 @@ Tolerance parameters interact with each other and with termination parameters:
 
 - **FeasibilityTol** and **OptimalityTol** together determine when a simplex solution is declared optimal. Both must be satisfied simultaneously.
 - **BarConvTol** determines barrier convergence independently. After barrier convergence, crossover to a basic solution uses simplex tolerances.
+- **MIPGap** and **MIPGapAbs** provide two convergence criteria for MIP; the solver terminates when either is satisfied.
 - Tighter tolerances generally require more iterations, interacting with **IterationLimit** and **TimeLimit**.
 - **NumericFocus** influences how aggressively the solver tightens internal tolerances and applies numerical safeguards.
 
@@ -18265,7 +19724,7 @@ The **Presolve** parameter affects the solve chain before method selection occur
 
 ## Overview
 
-This specification describes how errors propagate through the LP solver system, from initial detection deep within internal algorithms through cascading error handling layers to the point where a user retrieves a meaningful error message via the public API. Error propagation is a cross-cutting concern that touches nearly every module in the solver: the error handling primitives (P3.09), the logging subsystem (P3.10), the input and data validation modules (P3.07, P3.08), the solve entry chain (P3.24), the solver dispatch and LP core (P3.25), the barrier and concurrent solvers (P3.26), and the environment and model lifecycle modules (P3.30, P3.31).
+This specification describes how errors propagate through the LP solver system, from initial detection deep within internal algorithms through cascading error handling layers to the point where a user retrieves a meaningful error message via the public API. Error propagation is a cross-cutting concern that touches nearly every module in the solver: the error handling primitives (P3.09), the logging subsystem (P3.10), the input and data validation modules (P3.07, P3.08), the solve entry chain (P3.24), the solver dispatch and LP core (P3.25), the barrier and concurrent solvers (P3.26), the solver (P3.27), and the environment and model lifecycle modules (P3.30, P3.31).
 
 The solver's error propagation design follows three governing principles:
 
@@ -18292,11 +19751,12 @@ The solver's error propagation design follows three governing principles:
 |-----------|--------|---------------------------|
 | **Input Validation** | P3.07 | Generates validation errors at API entry points (null pointer, invalid sentinel, NaN detection) |
 | **Data Validation** | P3.08 | Generates data content errors (NaN in arrays, invalid variable types, infeasible solutions) |
-| **Logging** | P3.10 | Contains cxf_set_error_string, which sets predefined error messages; also provides log output for error diagnostics |
+| **Logging** | P3.10 | Contains cxf_errorlog, which sets predefined error messages; also provides log output for error diagnostics |
 | **Solve LP Core** | P3.25 | Generates solver errors (numeric, out-of-memory) and propagates them through the solve chain |
 | **Solve Barrier & Concurrent** | P3.26 | Generates Q-not-PSD errors and propagates solver errors |
+| **Solve MIP** | P3.27 | Generates MIP-specific errors and propagates solver errors |
 | **Model Lifecycle** | P3.31 | Generates modification errors (a model-update error message) during lazy update flush |
-| **Environment Lifecycle** | P3.30 | Generates initialization errors during environment finalization |
+| **Environment Lifecycle** | P3.30 | Generates initialization and licensing errors during environment finalization |
 
 ## Flow Description
 
@@ -18329,7 +19789,7 @@ Error messages reach the error buffer through a 2x2 matrix of functions organize
                     +------------------------+------------------------+
 ```
 
-Additionally, cxf_set_error_string (P3.10) is behaviorally identical to cxf_set_error_message, despite its placement in the Logging module.
+Additionally, cxf_errorlog (P3.10) is behaviorally identical to cxf_set_error_message, despite its placement in the Logging module.
 
 **Custom message functions** accept a printf-style format string and variadic arguments, producing context-specific messages that include runtime values (e.g., "Variable index out of range: 5000"). These are used by internal functions that have detailed knowledge of the error context.
 
@@ -18411,7 +19871,7 @@ The error buffer transitions through a well-defined lifecycle during each API ca
                +--------------------+--------------------+
                |                                         |
     Error cascades upward                     Optimization begins
-    (inner error preserved)                   (cxf_pre_optimize_hook)
+    (inner error preserved)                   (cxf_pre_optimize_callback)
                |                                         |
                v                                         v
     +-------------------+                     +-------------------+
@@ -18420,7 +19880,7 @@ The error buffer transitions through a well-defined lifecycle during each API ca
     +-------------------+                     +-------------------+
                |                                         |
                |                                Optimization ends
-               |                                (cxf_post_optimize_hook)
+               |                                (cxf_post_optimize_callback)
                |                                         |
                |                                         v
                |                              +-------------------+
@@ -18505,9 +19965,9 @@ cxf_optimize (public API)
     |       +-- returns OOM code
     |
     +-- receives OOM code
-    +-- cxf_pre_optimize_hook (locks buffer -- but too late, msg already set)
+    +-- cxf_pre_optimize_callback (locks buffer -- but too late, msg already set)
     +-- an out-of-memory error message may be set with overwrite=0
-    +-- cxf_post_optimize_hook (unlocks buffer)
+    +-- cxf_post_optimize_callback (unlocks buffer)
     +-- clears modification-blocked flag
     +-- releases locale safety state
     +-- returns OOM code to user
@@ -18521,7 +19981,7 @@ Three mechanisms work together to preserve the root-cause error message:
 
 1. **Empty-buffer check.** The custom message functions (cxf_error_env, cxf_error_model) check whether the error buffer is empty before writing. When called with `overwrite=0`, they only write to an empty buffer. Since the innermost error reporter writes first, its message persists.
 
-2. **Buffer lock flag.** The error buffer lock (managed by cxf_pre_optimize_hook and cxf_post_optimize_hook) provides an explicit lock that prevents overwrites even when `overwrite=1` is specified. This is used during optimization to protect error messages set before the solve loop from being overwritten by cascading errors during the solve.
+2. **Buffer lock flag.** The error buffer lock (managed by cxf_pre_optimize_callback and cxf_post_optimize_callback) provides an explicit lock that prevents overwrites even when `overwrite=1` is specified. This is used during optimization to protect error messages set before the solve loop from being overwritten by cascading errors during the solve.
 
 3. **Out-of-memory override.** The predefined message functions always write the out-of-memory message regardless of buffer state. This override exists because memory exhaustion is frequently the root cause of cascading failures -- an allocation failure deep in the solver may trigger a chain of secondary failures (cleanup failures, logging failures), and the original OOM message is the most important diagnostic.
 
@@ -18587,7 +20047,7 @@ This distinction reflects usage patterns:
 
 ### D5: Buffer Lock via Lifecycle Hooks (Not via Error Functions)
 
-The error buffer lock is managed by the optimization lifecycle hooks (cxf_pre_optimize_hook / cxf_post_optimize_hook from P3.13), not by the error reporting functions themselves. This separates concerns:
+The error buffer lock is managed by the optimization lifecycle hooks (cxf_pre_optimize_callback / cxf_post_optimize_callback from P3.13), not by the error reporting functions themselves. This separates concerns:
 
 - Error reporting functions are simple, stateless operations that check the lock but never set it.
 - The lock lifecycle is managed by the optimization entry point, which has the context to decide when locking is appropriate.
@@ -18694,7 +20154,7 @@ cxf_optimize
     |
     v
 cxf_optimize receives Q_NOT_PSD
-    +-- cxf_post_optimize_hook (unlocks error buffer)
+    +-- cxf_post_optimize_callback (unlocks error buffer)
     +-- clears modification-blocked flag
     +-- releases locale safety
     +-- returns Q_NOT_PSD to user
@@ -18793,19 +20253,19 @@ cxf_env_finalize
     +-- Stage 2: Hardware check
     |       |
     |       +-- CPU does not support required SIMD instructions
-    |       +-- cxf_env_set_status(env, NOT_SUPPORTED)
-    |       |     (predefined message: "Hardware not supported")
-    |       +-- cxf_error_env(env, NOT_SUPPORTED, overwrite=1,
+    |       +-- cxf_env_set_status(env, NO_LICENSE)
+    |       |     (predefined message: "No valid ConvexFeld license found")
+    |       +-- cxf_error_env(env, NO_LICENSE, overwrite=1,
     |       |     "This processor does not support...")
-    |       |     (overwrite=1 succeeds, replaces generic message)
+    |       |     (overwrite=1 succeeds, replaces generic license message)
     |       +-- jumps to Stage 8 (cleanup)
     |
     +-- Stage 8: Error Cleanup
     +-- Restores environment from snapshot (atomic rollback)
     +-- Environment remains in INACTIVE state
-    +-- Returns NOT_SUPPORTED
+    +-- Returns NO_LICENSE
 
-User receives NOT_SUPPORTED return code
+User receives NO_LICENSE return code
 User calls cxf_geterrormsg(env) -> "This processor does not support..."
 ```
 
@@ -18952,6 +20412,8 @@ The callback protocol spans the following modules and data structures:
 - P3.20 (Simplex Iteration) -- progress logging callback during simplex iterations
 - P3.21 (Simplex Phases) -- phase transition points where callbacks may be relevant
 - P3.26 (Solve Barrier & Concurrent) -- callback context management for barrier, concurrent, and distributed concurrent solves
+- P3.27 (Solve MIP) -- solution callbacks during MIP solution polishing
+- P3.28 (Multi-Objective & Scenario) -- multi-objective callback coordination and scenario callback propagation
 - P3.32 (Optimization Preparation) -- remote solver callback channel setup and signal-based interrupt handling
 
 ## Flow Description
@@ -19001,9 +20463,9 @@ cxf_optimize_internal
 
 Before and after optimization, the system invokes lifecycle hooks that share the "callback" name but are NOT user callbacks:
 
-1. **cxf_pre_optimize_hook (P3.13):** Called at the start of cxf_optimize. Sets the error buffer lock on the environment to preserve the first error message throughout the solve. Does not interact with CallbackState or invoke user code.
+1. **cxf_pre_optimize_callback (P3.13):** Called at the start of cxf_optimize. Sets the error buffer lock on the environment to preserve the first error message throughout the solve. Does not interact with CallbackState or invoke user code.
 
-2. **cxf_post_optimize_hook (P3.13):** Called at the end of cxf_optimize, on all exit paths. Clears the error buffer lock, restoring normal error reporting. Does not interact with CallbackState or invoke user code.
+2. **cxf_post_optimize_callback (P3.13):** Called at the end of cxf_optimize, on all exit paths. Clears the error buffer lock, restoring normal error reporting. Does not interact with CallbackState or invoke user code.
 
 These hooks implement a first-error preservation pattern: in cascading error scenarios, the user sees the root cause rather than a secondary symptom.
 
@@ -19021,6 +20483,8 @@ During optimization, the solver invokes the user callback at defined points. Eac
 The user callback function receives a "where" code that identifies the solver phase. Within the callback, the user can:
 - Query solver state via cxf_cbget (passing a "what" code to retrieve specific data)
 - Request termination via cxf_terminate (which calls cxf_callback_terminate, P3.13)
+- Add lazy constraints or user cuts (MIP callbacks only)
+- Inject heuristic solutions (MIP callbacks only)
 
 ### 5. Callback Invocation Points
 
@@ -19030,15 +20494,21 @@ The following table maps each callback event type to the module and function tha
 |------------|-------------------|----------------------|----------------|
 | POLLING | P3.25 (Solve LP Core) | cxf_solver_dispatch, cxf_solve_lp | Elapsed runtime |
 | PRESOLVE | P3.25 (Solve LP Core) | cxf_solver_dispatch (during presolve phase) | Rows removed, columns removed, elapsed time |
-| SIMPLEX | P3.20 (Simplex Iteration) | cxf_log_iteration_progress | Iteration count, objective value, primal/dual infeasibility, elapsed time, simplex phase (primal/dual) |
+| SIMPLEX | P3.20 (Simplex Iteration) | cxf_simplex_iterate | Iteration count, objective value, primal/dual infeasibility, elapsed time, simplex phase (primal/dual) |
 | BARRIER | P3.26 (Solve Barrier & Concurrent) | Barrier iteration loop (internal) | Iteration count, primal objective, dual objective, primal infeasibility, dual infeasibility, complementarity |
+| MIP_NODE | P3.27 (Solve MIP) / Internal B&B | Branch-and-bound node processing | Node count, open node count, best objective, best bound, gap, incumbent solution (if available), LP relaxation solution at current node |
+| MIP_SOLUTION | P3.27 (Solve MIP) | cxf_process_mip_solution (Phase 6), internal B&B solution found | Solution count, objective value, best bound, gap, variable values of the new solution |
 | MESSAGE | P3.10 (Logging) | Log output functions | The log message string |
 
 **Detailed invocation context by solver phase:**
 
-**Simplex callbacks (SIMPLEX):** Invoked by cxf_log_iteration_progress (P3.20) once per iteration batch. This function is called within the two-level iteration loop of cxf_solve_lp (P3.25) and reports progress regardless of whether console logging is enabled. The callback receives the current iteration count, objective value, and infeasibility measures. The callback is invoked even when console output is suppressed, ensuring that external monitoring systems (GUI progress bars, distributed managers) receive regular heartbeat notifications.
+**Simplex callbacks (SIMPLEX):** Invoked by cxf_simplex_iterate (P3.20) once per iteration batch. This function is called within the two-level iteration loop of cxf_solve_lp (P3.25) and reports progress regardless of whether console logging is enabled. The callback receives the current iteration count, objective value, and infeasibility measures. The callback is invoked even when console output is suppressed, ensuring that external monitoring systems (GUI progress bars, distributed managers) receive regular heartbeat notifications.
 
 **Barrier callbacks (BARRIER):** Invoked during each iteration of the interior-point method. The callback receives the barrier iteration count, primal and dual objective values, and convergence measures (primal infeasibility, dual infeasibility, complementarity gap).
+
+**MIP node callbacks (MIP_NODE):** Invoked at each node of the branch-and-bound tree during MIP solving. At this point, the LP relaxation at the current node has been solved. The user can query the relaxation solution, add lazy constraints or user cuts, and inject heuristic solutions. The user can also query the best incumbent solution and the best bound.
+
+**MIP solution callbacks (MIP_SOLUTION):** Invoked when the branch-and-bound solver finds a new integer-feasible solution, and also during the solution polishing pipeline (cxf_process_mip_solution Phase 6, P3.27). In the polishing case, the callback is dispatched after the polished solution has been validated and accepted. For presolved models, the solution is first uncrushed (mapped back to the original variable space) before the callback is invoked.
 
 **Presolve callbacks (PRESOLVE):** Invoked during the presolve phase when the progress reporting function detects sufficient elapsed time since the last report. Reports the number of rows and columns removed so far.
 
@@ -19054,13 +20524,31 @@ Within a callback, the user can take several actions that influence solver behav
 
 **Mechanism:** The user calls cxf_terminate, which invokes cxf_callback_terminate (P3.13).
 
-**Local path:** The function accesses the environment's asynchronous state structure and sets the termination flag. This flag is polled by the solver's main iteration loop at each iteration boundary (checked in cxf_simplex_post_iterate, P3.20, and at equivalent checkpoints in the barrier solver). When the flag is detected, the solver exits gracefully with an INTERRUPTED status.
+**Local path:** The function accesses the environment's asynchronous state structure and sets the termination flag. This flag is polled by the solver's main iteration loop at each iteration boundary (checked in cxf_simplex_post_iterate, P3.20, and at equivalent checkpoints in barrier and MIP solvers). When the flag is detected, the solver exits gracefully with an INTERRUPTED status.
 
 **Remote path (remote solver):** The function acquires the remote solver lock and sends a termination request message through the communication channel. The remote solver terminates at its next iteration boundary.
 
 The termination flag is deliberately kept separate from the CallbackState to avoid requiring the solver's main loop to acquire the callback mutex at every iteration. The flag write is atomic with respect to the solver's read, providing efficient synchronization without locking overhead.
 
-#### 6.2 Data Query (All Callback Points)
+#### 6.2 Lazy Constraint Addition (MIP_NODE and MIP_SOLUTION)
+
+**Mechanism:** The user calls cxf_cblazy within the callback to add a constraint that must be satisfied by any integer-feasible solution but is not part of the initial formulation.
+
+**Propagation:** The constraint is added to a pending lazy constraint pool managed by the branch-and-bound solver. At the next node evaluation, the solver checks the pool and incorporates any new constraints into the LP relaxation. This can cause the current node's LP relaxation to become infeasible, triggering pruning.
+
+#### 6.3 User Cut Addition (MIP_NODE)
+
+**Mechanism:** The user calls cxf_cbcut within the callback to add a cutting plane that tightens the LP relaxation without removing integer-feasible solutions.
+
+**Propagation:** Similar to lazy constraints, user cuts are added to a pending pool and incorporated into the LP relaxation at the next opportunity. Unlike lazy constraints, user cuts are valid inequalities that do not change the set of integer-feasible solutions.
+
+#### 6.4 Solution Injection (MIP_NODE)
+
+**Mechanism:** The user calls cxf_cbsolution within the callback to provide a complete or partial integer-feasible solution.
+
+**Propagation:** The injected solution is validated for feasibility. If feasible, it is added to the solution pool and may update the incumbent if its objective value is better. This can tighten the best bound and enable additional pruning.
+
+#### 6.5 Data Query (All Callback Points)
 
 **Mechanism:** The user calls cxf_cbget with a "what" code to retrieve specific solver state.
 
@@ -19152,7 +20640,7 @@ Errors during callback processing propagate through several layers:
 
 2. **cxf_callback_terminate errors (P3.13):** On the local path, termination flag setting cannot fail. On the remote path, remote solver communication failures return an error code from the message send operation.
 
-3. **cxf_getconstrs_callback errors (P3.13):** Out-of-memory on the remote server and communication failures are detected and reported through the environment's error system. On communication failure, the function enters a polling recovery loop, waiting for the remote optimization to complete before retrieving detailed error information.
+3. **cxf_getconstrs_callback errors (P3.13):** License errors, out-of-memory on the remote server, and communication failures are all detected and reported through the environment's error system. On communication failure, the function enters a polling recovery loop, waiting for the remote optimization to complete before retrieving detailed error information.
 
 4. **cxf_solve_with_callbacks error processing (P3.24):** After the solve completes, the callback result structure is examined:
    - Out-of-memory errors propagate immediately.
@@ -19162,7 +20650,7 @@ Errors during callback processing propagate through several layers:
 
 ### Error Buffer Locking
 
-The error buffer locking mechanism (cxf_pre_optimize_hook / cxf_post_optimize_hook, P3.13) ensures that during optimization, the first error message is preserved even when cascading errors occur. This is critical for callback-intensive solves where multiple callback invocations might generate error messages. The lock prevents secondary error messages from overwriting the root-cause message while still allowing error codes to be updated.
+The error buffer locking mechanism (cxf_pre_optimize_callback / cxf_post_optimize_callback, P3.13) ensures that during optimization, the first error message is preserved even when cascading errors occur. This is critical for callback-intensive solves where multiple callback invocations might generate error messages. The lock prevents secondary error messages from overwriting the root-cause message while still allowing error codes to be updated.
 
 ## Configuration
 
@@ -19172,8 +20660,10 @@ The error buffer locking mechanism (cxf_pre_optimize_hook / cxf_post_optimize_ho
 |-----------|-------------------|
 | OutputFlag | Controls whether console logging occurs, but does NOT affect callback invocation. Callbacks are always invoked regardless of OutputFlag. (P3.20: "the external logging callback is always invoked, regardless of whether a message was printed") |
 | Threads | Affects the frequency of progress callbacks in simplex. Time-based throttling normalizes by thread count (P3.20). |
-| Method | Determines which solver runs and therefore which callback event types are generated (simplex -> SIMPLEX; barrier -> BARRIER). |
+| Method | Determines which solver runs and therefore which callback event types are generated (simplex -> SIMPLEX; barrier -> BARRIER; MIP -> MIP_NODE/MIP_SOLUTION). |
 | TimeLimit / IterationLimit | Termination conditions checked at cxf_simplex_post_iterate (P3.20). These interact with callbacks because the termination check occurs at the same iteration boundaries where callbacks are invoked. |
+| LazyConstraints | When enabled, activates the lazy constraint callback pool in MIP solving. Must be set before optimization for MIP_NODE/MIP_SOLUTION lazy constraint callbacks to function. |
+| PreCrush | When using lazy constraints or user cuts in callbacks with presolve, this parameter controls whether the user must provide constraints in the original (unpresolved) variable space. |
 
 ### Callback Configuration on the CallbackState
 
@@ -19234,11 +20724,44 @@ When the concurrent solver (P3.26) creates multiple solver instances on shared-m
 
 ### Distributed Concurrent Solving
 
-For distributed concurrent LP (cxf_solve_concurrent_distributed, P3.26), worker models execute on remote solvers. A log callback relay is registered on each worker that uses a critical section (mutex) to safely relay worker log messages to the parent environment. User optimization callbacks are not relayed across the distributed boundary; only log callbacks are forwarded.
+For distributed concurrent LP (cxf_solve_concurrent_distributed, P3.26), worker models execute on remote remote solvers. A log callback relay is registered on each worker that uses a critical section (mutex) to safely relay worker log messages to the parent environment. User optimization callbacks are not relayed across the distributed boundary; only log callbacks are forwarded.
 
 ### Barrier Solver Callbacks
 
 The barrier (interior-point) solver invokes callbacks from its iteration loop. Since barrier iterations are typically faster than simplex iterations and the barrier method may use internal parallelism, the callback invocation frequency is tuned to avoid excessive overhead. The CallbackState mutex ensures that if multiple barrier threads attempt to invoke callbacks simultaneously, they are serialized.
+
+### Multi-Objective Callback Coordination
+
+cxf_solve_multiobj (P3.28) allocates a multi-objective control structure that tracks the currently active objective index. This structure is registered with both the clone's callback system and the original model's CallbackState, enabling user callbacks to query which objective is currently being optimized. The control structure coordinates callback reporting across the sequential objective optimization phases.
+
+## Compute Server Callback Protocol
+
+When the model is configured for remote remote solver execution, the callback protocol extends across the network boundary:
+
+### Setup Phase
+
+2. If callbacks are present, a callback-aware job submission request is sent to the server before the optimization request. This establishes a callback communication channel for relaying events.
+3. The optimization request is then sent through the server connection.
+
+### During Remote Execution
+
+- The remote solver invokes callbacks locally on the server, which are relayed through the callback communication channel to the client.
+- The client's callback function is invoked with the relayed event data.
+- Termination requests from the client callback are sent back to the server via cxf_callback_terminate (P3.13), which detects the remote execution context using a non-blocking lock test on the remote solver synchronization primitive.
+
+### Constraint Retrieval
+
+cxf_getconstrs_callback (P3.13) enables users to retrieve constraint matrix data during a callback in the remote solver context. It operates by:
+1. Acquiring the remote solver communication lock.
+2. Sending a remote procedure call to the server.
+3. Copying response data to user-provided arrays.
+4. Releasing the lock.
+
+This function supports both data retrieval mode (all output arrays provided) and count-only mode (any output array null). It includes error recovery with polling: on communication failure, it waits for the remote optimization to complete and retrieves detailed error information.
+
+### Result Delivery
+
+After remote optimization completes, cxf_wait_async (P3.32) serializes the results to the communication channel, transmitting status, objective value, runtime, and supplementary attributes. The callback channel is closed as part of solve finalization.
 
 ## Callback Statistics and Diagnostics
 
@@ -19262,14 +20785,14 @@ The suppressStatisticsLog flag on the CallbackState can be used to suppress this
 [x] No copied code fragments
 [x] All descriptions are behavioral, not implementational
 [x] All data structures described semantically using Layer 1 types
-[x] Explicit cross-references to P1.01, P1.02, P1.07, P3.10, P3.13, P3.20, P3.24, P3.25, P3.26, P3.32
+[x] Explicit cross-references to P1.01, P1.02, P1.07, P3.10, P3.13, P3.20, P3.24, P3.25, P3.26, P3.27, P3.28, P3.32
 [x] Passes the Clean Room Test: could be written without seeing the binary
 ```
 
 ## References
 
 - Butenhof, D.R. (1997). *Programming with POSIX Threads*. Addison-Wesley. (Mutex design patterns for callback synchronization.)
-- ConvexFeld Optimization, LLC. *ConvexFeld Optimizer Reference Manual* (public API documentation). Callback types, callback codes, cxf_setcallbackfunc, cxf_cbget, cxf_terminate.
+- ConvexFeld Optimization, LLC. *ConvexFeld Optimizer Reference Manual* (public API documentation). Callback types, callback codes, cxf_setcallbackfunc, cxf_cbget, cxf_cblazy, cxf_cbcut, cxf_cbsolution, cxf_terminate.
 - McConnell, S. (2004). *Code Complete*, 2nd edition. Microsoft Press. Chapter 24: Defensive Programming. (Sentinel-based validation patterns.)
 
 ---
@@ -19286,8 +20809,8 @@ The threading model addresses five concerns:
 
 1. **API serialization:** Ensuring that concurrent API calls on the same environment do not corrupt shared state.
 2. **Locale isolation:** Ensuring that per-thread numeric formatting settings do not interfere across threads.
-3. **Thread count management:** Determining how many threads the solver should use, reconciling hardware availability and user preferences.
-4. **Internal parallelism:** Distributing computational work across threads within the barrier solver and concurrent solver.
+3. **Thread count management:** Determining how many threads the solver should use, reconciling hardware availability, user preferences, and license limits.
+4. **Internal parallelism:** Distributing computational work across threads within the barrier solver, concurrent solver, and solver.
 5. **Signal safety:** Ensuring that operating system signal handlers interact correctly with multi-threaded solver operations.
 
 ## Components Involved
@@ -19303,6 +20826,7 @@ The threading model spans the following modules and data structures:
 | **P3.24 (Solve Entry & Dispatch)** | Locale acquisition at API boundary; modification-blocked flag; execution path selection (sync/async/callback) |
 | **P3.25 (Solve LP Core)** | Thread-unsafe solver state; concurrent solver dispatch creating independent model copies |
 | **P3.26 (Solve Barrier & Concurrent)** | Local concurrent solver with worker threads; distributed concurrent with remote workers; log relay critical section |
+| **P3.27 (Solve MIP)** | Thread-unsafe MIP operations; thread safety achieved through model-level isolation |
 | **P3.32 (Optimization Preparation)** | Signal handler installation with solve lock for mutual exclusion |
 | **P3.09 (Error Handling)** | Thread-unsafe error buffer; error buffer lock for cascading error preservation |
 
@@ -19329,15 +20853,15 @@ User Thread(s)
 |  - Algorithm selection                            |
 +---------------------------------------------------+
     |
-    +------------+-------------+
-    |            |             |
-    v            v             v
- [Simplex]   [Barrier]   [Concurrent]
- single-     internal     N solver
- threaded    thread       instances
-             pool for     (independent
-             linear       model copies)
-             algebra
+    +------------+-------------+----------------+
+    |            |             |                |
+    v            v             v                v
+ [Simplex]   [Barrier]   [Concurrent]     [MIP B&B]
+ single-     internal     N solver         LP relax.
+ threaded    thread       instances        at nodes
+             pool for     (independent     (each is
+             linear       model copies)    single-
+             algebra                       threaded)
                 |              |
                 v              v
            [Worker        [Worker threads
@@ -19349,8 +20873,8 @@ User Thread(s)
                            termination,
                            solution
                            aggregation]
-    |            |             |
-    +------------+-------------+
+    |            |             |                |
+    +------------+-------------+----------------+
     |
     v
 +---------------------------------------------------+
@@ -19390,7 +20914,12 @@ Level 4: Thread Pool Mutex (per-environment)
     |
     +-- Protects: thread pool initialization and destruction
     |
-Level 5: Log Relay Critical Section (per-concurrent-solve)
+Level 5: Compute Server Lock (per-connection)
+    |
+    +-- Protects: remote solver communication channel
+    |   for message serialization
+    |
+Level 6: Log Relay Critical Section (per-concurrent-solve)
         |
         +-- Protects: log message forwarding from distributed
             workers to parent environment
@@ -19430,7 +20959,9 @@ Before any parallel operation begins, the solver determines the effective thread
 
 **Step 3: User parameter application.** The user-configured Threads parameter is read from the environment. If this value is less than the auto-detected count, it takes precedence. A value of zero means "automatic" (no reduction).
 
-**Step 4: Oversubscription warning.** If the resolved thread count exceeds the number of logical processors, a warning is emitted advising the user to reduce the Threads parameter.
+**Step 4: License limit enforcement.** The license thread limit is checked. If it is more restrictive than the current count, the license limit is used. This ensures the solver never exceeds contractual parallelism limits.
+
+**Step 5: Oversubscription warning.** If the resolved thread count exceeds the number of logical processors, a warning is emitted advising the user to reduce the Threads parameter.
 
 The resolution chain is illustrated as follows:
 
@@ -19441,7 +20972,10 @@ Model Override ──(if set)──> base_count
 Logical Processors ──(cap for large systems)──> auto_count
        |
        v
-min(auto_count, user_Threads_param) ──> effective_threads
+min(auto_count, user_Threads_param) ──> user_count
+       |
+       v
+min(user_count, license_limit) ──> effective_threads
 ```
 
 ### 3. Concurrent Optimization Flow
@@ -19457,6 +20991,8 @@ When the solver algorithm dispatch (P3.25) selects a concurrent method, multiple
 3. **Instance diversification.** Each instance receives a different configuration to explore different portions of the solution space:
    - Per-instance seed offsets for randomized tie-breaking
    - For distributed LP: fixed method assignment (barrier, dual simplex, primal simplex)
+   - For distributed MIP with many workers: the last worker receives aggressive parameters (optimality-focused MIPFocus, increased cuts, aggressive presolve)
+
 4. **Worker thread creation.** Instances beyond the first are dispatched to worker threads. Instance 0 may run on the calling thread's schedule.
 
 5. **Completion polling.** The main thread polls completion flags in a busy-wait loop that transitions from yield-based to sleep-based polling after a threshold number of iterations. The loop also checks for user interrupts.
@@ -19469,13 +21005,14 @@ When the solver algorithm dispatch (P3.25) selects a concurrent method, multiple
 
 8. **Cleanup.** All worker threads are joined before any model is freed. Worker models are freed before worker environments. Temporary buffers are freed last.
 
-#### Distributed Concurrent (remote solvers)
+#### Distributed Concurrent (remote remote solvers)
 
-The distributed concurrent flow follows the same pattern but replaces worker threads with remote solver workers. Key differences:
+The distributed concurrent flow follows the same pattern but replaces worker threads with remote remote solver workers. Key differences:
 
-- Worker environments are created by connecting to remote solvers
+- Worker environments are created by connecting to remote remote solvers
 - A critical section protects the log message relay from workers to the parent environment
 - Communication with workers uses a structured message protocol (serialization with network byte order)
+- A license lock prevents concurrent distributed solves from the same environment
 
 ### 4. Per-Thread State for Parallel Simplex
 
@@ -19588,7 +21125,8 @@ The following table summarizes the thread safety level of each module and the sy
 | **P3.24 Solve Entry** | Conditional | Per-thread locale isolation; single-owner model | Must not be called concurrently on the same model. Locale isolation protects cross-thread formatting. |
 | **P3.25 Solve LP Core** | Not thread-safe | Model-level isolation | Each concurrent solve uses an independent model copy. |
 | **P3.26 Concurrent (local)** | Internal threading | Independent model clones | Worker threads use independent copies; parent modifications occur only after all workers join. |
-| **P3.26 Concurrent (distributed)** | Internal threading | CS for log relay | Workers run on remote servers; CS protects shared log channel. |
+| **P3.26 Concurrent (distributed)** | Internal threading | CS for log relay; license lock | Workers run on remote servers; CS protects shared log channel. |
+| **P3.27 [out of scope: MIP]** | Not thread-safe | Model-level isolation | Thread safety achieved through independent model copies at the concurrent solve level. |
 | **P3.32 Signal Handler** | Conditional | Solve lock (exclusive) | Only one optimization can install a signal handler at a time. Module-level global state for model reference. |
 
 ## Error Handling
@@ -19601,7 +21139,7 @@ When multiple threads must access the same environment's error state (e.g., duri
 
 ### Error Buffer Lock (Not a Thread Lock)
 
-The error buffer locked flag (P3.13 lifecycle hooks) is a **single-thread cascading-error guard**, not a thread synchronization mechanism. It prevents inner functions from overwriting the root-cause error message during a cascading failure within a single API call. The lock is set by cxf_pre_optimize_hook at optimization start and cleared by cxf_post_optimize_hook at optimization end.
+The error buffer locked flag (P3.13 lifecycle hooks) is a **single-thread cascading-error guard**, not a thread synchronization mechanism. It prevents inner functions from overwriting the root-cause error message during a cascading failure within a single API call. The lock is set by cxf_pre_optimize_callback at optimization start and cleared by cxf_post_optimize_callback at optimization end.
 
 ### Errors in Concurrent Solver Instances
 
@@ -19621,6 +21159,7 @@ Each concurrent solver instance operates on an independent model clone with its 
 | **Threads** | User-requested thread count | 0 (auto) | Zero means auto-detect; positive value caps thread count |
 | **ConcurrentMethod** | Selects concurrent solving strategy | -1 (auto) | Controls whether and how concurrent solving is used |
 | **ConcurrentJobs** | Number of concurrent solver instances | 0 (auto) | Zero means solver decides based on thread count |
+| **DistributedMIPJobs** | Number of distributed MIP workers | 0 (disabled) | Positive value enables distributed concurrent MIP |
 | **Method** | Solver algorithm selection | -1 (auto) | Methods 3, 4, 5 select concurrent LP solving |
 | **OutputFlag** | Controls logging verbosity | 1 (enabled) | Affects whether thread count and hardware info are logged |
 | **Seed** | Random seed for tie-breaking | 0 | Combined with per-instance offsets for concurrent solver diversification |
@@ -19634,9 +21173,12 @@ Environment initialization:
 User configuration:
     cxf_setintparam("Threads", N) -> threadsParameter
 
+initialization validation:
+    license_validate() -> license_thread_limit
+
 At optimization time:
     cxf_get_threads() -> effective_threads
-        = min(auto_or_override, threadsParameter)
+        = min(auto_or_override, threadsParameter, license_thread_limit)
 
 For concurrent solving:
     effective_threads / concurrent_instance_count -> threads_per_instance
@@ -19688,7 +21230,7 @@ The solver provides a determinism guarantee: with the same model, parameters, an
 
 **Decision:** On large systems, the auto-detected thread count prefers the physical core count over the logical core count.
 
-**Rationale:** LP solving is a compute-intensive workload that benefits primarily from independent execution units (physical cores), not from simultaneous multithreading (SMT/Hyper-Threading). SMT provides diminishing returns for compute-bound tasks because the two logical cores on the same physical core share execution resources. Using the physical core count as the baseline on large systems avoids the overhead of excessive thread synchronization while still utilizing all available compute capacity. An internal cap further limits the thread count to prevent diminishing returns from thread coordination overhead.
+**Rationale:** LP and MIP solving are compute-intensive workloads that benefit primarily from independent execution units (physical cores), not from simultaneous multithreading (SMT/Hyper-Threading). SMT provides diminishing returns for compute-bound tasks because the two logical cores on the same physical core share execution resources. Using the physical core count as the baseline on large systems avoids the overhead of excessive thread synchronization while still utilizing all available compute capacity. An internal cap further limits the thread count to prevent diminishing returns from thread coordination overhead.
 
 ---
 
@@ -19701,7 +21243,7 @@ The solver provides a determinism guarantee: with the same model, parameters, an
 [x] No copied code fragments
 [x] All descriptions are behavioral, not implementational
 [x] All data structures described semantically using Layer 1 types
-[x] Explicit cross-references to P1.01, P3.09, P3.11, P3.12, P3.13, P3.24, P3.25, P3.26, P3.32
+[x] Explicit cross-references to P1.01, P3.09, P3.11, P3.12, P3.13, P3.24, P3.25, P3.26, P3.27, P3.32
 [x] Passes the Clean Room Test: could be written without seeing the binary
 ```
 
@@ -19768,6 +21310,13 @@ Error codes are returned by solver functions to indicate the nature of a failure
 | QCP_EQUALITY_CONSTRAINT | 10021 | A quadratic equality constraint was specified, which is non-convex. The solver may suggest setting the NonConvex parameter. |
 | EXCEED_2B_NONZEROS | 10025 | The coefficient matrix or LU factorization has more than two billion nonzero entries, exceeding internal index limits. |
 
+### License Errors
+
+| Name | Value | Description |
+|------|-------|-------------|
+| NO_LICENSE | 10009 | Failed to obtain a valid license. The solver was not properly licensed or the license had expired. |
+| SIZE_LIMIT_EXCEEDED | 10010 | The model exceeds the size limit imposed by a restricted (demo or academic) license. |
+
 ### I/O and File Errors
 
 | Name | Value | Description |
@@ -19775,16 +21324,27 @@ Error codes are returned by solver functions to indicate the nature of a failure
 | CALLBACK | 10011 | An error occurred in a user-provided callback function. |
 | FILE_READ | 10012 | Failed to read the requested file. |
 | FILE_WRITE | 10013 | Failed to write the requested file. |
+| NODEFILE | 10019 | An error occurred reading or writing a node file during MIP optimization. |
 
 ### Feature and Compatibility Errors
 
 | Name | Value | Description |
 |------|-------|-------------|
 | IIS_NOT_INFEASIBLE | 10015 | Attempted to perform infeasibility analysis (IIS computation) on a model that is feasible. |
+| NOT_FOR_MIP | 10016 | The requested operation is not valid for a integer model (e.g., requesting continuous relaxation information). |
 | NOT_SUPPORTED | 10024 | The requested feature is not supported in the current usage environment or configuration. |
 | INVALID_PIECEWISE_OBJ | 10026 | A piecewise-linear objective function violated required properties (e.g., breakpoints not in non-decreasing order). |
 | UPDATEMODE_CHANGE | 10027 | Attempted to modify the UpdateMode parameter after model creation, which is not permitted. |
 | TUNE_MODEL_TYPES | 10031 | Attempted to tune models of different types simultaneously, which is not supported. |
+
+### Network and Server Errors
+
+| Name | Value | Description |
+|------|-------|-------------|
+| NETWORK | 10022 | A problem occurred communicating with a Compute Server. |
+| JOB_REJECTED | 10023 | The Compute Server was unable to process the submitted job (e.g., server queue is full). |
+| CLOUD | 10028 | An error occurred launching or communicating with a cloud computing job. |
+| CSWORKER | 10030 | A client-server application error occurred on the worker side. |
 
 ### Security Errors
 
@@ -19818,7 +21378,7 @@ Optimization status codes describe the outcome of an optimization call. They are
 |------|-------|-------------|
 | LOADED | 1 | Model is loaded, but no solution information is available. This is the initial state before optimization. |
 | OPTIMAL | 2 | Model was solved to optimality (subject to tolerances), and an optimal solution is available. |
-| SUBOPTIMAL | 13 | Unable to satisfy optimality tolerances; a sub-optimal solution is available. |
+| SUBOPTIMAL | 13 | Unable to satisfy optimality tolerances; a sub-optimal solution is available. This may occur when node relaxations in MIP cannot be solved to full precision. |
 
 ### Infeasibility and Unboundedness
 
@@ -19834,7 +21394,10 @@ Optimization status codes describe the outcome of an optimization call. They are
 | Name | Value | Description |
 |------|-------|-------------|
 | ITERATION_LIMIT | 7 | Optimization terminated because the simplex or barrier iteration limit was reached. |
+| NODE_LIMIT | 8 | Optimization terminated because the number of branch-and-cut nodes explored exceeded the NodeLimit parameter. |
 | TIME_LIMIT | 9 | Optimization terminated because the elapsed time exceeded the TimeLimit parameter. |
+| SOLUTION_LIMIT | 10 | Optimization terminated because the number of feasible solutions found reached the SolutionLimit parameter. |
+| USER_OBJ_LIMIT | 15 | A user-specified objective limit (BestObjStop or BestBdStop parameter) was reached. |
 | WORK_LIMIT | 16 | Optimization terminated because the computational work expended exceeded the WorkLimit parameter. |
 | MEM_LIMIT | 17 | Optimization terminated because allocated memory exceeded the SoftMemLimit parameter. |
 
@@ -19842,7 +21405,7 @@ Optimization status codes describe the outcome of an optimization call. They are
 
 | Name | Value | Description |
 |------|-------|-------------|
-| INTERRUPTED | 11 | Optimization was terminated by the user (e.g., via Ctrl-C or a callback requesting termination). |
+| INTERRUPTED | 11 | Optimization was terminated by the user (e.g., via Ctrl-C, a callback requesting termination, or a license becoming invalid during optimization). |
 | NUMERIC | 12 | Optimization was terminated due to unrecoverable numerical difficulties. |
 | INPROGRESS | 14 | An asynchronous optimization call was made, but the associated optimization run is not yet complete. |
 
@@ -19990,8 +21553,9 @@ ConvexFeld parameters come in three data types:
 Parameters are resolved in a layered precedence order, with later layers overriding earlier ones:
 
 1. **Built-in defaults** -- hardcoded in the solver library during parameter table initialization
-2. **Configuration file parameters** -- loaded from the optional `convexfeld.env` file in the current working directory
-3. **Programmatic settings** -- set by the user via the API (highest precedence)
+2. **License file parameters** -- extracted from the configuration file (convexfeld.lic) during environment finalization
+3. **Configuration file parameters** -- loaded from the optional `convexfeld.env` file in the current working directory
+4. **Programmatic settings** -- set by the user via the API (highest precedence)
 
 Parameters are stored on the environment object. When a model is created from an environment, it inherits the environment's parameter values. Model-level parameter changes do not propagate back to the environment.
 
@@ -19999,22 +21563,28 @@ Parameters are stored on the environment object. When a model is created from an
 
 - A default of **-1** typically means "automatic" -- the solver selects the best strategy.
 - A default of **Infinity** (for double parameters) or **MAXINT** (for int parameters) means "no limit."
+- Cut control parameters use: -1 = automatic, 0 = off, 1 = moderate, 2 = aggressive.
 - MAXINT = 2,000,000,000 throughout this document.
 
 ---
 
 ## 1. Termination Parameters
 
-These parameters control when the solver stops. They define resource limits (time, iterations, memory) and objective thresholds.
+These parameters control when the solver stops. They define resource limits (time, iterations, memory, nodes) and objective thresholds.
 
 | Parameter | Type | Default | Min | Max | Description |
 |-----------|------|---------|-----|-----|-------------|
 | TimeLimit | double | Infinity | 0 | Infinity | Wall-clock time limit in seconds. The solver terminates when this limit is reached. Settable from a callback. |
-| IterationLimit | double | Infinity | 0 | Infinity | Maximum number of simplex iterations. |
+| IterationLimit | double | Infinity | 0 | Infinity | Maximum number of simplex iterations. Applies to LP and to the LP relaxations solved during MIP. |
 | BarIterLimit | int | 1000 | 0 | MAXINT | Maximum number of barrier iterations. Settable from a callback. |
+| NodeLimit | double | Infinity | 0 | Infinity | Maximum number of branch-and-bound nodes explored in MIP. Settable from a callback. |
+| SolutionLimit | int | MAXINT | 1 | MAXINT | Stops MIP after finding this many feasible solutions. |
 | WorkLimit | double | Infinity | 0 | Infinity | Computational work limit in work units (a deterministic measure). Settable from a callback. |
 | MemLimit | double | Infinity | 0 | Infinity | Hard memory limit in GB. The solver terminates with an error if this limit is exceeded. |
 | SoftMemLimit | double | Infinity | 0 | Infinity | Soft memory limit in GB. The solver takes more conservative memory-saving measures when approaching this limit but does not terminate. |
+| BestBdStop | double | Infinity | -Infinity | Infinity | Terminates as soon as the best bound on the objective is at least as good (less than or equal for minimization) as this value. |
+| BestObjStop | double | -Infinity | -Infinity | Infinity | Terminates as soon as a feasible solution with objective at least as good as this value is found. |
+| Cutoff | double | Infinity | -Infinity | Infinity | Objective cutoff. Nodes are fathomed if their relaxation objective is worse than this value. For minimization, default is Infinity; for maximization, default is -Infinity. |
 | NLBarIterLimit | int | 1000 | 0 | MAXINT | Maximum number of barrier iterations for nonlinear models. |
 | PDHGIterLimit | double | Infinity | 0 | Infinity | Maximum number of PDHG (Primal-Dual Hybrid Gradient) iterations. |
 
@@ -20022,12 +21592,15 @@ These parameters control when the solver stops. They define resource limits (tim
 
 ## 2. Tolerance Parameters
 
-These parameters define numerical thresholds that determine when constraints are considered satisfied and when a solution is considered optimal.
+These parameters define numerical thresholds that determine when constraints are considered satisfied, when a solution is considered optimal, and when integer variables are considered integral.
 
 | Parameter | Type | Default | Min | Max | Description |
 |-----------|------|---------|-----|-----|-------------|
 | FeasibilityTol | double | 1e-6 | 1e-9 | 1e-2 | Primal feasibility tolerance. All constraints must be satisfied to within this tolerance. |
 | OptimalityTol | double | 1e-6 | 1e-9 | 1e-2 | Dual feasibility tolerance (reduced cost tolerance). Determines when a solution is considered optimal for simplex. |
+| IntFeasTol | double | 1e-5 | 1e-9 | 1e-1 | Integer feasibility tolerance. A variable is considered integral when its value is within this tolerance of the nearest integer. |
+| MIPGap | double | 1e-4 | 0 | Infinity | Relative MIP optimality gap. The solver terminates when (BestBd - BestObj) / BestObj is less than this value. |
+| MIPGapAbs | double | 1e-10 | 0 | Infinity | Absolute MIP optimality gap. The solver terminates when BestBd - BestObj is less than this value. |
 | BarConvTol | double | 1e-8 | 0.0 | 1.0 | Barrier convergence tolerance. The barrier solver terminates when primal infeasibility, dual infeasibility, and complementarity gap are all below this threshold. |
 | BarQCPConvTol | double | 1e-6 | 0.0 | 1.0 | Barrier convergence tolerance for QCP (Quadratically Constrained Program) models. |
 | MarkowitzTol | double | 0.0078125 | 1e-4 | 0.999 | Threshold pivoting tolerance for simplex basis factorization (Markowitz criterion). Larger values improve numerical stability at the cost of fill-in and speed. |
@@ -20079,7 +21652,121 @@ These parameters control the interior-point (barrier) algorithm and crossover to
 
 ---
 
-## 5. Presolve Parameters
+## 5. MIP Parameters
+
+These parameters control the Mixed-Integer Programming solver, including branching, heuristics, node management, and solution strategy.
+
+### 5.1 Strategy and Focus
+
+| Parameter | Type | Default | Min | Max | Description |
+|-----------|------|---------|-----|-----|-------------|
+| MIPFocus | int | 0 | 0 | 3 | High-level MIP strategy. 0 = balanced, 1 = focus on finding feasible solutions, 2 = focus on proving optimality, 3 = focus on improving the best bound. |
+| BranchDir | int | 0 | -1 | 1 | Preferred branch direction. -1 = branch down (floor) first, 0 = automatic, 1 = branch up (ceiling) first. |
+| VarBranch | int | -1 | -1 | 3 | Branch variable selection strategy. -1 = automatic. |
+| Symmetry | int | -1 | -1 | 2 | Symmetry detection level. -1 = automatic, 0 = off, 1 = conservative, 2 = aggressive. |
+| NonConvex | int | -1 | -1 | 2 | Strategy for non-convex quadratic problems. -1 = default (error on non-convex), 0 = error, 1 = linearize, 2 = spatial branch-and-bound. |
+| IntegralityFocus | int | 0 | 0 | 1 | When set to 1, the solver works harder to find solutions that do not exploit integrality tolerance. |
+
+### 5.2 Node Management
+
+| Parameter | Type | Default | Min | Max | Description |
+|-----------|------|---------|-----|-----|-------------|
+| NodeLimit | double | Infinity | 0 | Infinity | MIP node exploration limit (also listed under Termination). |
+| NodeMethod | int | -1 | -1 | 2 | LP algorithm for solving MIP node relaxations. -1 = automatic, 0 = primal simplex, 1 = dual simplex, 2 = barrier. |
+| NodefileDir | string | "" | -- | -- | Directory for storing MIP node files when memory usage becomes high. Default is the current directory. |
+| NodefileStart | double | Infinity | 0 | Infinity | Memory usage threshold (in GB) at which the solver starts writing node information to disk. |
+| Disconnected | int | -1 | -1 | 2 | Strategy for handling disconnected MIP components. -1 = automatic. |
+| StartNodeLimit | int | -1 | -2 | MAXINT | Node exploration limit when processing a MIP start. |
+
+### 5.3 Heuristics
+
+| Parameter | Type | Default | Min | Max | Description |
+|-----------|------|---------|-----|-----|-------------|
+| Heuristics | double | 0.05 | 0 | 1 | Fraction of total solve time devoted to MIP feasibility heuristics. |
+| PumpPasses | int | -1 | -1 | MAXINT | Number of feasibility pump heuristic passes. -1 = automatic, 0 = disabled. |
+| RINS | int | -1 | -1 | MAXINT | Frequency of RINS (Relaxation Induced Neighborhood Search) heuristic. -1 = automatic, 0 = off, n > 0 = apply every n-th node. |
+| SubMIPNodes | int | 500 | 0 | MAXINT | Node limit for sub-MIPs within heuristics. |
+| MinRelNodes | int | -1 | -1 | MAXINT | Node limit for the minimum relaxation heuristic at root. -1 = automatic. |
+| ZeroObjNodes | int | -1 | -1 | MAXINT | Node limit for zero-objective heuristic at root. -1 = automatic. |
+| NLPHeur | int | -1 | -1 | 1 | Controls NLP heuristic for non-convex quadratic models. -1 = automatic. |
+| NoRelHeurTime | double | 0 | 0 | Infinity | Time limit in seconds for the no-relaxation heuristic. This heuristic searches for feasible solutions without solving the LP relaxation. |
+| NoRelHeurWork | double | 0 | 0 | Infinity | Work limit for the no-relaxation heuristic, in work units. |
+
+### 5.4 Solution Improvement
+
+| Parameter | Type | Default | Min | Max | Description |
+|-----------|------|---------|-----|-----|-------------|
+| ImproveStartGap | double | 0.0 | 0.0 | Infinity | MIP gap threshold at which the solver switches to a solution improvement strategy. 0 = disabled. |
+| ImproveStartNodes | double | Infinity | 0.0 | Infinity | Node count threshold for switching to solution improvement. |
+| ImproveStartTime | double | Infinity | 0.0 | Infinity | Time threshold (seconds) for switching to solution improvement. |
+| ImproveStartWork | double | Infinity | 0.0 | Infinity | Work unit threshold for switching to solution improvement. |
+
+### 5.5 Solution Pool
+
+| Parameter | Type | Default | Min | Max | Description |
+|-----------|------|---------|-----|-----|-------------|
+| PoolSolutions | int | 10 | 1 | MAXINT | Maximum number of feasible solutions stored in the solution pool. |
+| PoolGap | double | Infinity | 0 | Infinity | Maximum relative gap for solutions kept in the pool. |
+| PoolGapAbs | double | Infinity | 0 | Infinity | Maximum absolute gap for solutions kept in the pool. |
+| PoolSearchMode | int | 0 | 0 | 2 | Strategy for populating the solution pool. 0 = store solutions found along the way, 1 = do systematic search, 2 = find the n best solutions. |
+| SolutionNumber | int | 0 | 0 | MAXINT | Selects which solution from the pool to query attributes for. |
+
+### 5.6 MIP Starts
+
+| Parameter | Type | Default | Min | Max | Description |
+|-----------|------|---------|-----|-----|-------------|
+| StartNumber | int | 0 | 0 | MAXINT | Selects which MIP start to use. |
+| StartTimeLimit | double | Infinity | 0 | Infinity | Time limit for processing MIP starts. |
+| StartWorkLimit | double | Infinity | 0 | Infinity | Work limit for processing MIP starts. |
+| LazyConstraints | int | 0 | 0 | 1 | Must be set to 1 when lazy constraints are added via callbacks. |
+
+### 5.7 Miscellaneous MIP
+
+| Parameter | Type | Default | Min | Max | Description |
+|-----------|------|---------|-----|-----|-------------|
+| MIQCPMethod | int | -1 | -1 | 1 | Method for solving Mixed-Integer Quadratically Constrained Programs. -1 = automatic. |
+| PartitionPlace | int | 15 | 0 | 31 | Controls where the partition heuristic runs during MIP. Encoded as a bitmask. |
+| OBBT | int | -1 | -1 | 3 | Controls aggressiveness of Optimality-Based Bound Tightening. -1 = automatic, 0 = off, 1-3 = increasingly aggressive. |
+
+---
+
+## 6. MIP Cut Parameters
+
+These parameters control the generation of cutting planes during the MIP solve. Each specific cut type can be individually tuned, or the global Cuts parameter can be used.
+
+| Parameter | Type | Default | Min | Max | Description |
+|-----------|------|---------|-----|-----|-------------|
+| Cuts | int | -1 | -1 | 3 | Global cut aggressiveness. -1 = automatic, 0 = off, 1 = moderate, 2 = aggressive, 3 = very aggressive. |
+| CutPasses | int | -1 | -1 | MAXINT | Maximum number of cutting plane passes at the root node. |
+| CutAggPasses | int | -1 | -1 | MAXINT | Maximum number of constraint aggregation passes during cut generation. |
+| CliqueCuts | int | -1 | -1 | 2 | Clique cut generation aggressiveness. |
+| CoverCuts | int | -1 | -1 | 2 | Cover cut generation aggressiveness. |
+| FlowCoverCuts | int | -1 | -1 | 2 | Flow cover cut generation aggressiveness. |
+| FlowPathCuts | int | -1 | -1 | 2 | Flow path cut generation aggressiveness. |
+| GomoryPasses | int | -1 | -1 | MAXINT | Maximum number of Gomory cut passes. |
+| GUBCoverCuts | int | -1 | -1 | 2 | GUB cover cut generation aggressiveness. |
+| ImpliedCuts | int | -1 | -1 | 2 | Implied bound cut generation aggressiveness. |
+| DualImpliedCuts | int | -1 | -1 | 2 | Dual implied bound cut generation aggressiveness. |
+| ProjImpliedCuts | int | -1 | -1 | 2 | Projected implied bound cut generation aggressiveness. |
+| InfProofCuts | int | -1 | -1 | 2 | Infeasibility proof cut generation aggressiveness. |
+| LiftProjectCuts | int | -1 | -1 | 2 | Lift-and-project cut generation aggressiveness. |
+| MIRCuts | int | -1 | -1 | 2 | Mixed Integer Rounding cut generation aggressiveness. |
+| MixingCuts | int | -1 | -1 | 2 | Mixing cut generation aggressiveness. |
+| ModKCuts | int | -1 | -1 | 2 | Mod-k cut generation aggressiveness. |
+| NetworkCuts | int | -1 | -1 | 2 | Network cut generation aggressiveness. |
+| BQPCuts | int | -1 | -1 | 2 | Boolean Quadric Polytope cut generation aggressiveness. |
+| RelaxLiftCuts | int | -1 | -1 | 2 | Relax-and-lift cut generation aggressiveness. |
+| RLTCuts | int | -1 | -1 | 2 | Reformulation-Linearization Technique cut generation aggressiveness. |
+| StrongCGCuts | int | -1 | -1 | 2 | Strong Chvatal-Gomory cut generation aggressiveness. |
+| SubMIPCuts | int | -1 | -1 | 2 | Sub-MIP cut generation aggressiveness. |
+| ZeroHalfCuts | int | -1 | -1 | 2 | Zero-half cut generation aggressiveness. |
+| MasterKnapsackCuts | int | -1 | -1 | 2 | Master knapsack polytope cut generation aggressiveness. |
+| MIPSepCuts | int | -1 | -1 | 2 | MIP separation cut generation aggressiveness. |
+| PSDCuts | int | -1 | -1 | 2 | Positive semi-definite cut generation aggressiveness. |
+
+---
+
+## 7. Presolve Parameters
 
 These parameters control the presolve phase, which simplifies and tightens the model before the main optimization.
 
@@ -20094,6 +21781,7 @@ These parameters control the presolve phase, which simplifies and tightens the m
 | PreDepRow | int | -1 | -1 | 1 | Controls presolve dependent row reduction. -1 = automatic. |
 | DualReductions | int | 1 | 0 | 1 | Controls dual reductions in presolve. When set to 0, dual reductions that could mask infeasibility or unboundedness are disabled. |
 | PreQLinearize | int | -1 | -1 | 2 | Controls linearization of quadratic terms during presolve. -1 = automatic. |
+| PreMIQCPForm | int | -1 | -1 | 2 | Controls the presolved form of MIQCP models. -1 = automatic. |
 | PreSparsify | int | -1 | -1 | 1 | Controls the sparsify reduction in presolve. -1 = automatic. |
 | PreSOS1BigM | double | -1 | -1 | Infinity | Controls the Big-M value used in SOS1 reformulation during presolve. -1 = automatic. |
 | PreSOS1Encoding | int | -1 | -1 | 3 | Controls the encoding used for SOS1 constraint reformulation. -1 = automatic. |
@@ -20102,7 +21790,7 @@ These parameters control the presolve phase, which simplifies and tightens the m
 
 ---
 
-## 6. Scaling Parameters
+## 8. Scaling Parameters
 
 These parameters control the scaling of the model coefficient matrix, which can improve numerical behavior.
 
@@ -20114,7 +21802,7 @@ These parameters control the scaling of the model coefficient matrix, which can 
 
 ---
 
-## 7. Output and Logging Parameters
+## 9. Output and Logging Parameters
 
 These parameters control what information the solver writes to the console, log files, and result files.
 
@@ -20126,13 +21814,14 @@ These parameters control what information the solver writes to the console, log 
 | DisplayInterval | int | 5 | 1 | MAXINT | Frequency of log output lines, in seconds. Controls how often progress lines are printed. |
 | Record | string | "" | -- | -- | File for recording API calls (for reproducibility). |
 | ResultFile | string | "" | -- | -- | File to which the solution is written after optimization. File format is determined by the extension. |
+| SolFiles | string | "" | -- | -- | Base name for writing intermediate MIP solutions to files as they are found. |
 | JSONSolDetail | int | 0 | 0 | 1 | Level of detail included in JSON solution output. 0 = basic, 1 = detailed. |
 | IgnoreNames | int | 0 | 0 | 1 | When set to 1, the solver ignores user-provided variable and constraint names. |
 | InputFile | string | "" | -- | -- | Input file for the command-line tool. Used only by convexfeld_cl. |
 
 ---
 
-## 8. Threading and Concurrency Parameters
+## 10. Threading and Concurrency Parameters
 
 These parameters control parallel execution and distributed computing.
 
@@ -20140,13 +21829,91 @@ These parameters control parallel execution and distributed computing.
 |-----------|------|---------|-----|-----|-------------|
 | Threads | int | 0 | 0 | MAXINT | Number of parallel threads to use. 0 = automatic (use all available cores, up to a solver-determined limit). |
 | ThreadLimit | int | 0 | 0 | MAXINT | Hard limit on total threads across all concurrent solves. 0 = no limit. |
+| ConcurrentMIP | int | 1 | 1 | 64 | Number of independent MIP solves to run concurrently. The first to finish determines the result. |
 | ConcurrentMethod | int | -1 | -1 | 3 | Controls which LP algorithms run concurrently. -1 = automatic. |
 | ConcurrentJobs | int | 0 | 0 | MAXINT | Number of distributed concurrent optimization jobs. 0 = no distributed concurrency. |
+| ConcurrentSettings | string | "" | -- | -- | Comma-separated list of parameter files for concurrent MIP instances. Command-line only. |
+| DistributedMIPJobs | int | 0 | 0 | MAXINT | Number of distributed MIP worker jobs. 0 = no distributed MIP. |
 | InheritParams | int | -1 | -1 | 1 | Controls whether concurrent and multi-objective sub-environments inherit parameters from the parent. -1 = automatic. |
 
 ---
 
-## 9. Tuning Parameters
+## 11. Compute Server and Licensing Parameters
+
+These parameters configure remote optimization servers, licensing services, and cloud computing.
+
+### 11.1 Compute Server
+
+| Parameter | Type | Default | Min | Max | Description |
+|-----------|------|---------|-----|-----|-------------|
+| ComputeServer | string | "" | -- | -- | Address of a ConvexFeld Remote Services cluster node. |
+| CSRouter | string | "" | -- | -- | Address of the cluster router node. |
+| CSGroup | string | "" | -- | -- | Group placement request for the compute cluster. |
+| ServerPassword | string | "" | -- | -- | Password for server authentication. |
+| CSPriority | int | 0 | -100 | 100 | Job priority on the remote solver. Higher values indicate higher priority. |
+| CSQueueTimeout | double | -1 | -1 | Infinity | Maximum time in seconds to wait in the server queue. -1 = infinite. |
+| CSIdleTimeout | int | -1 | -1 | MAXINT | Idle time in seconds before a remote solver job is terminated. -1 = infinite. |
+| ServerTimeout | int | -1 | -1 | MAXINT | Server connection timeout in seconds. -1 = no timeout. |
+| CSBatchMode | int | 0 | 0 | 1 | When set to 1, enables batch-mode optimization on remote solvers. |
+| CSTLSInsecure | int | 0 | 0 | 1 | When set to 1, allows insecure TLS connections. |
+| CSAppName | string | "" | -- | -- | Application name for job tracking and logging. |
+| CSClientLog | int | 0 | 0 | 3 | Client-side logging level for remote solver and WLS. 0 = off, 1 = errors, 2 = info, 3 = verbose. |
+
+### 11.2 Cluster Manager
+
+| Parameter | Type | Default | Min | Max | Description |
+|-----------|------|---------|-----|-----|-------------|
+| CSManager | string | "" | -- | -- | URL of the ConvexFeld Cluster Manager. |
+| CSAuthToken | string | "" | -- | -- | JSON Web Token for Cluster Manager authentication. |
+| CSAPIAccessID | string | "" | -- | -- | API access ID for the Cluster Manager. |
+| CSAPISecret | string | "" | -- | -- | API secret key for the Cluster Manager. |
+| Username | string | "" | -- | -- | Username for licensing and server authentication. |
+
+### 11.3 Token Server
+
+| Parameter | Type | Default | Min | Max | Description |
+|-----------|------|---------|-----|-----|-------------|
+| TokenServer | string | "" | -- | -- | Address of the token server for floating licenses. |
+| TSPort | int | 41954 | 0 | 65535 | Port number for the token server. |
+
+### 11.4 Instant Cloud
+
+| Parameter | Type | Default | Min | Max | Description |
+|-----------|------|---------|-----|-----|-------------|
+| CloudAccessID | string | "" | -- | -- | Access ID for ConvexFeld Instant Cloud. |
+| CloudSecretKey | string | "" | -- | -- | Secret key for ConvexFeld Instant Cloud. |
+| CloudPool | string | "" | -- | -- | Machine pool to use on ConvexFeld Instant Cloud. |
+| CloudHost | string | "" | -- | -- | Hostname for the Instant Cloud entry point. |
+
+### 11.5 Web License Service (WLS)
+
+| Parameter | Type | Default | Min | Max | Description |
+|-----------|------|---------|-----|-----|-------------|
+| WLSAccessID | string | "" | -- | -- | Access identifier for the Web License Service. |
+| WLSSecret | string | "" | -- | -- | Secret key for the Web License Service. |
+| WLSToken | string | "" | -- | -- | Authentication token for WLS. |
+| WLSTokenDuration | int | 0 | 0 | MAXINT | Token validity duration in seconds. 0 = use server default. |
+| WLSTokenRefresh | double | -1 | -1 | Infinity | Token refresh interval. -1 = automatic. |
+| WLSProxy | string | "" | -- | -- | Proxy server URL for WLS connections. |
+| WLSConfig | string | "" | -- | -- | Path to WLS configuration file. |
+| LicenseID | int | 0 | 0 | MAXINT | License identifier for WLS. |
+
+### 11.6 Distributed Workers
+
+| Parameter | Type | Default | Min | Max | Description |
+|-----------|------|---------|-----|-----|-------------|
+| WorkerPool | string | "" | -- | -- | Address of the distributed worker pool cluster. |
+| WorkerPassword | string | "" | -- | -- | Password for the distributed worker cluster. |
+
+### 11.7 Job Identification
+
+| Parameter | Type | Default | Min | Max | Description |
+|-----------|------|---------|-----|-----|-------------|
+| JobID | string | "" | -- | -- | Read-only. Compute Server Job ID assigned to the current session. |
+
+---
+
+## 12. Tuning Parameters
 
 These parameters control the automatic parameter tuning feature, which systematically searches for parameter settings that improve solve performance on a given model.
 
@@ -20156,6 +21923,7 @@ These parameters control the automatic parameter tuning feature, which systemati
 | TuneResults | int | -1 | -1 | MAXINT | Number of improved parameter sets to report. -1 = automatic. |
 | TuneTrials | int | 0 | 0 | MAXINT | Number of trial runs per parameter set during tuning. More trials increase reliability. |
 | TuneTimeLimit | double | 86400 | 0 | Infinity | Time limit for the entire tuning session, in seconds. Default is 24 hours. |
+| TuneTargetMIPGap | double | 0 | 0 | Infinity | Target MIP gap for tuning. Tuning attempts to achieve this gap. |
 | TuneTargetTime | double | 0.005 | 0.001 | Infinity | Target solve time for tuning. |
 | TuneCriterion | int | -1 | -1 | 2 | Criterion used to evaluate parameter sets during tuning. -1 = automatic. |
 | TuneJobs | int | 0 | 0 | MAXINT | Number of distributed tuning jobs (static workers). |
@@ -20169,7 +21937,7 @@ These parameters control the automatic parameter tuning feature, which systemati
 
 ---
 
-## 10. Multi-Objective Parameters
+## 13. Multi-Objective Parameters
 
 These parameters control behavior when solving models with multiple objective functions.
 
@@ -20182,7 +21950,7 @@ These parameters control behavior when solving models with multiple objective fu
 
 ---
 
-## 11. Function Constraint Parameters (Deprecated)
+## 14. Function Constraint Parameters (Deprecated)
 
 These parameters control piecewise-linear (PWL) approximation of nonlinear function constraints. They are deprecated in favor of the native nonlinear support.
 
@@ -20197,7 +21965,7 @@ These parameters control piecewise-linear (PWL) approximation of nonlinear funct
 
 ---
 
-## 12. Miscellaneous Parameters
+## 15. Miscellaneous Parameters
 
 | Parameter | Type | Default | Min | Max | Description |
 |-----------|------|---------|-----|-----|-------------|
@@ -20220,7 +21988,7 @@ In addition to the parameters above, several system environment variables influe
 | CXF_CONFIG_FILE | string | Path to the ConvexFeld configuration file, overriding the default search. |
 | CXF_CORES | int (1-1024) | Overrides the auto-detected logical core count. |
 | CXF_PHYSICALCORES | int (1-1024) | Overrides the auto-detected physical core count. |
-| CXF_MAXCORES | int (>0) | Limits the maximum number of cores the solver may use. |
+| CXF_MAXCORES | int (>0) | Limits the maximum number of cores the solver may use, subject to the license limit. |
 | CXF_MEMLIMIT | double (>=0) | Memory limit in GB applied during environment initialization. |
 
 ---
@@ -20275,14 +22043,35 @@ These tolerances control when the solver declares that an optimal solution has b
 | Name | Typical Value | Role | Where Used |
 |------|---------------|------|------------|
 | Optimality tolerance | 1e-6 | Reduced cost threshold for declaring optimality. A non-basic variable is considered optimal if its reduced cost does not violate the sign condition by more than this tolerance. When no non-basic variable violates optimality by more than epsilon_opt, the current basis is declared optimal. | Pricing, optimality check, simplex termination |
+| MIP relative gap | 1e-4 | For mixed-integer programs: the solver terminates when the gap between the best integer solution and the best bound is within this fraction of the incumbent objective value. | solver termination |
+| MIP absolute gap | 1e-10 | For mixed-integer programs: the solver terminates when the absolute difference between the best integer solution and the best bound is within this threshold. | solver termination |
 
 ### Published Default
 
-The ConvexFeld Optimizer Reference Manual documents the default OptimalityTol as 1e-6 (range [1e-9, 1e-2]). This is a standard value; see also CPLEX and HiGHS documentation for similar defaults.
+The ConvexFeld Optimizer Reference Manual documents the default OptimalityTol as 1e-6 (range [1e-9, 1e-2]), MIPGap as 1e-4, and MIPGapAbs as 1e-10. These are standard values; see also CPLEX and HiGHS documentation for similar defaults.
 
 ---
 
-## 3. Pivot Tolerances
+## 3. Integrality Tolerances
+
+These tolerances govern when integer variables are considered to have integral values.
+
+| Name | Typical Value | Role | Where Used |
+|------|---------------|------|------------|
+| Integer feasibility tolerance | 1e-5 | A variable x is considered integer if the distance to the nearest integer is at most epsilon_int: \|x - round(x)\| <= epsilon_int. This applies to all integer, binary, and semi-integer variables. | Branch-and-bound node processing, solution checking, heuristics |
+
+### Published Default
+
+The ConvexFeld Optimizer Reference Manual documents the default IntFeasTol as 1e-5 (range [1e-9, 1e-1]). This value is consistent with standard solver practice (Achterberg, 2007).
+
+### Design Notes
+
+- Setting IntFeasTol too small (e.g., 1e-9) can cause the solver to reject solutions that are essentially integral but have small floating-point rounding errors.
+- Setting IntFeasTol too large (e.g., 1e-1) can accept solutions with visibly non-integer values.
+
+---
+
+## 4. Pivot Tolerances
 
 These tolerances control the selection of pivot elements during simplex iterations to maintain numerical stability.
 
@@ -20310,7 +22099,7 @@ This phased approach is consistent with the recommendations of Maros (2003, Sect
 
 ---
 
-## 4. Barrier (Interior Point) Tolerances
+## 5. Barrier (Interior Point) Tolerances
 
 These tolerances control convergence of the barrier (interior point) algorithm.
 
@@ -20330,7 +22119,7 @@ The ConvexFeld Optimizer Reference Manual documents BarConvTol as 1e-8 and BarQC
 
 ---
 
-## 5. Numerical Constants
+## 6. Numerical Constants
 
 These constants define fundamental numerical thresholds and representations used throughout the solver.
 
@@ -20354,7 +22143,7 @@ The use of 1e100 as a solver infinity value is standard in commercial LP solvers
 
 ---
 
-## 6. Anti-Cycling and Perturbation Constants
+## 7. Anti-Cycling and Perturbation Constants
 
 These constants control the bound perturbation mechanism that prevents cycling in degenerate linear programs.
 
@@ -20388,7 +22177,7 @@ The perturbation approach is based on the EXPAND procedure (Gill, Murray, Saunde
 
 ---
 
-## 7. Scaling Constants
+## 8. Scaling Constants
 
 These constants control the matrix scaling (equilibration) applied to the constraint matrix before optimization.
 
@@ -20416,7 +22205,7 @@ Ruiz equilibration is described in Ruiz (2001), "A scaling algorithm to equilibr
 
 ---
 
-## 8. Bound Tolerance
+## 9. Bound Tolerance
 
 This tolerance governs when two bounds are considered equal (i.e., when a variable is treated as fixed).
 
@@ -20430,7 +22219,7 @@ This tolerance corresponds to the "degenerate bound gap" threshold described by 
 
 ---
 
-## 9. Reduced Cost Threshold
+## 10. Reduced Cost Threshold
 
 | Name | Typical Value | Role | Where Used |
 |------|---------------|------|------------|
@@ -20438,11 +22227,11 @@ This tolerance corresponds to the "degenerate bound gap" threshold described by 
 
 ### Design Notes
 
-The pricing threshold may differ from the optimality tolerance. During aggressive pricing phases (near optimality), the pricing threshold is tightened to avoid selecting candidates that would produce negligible objective improvement. During early iterations, a looser threshold accelerates convergence. See the adaptive pivot tolerance table in Section 3.
+The pricing threshold may differ from the optimality tolerance. During aggressive pricing phases (near optimality), the pricing threshold is tightened to avoid selecting candidates that would produce negligible objective improvement. During early iterations, a looser threshold accelerates convergence. See the adaptive pivot tolerance table in Section 4.
 
 ---
 
-## 10. Quadratic Constants
+## 11. Quadratic Constants
 
 | Name | Typical Value | Role | Where Used |
 |------|---------------|------|------------|
@@ -20454,7 +22243,7 @@ The 0.5 factor is part of the standard QP formulation and is not a tunable param
 
 ---
 
-## 11. Large Value Markers
+## 12. Large Value Markers
 
 | Name | Typical Value | Role | Where Used |
 |------|---------------|------|------------|
@@ -20470,9 +22259,12 @@ The following table summarizes the key tolerances with their standard default va
 |-----------|---------|-------|------------------|
 | Primal feasibility tolerance | 1e-6 | [1e-9, 1e-2] | ConvexFeld Reference Manual; Maros (2003) |
 | Dual feasibility / optimality tolerance | 1e-6 | [1e-9, 1e-2] | ConvexFeld Reference Manual; Maros (2003) |
+| Integer feasibility tolerance | 1e-5 | [1e-9, 1e-1] | ConvexFeld Reference Manual; Achterberg (2007) |
 | Barrier convergence tolerance | 1e-8 | (0, 1] | ConvexFeld Reference Manual |
 | Barrier QCP convergence tolerance | 1e-6 | (0, 1] | ConvexFeld Reference Manual |
 | Markowitz pivot tolerance | ~7.8e-3 | [1e-4, 0.999] | ConvexFeld Reference Manual |
+| MIP relative gap | 1e-4 | [0, infinity) | ConvexFeld Reference Manual |
+| MIP absolute gap | 1e-10 | [0, infinity) | ConvexFeld Reference Manual |
 | Solver infinity | 1e100 | -- | ConvexFeld Reference Manual |
 | Bound equality threshold | ~1e-10 | -- | Maros (2003) |
 | Harris pivot threshold | ~1e-9 | -- | Harris (1973); Maros (2003) |
@@ -20483,6 +22275,7 @@ The following table summarizes the key tolerances with their standard default va
 
 ## References
 
+- Achterberg, T. (2007). *Constraint Integer Programming.* PhD thesis, Technische Universitat Berlin.
 - Curtis, A.R. and Reid, J.K. (1972). "On the automatic scaling of matrices for Gaussian elimination." *IMA Journal of Applied Mathematics*, 10(1):118--124.
 - Dantzig, G.B. (1963). *Linear Programming and Extensions.* Princeton University Press.
 - Forrest, J.J.H. and Goldfarb, D. (1992). "Steepest-edge simplex algorithms for linear programming." *Mathematical Programming*, 57(1):341--374.
@@ -20544,7 +22337,7 @@ The guide references spec IDs throughout. Each ID maps to a specific file in the
 **What you build:**
 - `cxf_calloc`, `cxf_realloc`, `cxf_vector_free`, `cxf_model_alloc` -- the memory allocation layer with optional tracking, memory limits, and custom allocator support.
 - `cxf_error_env`, `cxf_error_model`, `cxf_set_error_message`, `cxf_env_set_status` -- the error reporting system with first-error preservation and locked-buffer semantics.
-- `cxf_log`, `cxf_set_error_string`, `cxf_register_log_callback` -- logging output with configurable verbosity.
+- `cxf_log`, `cxf_errorlog`, `cxf_register_log_callback` -- logging output with configurable verbosity.
 
 **What you gain:**
 Every subsequent module depends on being able to allocate memory, report errors, and produce log output. These three capabilities are the bedrock of the entire solver.
@@ -20593,9 +22386,9 @@ The ability to create an environment, create a model within it, populate the mod
 - P3.08 -- Data Validation (`data_validation.md`)
 
 **What you build:**
-- `cxf_matrix_setup`, `cxf_prepare_row_data`, `cxf_build_row_major`, `cxf_sort_by_values` -- functions to construct and finalize the internal sparse matrix representation from user-provided data.
+- `cxf_matrix_setup`, `cxf_prepare_row_data`, `cxf_build_row_major`, `cxf_sort_indices` -- functions to construct and finalize the internal sparse matrix representation from user-provided data.
 - `cxf_finalize_row_data` (6-part pipeline) -- the complete matrix finalization sequence.
-- Model type detection (`cxf_is_quadratic`, `cxf_is_socp`, etc.) and input/data validation functions.
+- Model type detection (`cxf_is_mip_model`, `cxf_is_quadratic`, `cxf_is_socp`, etc.) and input/data validation functions.
 
 **What you gain:**
 The ability to take raw user input (variable bounds, constraint coefficients, objective) and produce the finalized internal matrix representation that all solver algorithms consume. Plus a comprehensive validation layer that catches malformed inputs before they reach the solver.
@@ -20604,7 +22397,7 @@ The ability to take raw user input (variable bounds, constraint coefficients, ob
 - Build matrices from hand-crafted test cases and verify CSR/CSC correctness.
 - Test index sorting on unsorted input.
 - Verify NaN/infinity detection catches invalid coefficients.
-- Verify model type detection correctly classifies LP, QP, and SOCP models.
+- Verify model type detection correctly classifies LP, QP, MIP, and SOCP models.
 - Test label validation with valid and invalid string inputs.
 - Verify that finalization produces row-major data consistent with the column-major input.
 - Run on standard small LP test cases (e.g., the Netlib afiro problem has 27 rows and 32 columns).
@@ -20625,8 +22418,8 @@ The ability to take raw user input (variable bounds, constraint coefficients, ob
 - All three EtaVector variants (PIVOT, VARIABLE_FIX, WARM_START) with sparse storage.
 - The PFI algorithm for FTRAN and BTRAN operations.
 - `cxf_pivot_with_eta` -- the central function that creates an eta vector to record a basis pivot.
-- `cxf_fix_variables_at_bounds` -- variable-fixing based on reduced cost analysis.
-- `cxf_progress_snapshot` and `cxf_basis_diff` -- for convergence detection in the iteration loop.
+- `cxf_basis_refactor` -- variable-fixing based on reduced cost analysis.
+- `cxf_basis_snapshot` and `cxf_basis_diff` -- for convergence detection in the iteration loop.
 - `cxf_basis_warm` -- warm-start eta creation for reoptimization.
 - `cxf_alloc_eta`, `cxf_alloc_work_arrays`, `cxf_setup_resources` -- allocation helpers for the basis system and work arrays.
 
@@ -20718,7 +22511,7 @@ The ability to execute a complete simplex pivot: given an entering variable from
 
 **Specs to implement:**
 - P1.04 -- SolverState (`solver_state.md`)
-- P1.09 -- SolutionData (`work_arrays.md`)
+- P1.09 -- WorkArrays (`work_arrays.md`)
 - P2.1 -- Revised Simplex Method (`revised_simplex.md`)
 - P2.8 -- Bound Propagation (`bound_propagation.md`)
 - P3.20 -- Simplex Iteration (`simplex_iteration.md`)
@@ -20727,10 +22520,10 @@ The ability to execute a complete simplex pivot: given an entering variable from
 
 **What you build:**
 - The SolverState structure -- the central mutable state container for the simplex solver, holding problem dimensions, solve configuration, iteration control, basis tracking arrays, CSR/CSC matrix copies, working bounds, reduced costs, and all control parameters.
-- The SolutionData structure for temporary computation buffers.
+- The WorkArrays structure for temporary computation buffers.
 - The 10-step inner iteration loop described in the optimization pipeline integration spec (P4.1):
-  1. `cxf_progress_snapshot` -- capture current basis state
-  2. `cxf_log_iteration_progress` -- progress logging and callback notification
+  1. `cxf_basis_snapshot` -- capture current basis state
+  2. `cxf_simplex_iterate` -- progress logging and callback notification
   3. `cxf_simplex_phase_end` -- phase transition checks (first call)
   4. `cxf_simplex_perturbation` -- anti-cycling if stalling
   5. `cxf_simplex_step` -- primary simplex pivot (pricing + ratio test + basis update)
@@ -20739,8 +22532,8 @@ The ability to execute a complete simplex pivot: given an entering variable from
   8. `cxf_simplex_phase_end` -- post-pivot cleanup (second call)
   9. `cxf_basis_diff` -- convergence detection
   10. `cxf_simplex_post_iterate` -- stall detection, termination checks
-- State initialization (`cxf_init_solve_state`, `cxf_free_warmstart_basis`, `cxf_free_work_arrays`) to create the SolverState from model data.
-- State cleanup (`cxf_cleanup_solve_state`, `cxf_free_attribute_table`, `cxf_free_basis_state`) to tear down the SolverState.
+- State initialization (`cxf_init_solve_state`, `cxf_setup_basis`, `cxf_setup_work_arrays`) to create the SolverState from model data.
+- State cleanup (`cxf_cleanup_solve_state`, `cxf_free_solver_state`, `cxf_free_basis_state`) to tear down the SolverState.
 
 **What you gain:**
 A complete simplex iteration engine that can solve LP problems. This is the first stage where you have an end-to-end solver: given a prepared SolverState with an initial basis, the iteration loop will execute simplex pivots until optimality, infeasibility, unboundedness, or an iteration limit is reached.
@@ -20780,8 +22573,8 @@ A complete simplex iteration engine that can solve LP problems. This is the firs
 - `cxf_simplex_phase_end` -- phase transition handling (Phase I to Phase II transition when feasibility is achieved).
 - `cxf_simplex_refine` -- post-solve refinement (fix non-basic variables at bounds based on reduced costs, recover basic variables near upper bounds).
 - `cxf_simplex_final` -- final result processing (dual-feasibility-based variable fixing, complementary slackness analysis).
-- `cxf_simplex_postsolve` -- implied bound propagation (FBBT) via `cxf_propagate_bounds`, constraint tightening, working array deallocation.
-- `cxf_propagate_bounds`, `cxf_cleanup_coeff_change`, `cxf_cleanup_optimization`, `cxf_propagate_bounds` -- cleanup utilities.
+- `cxf_simplex_cleanup` -- implied bound propagation (FBBT) via `cxf_propagate_bounds`, constraint tightening, working array deallocation.
+- `cxf_cleanup_helper`, `cxf_cleanup_coeff_change`, `cxf_cleanup_optimization`, `cxf_propagate_bounds` -- cleanup utilities.
 
 **What you gain:**
 The complete simplex lifecycle from initialization through crash basis, iteration, post-processing, and cleanup. The crash basis dramatically reduces Phase I iteration counts on practical problems. The anti-cycling perturbation ensures convergence on degenerate problems. The post-solve refinement and cleanup produce polished solutions.
@@ -20810,14 +22603,14 @@ The complete simplex lifecycle from initialization through crash basis, iteratio
 
 **What you build:**
 - `cxf_solve_lp` (6-part pipeline) -- the complete LP solve orchestration: parameter extraction, solver state initialization, method selection, crash basis, the two-level iteration loop (inner for basis stabilization, outer for round control), piecewise-linear constraint processing, solution extraction, and status mapping.
-- `cxf_solver_dispatch` (6-part pipeline) -- algorithm routing: LP/QP/SOCP detection, method selection heuristic, the presolve-solve-uncrush cycle, parameter backup/restore, and result reporting.
+- `cxf_solver_dispatch` (6-part pipeline) -- algorithm routing: LP/QP/SOCP/MIP detection, method selection heuristic, the presolve-solve-uncrush cycle, parameter backup/restore, and result reporting.
 - Solution processing: `cxf_process_lp_solution`, `cxf_uncrush_solution`, `cxf_wire_result_attributes`, `cxf_compute_gap`, `cxf_scale_objval`, `cxf_copy_solution`.
 - Statistics and diagnostics: `cxf_presolve_stats`, `cxf_coefficient_stats`, `cxf_compute_coef_stats`, `cxf_compute_violations`, `cxf_compute_fingerprint`, `cxf_get_timestamp`.
 - Buffer cleanup: `cxf_free_callback_state`, `cxf_free_solution_pool`, `cxf_clear_solution`, `cxf_clear_pending_buffer`, `cxf_reset_pending_buffer`.
 
 **External dependency required: Presolve system.**
 The presolve-solve-uncrush cycle in `cxf_solver_dispatch` relies on a presolve subsystem that is not fully specified in this corpus. The presolve system performs variable elimination, constraint aggregation, bound tightening, and redundancy removal to create a reduced problem. You must either:
-- Implement presolve from published literature: Andersen and Andersen (1995) "Presolving in Linear Programming."
+- Implement presolve from published literature: Andersen and Andersen (1995) "Presolving in Linear Programming," Achterberg et al. (2020) "Presolve Reductions in Mixed Integer Programming."
 - Use an existing open-source presolve implementation (e.g., from HiGHS or GLPK).
 - Initially stub the presolve system to pass through the original problem unchanged, and add presolve reductions incrementally.
 
@@ -20859,7 +22652,7 @@ A complete LP solver pipeline that handles the full flow: parameter management, 
 - Model lifecycle: `cxf_model_create_internal`, `cxf_env_model_cleanup`, `cxf_update_model_manager`, `cxf_model_apply_modifications` (lazy update flush).
 - Environment lifecycle: `cxf_env_create_internal`, `cxf_env_free_internal`, `cxf_env_finalize` (8-part licensing pipeline), `cxf_env_load_logfile`, `cxf_env_update_active_model`.
 - Optimization preparation: signal handler installation, remote solver delegation.
-- Callbacks: `cxf_init_callback_struct`, `cxf_callback_terminate`, `cxf_pre_optimize_hook`, `cxf_post_optimize_hook`, `cxf_getconstrs_callback`, `cxf_copy_env_callbacks`.
+- Callbacks: `cxf_init_callback_struct`, `cxf_callback_terminate`, `cxf_pre_optimize_callback`, `cxf_post_optimize_callback`, `cxf_getconstrs_callback`, `cxf_copy_env_callbacks`.
 - Threading: locale safety, solve lock acquisition/release, CPU detection, thread count management.
 
 **What you gain:**
@@ -20914,7 +22707,8 @@ The core barrier/interior-point algorithm (predictor-corrector Mehrotra steps, C
 **What you build:**
 - `cxf_solve_barrier` -- barrier entry point: Q-matrix PSD validation, binary variable linearization, delegation to the IPM implementation, and routing to crossover (Stage 11) when crossover is enabled.
 - `cxf_solve_concurrent` (6-part pipeline) -- concurrent optimization: model cloning, parameter diversification, worker thread spawning, first-wins polling, winner selection, and solution aggregation.
-- `cxf_solve_concurrent_distributed` -- distributed concurrent solving across remote solvers.
+- `cxf_solve_concurrent_distributed` -- distributed concurrent solving across remote remote solvers.
+- `cxf_solve_concurrent_mip` -- concurrent MIP solving with diversified seeds.
 
 **What you gain:**
 Two additional algorithm paths beyond simplex: barrier (interior-point) for large sparse problems, and concurrent (algorithm portfolio) for hedging between methods on problems where the best algorithm is unknown.
@@ -20924,6 +22718,40 @@ Two additional algorithm paths beyond simplex: barrier (interior-point) for larg
 - Concurrent solving: configure method=3 (concurrent) and verify the solver runs multiple methods and returns a correct solution.
 - Verify that concurrent model clones are fully independent (no shared mutable state).
 - Verify parameter diversification: each concurrent instance should use a different random seed.
+
+---
+
+### Stage 13: MIP Entry and Solution Processing
+
+**Specs to implement:**
+- P3.27 -- Solve MIP (`solve_mip.md`)
+- P3.28 -- Multi-Objective & Scenario (`solve_multiobj.md`)
+- P3.35 -- Query Utilities (`query_utilities.md`)
+
+**External dependency required: Branch-and-bound engine.**
+The core MIP branch-and-bound algorithm (node selection, branching variable selection, cutting planes, heuristics) is not specified in this corpus. This is by far the largest external dependency. You must either:
+- Implement a branch-and-bound engine from published literature: Achterberg (2007) "Constraint Integer Programming," Land and Doig (1960), Dakin (1965), plus cutting plane references (Gomory 1958, Balas et al. 1996).
+- Use an existing open-source solver framework (e.g., SCIP, CBC, or HiGHS MIP).
+- Skip MIP entirely if your use case only requires LP solving.
+
+The solver uses the LP solver (Stages 1-9) as a subroutine for solving LP relaxations at each node.
+
+**What you build:**
+- `cxf_solve_mip` -- MIP entry point: non-PSD recovery wrapper, delegation to the branch-and-bound engine.
+- `cxf_presolve_mip` -- MIP presolve logging.
+- `cxf_setup_mip_params` -- MIP parameter configuration.
+- `cxf_process_mip_solution` (6-part pipeline) -- MIP solution processing: polishing, attribute wiring, gap computation.
+- Multi-objective: `cxf_solve_multiobj`, `cxf_solve_multiscenario`, `cxf_setup_scenario` (5-part pipeline).
+- Query utilities: `cxf_get_genconstr_name`, `cxf_get_qconstr_data`, `cxf_count_genconstr_types`, `cxf_has_history`, `cxf_fix_variable`.
+
+**What you gain:**
+The ability to solve mixed-integer programs and multi-objective problems. The MIP entry point manages the interface between the branch-and-bound engine and the LP solver, handles solution pool management, and processes MIP-specific solution attributes.
+
+**What you can test:**
+- If a B&B engine is available: solve small MIP instances (e.g., from MIPLIB) and verify optimal solutions.
+- Verify MIP gap computation: the reported gap should match (best_bound - incumbent) / |incumbent|.
+- Verify solution pool management: solve with PoolSolutions > 1 and verify multiple solutions are stored.
+- Verify non-convex QP handling: a continuous QP with non-PSD Q matrix should be re-dispatched as MIP when NonConvex is enabled.
 
 ---
 
@@ -20977,6 +22805,8 @@ The following modules can be deferred or stubbed without blocking the core LP so
 | P3.11 -- Threading | Single-threaded stub; no-op lock functions | Stage 10, when concurrent solving is needed |
 | P3.23 -- Crossover | Skip crossover; simplex-only operation | Stage 11, when barrier support is added |
 | P3.26 -- Barrier & Concurrent | Return "method not supported" | Stage 12, when barrier/concurrent are needed |
+| P3.27 -- MIP | Return "method not supported" for integer models | Stage 13, when MIP is needed |
+| P3.28 -- Multi-Objective | Return "feature not supported" | Stage 13, when multi-objective is needed |
 | P3.32 -- Optimization Preparation | Skip signal handler and remote solver delegation | Stage 10 |
 | P3.33 -- Statistics | No-op diagnostic functions; skip fingerprinting | Stage 9, when the pipeline is complete |
 | P3.34 -- Cleanup Utilities (partially) | Stub signal handler restoration; implement bound propagation for Stage 8 | Stage 10 for full cleanup |
@@ -20988,6 +22818,7 @@ The following modules can be deferred or stubbed without blocking the core LP so
 | Sparse LU factorization | Stage 4 (Basis System) | Bartels & Golub (1969), Forrest & Tomlin (1972), Reid (1982), Maros (2003) Ch. 5 | LUSOL, SuiteSparse, SuperLU |
 | Presolve system | Stage 9 (LP Pipeline) | Andersen & Andersen (1995), Achterberg et al. (2020) | HiGHS presolve, GLPK presolve |
 | Interior-point method | Stage 12 (Barrier) | Mehrotra (1992), Gondzio (1996), Wright (1997) | OOQP, HiGHS IPM |
+| Branch-and-bound engine | Stage 13 (MIP) | Achterberg (2007), Land & Doig (1960) | SCIP, CBC, HiGHS MIP |
 
 **Note on presolve stubbing:** The LP solver can operate without presolve by passing the problem through unchanged. Presolve improves performance (often dramatically on large problems) but is not required for correctness. It is recommended to stub presolve initially and add it when the core solver is validated.
 
@@ -21063,8 +22894,9 @@ The following modules can be deferred or stubbed without blocking the core LP so
 | 10 | Public API | Entry chain + Callbacks + Threading | 13 | Full user-facing solver |
 | 11 | Crossover | Barrier-to-simplex conversion | 2 | Post-barrier cleanup |
 | 12 | Barrier & Concurrent | IPM entry + Concurrent racing | 1 | Alternative algorithms |
+| 13 | MIP & Extensions | MIP entry + Multi-objective | 3 | Integer programming |
 
-**Total:** 58 spec files across 12 implementation stages.
+**Total:** 61 spec files across 13 implementation stages.
 
 ---
 
@@ -21081,6 +22913,8 @@ The following modules can be deferred or stubbed without blocking the core LP so
 
 ## References
 
+- Achterberg, T. (2007). "Constraint Integer Programming." PhD thesis, Technische Universitat Berlin.
+- Achterberg, T., Bixby, R.E., Gu, Z., Rothberg, E., and Weninger, D. (2020). "Presolve Reductions in Mixed Integer Programming." *INFORMS Journal on Computing*, 32(2):473-506.
 - Andersen, E.D. and Andersen, K.D. (1995). "Presolving in Linear Programming." *Mathematical Programming*, 71(2):221-245.
 - Bartels, R.H. and Golub, G.H. (1969). "The Simplex Method of Linear Programming Using LU Decomposition." *Communications of the ACM*, 12(5):266-268.
 - Bixby, R.E. and Saltzman, M.J. (1994). "Recovering an Optimal LP Basis from an Interior Point Solution." *Operations Research Letters*, 15(4):169-178.
@@ -21091,10 +22925,12 @@ The following modules can be deferred or stubbed without blocking the core LP so
 - Goldfarb, D. and Reid, J.K. (1977). "A practicable steepest-edge simplex algorithm." *Mathematical Programming*, 12(1):361-371.
 - Gondzio, J. (1996). "Multiple centrality corrections in a primal-dual method for linear programming." *Computational Optimization and Applications*, 6(2):137-156.
 - Harris, P.M.J. (1973). "Pivot selection methods of the Devex LP code." *Mathematical Programming*, 5(1):1-28.
+- Land, A.H. and Doig, A.G. (1960). "An automatic method of solving discrete programming problems." *Econometrica*, 28(3):497-520.
 - Maros, I. (2003). *Computational Techniques of the Simplex Method*. Springer.
 - Megiddo, N. (1991). "On Finding Primal- and Dual-Optimal Bases." *ORSA Journal on Computing*, 3(1):63-65.
 - Mehrotra, S. (1992). "On the Implementation of a Primal-Dual Interior Point Method." *SIAM Journal on Optimization*, 2(4):575-601.
 - Reid, J.K. (1982). "A sparsity-exploiting variant of the Bartels-Golub decomposition for linear programming bases." *Mathematical Programming*, 24(1):55-69.
+- Savelsbergh, M.W.P. (1994). "Preprocessing and Probing Techniques for Mixed Integer Programming Problems." *ORSA Journal on Computing*, 6(4):445-454.
 - Suhl, U.H. and Suhl, L.M. (1990). "Computing sparse LU factorizations for large-scale linear programming bases." *ORSA Journal on Computing*, 2(4):325-335.
 - Wright, S.J. (1997). *Primal-Dual Interior-Point Methods*. SIAM.
 

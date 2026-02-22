@@ -32,7 +32,7 @@ The guide references spec IDs throughout. Each ID maps to a specific file in the
 **What you build:**
 - `cxf_calloc`, `cxf_realloc`, `cxf_vector_free`, `cxf_model_alloc` -- the memory allocation layer with optional tracking, memory limits, and custom allocator support.
 - `cxf_error_env`, `cxf_error_model`, `cxf_set_error_message`, `cxf_env_set_status` -- the error reporting system with first-error preservation and locked-buffer semantics.
-- `cxf_log`, `cxf_set_error_string`, `cxf_register_log_callback` -- logging output with configurable verbosity.
+- `cxf_log`, `cxf_errorlog`, `cxf_register_log_callback` -- logging output with configurable verbosity.
 
 **What you gain:**
 Every subsequent module depends on being able to allocate memory, report errors, and produce log output. These three capabilities are the bedrock of the entire solver.
@@ -81,9 +81,9 @@ The ability to create an environment, create a model within it, populate the mod
 - P3.08 -- Data Validation (`data_validation.md`)
 
 **What you build:**
-- `cxf_matrix_setup`, `cxf_prepare_row_data`, `cxf_build_row_major`, `cxf_sort_by_values` -- functions to construct and finalize the internal sparse matrix representation from user-provided data.
+- `cxf_matrix_setup`, `cxf_prepare_row_data`, `cxf_build_row_major`, `cxf_sort_indices` -- functions to construct and finalize the internal sparse matrix representation from user-provided data.
 - `cxf_finalize_row_data` (6-part pipeline) -- the complete matrix finalization sequence.
-- Model type detection (`cxf_is_quadratic`, `cxf_is_socp`, etc.) and input/data validation functions.
+- Model type detection (`cxf_is_mip_model`, `cxf_is_quadratic`, `cxf_is_socp`, etc.) and input/data validation functions.
 
 **What you gain:**
 The ability to take raw user input (variable bounds, constraint coefficients, objective) and produce the finalized internal matrix representation that all solver algorithms consume. Plus a comprehensive validation layer that catches malformed inputs before they reach the solver.
@@ -92,7 +92,7 @@ The ability to take raw user input (variable bounds, constraint coefficients, ob
 - Build matrices from hand-crafted test cases and verify CSR/CSC correctness.
 - Test index sorting on unsorted input.
 - Verify NaN/infinity detection catches invalid coefficients.
-- Verify model type detection correctly classifies LP, QP, and SOCP models.
+- Verify model type detection correctly classifies LP, QP, MIP, and SOCP models.
 - Test label validation with valid and invalid string inputs.
 - Verify that finalization produces row-major data consistent with the column-major input.
 - Run on standard small LP test cases (e.g., the Netlib afiro problem has 27 rows and 32 columns).
@@ -113,8 +113,8 @@ The ability to take raw user input (variable bounds, constraint coefficients, ob
 - All three EtaVector variants (PIVOT, VARIABLE_FIX, WARM_START) with sparse storage.
 - The PFI algorithm for FTRAN and BTRAN operations.
 - `cxf_pivot_with_eta` -- the central function that creates an eta vector to record a basis pivot.
-- `cxf_fix_variables_at_bounds` -- variable-fixing based on reduced cost analysis.
-- `cxf_progress_snapshot` and `cxf_basis_diff` -- for convergence detection in the iteration loop.
+- `cxf_basis_refactor` -- variable-fixing based on reduced cost analysis.
+- `cxf_basis_snapshot` and `cxf_basis_diff` -- for convergence detection in the iteration loop.
 - `cxf_basis_warm` -- warm-start eta creation for reoptimization.
 - `cxf_alloc_eta`, `cxf_alloc_work_arrays`, `cxf_setup_resources` -- allocation helpers for the basis system and work arrays.
 
@@ -206,7 +206,7 @@ The ability to execute a complete simplex pivot: given an entering variable from
 
 **Specs to implement:**
 - P1.04 -- SolverState (`solver_state.md`)
-- P1.09 -- SolutionData (`work_arrays.md`)
+- P1.09 -- WorkArrays (`work_arrays.md`)
 - P2.1 -- Revised Simplex Method (`revised_simplex.md`)
 - P2.8 -- Bound Propagation (`bound_propagation.md`)
 - P3.20 -- Simplex Iteration (`simplex_iteration.md`)
@@ -215,10 +215,10 @@ The ability to execute a complete simplex pivot: given an entering variable from
 
 **What you build:**
 - The SolverState structure -- the central mutable state container for the simplex solver, holding problem dimensions, solve configuration, iteration control, basis tracking arrays, CSR/CSC matrix copies, working bounds, reduced costs, and all control parameters.
-- The SolutionData structure for temporary computation buffers.
+- The WorkArrays structure for temporary computation buffers.
 - The 10-step inner iteration loop described in the optimization pipeline integration spec (P4.1):
-  1. `cxf_progress_snapshot` -- capture current basis state
-  2. `cxf_log_iteration_progress` -- progress logging and callback notification
+  1. `cxf_basis_snapshot` -- capture current basis state
+  2. `cxf_simplex_iterate` -- progress logging and callback notification
   3. `cxf_simplex_phase_end` -- phase transition checks (first call)
   4. `cxf_simplex_perturbation` -- anti-cycling if stalling
   5. `cxf_simplex_step` -- primary simplex pivot (pricing + ratio test + basis update)
@@ -227,8 +227,8 @@ The ability to execute a complete simplex pivot: given an entering variable from
   8. `cxf_simplex_phase_end` -- post-pivot cleanup (second call)
   9. `cxf_basis_diff` -- convergence detection
   10. `cxf_simplex_post_iterate` -- stall detection, termination checks
-- State initialization (`cxf_init_solve_state`, `cxf_free_warmstart_basis`, `cxf_free_work_arrays`) to create the SolverState from model data.
-- State cleanup (`cxf_cleanup_solve_state`, `cxf_free_attribute_table`, `cxf_free_basis_state`) to tear down the SolverState.
+- State initialization (`cxf_init_solve_state`, `cxf_setup_basis`, `cxf_setup_work_arrays`) to create the SolverState from model data.
+- State cleanup (`cxf_cleanup_solve_state`, `cxf_free_solver_state`, `cxf_free_basis_state`) to tear down the SolverState.
 
 **What you gain:**
 A complete simplex iteration engine that can solve LP problems. This is the first stage where you have an end-to-end solver: given a prepared SolverState with an initial basis, the iteration loop will execute simplex pivots until optimality, infeasibility, unboundedness, or an iteration limit is reached.
@@ -268,8 +268,8 @@ A complete simplex iteration engine that can solve LP problems. This is the firs
 - `cxf_simplex_phase_end` -- phase transition handling (Phase I to Phase II transition when feasibility is achieved).
 - `cxf_simplex_refine` -- post-solve refinement (fix non-basic variables at bounds based on reduced costs, recover basic variables near upper bounds).
 - `cxf_simplex_final` -- final result processing (dual-feasibility-based variable fixing, complementary slackness analysis).
-- `cxf_simplex_postsolve` -- implied bound propagation (FBBT) via `cxf_propagate_bounds`, constraint tightening, working array deallocation.
-- `cxf_propagate_bounds`, `cxf_cleanup_coeff_change`, `cxf_cleanup_optimization`, `cxf_propagate_bounds` -- cleanup utilities.
+- `cxf_simplex_cleanup` -- implied bound propagation (FBBT) via `cxf_propagate_bounds`, constraint tightening, working array deallocation.
+- `cxf_cleanup_helper`, `cxf_cleanup_coeff_change`, `cxf_cleanup_optimization`, `cxf_propagate_bounds` -- cleanup utilities.
 
 **What you gain:**
 The complete simplex lifecycle from initialization through crash basis, iteration, post-processing, and cleanup. The crash basis dramatically reduces Phase I iteration counts on practical problems. The anti-cycling perturbation ensures convergence on degenerate problems. The post-solve refinement and cleanup produce polished solutions.
@@ -298,14 +298,14 @@ The complete simplex lifecycle from initialization through crash basis, iteratio
 
 **What you build:**
 - `cxf_solve_lp` (6-part pipeline) -- the complete LP solve orchestration: parameter extraction, solver state initialization, method selection, crash basis, the two-level iteration loop (inner for basis stabilization, outer for round control), piecewise-linear constraint processing, solution extraction, and status mapping.
-- `cxf_solver_dispatch` (6-part pipeline) -- algorithm routing: LP/QP/SOCP detection, method selection heuristic, the presolve-solve-uncrush cycle, parameter backup/restore, and result reporting.
+- `cxf_solver_dispatch` (6-part pipeline) -- algorithm routing: LP/QP/SOCP/MIP detection, method selection heuristic, the presolve-solve-uncrush cycle, parameter backup/restore, and result reporting.
 - Solution processing: `cxf_process_lp_solution`, `cxf_uncrush_solution`, `cxf_wire_result_attributes`, `cxf_compute_gap`, `cxf_scale_objval`, `cxf_copy_solution`.
 - Statistics and diagnostics: `cxf_presolve_stats`, `cxf_coefficient_stats`, `cxf_compute_coef_stats`, `cxf_compute_violations`, `cxf_compute_fingerprint`, `cxf_get_timestamp`.
 - Buffer cleanup: `cxf_free_callback_state`, `cxf_free_solution_pool`, `cxf_clear_solution`, `cxf_clear_pending_buffer`, `cxf_reset_pending_buffer`.
 
 **External dependency required: Presolve system.**
 The presolve-solve-uncrush cycle in `cxf_solver_dispatch` relies on a presolve subsystem that is not fully specified in this corpus. The presolve system performs variable elimination, constraint aggregation, bound tightening, and redundancy removal to create a reduced problem. You must either:
-- Implement presolve from published literature: Andersen and Andersen (1995) "Presolving in Linear Programming."
+- Implement presolve from published literature: Andersen and Andersen (1995) "Presolving in Linear Programming," Achterberg et al. (2020) "Presolve Reductions in Mixed Integer Programming."
 - Use an existing open-source presolve implementation (e.g., from HiGHS or GLPK).
 - Initially stub the presolve system to pass through the original problem unchanged, and add presolve reductions incrementally.
 
@@ -347,7 +347,7 @@ A complete LP solver pipeline that handles the full flow: parameter management, 
 - Model lifecycle: `cxf_model_create_internal`, `cxf_env_model_cleanup`, `cxf_update_model_manager`, `cxf_model_apply_modifications` (lazy update flush).
 - Environment lifecycle: `cxf_env_create_internal`, `cxf_env_free_internal`, `cxf_env_finalize` (8-part licensing pipeline), `cxf_env_load_logfile`, `cxf_env_update_active_model`.
 - Optimization preparation: signal handler installation, remote solver delegation.
-- Callbacks: `cxf_init_callback_struct`, `cxf_callback_terminate`, `cxf_pre_optimize_hook`, `cxf_post_optimize_hook`, `cxf_getconstrs_callback`, `cxf_copy_env_callbacks`.
+- Callbacks: `cxf_init_callback_struct`, `cxf_callback_terminate`, `cxf_pre_optimize_callback`, `cxf_post_optimize_callback`, `cxf_getconstrs_callback`, `cxf_copy_env_callbacks`.
 - Threading: locale safety, solve lock acquisition/release, CPU detection, thread count management.
 
 **What you gain:**
@@ -402,7 +402,8 @@ The core barrier/interior-point algorithm (predictor-corrector Mehrotra steps, C
 **What you build:**
 - `cxf_solve_barrier` -- barrier entry point: Q-matrix PSD validation, binary variable linearization, delegation to the IPM implementation, and routing to crossover (Stage 11) when crossover is enabled.
 - `cxf_solve_concurrent` (6-part pipeline) -- concurrent optimization: model cloning, parameter diversification, worker thread spawning, first-wins polling, winner selection, and solution aggregation.
-- `cxf_solve_concurrent_distributed` -- distributed concurrent solving across remote solvers.
+- `cxf_solve_concurrent_distributed` -- distributed concurrent solving across remote remote solvers.
+- `cxf_solve_concurrent_mip` -- concurrent MIP solving with diversified seeds.
 
 **What you gain:**
 Two additional algorithm paths beyond simplex: barrier (interior-point) for large sparse problems, and concurrent (algorithm portfolio) for hedging between methods on problems where the best algorithm is unknown.
@@ -412,6 +413,40 @@ Two additional algorithm paths beyond simplex: barrier (interior-point) for larg
 - Concurrent solving: configure method=3 (concurrent) and verify the solver runs multiple methods and returns a correct solution.
 - Verify that concurrent model clones are fully independent (no shared mutable state).
 - Verify parameter diversification: each concurrent instance should use a different random seed.
+
+---
+
+### Stage 13: MIP Entry and Solution Processing
+
+**Specs to implement:**
+- P3.27 -- Solve MIP (`solve_mip.md`)
+- P3.28 -- Multi-Objective & Scenario (`solve_multiobj.md`)
+- P3.35 -- Query Utilities (`query_utilities.md`)
+
+**External dependency required: Branch-and-bound engine.**
+The core MIP branch-and-bound algorithm (node selection, branching variable selection, cutting planes, heuristics) is not specified in this corpus. This is by far the largest external dependency. You must either:
+- Implement a branch-and-bound engine from published literature: Achterberg (2007) "Constraint Integer Programming," Land and Doig (1960), Dakin (1965), plus cutting plane references (Gomory 1958, Balas et al. 1996).
+- Use an existing open-source solver framework (e.g., SCIP, CBC, or HiGHS MIP).
+- Skip MIP entirely if your use case only requires LP solving.
+
+The solver uses the LP solver (Stages 1-9) as a subroutine for solving LP relaxations at each node.
+
+**What you build:**
+- `cxf_solve_mip` -- MIP entry point: non-PSD recovery wrapper, delegation to the branch-and-bound engine.
+- `cxf_presolve_mip` -- MIP presolve logging.
+- `cxf_setup_mip_params` -- MIP parameter configuration.
+- `cxf_process_mip_solution` (6-part pipeline) -- MIP solution processing: polishing, attribute wiring, gap computation.
+- Multi-objective: `cxf_solve_multiobj`, `cxf_solve_multiscenario`, `cxf_setup_scenario` (5-part pipeline).
+- Query utilities: `cxf_get_genconstr_name`, `cxf_get_qconstr_data`, `cxf_count_genconstr_types`, `cxf_has_history`, `cxf_fix_variable`.
+
+**What you gain:**
+The ability to solve mixed-integer programs and multi-objective problems. The MIP entry point manages the interface between the branch-and-bound engine and the LP solver, handles solution pool management, and processes MIP-specific solution attributes.
+
+**What you can test:**
+- If a B&B engine is available: solve small MIP instances (e.g., from MIPLIB) and verify optimal solutions.
+- Verify MIP gap computation: the reported gap should match (best_bound - incumbent) / |incumbent|.
+- Verify solution pool management: solve with PoolSolutions > 1 and verify multiple solutions are stored.
+- Verify non-convex QP handling: a continuous QP with non-PSD Q matrix should be re-dispatched as MIP when NonConvex is enabled.
 
 ---
 
@@ -465,6 +500,8 @@ The following modules can be deferred or stubbed without blocking the core LP so
 | P3.11 -- Threading | Single-threaded stub; no-op lock functions | Stage 10, when concurrent solving is needed |
 | P3.23 -- Crossover | Skip crossover; simplex-only operation | Stage 11, when barrier support is added |
 | P3.26 -- Barrier & Concurrent | Return "method not supported" | Stage 12, when barrier/concurrent are needed |
+| P3.27 -- MIP | Return "method not supported" for integer models | Stage 13, when MIP is needed |
+| P3.28 -- Multi-Objective | Return "feature not supported" | Stage 13, when multi-objective is needed |
 | P3.32 -- Optimization Preparation | Skip signal handler and remote solver delegation | Stage 10 |
 | P3.33 -- Statistics | No-op diagnostic functions; skip fingerprinting | Stage 9, when the pipeline is complete |
 | P3.34 -- Cleanup Utilities (partially) | Stub signal handler restoration; implement bound propagation for Stage 8 | Stage 10 for full cleanup |
@@ -476,6 +513,7 @@ The following modules can be deferred or stubbed without blocking the core LP so
 | Sparse LU factorization | Stage 4 (Basis System) | Bartels & Golub (1969), Forrest & Tomlin (1972), Reid (1982), Maros (2003) Ch. 5 | LUSOL, SuiteSparse, SuperLU |
 | Presolve system | Stage 9 (LP Pipeline) | Andersen & Andersen (1995), Achterberg et al. (2020) | HiGHS presolve, GLPK presolve |
 | Interior-point method | Stage 12 (Barrier) | Mehrotra (1992), Gondzio (1996), Wright (1997) | OOQP, HiGHS IPM |
+| Branch-and-bound engine | Stage 13 (MIP) | Achterberg (2007), Land & Doig (1960) | SCIP, CBC, HiGHS MIP |
 
 **Note on presolve stubbing:** The LP solver can operate without presolve by passing the problem through unchanged. Presolve improves performance (often dramatically on large problems) but is not required for correctness. It is recommended to stub presolve initially and add it when the core solver is validated.
 
@@ -551,8 +589,9 @@ The following modules can be deferred or stubbed without blocking the core LP so
 | 10 | Public API | Entry chain + Callbacks + Threading | 13 | Full user-facing solver |
 | 11 | Crossover | Barrier-to-simplex conversion | 2 | Post-barrier cleanup |
 | 12 | Barrier & Concurrent | IPM entry + Concurrent racing | 1 | Alternative algorithms |
+| 13 | MIP & Extensions | MIP entry + Multi-objective | 3 | Integer programming |
 
-**Total:** 58 spec files across 12 implementation stages.
+**Total:** 61 spec files across 13 implementation stages.
 
 ---
 
@@ -569,6 +608,8 @@ The following modules can be deferred or stubbed without blocking the core LP so
 
 ## References
 
+- Achterberg, T. (2007). "Constraint Integer Programming." PhD thesis, Technische Universitat Berlin.
+- Achterberg, T., Bixby, R.E., Gu, Z., Rothberg, E., and Weninger, D. (2020). "Presolve Reductions in Mixed Integer Programming." *INFORMS Journal on Computing*, 32(2):473-506.
 - Andersen, E.D. and Andersen, K.D. (1995). "Presolving in Linear Programming." *Mathematical Programming*, 71(2):221-245.
 - Bartels, R.H. and Golub, G.H. (1969). "The Simplex Method of Linear Programming Using LU Decomposition." *Communications of the ACM*, 12(5):266-268.
 - Bixby, R.E. and Saltzman, M.J. (1994). "Recovering an Optimal LP Basis from an Interior Point Solution." *Operations Research Letters*, 15(4):169-178.
@@ -579,9 +620,11 @@ The following modules can be deferred or stubbed without blocking the core LP so
 - Goldfarb, D. and Reid, J.K. (1977). "A practicable steepest-edge simplex algorithm." *Mathematical Programming*, 12(1):361-371.
 - Gondzio, J. (1996). "Multiple centrality corrections in a primal-dual method for linear programming." *Computational Optimization and Applications*, 6(2):137-156.
 - Harris, P.M.J. (1973). "Pivot selection methods of the Devex LP code." *Mathematical Programming*, 5(1):1-28.
+- Land, A.H. and Doig, A.G. (1960). "An automatic method of solving discrete programming problems." *Econometrica*, 28(3):497-520.
 - Maros, I. (2003). *Computational Techniques of the Simplex Method*. Springer.
 - Megiddo, N. (1991). "On Finding Primal- and Dual-Optimal Bases." *ORSA Journal on Computing*, 3(1):63-65.
 - Mehrotra, S. (1992). "On the Implementation of a Primal-Dual Interior Point Method." *SIAM Journal on Optimization*, 2(4):575-601.
 - Reid, J.K. (1982). "A sparsity-exploiting variant of the Bartels-Golub decomposition for linear programming bases." *Mathematical Programming*, 24(1):55-69.
+- Savelsbergh, M.W.P. (1994). "Preprocessing and Probing Techniques for Mixed Integer Programming Problems." *ORSA Journal on Computing*, 6(4):445-454.
 - Suhl, U.H. and Suhl, L.M. (1990). "Computing sparse LU factorizations for large-scale linear programming bases." *ORSA Journal on Computing*, 2(4):325-335.
 - Wright, S.J. (1997). *Primal-Dual Interior-Point Methods*. SIAM.

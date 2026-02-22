@@ -2,7 +2,7 @@
 
 ## Purpose
 
-MatrixData is the core constraint matrix representation for a linear programming model. It stores the complete mathematical formulation: the constraint matrix A in sparse format, the objective function coefficients, variable bounds, constraint right-hand sides, constraint senses, and variable types. It also manages auxiliary representations (row-major format), scaling state, and special constraint types (quadratic, piecewise-linear, SOS, and general constraints). A model may maintain two MatrixData instances: a primary (original problem) and a working copy (modified during the solve process).
+MatrixData is the core constraint matrix representation for a linear or mixed-integer programming model. It stores the complete mathematical formulation: the constraint matrix A in sparse format, the objective function coefficients, variable bounds, constraint right-hand sides, constraint senses, and variable types. It also manages auxiliary representations (row-major format), scaling state, and special constraint types (quadratic, piecewise-linear, SOS, and general constraints). A model may maintain two MatrixData instances: a primary (original problem) and a working copy (modified during the solve process).
 
 ## Fields
 
@@ -85,7 +85,7 @@ The CSR cache is invalidated (all CSR arrays freed and set to NULL) whenever the
 
 | Field | Type | Purpose | Valid Values | Invariants |
 |-------|------|---------|--------------|------------|
-| vtype | array-of-char, length numVars | Type code for each variable | 'C' (continuous), 'B' (binary), 'I' (integer), 'S' (semi-continuous), 'N' (semi-integer) | Determines variable handling during optimization |
+| vtype | array-of-char, length numVars | Type code for each variable | 'C' (continuous), 'B' (binary), 'I' (integer), 'S' (semi-continuous), 'N' (semi-integer) | Determines whether the problem is an LP or MIP |
 
 ### Names
 
@@ -204,7 +204,8 @@ The SwapData structure supports the row-major conversion pipeline by:
 | version | int | Internal version number for the matrix data format | Positive integer | Incremented when the internal format changes |
 | modelType | int | Identifies the overall model type (LP, QP, etc.) | Non-negative integer | Derived from the combination of variable types and constraint types |
 | solStatus | int | Solution status from the most recent optimization | Negative when unsolved; non-negative solver-specific status codes | Reset when model is modified |
-| solveActiveFlag | int | Flag set when the solver is actively processing | 0 or 1 | Set to 1 during solve, cleared afterward |
+| integrality | int | Flag indicating the model contains integer variables | 0 (continuous only) or nonzero (has integer/binary/etc.) | Nonzero if any of numBinaryVars, numIntegerVars, numSemiContVars, numSemiIntVars > 0 |
+| mipSolveFlag | int | Flag set when the solver is actively processing | 0 or 1 | Set to 1 during MIP solve, cleared afterward |
 | optimizeFlag | int | Controls whether optimization should proceed | 0 (do not optimize) or positive (proceed) | Also used for multi-objective state |
 | forceNonConvex | int | Forces non-convex problem handling | 0 or nonzero | Overrides default convexity checks |
 | numPWLObjs | int | Count of piecewise-linear objective terms | >= 0 | -- |
@@ -214,7 +215,7 @@ The SwapData structure supports the row-major conversion pipeline by:
 
 - **Owned by CxfModel:** The model holds two pointers to MatrixData instances: the primary matrix (original problem as provided by the user) and a working matrix (a copy that may be modified during the solve process). The model owns both instances.
 - **References CxfEnv:** MatrixData itself does not contain an environment pointer. All memory allocation and error reporting is done through the CxfEnv obtained from the owning model.
-- **Referenced by solver subsystems:** The simplex solver, barrier solver, and presolve routines all read from and (in the case of the working copy) write to MatrixData fields.
+- **Referenced by solver subsystems:** The simplex solver, barrier solver, solver, and presolve routines all read from and (in the case of the working copy) write to MatrixData fields.
 - **Contains SwapData (conditional):** During row-major conversion, a temporary SwapData structure is allocated and pointed to from MatrixData. This is owned by the conversion pipeline and freed after use.
 - **Related to PendingBuffer:** Model modifications are batched in a PendingBuffer and applied to MatrixData in bulk. The PendingBuffer is a separate structure on the model.
 

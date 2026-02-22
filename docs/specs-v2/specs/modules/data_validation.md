@@ -68,11 +68,15 @@ The function iterates through each element of the array from index 0 to count-1.
 - Unrecognized variable type character -> INVALID_ARGUMENT error, with logged error message
 
 **Behavioral Description:**
-The function iterates through each character in the type array. For each character, it performs case normalization: lowercase ASCII letters are converted to uppercase before comparison. The normalized character is then checked against the recognized LP variable type code:
+The function iterates through each character in the type array. For each character, it performs case normalization: lowercase ASCII letters are converted to uppercase before comparison. The normalized character is then checked against the five recognized LP variable type codes:
 
 - 'C' : Continuous variable
+- 'B' : Binary variable (domain restricted to 0 and 1)
+- 'I' : General integer variable
+- 'S' : Semi-continuous variable (zero or within a continuous range)
+- 'N' : Semi-integer variable (zero or an integer within a range)
 
-If the character does not match the recognized code, the function logs an error through the environment's error logging facility (reporting the original, non-normalized character for diagnostic clarity) and returns an error code immediately. Validation is early-exit: only the first invalid character causes an error return.
+These type codes follow the standard ConvexFeld API convention for the VType attribute. If the character does not match any recognized code, the function logs an error through the environment's error logging facility (reporting the original, non-normalized character for diagnostic clarity) and returns an error code immediately. Validation is early-exit: only the first invalid character causes an error return.
 
 **Thread Safety:** conditional (safe if no other thread is concurrently modifying the error state of the same environment)
 
@@ -82,7 +86,7 @@ If the character does not match the recognized code, the function logs an error 
 
 ### cxf_validate_solution
 
-**Purpose:** Comprehensively validate a solution vector against all model constraints, variable bounds, and special constraint types, producing detailed violation metrics and optional diagnostic output.
+**Purpose:** Comprehensively validate a solution vector against all model constraints, variable bounds, integrality requirements, and special constraint types, producing detailed violation metrics and optional diagnostic output.
 
 **Signature:**
 - Input: model : pointer-to-Model - The model against which the solution is validated
@@ -97,14 +101,14 @@ If the character does not match the recognized code, the function logs an error 
 - If violation_info is non-null, it must point to a valid, writable ViolationInfo structure.
 
 **Postconditions:**
-- On success, the function has computed violation metrics for all constraint categories. If violation_info is non-null, it is populated with the maximum violation and worst-violating index for each category (constraint, bound). Diagnostic messages may have been printed to the solver log.
+- On success, the function has computed violation metrics for all constraint categories. If violation_info is non-null, it is populated with the maximum violation and worst-violating index for each category (constraint, bound, integrality). Diagnostic messages may have been printed to the solver log.
 - The model's modification control state is restored to its pre-call value.
 - Any internally allocated workspace has been freed.
 
 **Side Effects:**
 - Temporarily modifies and restores the model's modification-blocked flag to allow attribute queries during validation.
 - Allocates temporary workspace for constraint activity computation; this workspace is freed before the function returns.
-- In verbose mode, prints warning messages to the solver log for violations exceeding their respective tolerances (feasibility tolerance for constraint and bound violations). Also prints diagnostic suggestions about possible numerical causes (large coefficients, wide coefficient ranges, large bounds, large right-hand sides) when overall violations are significantly above tolerance.
+- In verbose mode, prints warning messages to the solver log for violations exceeding their respective tolerances (feasibility tolerance for constraint and bound violations, integrality tolerance for integer violations). Also prints diagnostic suggestions about possible numerical causes (large coefficients, wide coefficient ranges, large bounds, large right-hand sides) when overall violations are significantly above tolerance.
 - In silent mode, prints a one-line summary of maximum violations per category.
 
 **Error Conditions:**
@@ -119,15 +123,17 @@ The function performs a comprehensive, multi-category solution validation. It pr
 
 3. **Indicator Constraint Feasibility:** For models with indicator constraints, the function validates the implied linear constraints when the indicator variable is active.
 
-4. **Variable Bound Feasibility:** For each variable, the function computes the bound violation as the maximum of (lower bound - x) and (x - upper bound), clamped to zero when feasible.
+4. **Variable Bound Feasibility:** For each variable, the function computes the bound violation as the maximum of (lower bound - x) and (x - upper bound), clamped to zero when feasible. For semi-continuous and semi-integer variables, the violation is computed as the minimum of the standard bound violation and the absolute value of x (since these variable types allow the value zero in addition to their bounded range).
 
-5. **SOS Constraint Feasibility:** For models with SOS (Special Ordered Set) constraints, the function delegates to an internal SOS validation routine that checks SOS1/SOS2 conditions.
+5. **Integrality Feasibility:** For all non-continuous variables (binary, integer, semi-integer), the function computes the distance from the nearest integer by rounding and taking the absolute difference. The maximum integrality violation and sum are tracked. The function also tracks the maximum absolute value of integer variables to warn about very large integer values (above a threshold on the order of two billion), which may cause numerical issues.
 
-6. **General Constraint Feasibility:** For models with general constraints (piecewise-linear, function constraints, etc.), the function delegates to an internal general constraint validation routine.
+6. **SOS Constraint Feasibility:** For models with SOS (Special Ordered Set) constraints, the function delegates to an internal SOS validation routine that checks SOS1/SOS2 conditions.
+
+7. **General Constraint Feasibility:** For models with general constraints (piecewise-linear, function constraints, etc.), the function delegates to an internal general constraint validation routine.
 
 After all validation phases, the function produces output. In verbose mode, it prints warnings for each category whose maximum violation exceeds the relevant tolerance, and suggests possible numerical causes when the overall violation is large. In silent mode, it prints a compact one-line summary. If a violation_info output structure was provided, it is populated with the per-category maximum violations, violation sums, and worst-violating indices.
 
-The ViolationInfo output structure contains fields for: maximum overall violation, maximum bound violation, maximum constraint violation, accumulated bound violation sum, accumulated constraint violation sum, and the indices of the worst-violating bound and constraint entries.
+The ViolationInfo output structure contains fields for: maximum overall violation, maximum bound violation, maximum constraint violation, maximum integrality violation, accumulated bound violation sum, accumulated constraint violation sum, accumulated integrality violation sum, and the indices of the worst-violating bound, constraint, and integrality entries.
 
 **Thread Safety:** unsafe (temporarily modifies model state; allocates and frees workspace; writes to solver log)
 

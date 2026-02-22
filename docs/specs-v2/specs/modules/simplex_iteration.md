@@ -6,9 +6,9 @@ The Simplex Iteration module contains the core functions that execute within the
 
 ## Functions
 
-### cxf_log_iteration_progress
+### cxf_simplex_iterate
 
-**Purpose:** Report presolve and iteration progress to the user log and invoke the external monitoring callback.
+**Purpose:** Report presolve and iteration progress to the user log and invoke the external monitoring callback. Despite its name, this function does not perform simplex iterations — it is a progress logging and callback notification function.
 
 **Signature:**
 - Input: `model` : pointer-to-Model - The model containing logging configuration, solve mode, and thread count
@@ -41,11 +41,11 @@ This function provides progress reporting during the LP solve. It is called once
 
 **Step 3: Format and emit message.** The message format depends on the current solve mode:
 - During general constraint preprocessing: reports the preprocessing phase and elapsed time.
-- During standard presolve: reports the number of rows and columns removed and the elapsed time. The message prefix varies depending on whether this is the initial presolve or a subsequent presolve phase.
+- During standard presolve: reports the number of rows and columns removed and the elapsed time. The message prefix varies depending on whether this is the initial presolve or a root relaxation presolve within a MIP solve.
 
 **Step 4: Callback invocation.** The external logging callback is always invoked, regardless of whether a message was printed. This ensures that external monitoring systems (GUI progress bars, distributed computing managers) receive regular heartbeat notifications even when console output is suppressed.
 
-**Naming history:** Formerly `cxf_simplex_iterate`; renamed to better reflect that this function performs progress logging and callback notification, not simplex iteration logic (which resides in cxf_simplex_step, cxf_simplex_step2, and cxf_simplex_step3).
+**Naming note:** Despite its name suggesting iteration logic, this function is purely a logging and notification utility. The actual simplex iteration logic resides in cxf_simplex_step, cxf_simplex_step2, and cxf_simplex_step3 (all in this module).
 
 **Thread Safety:** Not thread-safe. Must be called from the main solve thread.
 
@@ -197,7 +197,7 @@ This function processes the secondary pricing queue populated during cxf_simplex
 
 6. **Infeasibility handling.** Infeasibility detection uses a two-stage procedure: the initial ratio check is confirmed against dual activity bounds before returning the infeasibility code. If confirmation fails, the candidate entry is restored and processing continues. This prevents false infeasibility alarms caused by numerical noise.
 
-7. **Bound-change eta record creation.** A lightweight bound-change eta record is created for each processed candidate (when eta tracking is active). This record stores the variable index, constraint index, flip classification, pivot coefficient, and ratio value.
+7. **Bound-change eta record creation.** A lightweight bound-change eta record is created for each processed candidate (when eta tracking is active). This record stores the variable index, constraint index, flip classification, pivot coefficient, and ratio value. For integer variables, the flip classification includes an additional flag to enable downstream MIP processing.
 
 8. **Bound update and notification.** New bounds are written to the variable's working bound arrays, cxf_pivot_update (P3.19) is called to incrementally update constraint activity bounds, and the pricing subsystem is notified via dirty-marking. If the flip type indicates both bounds are tightened (variable fixed), cxf_pivot_bound (P3.19) is called to fully fix the variable.
 
@@ -275,7 +275,7 @@ This technique is a standard LP presolve reduction also applicable during simple
 
 6. **Infeasibility handling.** As in step2, a two-stage procedure confirms infeasibility before reporting: the initial implication is verified against the constraint's minimum and maximum activity bounds. Unconfirmed infeasibilities are treated as false alarms (the constraint entry is restored and processing continues).
 
-7. **Bound-change eta record creation.** A lightweight bound-change eta record is created for each processed constraint (same format as step2). The record stores the variable index, constraint index, violation flags, coefficient, and implied value. Piecewise-linear variables receive additional flags.
+7. **Bound-change eta record creation.** A lightweight bound-change eta record is created for each processed constraint (same format as step2). The record stores the variable index, constraint index, violation flags, coefficient, and implied value. Piecewise-linear and integer variables receive additional flags.
 
 8. **Bound update and notification.** New bounds are applied, activity bounds are updated via cxf_pivot_update (P3.19), and the pricing subsystem is notified. If both bounds are tightened, cxf_pivot_bound (P3.19) fixes the variable.
 
@@ -389,8 +389,8 @@ This single-interval comparison (rather than tracking progress over multiple int
 
 The five functions in this module are called in a specific order within the main LP solve driver (cxf_solve_lp, P3.25). The typical per-iteration sequence is:
 
-1. **cxf_progress_snapshot** (P3.16) — capture progress baseline
-2. **cxf_log_iteration_progress** (this module) — progress logging and callback
+1. **cxf_basis_snapshot** (P3.16) — capture progress baseline
+2. **cxf_simplex_iterate** (this module) — progress logging and callback
 3. **cxf_simplex_phase_end** (P3.21) — check for phase transition
 4. **cxf_simplex_perturbation** (P3.21) — anti-cycling perturbation if needed
 5. **cxf_simplex_step** (this module) — primary simplex pivot
@@ -404,7 +404,11 @@ This sequence repeats until termination. The post_iterate function's return code
 
 ### Naming Clarifications
 
-**cxf_simplex_step2** and **cxf_simplex_step3** are not sequential steps of a single operation. They are complementary bound propagation passes that operate on different candidate queues (variable-side and constraint-side, respectively). They can be thought of as "variable_bound_propagation" and "constraint_bound_propagation."
+Several function names in this module are historically misleading:
+
+- **cxf_simplex_iterate** does not perform simplex iterations. It reports presolve progress and invokes the logging callback. A more descriptive name would be "progress_report" or "log_iteration_progress."
+
+- **cxf_simplex_step2** and **cxf_simplex_step3** are not sequential steps of a single operation. They are complementary bound propagation passes that operate on different candidate queues (variable-side and constraint-side, respectively). They can be thought of as "variable_bound_propagation" and "constraint_bound_propagation."
 
 ### Bidirectional Bound Propagation (step2 + step3)
 
@@ -430,7 +434,7 @@ The constraint-side propagation (step3) is the standard implied-bound technique 
 | cxf_simplex_step2 | BOUND_CHANGE | Lightweight bound-change record for variable-side flips |
 | cxf_simplex_step3 | BOUND_CHANGE | Lightweight bound-change record for constraint-side propagation |
 
-The bound-change eta records created by step2 and step3 are a lightweight variant distinct from the full pivot eta records (Variant 1) and the variable-fixing records (Variant 2) created by cxf_pivot_bound (P3.19). They store only the variable index, constraint index, classification flags, pivot coefficient, and ratio/implied value. For piecewise-linear variables, an additional flag is included in the classification to enable downstream PWL processing.
+The bound-change eta records created by step2 and step3 are a lightweight variant distinct from the full pivot eta records (Variant 1) and the variable-fixing records (Variant 2) created by cxf_pivot_bound (P3.19). They store only the variable index, constraint index, classification flags, pivot coefficient, and ratio/implied value. For integer and piecewise-linear variables, an additional flag is included in the classification to enable downstream MIP or PWL processing.
 
 All eta records are allocated from the SolverState's memory pool via bump allocation and are freed in bulk during basis refactorization.
 
@@ -447,7 +451,7 @@ This conservative approach prevents false infeasibility reports caused by accumu
 
 The five functions in this module use two different parameter patterns:
 
-- **cxf_log_iteration_progress** and **cxf_simplex_post_iterate** accept a model pointer and a solver state pointer. They require model-level information (logging configuration, stall detection settings, thread count) that is not available in the solver state alone.
+- **cxf_simplex_iterate** and **cxf_simplex_post_iterate** accept a model pointer and a solver state pointer. They require model-level information (logging configuration, stall detection settings, thread count) that is not available in the solver state alone.
 
 - **cxf_simplex_step**, **cxf_simplex_step2**, and **cxf_simplex_step3** accept a solver state pointer and an environment pointer. They require solver-level tolerances and algorithm parameters but do not need model-level logging or configuration data.
 
@@ -467,7 +471,7 @@ This distinction reflects the separation of concerns between monitoring/logging 
 
 | Function | Thread Safety | Notes |
 |----------|---------------|-------|
-| cxf_log_iteration_progress | Not thread-safe | Writes to log, invokes callback |
+| cxf_simplex_iterate | Not thread-safe | Writes to log, invokes callback |
 | cxf_simplex_step | Not thread-safe | Modifies basis, eta chain, pricing, objective, constraint matrix |
 | cxf_simplex_step2 | Not thread-safe | Modifies bounds, pricing, eta chain, activity bounds |
 | cxf_simplex_step3 | Not thread-safe | Modifies bounds, pricing, eta chain, activity bounds |
@@ -487,7 +491,7 @@ All functions operate within a single-threaded simplex solve. Thread safety for 
 [x] All descriptions are behavioral, not implementational
 [x] All data structures described semantically using Layer 1/2 references
 [x] Explicit cross-references to P1.03, P1.04, P2.01, P2.1, P2.4 (algorithm specs) and P3.16-P3.19 (module specs)
-[x] Naming misnomers documented (cxf_log_iteration_progress is logging, not iteration)
+[x] Naming misnomers documented (cxf_simplex_iterate is logging, not iteration)
 [x] Passes the Clean Room Test: could be written without seeing the binary
 ```
 

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This module provides higher-level allocation functions that build on the memory primitives to allocate and initialize domain-specific solver structures. It includes the arena allocator for eta vectors used in the Product Form of the Inverse and the allocation and initialization of the SolutionData (solution data container). These functions bridge the gap between raw memory allocation and the solver's runtime data structures.
+This module provides higher-level allocation functions that build on the memory primitives to allocate and initialize domain-specific solver structures. It includes the arena allocator for eta vectors used in the Product Form of the Inverse, the allocation and initialization of the WorkArrays (solution data container), and the pre-optimization resource validation function that checks licensing and model size limits. These functions bridge the gap between raw memory allocation and the solver's runtime data structures.
 
 ## Functions
 
@@ -48,20 +48,20 @@ cxf_alloc_eta implements a region-based memory allocator (arena allocator) optim
 
 ### cxf_alloc_work_arrays
 
-**Purpose:** Allocate (if necessary) and initialize the SolutionData solution data container on a Model, preparing it for a new optimization call.
+**Purpose:** Allocate (if necessary) and initialize the WorkArrays solution data container on a Model, preparing it for a new optimization call.
 
 **Signature:**
-- Input: model : pointer-to-Model - The model on which to allocate or reinitialize the SolutionData
-- Input: template : pointer-to-SolutionData (nullable) - Optional template from which to copy scalar field values (e.g., from a scenario model); if null, fields are initialized to defaults
+- Input: model : pointer-to-Model - The model on which to allocate or reinitialize the WorkArrays
+- Input: template : pointer-to-WorkArrays (nullable) - Optional template from which to copy scalar field values (e.g., from a scenario model); if null, fields are initialized to defaults
 - Output: int - Error code: zero on success, OUT_OF_MEMORY error code on allocation failure
 
 **Preconditions:**
 - model must be a valid, initialized Model with a valid environment and matrix data
-- If template is non-null, it must point to a valid, initialized SolutionData structure
+- If template is non-null, it must point to a valid, initialized WorkArrays structure
 - The model's matrix data must be populated (the function reads the variable count from it)
 
 **Postconditions:**
-- On success, the model's SolutionData pointer references an initialized structure with:
+- On success, the model's WorkArrays pointer references an initialized structure with:
   - The active flag set to indicate the structure is live
   - Scale factors computed from the model's variable count multiplied by standard algorithmic tolerance and scaling constants
   - The base tolerance stored from the solver's tolerance constant
@@ -71,23 +71,67 @@ cxf_alloc_eta implements a region-based memory allocator (arena allocator) optim
   - All solution pool and cut counters cleared to zero
   - All pointer fields for solution arrays (primal values, dual values) set to null
   - If a template was provided, scalar fields (counters, objective values, scale factors, thresholds) have been bulk-copied from the template, with pointer fields subsequently cleared to prevent aliasing
-- Any previously allocated solution arrays (primal values, dual values) within the SolutionData have been freed before reinitialization
+- Any previously allocated solution arrays (primal values, dual values) within the WorkArrays have been freed before reinitialization
 
 **Side Effects:**
-- Allocates the SolutionData structure via cxf_calloc if not already present on the model
-- Frees any existing solution arrays owned by the SolutionData
+- Allocates the WorkArrays structure via cxf_calloc if not already present on the model
+- Frees any existing solution arrays owned by the WorkArrays
 - Clears borrowed pointer fields to prevent aliasing
 - Invokes an internal cleanup routine on the model
 
 **Error Conditions:**
-- Out of memory during SolutionData structure allocation -> returns OUT_OF_MEMORY error code
+- Out of memory during WorkArrays structure allocation -> returns OUT_OF_MEMORY error code
 
 **Behavioral Description:**
-cxf_alloc_work_arrays prepares the model's solution data container for a new optimization run. If the model does not yet have a SolutionData structure, one is allocated as a zero-initialized block. Any existing solution arrays (primal and dual value arrays) are freed to avoid memory leaks from a previous solve. The function then initializes all fields to their default states: the active flag is set, scale factors are computed as the product of the variable count and standard tolerance/scaling constants, anti-cycling indices are set to sentinel values indicating "not set," and adaptive threshold values are set to sentinel values indicating "not yet activated." If a template SolutionData is provided (used in multi-scenario optimization where a scenario model's results are transferred to the original model), the scalar fields are bulk-copied from the template and pointer fields are then explicitly cleared to null to prevent double-ownership of the template's arrays. Finally, additional tracking fields (counters, pool data) are zeroed.
+cxf_alloc_work_arrays prepares the model's solution data container for a new optimization run. If the model does not yet have a WorkArrays structure, one is allocated as a zero-initialized block. Any existing solution arrays (primal and dual value arrays) are freed to avoid memory leaks from a previous solve. The function then initializes all fields to their default states: the active flag is set, scale factors are computed as the product of the variable count and standard tolerance/scaling constants, anti-cycling indices are set to sentinel values indicating "not set," and adaptive threshold values are set to sentinel values indicating "not yet activated." If a template WorkArrays is provided (used in multi-scenario optimization where a scenario model's results are transferred to the original model), the scalar fields are bulk-copied from the template and pointer fields are then explicitly cleared to null to prevent double-ownership of the template's arrays. Finally, additional tracking fields (counters, pool data) are zeroed.
 
 **Thread Safety:** unsafe - Must be called from a single thread. The Model structure is not thread-safe.
 
 **Dependencies:** cxf_calloc (for allocation), system deallocator (for freeing old arrays).
+
+---
+
+### cxf_setup_resources
+
+**Purpose:** Validate the license and check model size against license limits before optimization can proceed.
+
+**Signature:**
+- Input: model : pointer-to-Model - The model to validate
+- Output: int - Error code: zero on success, or a license/resource error code on failure
+
+**Preconditions:**
+- model must be a valid, initialized Model with a valid environment
+- The model's environment must reference a root environment with license data
+
+**Postconditions:**
+- On success (return zero), the license is valid and the model's dimensions (variable count, constraint count, nonzero count, and quadratic term count, including any pending uncommitted modifications) are within the license limits
+- On failure, an appropriate error code is returned and an error message may have been logged on the environment
+
+**Side Effects:**
+- For cloud-based or web license service deployment types: may perform network communication to validate or refresh a license token, protected by a critical section on the root environment
+- May update cached license tokens on the root environment when a fresh token is obtained
+- Logs error messages on the environment when initialization validation fails
+
+**Error Conditions:**
+- Environment relationship invalid (model's initialized environment does not match root environment) -> returns LICENSE_SIZE_EXCEEDED error
+- License suspended -> returns LICENSE_SIZE_EXCEEDED error
+- Cloud/WLS token validation failure (all fallback attempts exhausted) -> returns LICENSE_SIZE_EXCEEDED error
+- Batch mode active on environment -> returns CANNOT_OPTIMIZE_BATCH error (batch-mode models cannot be optimized locally)
+- Model variable count exceeds license limit -> returns LICENSE_LIMIT error
+- Model constraint count (sum of all constraint types plus pending) exceeds license limit -> returns LICENSE_LIMIT error
+- Model nonzero count exceeds license limit -> returns LICENSE_LIMIT error
+- Model quadratic term count exceeds license limit -> returns LICENSE_LIMIT error
+
+**Behavioral Description:**
+cxf_setup_resources performs a multi-tier validation before allowing optimization to proceed. First, it validates the environment chain by confirming that the model's license reference matches the root environment's license reference; if not, or if a basic environment validation fails, it returns an error immediately. If the model has no matrix data (empty model), it returns success since there is nothing to validate. It then checks whether the license has been externally suspended.
+
+For cloud-based and web license service (WLS) deployment types, the function enters a critical section and performs a cascading token validation strategy: it first tries a cached token, then an alternate cached token, then attempts a token refresh from the configuration server, and finally makes a full license service API call. Each successful validation updates the token cache for future calls. This multi-tier caching minimizes network latency during repeated optimization calls.
+
+After license-type-specific validation, the function checks whether the environment is in batch mode (which prohibits local optimization). Finally, it validates the model's dimensions against the license limits. The total constraint count is computed as the sum of all constraint types (linear, quadratic, SOS, general, piecewise-linear, and others), including any pending uncommitted modifications from the lazy update buffer.
+
+**Thread Safety:** conditional - Token validation for cloud and WLS licenses is protected by a critical section on the root environment, serializing concurrent token operations. Model size checks are read-only and safe for concurrent access to different models sharing the same environment.
+
+**Dependencies:** initialization validation functions (for basic environment validations and token validation), system identification functions (for machine/user identification in cloud licensing), error logging (for reporting license failures).
 
 ---
 
@@ -107,9 +151,9 @@ The eta vector memory pool uses a region-based (arena) allocator rather than ind
 
 The Product Form of the Inverse (PFI) approach that generates these eta vectors is described in Dantzig and Orchard-Hays (1954), "The Product Form for the Inverse in the Simplex Method," *Mathematical Tables and Other Aids to Computation*.
 
-### SolutionData Initialization Pattern
+### WorkArrays Initialization Pattern
 
-The SolutionData allocation function follows a "create-or-reinitialize" pattern common in solver implementations:
+The WorkArrays allocation function follows a "create-or-reinitialize" pattern common in solver implementations:
 
 - If the structure does not exist, it is allocated.
 - If it already exists from a previous solve, its arrays are freed but the structure itself is reused.
@@ -117,6 +161,17 @@ The SolutionData allocation function follows a "create-or-reinitialize" pattern 
 - Template copying supports multi-scenario optimization where results from one solve are used to initialize the next.
 
 The adaptive threshold pattern (initialized to -1.0 meaning "compute on first use") is a standard technique for dynamic tolerance adjustment in LP solvers, as discussed in Maros (2003), *Computational Techniques of the Simplex Method*, Chapter 8.
+
+### License Validation Strategy
+
+The initialization validation function implements a defense-in-depth approach:
+
+1. **Environment chain validation** catches corrupted or detached model-environment relationships.
+2. **License suspension check** supports external administrative control.
+3. **Token caching with cascading fallback** minimizes network latency while ensuring validity.
+4. **Comprehensive size checking** covers all constraint types and pending modifications to prevent license circumvention via lazy updates.
+
+The critical section protecting token operations ensures that concurrent optimizations do not corrupt shared token state, while the model size checks are inherently read-only and safe for concurrent access.
 
 ## References
 
