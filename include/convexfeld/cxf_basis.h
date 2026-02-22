@@ -94,6 +94,11 @@ struct BasisState {
     /* P2.3: Arena allocator for eta vectors (NULL = use individual calloc) */
     EtaBuffer *eta_pool;      /**< Bump allocator, reset at refactorization */
 
+    /* P3.4: Missing BasisState fields per basis_state.md */
+    int eta_row_count;        /**< Count of pivot etas (vs fix/warm etas) */
+    int numerical_flag;       /**< 1 if numerical instability detected */
+    int64_t fill_in_estimate; /**< Estimated LU fill-in for buffer sizing */
+
     /* Working storage */
     double *work;             /**< Working array [m] */
 

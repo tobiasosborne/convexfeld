@@ -37,22 +37,9 @@
  * Internal helper: clear eta list
  ******************************************************************************/
 
-/**
- * @brief Free all eta factors in the linked list.
- */
-static void clear_eta_list(BasisState *basis) {
-    EtaVector *eta = basis->eta_head;
-    while (eta != NULL) {
-        EtaVector *next = eta->next;
-        free(eta->indices);
-        free(eta->values);
-        free(eta);
-        eta = next;
-    }
-    basis->eta_head = NULL;
-    basis->eta_count = 0;
-    basis->pivots_since_refactor = 0;
-}
+/* e2t: Shared eta list clear (eta_pool.c) */
+extern void cxf_eta_list_clear(BasisState *basis);
+#define clear_eta_list cxf_eta_list_clear
 
 /*******************************************************************************
  * cxf_basis_validate - Simple validation

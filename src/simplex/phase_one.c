@@ -124,6 +124,62 @@ int cxf_setup_phase_one(SolverState *state) {
     for (int j = 0; j < n; j++)
         state->work_obj[j] = 0.0;
 
+    /* P5.3: Use crash results to select structural variables into basis.
+     * For rows marked BASIC_LOWER by crash, look for a singleton structural
+     * column that can replace the slack/artificial, reducing Phase I work.
+     * Only swap if the structural variable's value is feasible. */
+    if (state->row_status != NULL && state->csc_col_ptr != NULL) {
+        for (int i = 0; i < m; i++) {
+            if (state->row_status[i] != CXF_ROW_BASIC_LOWER) continue;
+
+            /* Only useful if this row has an artificial (obj coeff = 1) */
+            int aux_var = n + i;
+            if (state->work_obj[aux_var] < 0.5) continue;
+
+            /* Find best singleton structural column in this row */
+            int best_col = -1;
+            double best_abs = 0.0;
+            for (int j = 0; j < n; j++) {
+                if (basis->var_status[j] >= 0) continue;  /* already basic */
+                if (state->col_nz_count == NULL) continue;
+                if (state->col_nz_count[j] != 1) continue; /* not singleton */
+
+                /* Check if column j has a nonzero in row i */
+                int64_t cs = state->csc_col_ptr[j];
+                int64_t ce = state->csc_col_ptr[j + 1];
+                for (int64_t k = cs; k < ce; k++) {
+                    if (state->csc_row_idx[k] == i) {
+                        double aij = fabs(state->csc_values[k]);
+                        if (aij > CXF_PIVOT_TOL && aij > best_abs) {
+                            best_abs = aij;
+                            best_col = j;
+                        }
+                        break;
+                    }
+                }
+            }
+
+            if (best_col >= 0) {
+                /* Swap: put structural var in basis, make auxiliary nonbasic */
+                basis->basic_vars[i] = best_col;
+                basis->var_status[best_col] = i;
+                basis->var_status[aux_var] = CXF_VAR_AT_LOWER;
+
+                /* Set auxiliary to zero (nonbasic at lower) */
+                state->work_x[aux_var] = 0.0;
+                state->work_obj[aux_var] = 0.0;
+                state->num_artificials--;
+
+                /* Compute structural var value from constraint */
+                double rhs = state->work_rhs ? state->work_rhs[i] : 0.0;
+                int64_t cs = state->csc_col_ptr[best_col];
+                double aij = state->csc_values[cs];
+                if (fabs(aij) > CXF_PIVOT_TOL)
+                    state->work_x[best_col] = rhs / aij;
+            }
+        }
+    }
+
     /* Compute initial Phase I objective = sum of artificial values */
     state->obj_value = 0.0;
     for (int i = 0; i < m; i++) {

@@ -26,37 +26,9 @@
 /* Minimum pivot tolerance (Harris pivot threshold from spec) */
 #define MIN_PIVOT_TOL  CXF_PIVOT_TOL  /* 1e-9 */
 
-/* P2.3: Arena pool reset (eta_pool.c) */
-extern void cxf_eta_pool_reset(EtaBuffer *pool);
-
-/**
- * @brief Clear all eta vectors from a BasisState.
- *
- * P2.3: If pool is active, reset pool in O(1) instead of O(k) free chain.
- * @param basis BasisState to clear.
- */
-static void clear_eta_list(BasisState *basis) {
-    if (basis == NULL) return;
-
-    if (basis->eta_pool != NULL) {
-        /* P2.3: O(1) bulk deallocation via pool reset */
-        cxf_eta_pool_reset(basis->eta_pool);
-    } else {
-        /* Legacy: O(k) individual free chain */
-        EtaVector *eta = basis->eta_head;
-        while (eta != NULL) {
-            EtaVector *next = eta->next;
-            free(eta->indices);
-            free(eta->values);
-            free(eta);
-            eta = next;
-        }
-    }
-
-    basis->eta_head = NULL;
-    basis->eta_count = 0;
-    basis->pivots_since_refactor = 0;
-}
+/* e2t: Shared eta list clear (eta_pool.c) */
+extern void cxf_eta_list_clear(BasisState *basis);
+#define clear_eta_list cxf_eta_list_clear
 
 /**
  * @brief Fix near-bound nonbasic variables and clear etas (P2.4).

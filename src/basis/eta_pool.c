@@ -11,6 +11,7 @@
  */
 
 #include "convexfeld/cxf_types.h"
+#include "convexfeld/cxf_basis.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -122,6 +123,30 @@ void cxf_eta_pool_reset(EtaBuffer *pool) {
 /**
  * @brief Free the entire pool and all chunks.
  */
+/**
+ * @brief Clear eta list: pool reset or individual free chain (e2t DRY fix).
+ *
+ * Shared implementation used by refactor.c and warm.c.
+ */
+void cxf_eta_list_clear(BasisState *basis) {
+    if (basis == NULL) return;
+    if (basis->eta_pool != NULL) {
+        cxf_eta_pool_reset(basis->eta_pool);
+    } else {
+        EtaVector *eta = basis->eta_head;
+        while (eta != NULL) {
+            EtaVector *next = eta->next;
+            free(eta->indices);
+            free(eta->values);
+            free(eta);
+            eta = next;
+        }
+    }
+    basis->eta_head = NULL;
+    basis->eta_count = 0;
+    basis->pivots_since_refactor = 0;
+}
+
 void cxf_eta_pool_free(EtaBuffer *pool) {
     if (pool == NULL) return;
 
