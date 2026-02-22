@@ -239,7 +239,18 @@ int cxf_solve_lp(CxfModel *model) {
         cxf_simplex_postsolve(state, env);
     }
 
-    /* P6.3: Extract solution for all terminal statuses, not just OPTIMAL.
+    /* P6.3: Final accuracy pass at OPTIMAL (numerical_stability.md).
+     * Force refactorization + from-scratch x_B and obj recomputation
+     * to eliminate all accumulated drift before reporting the answer. */
+    if (model->status == CXF_OPTIMAL) {
+        extern int cxf_recompute_xB(SolverState *state);
+        extern void cxf_recompute_objective(SolverState *state);
+        cxf_solver_refactor(state, env);
+        cxf_recompute_xB(state);
+        cxf_recompute_objective(state);
+    }
+
+    /* Extract solution for all terminal statuses, not just OPTIMAL.
      * Iteration-limit and time-limit should still provide best-available. */
     if (model->status == CXF_OPTIMAL ||
         model->status == CXF_ITERATION_LIMIT ||

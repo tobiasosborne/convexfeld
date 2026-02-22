@@ -41,6 +41,10 @@ extern int cxf_ratio_test(SolverState *state, CxfEnv *env, int enteringVar,
                           int *leavingRow_out, double *pivotElement_out);
 extern int cxf_solver_refactor(SolverState *ctx, CxfEnv *env);
 extern int cxf_compute_reduced_costs(SolverState *state);
+extern int cxf_recompute_xB(SolverState *state);
+extern void cxf_recompute_objective(SolverState *state);
+extern double cxf_ftran_residual(SolverState *state, const double *a,
+                                 const double *x);
 extern void cxf_pricing_update_var(PricingState *ctx, SolverState *state,
                                    int varIndex);
 extern void cxf_pricing_update_constr(PricingState *ctx, SolverState *state,
@@ -454,19 +458,39 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env) {
         rc = cxf_ftran(basis, column, pivotCol);
         if (rc != CXF_OK) return rc;
 
-        /* P2.2: FTRAN residual monitoring — ||a - B*x|| check.
+        /* P2.2: FTRAN quality checks — NaN/Inf + residual monitoring.
          * column[] still holds the original entering column (pre-FTRAN).
-         * pivotCol[] holds B^{-1} * column. Residual = column - B * pivotCol.
-         * We approximate by checking ||column - B*pivotCol|| but since we
-         * don't have B explicitly, we use the norm of pivotCol as a proxy:
-         * if any pivotCol entry is NaN/Inf, trigger refactorization. */
+         * pivotCol[] holds B^{-1} * column. */
         {
             int need_refactor = 0;
+
+            /* Check for NaN/Inf in FTRAN result */
             for (int ri = 0; ri < m; ri++) {
                 if (!isfinite(pivotCol[ri])) { need_refactor = 1; break; }
             }
+
+            /* Residual monitoring: ||a - B*(B^{-1}a)||_inf
+             * Periodic check when eta vectors have accumulated.
+             * Trigger refactorization if residual exceeds threshold. */
+            if (!need_refactor && state->eta_count > 10 &&
+                state->iteration % 20 == 0) {
+                double residual = cxf_ftran_residual(state, column,
+                                                     pivotCol);
+                if (residual > 10.0 * env->feasibility_tol) {
+                    need_refactor = 1;
+                    /* Adaptive: reduce future eta threshold */
+                    int new_limit = state->eta_count;
+                    if (new_limit < 25) new_limit = 25;
+                    if (state->thresholds[5] <= 0 ||
+                        new_limit < state->thresholds[5])
+                        state->thresholds[5] = new_limit;
+                }
+            }
+
             if (need_refactor) {
                 cxf_solver_refactor(state, env);
+                cxf_recompute_xB(state);
+                cxf_recompute_objective(state);
                 cxf_compute_reduced_costs(state);
                 /* Re-FTRAN after refactorization */
                 extract_column_ext(state, entering, column);
@@ -646,6 +670,8 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env) {
         extern int cxf_refactor_check(SolverState *, CxfEnv *);
         if (cxf_refactor_check(state, env) > 0) {
             cxf_solver_refactor(state, env);
+            cxf_recompute_xB(state);
+            cxf_recompute_objective(state);
             cxf_compute_reduced_costs(state);
         }
     }

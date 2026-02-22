@@ -162,8 +162,18 @@ int cxf_refactor_check(SolverState *ctx, CxfEnv *env) {
         return 0;
     }
 
-    /* Check eta count limit */
-    if (ctx->eta_count >= env->max_eta_count) {
+    /* Adaptive eta count threshold: min(100, max(50, m/4))
+     * Per numerical_stability.md Section A */
+    int m = ctx->num_constrs;
+    int eta_limit = m / 4;
+    if (eta_limit < 50) eta_limit = 50;
+    if (eta_limit > 100) eta_limit = 100;
+
+    /* Residual-triggered adaptive reduction (stored in thresholds[5]) */
+    if (ctx->thresholds[5] > 0 && (int)ctx->thresholds[5] < eta_limit)
+        eta_limit = (int)ctx->thresholds[5];
+
+    if (ctx->eta_count >= eta_limit) {
         return 2;  /* Required */
     }
 

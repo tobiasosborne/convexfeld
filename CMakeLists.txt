@@ -121,6 +121,7 @@ target_sources(convexfeld PRIVATE
     src/simplex/presolve.c
     src/simplex/phase_one.c
     src/simplex/reduced_costs.c
+    src/simplex/recompute.c
     src/simplex/phase_loop.c
     # Error module (M1.7 stubs + M3.1.2-M3.1.7)
     src/error/core.c

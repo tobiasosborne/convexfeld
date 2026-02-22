@@ -984,3 +984,52 @@ The spec says: Phase I optimality with infeasibility > 0 = INFEASIBLE. Period.
 But if the spec doesn't have recovery code, the real fix is in the callees. Fix the
 components so the orchestrator doesn't need workarounds.
 
+---
+
+### Per-Pivot Bound Snap Causes Butterfly Effect (2026-02-22)
+
+**Context:** Adding `state->work_x[leaving] = lb` (snap leaving variable to exact
+bound) at every pivot in `cxf_apply_pivot`.
+
+**Result:** etamacro gained PASS, BUT scfxm1 regressed from PASS to FAIL (0.13% error).
+The tiny per-pivot snap (~1e-15 change) altered the iteration path enough to reach a
+different (slightly suboptimal) vertex on scfxm1.
+
+**Fix:** Snap only at refactorization points (in `cxf_recompute_xB`), not at every pivot.
+This gives the accuracy benefit without butterfly-effect regressions.
+
+**Lesson:** Modifications to primal values at every iteration have outsized effects
+because they compound over hundreds of pivots. Prefer infrequent batch corrections
+(at refactorization) over per-iteration adjustments.
+
+---
+
+### Phase I cxf_recompute_objective Must Update work_obj[] (2026-02-22)
+
+**Context:** Added x_B recomputation after refactorization. Phase I objective
+recomputation only updated `obj_value`, not `work_obj[]` (w-coefficients).
+
+**Result:** boeing1 regressed from OPTIMAL (176% error) to INFEASIBLE. After
+x_B recomputation, the w-coefficients were stale, so `cxf_compute_reduced_costs`
+used wrong objective → wrong pricing → Phase I failed.
+
+**Fix:** In `cxf_recompute_objective` for Phase I, reset ALL `work_obj[j] = 0`
+then recompute w-coefficients: `work_obj[bv] = -1` if below lb, `+1` if above ub.
+
+**Lesson:** Any function that recomputes Phase I state must update BOTH `obj_value`
+AND `work_obj[]`. They are tightly coupled in Phase I but independent in Phase II.
+
+---
+
+### Forced Refactorize + Recompute at Phase I "Optimal" Unblocks Infeasible (2026-02-22)
+
+**Context:** capri declared INFEASIBLE with Phase I obj=12.3 (99.96% reduced but
+nonzero). No improving directions found.
+
+**Fix:** Before returning INFEASIBLE, force refactorization + x_B recomputation +
+RC recomputation. The fresh factorization reveals improving directions hidden by
+accumulated drift. capri now reaches OPTIMAL (10% error).
+
+**Lesson:** "No improving direction" during Phase I may be a numerical artifact.
+Always refactorize + recompute before declaring Phase I infeasibility.
+

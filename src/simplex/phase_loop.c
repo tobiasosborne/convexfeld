@@ -83,9 +83,41 @@ int cxf_check_phase_one_end(SolverState *state, CxfModel *model, CxfEnv *env) {
     }
 
     /* Phase I optimal but objective still positive.
-     * Safety net: recompute reduced costs and scan for improving dirs. */
+     * Safety net: force refactorization + recompute to clear drift,
+     * then scan for improving directions. */
+    {
+        extern int cxf_solver_refactor(SolverState *, CxfEnv *);
+        extern int cxf_recompute_xB(SolverState *);
+        extern void cxf_recompute_objective(SolverState *);
+        cxf_solver_refactor(state, env);
+        cxf_recompute_xB(state);
+        cxf_recompute_objective(state);
+        /* Re-check: recomputation may have made us feasible */
+        if (state->obj_value <= tol) {
+            extern int cxf_transition_to_phase_two(SolverState *, CxfModel *);
+            int rc2 = cxf_transition_to_phase_two(state, model);
+            if (rc2 != CXF_OK) return rc2;
+            cxf_compute_reduced_costs(state);
+            return CXF_OK;
+        }
+    }
     cxf_compute_reduced_costs(state);
     if (has_improving_direction(state, env)) return 1;
+
+    /* Phase I near-feasibility: try tighter pricing tolerance.
+     * Spec: two_phase_method.md line 142 — "solver may attempt
+     * additional iterations with tighter tolerances." */
+    if (phase1_obj < 100.0 * tol) {
+        double save_tol = env->optimality_tol;
+        env->optimality_tol *= 0.01;
+        cxf_compute_reduced_costs(state);
+        if (has_improving_direction(state, env)) {
+            /* Weak improving direction found — continue Phase I.
+             * Tighter tolerance stays active; restored in solve_lp.c. */
+            return 1;
+        }
+        env->optimality_tol = save_tol;
+    }
 
     /* No improving direction → truly infeasible */
     return CXF_INFEASIBLE;
