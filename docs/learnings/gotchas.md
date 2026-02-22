@@ -1073,3 +1073,29 @@ is -18.7519290660 (confirmed by spec oracle and our solver). Fixed the CSV.
 MPS file structure. A reference from a different problem variant is worse than
 no reference.
 
+---
+
+### cxf_simplex_refine Destroys Optimal Solution (2026-02-22)
+
+**Context:** recipe solves correctly (obj=-266.616) but the post-solve
+`cxf_simplex_refine` changes it to -268.636 (wrong).
+
+**Root cause:** Three destructive operations in refine.c:
+1. **Pass 1:** RC-based status reassignment moved nonbasic vars to different
+   bounds without updating basic vars → violated Ax=b
+2. **Pass 2:** Recovery pivots for basic vars near ub changed the basis →
+   moved to suboptimal vertex
+3. **Pass 3:** Partial objective recomputation (j<n only) inconsistent with
+   the full recomputation in the final accuracy pass
+
+**Fix:** Refine Pass 1 now only snaps to current status bound. Pass 2 (recovery
+pivots) and Pass 3 (partial obj recompute) disabled. Final accuracy pass
+(refactorize + recompute_xB + recompute_obj) handles everything correctly.
+
+**Result:** Recipe error 0.76% → 0.02%.
+
+**Lesson:** Post-solve operations that modify the basis or variable positions
+MUST maintain constraint consistency. Moving nonbasic vars without adjusting
+basic vars violates Ax=b. Use the diagnostic tool (diagnose.c) to compare
+iteration-level behavior with the actual solver.
+
