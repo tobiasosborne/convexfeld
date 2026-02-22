@@ -58,14 +58,15 @@
 
 ## Next Steps
 
-1. **Phase I degeneracy** — finnis, stair, capri, tuff all get close but can't
-   finish Phase I. Root cause: deep degeneracy with insufficient perturbation.
-   The perturbation system needs improvement (currently too weak/inactive).
+1. **Phase I pricing convergence** (convexfeld-pr0h) — boeing2, capri reach 97%+
+   feasibility reduction but run out of improving directions. Not degeneracy.
 
-2. **RC3 (OBJSENSE)** and **RC4 (RANGES)** — straightforward parser additions.
+2. **RC4 (RANGES)** — parser addition for forplan. RC3 (OBJSENSE) may not be needed
+   (stand* instances now pass without it).
 
 3. **Phase II numerical drift** — boeing1, e226 reach OPTIMAL but with wrong obj.
-   Pre-existing issue now visible because Phase I succeeds.
+
+4. **Small obj errors** — scorpion (0.017%), stair (0.04%), finnis (0.2%) — tolerance issues.
 
 ## Key Files Modified
 
