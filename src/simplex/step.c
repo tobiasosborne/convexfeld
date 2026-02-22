@@ -106,11 +106,14 @@ int cxf_apply_pivot(SolverState *state, int entering, int leavingRow,
             state->work_x[bv] -= stepSize * pivotCol[i];
     }
 
-    /* Update entering variable */
+    /* Update entering variable value.
+     * Use current x (not lb/ub) as starting point — handles free variables
+     * where x=0 but lb=-inf correctly. For bounded vars, x==lb or x==ub
+     * so this is equivalent to the standard formula. */
     if (basis->var_status[entering] == CXF_VAR_AT_LOWER)
-        state->work_x[entering] = state->work_lb[entering] + stepSize;
+        state->work_x[entering] = state->work_x[entering] + stepSize;
     else
-        state->work_x[entering] = state->work_ub[entering] - stepSize;
+        state->work_x[entering] = state->work_x[entering] - stepSize;
 
     /* Create eta vector and exchange basis */
     int rc = cxf_pivot_with_eta(basis, leavingRow, pivotCol,
@@ -551,11 +554,11 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env) {
                 state->work_x[bv] = state->work_lb[bv];
         }
 
-        /* Update entering variable */
+        /* Update entering variable (use current x, not lb/ub — handles free vars) */
         if (basis->var_status[entering] == CXF_VAR_AT_LOWER)
-            state->work_x[entering] = state->work_lb[entering] + stepSize;
+            state->work_x[entering] = state->work_x[entering] + stepSize;
         else
-            state->work_x[entering] = state->work_ub[entering] - stepSize;
+            state->work_x[entering] = state->work_x[entering] - stepSize;
 
         /* Basis exchange: eta + status update */
         rc = cxf_pivot_with_eta(basis, leavingRow, pivotCol,

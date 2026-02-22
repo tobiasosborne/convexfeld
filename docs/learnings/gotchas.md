@@ -953,6 +953,11 @@ at `[n+m, n+2m)` with `art_coeff` — the opposite of what the spec prescribes.
    unconditional `diag_coeff` set by phase_one.c. Simplified to always return +1.0 for
    <= and =, -1.0 for >=.
 
+6. **Free variables (lb=-inf) entering from AT_LOWER corrupts x.** The entering
+   variable update `x = lb + step` gives `x = -1e100 + step ≈ -1e100` for free
+   variables. Fix: use `x = work_x[entering] + step` (current value, not lb).
+   This was the root cause of capri's -6.76e100 objective.
+
 **Result:** 40/40 tests pass (including previously-failing test_geq_constraints).
 scorpion and israel now pass Netlib (were RC2 false INFEASIBLE). Net ~200 LOC removed.
 

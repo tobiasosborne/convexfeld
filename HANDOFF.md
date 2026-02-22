@@ -33,10 +33,15 @@
    - Objective recomputation at transition only covered [0,n), should cover [0,n+m)
    - RHS-conditional fallback functions inconsistent with unconditional diag_coeff
 
-5. **Diagnostic validation (boeing1)**
-   - Phase I works correctly (obj=936→0 in 120 iterations)
-   - Phase II reaches -488 at 500 iters (reference: -335). Still needs more iterations.
-   - 3 basic vars past bounds at iter 499 = pre-existing numerical drift, not Phase I regression
+5. **Diagnostic validation (boeing1, capri, finnis, stair)**
+   - boeing1: Phase I succeeds (obj=936→0 in 120 iters), Phase II has numerical drift
+   - capri: Free variable entering bug found and fixed (x = lb + step = -1e100 for free vars)
+   - finnis: Phase I gets to obj=0.009 but can't finish — degeneracy, needs perturbation
+   - stair: 87% degenerate pivots, 3 real improvements in 200 iters — needs perturbation
+
+6. **Fixed free variable entering bug** (step.c cxf_apply_pivot)
+   - Bug: `work_x[entering] = work_lb[entering] + step` → -1e100 for free vars
+   - Fix: `work_x[entering] = work_x[entering] + step` (use current value, not lb)
 
 ### Netlib Impact
 
@@ -53,16 +58,14 @@
 
 ## Next Steps
 
-1. **Run targeted Netlib instances** via diagnostic tool on other RC2 instances:
-   bandm, capri, finnis, bore3d, e226, stair, tuff, vtp.base
+1. **Phase I degeneracy** — finnis, stair, capri, tuff all get close but can't
+   finish Phase I. Root cause: deep degeneracy with insufficient perturbation.
+   The perturbation system needs improvement (currently too weak/inactive).
 
-2. **Investigate etamacro regression** (0.08% error, was passing). May be from
-   unconditional fallback change.
+2. **RC3 (OBJSENSE)** and **RC4 (RANGES)** — straightforward parser additions.
 
-3. **RC3 (OBJSENSE)** and **RC4 (RANGES)** — straightforward parser additions.
-
-4. **Phase II numerical drift** — boeing1 shows 3 past-lb variables at iter 499.
-   This is a pre-existing issue now visible because Phase I succeeds.
+3. **Phase II numerical drift** — boeing1, e226 reach OPTIMAL but with wrong obj.
+   Pre-existing issue now visible because Phase I succeeds.
 
 ## Key Files Modified
 
