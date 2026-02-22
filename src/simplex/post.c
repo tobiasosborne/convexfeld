@@ -67,19 +67,11 @@ int cxf_simplex_post_iterate(SolverState *state, CxfEnv *env,
 
         state->obj_at_last_refactor = state->obj_value;
 
-        /* Trigger full refactorization + recompute.
-         * Previously called cxf_fix_variables_at_bounds which only
-         * cleared etas WITHOUT refactoring — destroying the basis
-         * inverse and corrupting all subsequent FTRAN/BTRAN. */
-        {
-            extern int cxf_solver_refactor(SolverState *, CxfEnv *);
-            extern int cxf_recompute_xB(SolverState *);
-            extern void cxf_recompute_objective(SolverState *);
-            cxf_solver_refactor(state, env);
-            cxf_recompute_xB(state);
-            cxf_recompute_objective(state);
-            cxf_compute_reduced_costs(state);
-        }
+        /* Stall counters reset — refactorization handled by step.c Phase 9.
+         * post_iterate should NOT refactorize independently, as the different
+         * threshold (refactor_interval=50 vs adaptive eta_limit=100) causes
+         * extra refactorization + xB recompute that alters the simplex path.
+         * This was root cause of finnis 7.3% error (diagnose gets 0.2%). */
         state->rows_eliminated = 0;
         state->cols_eliminated = 0;
     }
