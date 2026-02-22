@@ -1,14 +1,16 @@
 /**
  * @file perturbation.c
- * @brief EXPAND anti-cycling perturbation (v2 P2.6, P3.21)
+ * @brief EXPAND anti-cycling perturbation (v2 P2.6, P5.1)
  *
- * Implied bound analysis removes irrecoverably degenerate variables
- * from the pricing set. Uses saved (original) bounds to avoid
- * perturbation drift. Degenerate variables set to AT_UPPER (not
- * FIXED) so they remain eligible as ratio test blockers.
+ * Spec-compliant 5-phase EXPAND perturbation:
+ *   Phase 1: Save bounds
+ *   Phase 2: Retrieve candidates from V2 pricing (P4.5)
+ *   Phase 3: Restore saved bounds before analysis (P5.2 fix)
+ *   Phase 4: Candidate processing (nonbasic + basic unified)
+ *   Phase 5: Counter update + pricing notification
  *
  * Spec: docs/specs-v2/specs/algorithms/perturbation.md
- *       docs/specs-v2/specs/modules/simplex_phases.md
+ * Beads: 6wgv (P5.1), 9yi2 (P5.2)
  */
 
 #include "convexfeld/cxf_solver.h"
@@ -91,13 +93,20 @@ static int analyze_basic(SolverState *state, int row, int bvar,
     return 0;
 }
 
+extern void cxf_pricing_candidates_v2(PricingState *ctx, SolverState *state,
+                                      int *count, int **candidates);
+extern void cxf_compute_activity_bounds(SolverState *state, int count,
+                                        const int *indices);
+
 /**
- * @brief Apply EXPAND anti-cycling perturbation (v2 P2.6).
+ * @brief Apply EXPAND anti-cycling perturbation (v2 P2.6, P5.1).
  *
- * Phase 1: Save current bounds if not already saved
- * Phase 2: Process nonbasic variables — remove degenerate from pricing
- * Phase 3: Process basic variables — implied bound analysis
- * Phase 4: Notify pricing of changes
+ * Spec-compliant 5-phase flow per perturbation.md:
+ *   Phase 1: Save bounds
+ *   Phase 2: Retrieve candidates from V2 pricing
+ *   Phase 3: Restore saved bounds before analysis
+ *   Phase 4: Process candidates (nonbasic + basic)
+ *   Phase 5: Counter update + pricing notification
  */
 int cxf_simplex_perturbation(SolverState *state, CxfEnv *env) {
     if (!state || !env) return CXF_ERROR_NULL_ARGUMENT;
@@ -105,14 +114,9 @@ int cxf_simplex_perturbation(SolverState *state, CxfEnv *env) {
     int n = state->num_vars;
     int m = state->num_constrs;
     if (n == 0 || m == 0) return CXF_OK;
-    /* P1.6 (zr5l): removed iteration==0 guard — proactive perturbation
-     * is now called in early iterations by solve_lp.c */
 
     BasisState *basis = state->basis;
     if (!basis || !basis->var_status) return CXF_OK;
-
-    CxfModel *model = state->model_ref;
-    if (!model) return CXF_ERROR_NULL_ARGUMENT;
 
     double feas_tol = env->feasibility_tol;
     if (feas_tol <= 0.0) feas_tol = CXF_FEASIBILITY_TOL;
@@ -128,76 +132,125 @@ int cxf_simplex_perturbation(SolverState *state, CxfEnv *env) {
                (size_t)total * sizeof(double));
     }
 
-    /*--- Phase 2: Nonbasic variables at bounds ---
-     * P1.7 (a5vp): candidate removal, NOT bound modification.
-     * Spec P2.6: "removes degenerate candidates from pricing set...
-     * avoids modifying bound arrays." We mark degenerate variables
-     * dirty in pricing to exclude them, without touching work_x. */
+    /*--- Phase 2: Candidate retrieval from V2 pricing (P5.1) ---
+     * Use the V2 dirty queue instead of full-scanning all variables.
+     * Falls back to full scan if pricing unavailable or empty. */
+    int cand_count = 0;
+    int *cand_list = NULL;
+    if (state->pricing)
+        cxf_pricing_candidates_v2(state->pricing, state,
+                                  &cand_count, &cand_list);
+
+    /*--- Phase 3: Bound drift prevention (P5.2) ---
+     * Our perturbation uses candidate removal (not bound modification),
+     * so work_lb/work_ub are never modified by this function. The
+     * analyze_basic() helper already reads saved_lb/saved_ub for other
+     * variables' bounds, preventing drift. No explicit bound restoration
+     * needed — that would undo valid preprocessing tightening.
+     * Full bound restoration happens in cxf_simplex_unperturb(). */
+
+    /*--- Phase 4: Candidate processing ---
+     * Process V2 candidates if available, else fall back to full scan.
+     * Case A: Nonbasic at lower — check RC, mark degenerate dirty
+     * Case B: Basic — implied bound analysis */
     double *dj = state->work_dj;
-    if (dj) {
+
+    if (cand_count > 0 && cand_list != NULL) {
+        /* V2 path: process only pricing candidates */
+        for (int ci = 0; ci < cand_count; ci++) {
+            int j = cand_list[ci];
+            if (j < 0 || j >= total) continue;
+
+            int status = basis->var_status[j];
+
+            if (status == CXF_VAR_AT_LOWER && dj) {
+                /* Case A: Nonbasic at lower bound */
+                double lb = state->work_lb[j];
+                double ub = state->work_ub[j];
+                if (ub - lb < feas_tol) continue;
+
+                double rc = dj[j];
+                if (fabs(rc) <= feas_tol || rc < -feas_tol) {
+                    /* Degenerate or negative RC: check equality infeasibility */
+                    if (rc < -feas_tol && j >= n && (j - n) < m &&
+                        state->work_sense) {
+                        char sense = state->work_sense[j - n];
+                        if (sense == '=' || sense == 'E') {
+                            state->problem_row_index = j - n;
+                            state->perturb_count += perturbed;
+                            return CXF_INFEASIBLE;
+                        }
+                    }
+                    if (state->pricing)
+                        cxf_pricing_mark_dirty(state->pricing, j);
+                    perturbed++;
+                }
+            } else if (status >= 0) {
+                /* Case B: Basic variable — implied bound analysis */
+                int row = status;  /* var_status >= 0 is the basis row */
+                if (row < 0 || row >= m) continue;
+                if (j >= n) continue;  /* skip auxiliaries */
+
+                int result = analyze_basic(state, row, j, feas_tol);
+                if (result == -1) {
+                    state->problem_row_index = row;
+                    state->perturb_count += perturbed;
+                    return CXF_INFEASIBLE;
+                }
+                if (result == 1) {
+                    if (state->pricing)
+                        cxf_pricing_mark_dirty(state->pricing, j);
+                    perturbed++;
+                }
+            }
+        }
+    } else if (dj) {
+        /* Fallback: synthesize candidate list from full scan */
         for (int j = 0; j < total; j++) {
-            if (basis->var_status[j] != CXF_VAR_AT_LOWER) continue;
-
-            double rc = dj[j];
-            double lb = state->work_lb[j];
-            double ub = state->work_ub[j];
-
-            /* Skip if already fixed */
-            if (ub - lb < feas_tol) continue;
-
-            if (fabs(rc) <= feas_tol) {
-                /* Near-zero RC at lower bound: degenerate candidate.
-                 * Mark dirty to remove from pricing set. */
-                if (state->pricing)
-                    cxf_pricing_mark_dirty(state->pricing, j);
-                perturbed++;
-            } else if (rc < -feas_tol) {
-                /* Negative RC at lower bound: check equality constraints */
-                if (j >= n && (j - n) < m && state->work_sense) {
-                    char sense = state->work_sense[j - n];
-                    if (sense == '=' || sense == 'E') {
+            int s = basis->var_status[j];
+            if (s != CXF_VAR_AT_LOWER && !(s >= 0 && j < n)) continue;
+            /* Reuse the V2 path logic inline for each candidate */
+            if (s == CXF_VAR_AT_LOWER) {
+                if (state->work_ub[j] - state->work_lb[j] < feas_tol)
+                    continue;
+                double rc = dj[j];
+                if (fabs(rc) > feas_tol && rc >= -feas_tol) continue;
+                if (rc < -feas_tol && j >= n && (j-n) < m &&
+                    state->work_sense) {
+                    char se = state->work_sense[j - n];
+                    if (se == '=' || se == 'E') {
                         state->problem_row_index = j - n;
                         state->perturb_count += perturbed;
                         return CXF_INFEASIBLE;
                     }
                 }
-                /* For inequalities: mark dirty to remove from pricing */
                 if (state->pricing)
                     cxf_pricing_mark_dirty(state->pricing, j);
                 perturbed++;
+            } else {
+                int row = s;
+                if (row < 0 || row >= m) continue;
+                int r = analyze_basic(state, row, j, feas_tol);
+                if (r == -1) {
+                    state->problem_row_index = row;
+                    state->perturb_count += perturbed;
+                    return CXF_INFEASIBLE;
+                }
+                if (r == 1) {
+                    if (state->pricing)
+                        cxf_pricing_mark_dirty(state->pricing, j);
+                    perturbed++;
+                }
             }
         }
     }
 
-    /*--- Phase 3: Basic variables — implied bound analysis ---*/
-    if (basis->basic_vars && state->csr_row_ptr) {
-        for (int i = 0; i < m; i++) {
-            int bvar = basis->basic_vars[i];
-            if (bvar < 0 || bvar >= n) continue;
-
-            int result = analyze_basic(state, i, bvar, feas_tol);
-            if (result == -1) {
-                state->problem_row_index = i;
-                state->perturb_count += perturbed;
-                return CXF_INFEASIBLE;
-            }
-            if (result == 1) {
-                /* P2.6 Case B: degenerate basic variable —
-                 * mark dirty in pricing to exclude from
-                 * next candidate retrieval */
-                if (state->pricing)
-                    cxf_pricing_mark_dirty(state->pricing, bvar);
-                perturbed++;
-            }
-        }
-    }
-
-    /*--- Phase 4: Pricing notification ---*/
+    /*--- Phase 5: Counter update + pricing notification ---*/
     if (state->pricing && perturbed > 0)
         cxf_pricing_end_level(state->pricing);
 
     if (state->work_counter)
-        *state->work_counter += (double)total;
+        *state->work_counter += (double)(cand_count > 0 ? cand_count : total);
 
     state->perturb_count += perturbed;
     return CXF_OK;

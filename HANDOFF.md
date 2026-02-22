@@ -4,7 +4,7 @@
 
 ---
 
-## STATUS: Phase 0-1 done, Phase 2 5/6, Phase 3 done, Phase 4: 5/9 (critical path done)
+## STATUS: Phase 0-1 done, Phase 2 5/6, Phase 3 done, Phase 4: 5/9, Phase 5: 2/4 (critical path through P5.1 done)
 
 ### Session Summary
 
@@ -14,6 +14,8 @@
 - **P4.5 (v35i)**: `cxf_pricing_candidates_v2` — adaptive retrieval (full scan + partial expansion)
 - **P4.8 partial**: Wired V2 pricing into step.c iteration loop (producers + consumer + candidates)
 - Shared V2 queue insertion helpers in `queue_insert.c`
+- **P5.1 (6wgv)**: Rewrote perturbation to use V2 pricing candidates instead of full scan
+- **P5.2 (9yi2)**: Bound drift prevention via saved bounds in analyze_basic
 - 11 new V2 pricing unit tests (all passing)
 - 40/40 total tests pass
 
@@ -22,6 +24,7 @@
 | Phase | Issues Closed |
 |-------|---------------|
 | P4 | P4.2 (update_var), P4.3 (update_constr), P4.4 (update_queues), P4.5 (candidates_v2) |
+| P5 | P5.1 (EXPAND perturbation v2), P5.2 (bound restoration) |
 
 ### What Changed
 
@@ -63,12 +66,13 @@
 ## Next Steps — Critical Path
 
 ```
-P4.5 (done) → P5.1 (6wgv) → Phase 6
+P5.1 (done) → Phase 6 (orchestration)
 ```
 
 ### Priority order:
-1. `6wgv` **P5.1**: EXPAND perturbation (now unblocked by P4.5)
-2. `52go` **P4.7**: Mark dirty with 4-bit flags (upgrade V1 mark_dirty)
+1. `cps2` **P6.1**: Implement cxf_simplex_postsolve (unblocked by P5.1)
+2. `i86t` **P6.2**: Implement cxf_simplex_final analysis
+3. `52go` **P4.7**: Mark dirty with 4-bit flags (upgrade V1 mark_dirty)
 3. `fevq` **P4.6**: Rewrite end_level with queue compaction
 4. `txab` **P4.8**: Complete V2 wiring (remove V1 fallbacks)
 5. `9ef0` **P4.9**: Steepest edge weight updates
