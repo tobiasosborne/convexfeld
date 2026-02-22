@@ -4,7 +4,7 @@
 
 ---
 
-## STATUS: 22/35 Netlib pass. 40/40 unit tests. Scaling infrastructure ready but disabled.
+## STATUS: 22/35 Netlib pass. 40/40 unit tests. Implementation audit complete.
 
 ### Scorecard
 
@@ -14,59 +14,60 @@
 
 ---
 
+## Implementation Audit (2026-02-22)
+
+**Full analysis: `docs/learnings/implementation_audit.md`**
+
+The spec agent audited 5 subsystems across ~30 source files and found **14 significant deviations** from the cleanroom spec. The single highest-impact finding: Kahan-stable addition is entirely absent, and `cxf_pivot_update` has a wrong API that prevents correct implementation.
+
+### Priority Fix Order (items 1-6 fix ~12 of 13 failures)
+
+| # | Issue ID | Finding | Fixes | Effort |
+|---|----------|---------|-------|--------|
+| 1 | convexfeld-heyz | **C1+C3**: Redesign `cxf_pivot_update` — old/new bounds API + Kahan-stable add | 10 numerical drift | Medium |
+| 2 | convexfeld-h8xm | **C2**: Full `cxf_pivot_bound` — eta, activity, matrix cleanup | All bound-tightening | Medium |
+| 3 | convexfeld-bgl4 | **H4**: Phase I w-coefficients updated per pivot | boeing2, capri | Low |
+| 4 | convexfeld-xd5l | **C4**: `specialMode` flag + Phase I UNBOUNDED suppression | scsd1, scagr25 | Low |
+| 5 | convexfeld-70c0 | **H2**: Two-stage infeasibility confirmation in step2/step3 | boeing2, capri | Low |
+| 6 | convexfeld-ifo2 | **H1**: Harris tolerance `feasTol` → `10*feasTol` | All (pivot quality) | Trivial |
+| 7 | convexfeld-94em | **H3**: Inner loop convergence — remove dimension scaling, add dead zone | Large problems | Low |
+| 8 | convexfeld-mbbr | **M2**: Sparse LU factorization | bandm, tuff, vtp.base | High |
+
+### Other Audit Issues Created
+
+| Issue ID | Finding | Priority |
+|----------|---------|----------|
+| convexfeld-s9am | M1: Re-enable BFRT | P2 |
+| convexfeld-36qh | M3: Basis snapshot → progress counters | P2 |
+| convexfeld-l0ca | M4: V1 pricing weight update drops nonbasic | P2 |
+| convexfeld-ro9z | M6: refine.c must create eta records | P2 |
+| convexfeld-vwpt | M5: Pricing level init 1→0 | P3 |
+| convexfeld-muxv | M7: Primal crash second pass | P3 |
+| convexfeld-yf1c | M8: fix_variables_at_bounds stub (deferred) | P4 |
+
+---
+
 ## What Changed This Session
 
 ### Code Changes
-1. **ftran.c** — Fixed FTRAN diagonal fallback: `*= diag_coeff` → `/= diag_coeff`. This is backward-compatible (1/±1 = ±1) but required for non-±1 diag_coeff when scaling is active.
-2. **btran.c** — Same fix for BTRAN diagonal fallback.
-3. **cxf_solver.h** — Added `row_scale`, `col_scale` fields to SolverState (NULL when no scaling).
-4. **cxf_basis.h** — Updated diag_coeff comment to note scaling support.
-5. **context.c** — Added free calls for row_scale/col_scale.
-6. **scaling.c** — Complete rewrite: full row+column Ruiz equilibration (matrix_finalization.md Strategy 3). Includes slack-aware row norms (diag_coeff included in row infinity norm). DISABLED via threshold=1e30.
-7. **solve_lp.c** — Wired scaling call + unscaling before solution extraction.
-8. **phase_one.c** — Phase I sets `diag_coeff = row_scale * sense_sign` when scaling active. Phase II transition re-scales restored objective.
+1. **ftran.c** — FTRAN diagonal fallback: `*=` → `/=` (backward-compatible)
+2. **btran.c** — BTRAN diagonal fallback: same fix
+3. **scaling.c** — Full row+column Ruiz equilibration (DISABLED, threshold=1e30)
+4. **solve_lp.c** — Scaling wiring + unscaling before extraction
+5. **phase_one.c** — Phase I diag_coeff with row_scale; Phase II obj re-scale
+6. **step.c** — Ratio test: bound-flip fallback + column rejection across candidates
+7. **cxf_solver.h** — `row_scale`, `col_scale` fields
+8. **context.c** — Scale factor allocation/freeing
 
-### Key Finding: Scaling Is Systems-Limited
+### Scaling Analysis
 
-The scaling implementation is mathematically correct:
-- `A' = D_r * A * D_c` with consistent bound/RHS/obj/diag_coeff transformation
-- Objective value invariant (c_s^T y = c^T x)
-- FTRAN/BTRAN correctly divide by diag_coeff (not multiply)
-- Slack-aware row norms prevent over-scaling
-
-But enabling scaling **regresses every tested problem**:
-- blend: PASS → UNBOUNDED
-- stair: PASS → INFEASIBLE
-- boeing1: 18% → 41% error (worse)
-- grow7: 12.5% → 15% error (worse)
-
-Root cause: the solver's anti-degeneracy, ratio test, and Phase I convergence aren't robust enough to handle the different iteration path scaling creates.
+Scaling infrastructure is complete and mathematically correct. Disabled because enabling it regresses all tested problems. Root cause: solver baseline robustness insufficient. The spec agent confirmed the reference solver handles scaling through general robustness (residual monitoring, column rejection, EXPAND), not scaling-aware mechanisms. See `docs/learnings/scaling_report.md`.
 
 ---
-
-## Next Steps
-
-### To Enable Scaling (requires solver robustness first)
-1. Improve anti-cycling: EXPAND perturbation must work reliably
-2. Ratio test fallback: don't return UNBOUNDED when no blockers — try alternate candidates
-3. Phase I convergence: forced refactorize + recompute cycle on stall
-4. Set threshold to ~1e4 (catches boeing1/grow7/bore3d but not blend/stair)
-5. Run full 35-problem regression
-
-### Other Priorities
-- etamacro, recipe, boeing2: near-miss problems (< 0.1% error)
-- scsd1: Phase I cycling on all-equality problem
-- bandm, tuff: dense LU performance (timeout)
-- finnis: solver-vs-diagnose discrepancy (see previous HANDOFF)
-
----
-
-### Ratio Test Improvement (shipped, active)
-The ratio test now has a bound-flip fallback: when no valid blocker is found but the entering variable has finite bounds, it flips to the opposite bound instead of returning UNBOUNDED. Also, when multiple candidates exist, UNBOUNDED rejection tries the next candidate before giving up. These changes are active and harmless without scaling.
 
 ## DO NOT
-- Enable scaling without fixing ratio test UNBOUNDED fallback first
+- Enable scaling without fixing C1+C3 (pivot_update) and H1 (Harris tolerance) first
 - Change diag_coeff based on RHS sign (causes regressions on israel/stair/e226)
 - Re-add RC-based status reassignment in refine.c (corrupts obj)
 - Re-add recovery pivots in refine.c Pass 2 (changes basis during post-solve)
-- Skip reading this file and docs/learnings/gotchas.md
+- Skip reading this file and `docs/learnings/implementation_audit.md`
