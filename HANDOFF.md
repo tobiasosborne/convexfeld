@@ -4,91 +4,112 @@
 
 ---
 
-## STATUS: Phase I rewritten to spec-compliant bound-violation approach. 40/40 tests pass.
+## STATUS: 18/36 Netlib pass. Phase I rewritten. 40/40 unit tests pass. 15 failures are implementation gaps.
 
-### What Was Done This Session
+### Scorecard
 
-1. **Full architectural audit** against v2 specs (17 spec files, 14 source files)
-   - Cross-referenced implementation contracts across all simplex modules
-   - Found spec internally contradicts itself on BFRT row negation (3 docs disagree)
-   - Confirmed Phase I was entirely unspecified (until two_phase_method.md was added)
+**PASS (18):** afiro, sc50b, sc105, share2b, israel, adlittle, blend, lotfi, beaconfd, stocfor1, ship04l, scfxm1, standata, standgub, standmps, scagr7, sctap1, brandy
 
-2. **New spec `two_phase_method.md` compliance audit**
-   - Found FUNDAMENTAL mismatch: spec says implicit bound-violation Phase I, code had explicit artificials
-   - Identified 9 specific violations
-   - The explicit artificials approach caused test_geq_constraints bug
-
-3. **Implemented Option A: Rewrote Phase I to match spec** (convexfeld-avjr)
-   - Removed `art_coeff` field from SolverState
-   - Shrunk all arrays from `n+2m` to `n+m` (15 files changed)
-   - Rewrote `cxf_setup_phase_one` — slacks always basic, dynamic w coefficients
-   - Added Phase I bound-crossing to ratio test (both passes) and compute_step
-   - Added post-pivot w-coefficient recomputation in step.c
-   - Simplified Phase I→II transition (no artificial pivot-out needed)
-   - Unified fallback auxiliary coefficients to unconditional convention
-   - **Result: 40/40 tests pass** (test_geq_constraints now passes for first time)
-
-4. **Post-rewrite architectural audit** — found and fixed:
-   - Missing `cxf_compute_reduced_costs` after Phase I→II transition
-   - Objective recomputation at transition only covered [0,n), should cover [0,n+m)
-   - RHS-conditional fallback functions inconsistent with unconditional diag_coeff
-
-5. **Diagnostic validation (boeing1, capri, finnis, stair)**
-   - boeing1: Phase I succeeds (obj=936→0 in 120 iters), Phase II has numerical drift
-   - capri: Free variable entering bug found and fixed (x = lb + step = -1e100 for free vars)
-   - finnis: Phase I gets to obj=0.009 but can't finish — degeneracy, needs perturbation
-   - stair: 87% degenerate pivots, 3 real improvements in 200 iters — needs perturbation
-
-6. **Fixed free variable entering bug** (step.c cxf_apply_pivot)
-   - Bug: `work_x[entering] = work_lb[entering] + step` → -1e100 for free vars
-   - Fix: `work_x[entering] = work_x[entering] + step` (use current value, not lb)
-
-### Netlib Impact
-
-| Instance | Before | After |
-|----------|--------|-------|
-| scorpion | INFEASIBLE (RC2 bug) | **PASS** |
-| israel | wrong obj (RC2 bug) | **PASS** |
-| share2b | PASS | PASS |
-| boeing1 | INFEASIBLE | wrong obj (Phase II needs work) |
-| etamacro | PASS | 0.08% obj error (minor regression) |
-| recipe | UNBOUNDED | 0.76% obj error (improvement) |
+**FAIL (18):** See root cause table below.
 
 ---
 
-## Next Steps
+## What Needs Implementing (Priority Order)
 
-1. **Phase I pricing convergence** (convexfeld-pr0h) — boeing2, capri reach 97%+
-   feasibility reduction but run out of improving directions. Not degeneracy.
+All 15 non-timeout failures are **implementation gaps, not spec deficiencies.** The specs prescribe every mechanism needed. Read the specific spec sections cited below.
 
-2. **RC4 (RANGES)** — parser addition for forplan. RC3 (OBJSENSE) may not be needed
-   (stand* instances now pass without it).
+### 1. Numerical Maintenance — fixes 10 instances
 
-3. **Phase II numerical drift** — boeing1, e226 reach OPTIMAL but with wrong obj.
+**Instances:** scorpion (0.017%), kb2 (0.024%), stair (0.04%), etamacro (0.07%), finnis (0.2%), grow7 (0.56%), recipe (0.76%), boeing1 (176%), e226 (61%), bore3d (7.5%)
 
-4. **Small obj errors** — scorpion (0.017%), stair (0.04%), finnis (0.2%) — tolerance issues.
+**Root cause:** Accumulated floating-point error over hundreds of pivots. The solver doesn't refactorize often enough and doesn't recompute values from scratch.
 
-## Key Files Modified
+**What the spec says to implement:**
 
-| File | Change |
-|------|--------|
-| `include/convexfeld/cxf_solver.h` | Removed `art_coeff` field |
-| `src/simplex/phase_one.c` | **Rewritten** — implicit bound-violation Phase I |
-| `src/simplex/step.c` | Phase I w-update, removed artificial branch, fixed compute_step |
-| `src/simplex/ratio_test.c` | Phase I bound-crossing guards in both passes |
-| `src/simplex/reduced_costs.c` | Removed artificial branch, unconditional fallback |
-| `src/simplex/phase_loop.c` | Phase I obj = sum of violations |
-| `src/simplex/context.c` | Arrays n+m, removed art_coeff alloc |
-| `src/basis/lu_factorize.c` | Removed artificial column extraction |
-| `src/basis/refactor.c` | Simplified diagonal check |
-| `src/simplex/cleanup.c` | n+m bound |
-| `src/simplex/perturbation.c` | n+m bound |
-| `src/simplex/post.c` | n+m bound |
-| `src/simplex/refine.c` | n+m bound |
-| `src/pricing/weight_update.c` | n+m bound |
-| `docs/learnings/gotchas.md` | Phase I rewrite learnings |
+**(a) Adaptive refactorization interval** — `docs/specs-v2/specs/reference/numerical_stability.md` lines 25-49
+- Use `min(100, max(50, m/4))` for eta count threshold (currently fixed at 100)
+- Add residual monitoring: after FTRAN, compute `r = a - B*x`, trigger refactorization if `||r||_inf > 10 * epsilon_feas`
+- Adaptive: if residual triggers frequently, reduce the eta count threshold
+- **File:** `src/simplex/step.c` Phase 9 (refactorization check), currently at line ~622
+
+**(b) Recompute x_B from scratch at refactorization** — `revised_simplex.md` line 320 (Step 9.4)
+- After LU refactorization: `x_B = B^{-1} b` computed fresh, replacing the incrementally-maintained values
+- **File:** wherever `cxf_solver_refactor()` is called — add `x_B` recomputation after it
+
+**(c) Recompute objective from scratch at refactorization** — `numerical_stability.md` line 47
+- After refactorization: `obj = c^T x` from scratch, not trusting incremental `obj += dj * step`
+- Also at OPTIMAL: verify objective from original coefficients (`solve_lp_core.md` line 436)
+- **File:** `src/simplex/step.c` after refactorization, and `src/simplex/solve_lp.c` before returning
+
+### 2. UNBOUNDED Regression — fixes 2 instances
+
+**Instances:** scsd1, scagr25
+
+**Root cause:** scagr25 was previously PASS. This is a regression from recent changes (EXPAND bound widening or ratio test bound-crossing guards). Standard debugging.
+
+**Action:** Run diagnostic tool on both. Determine if UNBOUNDED occurs in Phase I or Phase II. If Phase I, the ratio test bound-crossing guards may be mis-triggering. If Phase II, the EXPAND widening may be corrupting bounds. Bisect to the introducing commit if needed.
+
+**Files:** `src/simplex/ratio_test.c` (bound-crossing guards), `src/simplex/perturbation.c` (EXPAND widening)
+
+### 3. Phase I Pricing Convergence — fixes 2 instances
+
+**Instances:** boeing2 (Phase I obj=206, 97% reduced), capri (Phase I obj=12, 99.96% reduced)
+
+**Root cause:** Phase I reaches near-feasibility but pricing exhausts all candidates at tolerance levels 0/1/2. The residual infeasibility is small but nonzero.
+
+**What the spec says:** `two_phase_method.md` line 142: "If the Phase I objective is positive but very small (below a multiple of the feasibility tolerance), the solver may attempt additional iterations with tighter tolerances before declaring infeasibility."
+
+**Action:** In `cxf_check_phase_one_end` (`src/simplex/phase_loop.c`), before returning `CXF_INFEASIBLE`: if Phase I objective < 100 * feasibility_tol, try one more pricing pass with tolerance = 0.01 * optimality_tol. This is ~5 lines.
+
+### 4. RANGES Parsing — fixes 1 instance
+
+**Instance:** forplan
+
+**Root cause:** MPS parser recognizes `RANGES` as a section header but has no handler. Lines in RANGES section are silently ignored.
+
+**Action:** Implement `parse_ranges_line()` in `src/api/mps_parse.c`. MPS RANGES semantics:
+- For `L` row with RHS b and range r: becomes `b - |r| <= a'x <= b`
+- For `G` row with RHS b and range r: becomes `b <= a'x <= b + |r|`
+- For `E` row with RHS b and range r: depends on sign of r
+
+### 5. Performance / Sparse LU — fixes 3 timeout instances
+
+**Instances:** bandm, tuff, vtp.base (all timeout at 10s)
+
+**Root cause:** Dense LU factorization is O(m^3). The Markowitz ordering is implemented in `lu_factorize.c` but forward/back substitution in `ftran.c`/`btran.c` may still be dense.
+
+**Action:** Profile to confirm bottleneck is LU. If so, implement sparse forward/back substitution using the CSC L/U factors that Markowitz already produces.
+
+---
+
+## What Was Done This Session
+
+1. **Architectural audit** — 14 source files vs 17 v2 spec documents
+2. **BFRT analysis corrected** — NOT a spec bug. Implementation was incomplete (missing factorization update after row negation). Specs are internally consistent.
+3. **Phase I rewritten** — explicit artificials → implicit bound-violation per `two_phase_method.md`. Removed `art_coeff`, arrays shrunk from n+2m to n+m. 15 files changed.
+4. **Free variable entering bug fixed** — `x = lb + step` → `x = current_x + step`
+5. **EXPAND bound widening added** — Mechanism B for leaving-side degeneracy
+6. **10 stale beads issues closed** — outdated understanding cleaned up
+7. **40/40 unit tests pass**
+
+## Key Files
+
+| File | Purpose |
+|------|---------|
+| `src/simplex/step.c` | Iteration engine — Phase I w-update, refactorization check |
+| `src/simplex/phase_one.c` | Phase I setup + transition (bound-violation approach) |
+| `src/simplex/ratio_test.c` | Harris ratio test with Phase I bound-crossing guards |
+| `src/simplex/perturbation.c` | EXPAND widening (Mechanism B) + candidate removal (A) |
+| `src/simplex/reduced_costs.c` | Full RC recomputation |
+| `src/simplex/phase_loop.c` | Phase I termination + transition orchestration |
+| `src/simplex/solve_lp.c` | Top-level solve flow |
+| `src/basis/lu_factorize.c` | LU factorization (Markowitz) |
+| `src/basis/refactor.c` | Refactorization trigger |
+| `tools/diagnose.c` | Diagnostic harness for tracing iterations |
+| `docs/architecture_contract_map.md` | Component interface contracts |
 
 ## DO NOT
+- Re-introduce explicit artificial variables (spec says don't)
+- Claim BFRT row negation is a spec bug (it's not — implementation was incomplete)
 - Run full Netlib suite (use targeted `--filter` or diagnostic tool)
-- Skip reading `docs/remediation_plan.md`
-- Re-introduce explicit artificial variables (the spec says don't)
+- Skip reading this file and `docs/remediation_plan.md`
