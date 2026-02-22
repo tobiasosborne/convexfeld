@@ -15,6 +15,11 @@ This project uses **bd** (beads) for issue tracking. Run `bd onboard` to get sta
 
 ### Documentation Structure
 
+**Architecture & Diagnostics** (MUST READ for solver work):
+- `docs/architecture_contract_map.md` - Component interface contracts, confirmed root causes
+- `docs/remediation_plan.md` - Prioritized fix plan for Netlib failures
+- `tools/diagnose.c` - Diagnostic harness for tracing iteration failures
+
 **Learnings** (docs/learnings/):
 - `README.md` - Index and quick reference
 - `m0-m1_setup.md` - Setup and tracer bullet learnings

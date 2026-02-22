@@ -843,6 +843,66 @@ was the missing link between pivots and bound propagation.
 
 ---
 
+### BFRT negate_constraint_row Corrupts Matrix — Root Cause of 18 False UNBOUNDED
+
+**Date:** 2026-02-22
+
+**Context:** Investigated 18 false UNBOUNDED Netlib failures using Component Interface
+Contract Map (`docs/architecture_contract_map.md`) and diagnostic tool (`tools/diagnose.c`).
+
+**Root Cause:** `negate_constraint_row()` in step.c negates CSR/CSC row coefficients,
+RHS, and diag_coeff after BFRT flips. But the LU factorization (eta vectors) is NOT
+updated. All subsequent FTRAN/BTRAN results are wrong because they use stale factorization
+that doesn't know about the negated rows. This causes:
+- Wrong pivot columns → wrong step sizes
+- Cumulative drift: basic variables move past their bounds
+- Growing infeasibility over iterations
+- Eventually ratio test has 0 valid candidates → false UNBOUNDED
+
+**Evidence (recipe, grow7, boeing2):**
+- boeing2: 262 BFRT flips → 49 basic vars past lower bounds → UNBOUNDED at iter 156
+- recipe: 12 flips → 12 past upper bounds → UNBOUNDED at iter 152
+- grow7: 8 flips → worst infeasibility 3.58e8 → UNBOUNDED at iter 347
+
+**V2 Spec May Be Wrong Here:** P3.5 references harris_ratio_test.md Stage 3 Step 6c
+for row negation. Standard BFRT (Koberstein 2005) does NOT negate constraint rows.
+The spec may describe a technique requiring BOTH negation AND factorization update,
+but only negation was implemented.
+
+**Fix:** Delete `negate_constraint_row()` entirely. Standard BFRT clamping works without it.
+
+**Lesson:** When implementing a spec technique, verify it against the academic literature.
+A spec can be wrong or incomplete. Matrix modifications MUST be accompanied by
+corresponding factorization updates, or the inverse representation becomes inconsistent.
+
+---
+
+### Phase I >= Without Surplus Variable — Root Cause of 6 False INFEASIBLE
+
+**Date:** 2026-02-22
+
+**Context:** Investigated 6 false INFEASIBLE Netlib failures (scorpion, bandm, etc.).
+
+**Root Cause:** For violated >= constraints, phase_one.c sets `diag_coeff = +1.0` (line 102),
+creating the formulation `a'x + aux = b` instead of `a'x - surplus = b`. Without a surplus
+variable, Phase I has fewer pivot options and can get permanently stuck at a non-zero
+objective, even though the problem is feasible.
+
+**Evidence (scorpion):**
+- 53 violated >= constraints → 53 diag_coeff = +1 mismatches
+- Phase I stalls at obj = 0.036 after 471 iterations (Bland's rule active)
+- No improving directions found (best rc = -1e-15)
+- Problem IS feasible per reference solver
+
+**Fix:** Always use `diag = -1.0` for >= constraints (surplus direction), regardless
+of whether the initial point satisfies the constraint.
+
+**Lesson:** The algebraic representation of constraint slack/surplus variables must match
+the constraint sense unconditionally. Conditional sign assignment based on initial point
+feasibility creates a harder Phase I problem with fewer degrees of freedom.
+
+---
+
 ### V2 Perturbation is Candidate Removal, NOT Bound Modification
 
 **Date:** 2026-02-20
