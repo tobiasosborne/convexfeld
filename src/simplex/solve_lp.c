@@ -35,6 +35,8 @@ extern int cxf_simplex_init(CxfModel *model, SolverState **stateP);
 extern void cxf_simplex_final(SolverState *state);
 extern int cxf_extract_solution(SolverState *state, CxfModel *model);
 
+/* Scaling (disabled — see TODO in solve flow) */
+
 /* Simplex phases (P3.21) */
 extern int cxf_simplex_crash(SolverState *state, CxfEnv *env);
 extern int cxf_simplex_perturbation(SolverState *state, CxfEnv *env);
@@ -104,6 +106,12 @@ int cxf_solve_lp(CxfModel *model) {
     /* Initialize solver state */
     rc = cxf_simplex_init(model, &state);
     if (rc != CXF_OK) { model->status = rc; return rc; }
+
+    /* Matrix scaling disabled: column-only Ruiz equilibration causes
+     * fundamental inconsistency with diag_coeff-based slack representation.
+     * Full row+column scaling needs diag_coeff to be non-±1, requiring
+     * changes throughout FTRAN/BTRAN/column extraction.
+     * TODO: implement full scaling with proper slack coefficient handling. */
 
     /* Crash basis (P2.5) */
     cxf_simplex_crash(state, env);
