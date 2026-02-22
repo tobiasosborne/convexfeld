@@ -249,13 +249,27 @@ neg_row=75 bv=73 x=42.50 lb=10.00 ub=18.00 ratio=-24.50 d=-1.00
 ```
 Variable 73 is 24.5 past its upper bound (18.0). The only ratio is negative → skipped → UNBOUNDED.
 
-**Possible v2 spec error:** Standard BFRT (Koberstein 2005) does NOT negate constraint rows.
-The spec reference "harris_ratio_test.md Stage 3 Step 6c" may be describing a technique
-that requires BOTH row negation AND factorization update — but only the negation was implemented.
-The spec should be reviewed for correctness here.
+**CONFIRMED V2 SPEC BUG:** The spec (harris_ratio_test.md Stage 3, Step 6c) literally says:
+"Negate the relevant row coefficients in the constraint matrix to maintain algebraic
+consistency when the variable changes its bound direction." This is WRONG for three reasons:
 
-**Fix:** Remove `negate_constraint_row()` calls entirely. Standard BFRT clamping (setting
-flipped variable to opposite bound) is sufficient. No matrix modification needed.
+1. **Dual/primal conflation.** The spec references Forrest & Goldfarb (1992) who developed
+   BFRT for DUAL simplex where row operations are natural. ConvexFeld uses PRIMAL simplex
+   where the correct bound-flip operation is a column substitution (x → u-x), not row negation.
+
+2. **"Algebraic consistency" is undefined.** The spec claims negation "maintains the invariant"
+   but is SILENT on LU/eta factor validity. The factorization is immediately invalid after
+   row negation — B has changed but B^{-1} (stored as eta product) hasn't. This isn't
+   "numerical drift" — it's a discrete algebraic break.
+
+3. **Refactorization described as optional.** The spec says "periodic refactorization resets
+   drift" as if the issue is gradual. But any FTRAN/BTRAN call after row negation produces
+   wrong results, so the very next iteration is corrupted.
+
+Standard primal BFRT (Koberstein 2005, Maros 2003) does NOT negate rows. It clamps the
+flipped variable to the opposite bound, extends the step, and continues — no matrix modification.
+
+**Fix:** Remove `negate_constraint_row()` calls entirely. Standard BFRT clamping is sufficient.
 
 ---
 
@@ -323,10 +337,53 @@ BFRT, re-test to see if they resolve. If not, separate investigation needed.
 
 | ID | Spec Ref | Violation | Status | Required Action |
 |----|----------|-----------|--------|-----------------|
-| **V1** | P3.5 | `negate_constraint_row` without factorization update | **SPEC MAY BE WRONG** | Remove row negation; standard BFRT doesn't need it |
+| **V1** | P3.5 | `negate_constraint_row` prescribed by spec but wrong for primal simplex | **SPEC BUG** | Remove row negation; spec imported dual technique into primal context |
 | **V2** | P0.9 | BFRT pricing notification | **FIXED** | Already in step.c:673-677 |
-| **V3** | Phase I | >= constraints use diag=+1 (no surplus variable) | **BUG** | Always use diag=-1 for >= |
+| **V3** | Phase I | Conditional diag_coeff based on initial feasibility | **SPEC OMISSION** | Spec doesn't mention diag_coeff; always use fixed sign per sense |
 | **V4** | MPS | No OBJSENSE parsing | **MISSING FEATURE** | Add OBJSENSE handling |
+| **V5** | MPS | RANGES section recognized but content ignored | **MISSING FEATURE** | Add RANGES handler |
+
+---
+
+## POST-RC1 FAILURE LANDSCAPE (BFRT disabled)
+
+After disabling BFRT, re-running diagnostics reveals three distinct remaining failure mechanisms:
+
+### Mechanism A: RC2 diag_coeff → Phase I stalls → false INFEASIBLE
+Instances: boeing1(47 mismatches), boeing2, capri, finnis(88 mismatches), scorpion(53), bandm
+
+Pattern: Wrong diag_coeff for >= and/or <= constraints → Phase I operates with
+incorrect algebraic representation → Phase I stalls at non-zero objective →
+declares INFEASIBLE on feasible problems. Fix: RC2.
+
+### Mechanism B: RC2 diag_coeff → wrong FTRAN → bound violations → wrong obj or UNBOUNDED
+Instances: vtp.base(32 mismatches, 29 past-bound vars), israel(8 constraint violations),
+recipe(2.1% obj error)
+
+Pattern: Wrong diag_coeff → every FTRAN/BTRAN uses wrong auxiliary column →
+accumulated numerical errors → basic variables drift past bounds → either
+wrong objective (if solver reaches "optimal") or UNBOUNDED (if ratio test fails).
+
+### Mechanism C: Phase I degeneracy → numerical breakdown → UNBOUNDED
+Instances: grow7(343 degenerate iters, all =), scsd1(169 degenerate iters, all =)
+
+Pattern: All-equality constraints with no >= or <= → Phase I has all degenerate
+pivots (ratio=0) → Bland's rule activates → basis representation degrades over
+100+ degenerate pivots → FTRAN produces near-zero pivot columns → ratio test
+finds no valid candidates → UNBOUNDED.
+
+Root cause: not RC2 (no >= constraints). This is a Phase I degeneracy + basis
+maintenance issue. Better perturbation or reduced refactorization interval
+would help. Possibly also related to the Phase I formulation for = constraints
+(conditional diag based on slack sign).
+
+### Summary: RC2 is the dominant remaining issue
+
+| Mechanism | Instances | Root Cause | Fix |
+|-----------|-----------|-----------|-----|
+| A (INFEASIBLE) | 6 | RC2 diag_coeff | Fix diag_coeff |
+| B (wrong obj/UNBOUNDED) | 3 | RC2 diag_coeff | Fix diag_coeff |
+| C (Phase I degeneracy) | 2 | Degeneracy + numerical | Perturbation, refactor freq |
 
 ---
 

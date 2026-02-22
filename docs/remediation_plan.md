@@ -34,10 +34,29 @@ cumulative bound violations until the ratio test can't find valid candidates.
 - grow7: 8 BFRT flips → worst infeasibility 3.58e8 → UNBOUNDED at iter 347
 - boeing2: 262 BFRT flips → worst infeasibility 1.45e5 → UNBOUNDED at iter 156
 
-### V2 Spec Note
+### V2 Spec Bug (CONFIRMED)
 
-P3.5 references "harris_ratio_test.md Stage 3 Step 6c" for row negation.
-**The spec may be incorrect here.** Standard BFRT (Koberstein 2005, Maros 2003)
+P3.5 references "harris_ratio_test.md Stage 3 Step 6c" which literally says:
+> "Negate the relevant row coefficients in the constraint matrix to maintain
+>  algebraic consistency when the variable changes its bound direction."
+
+**This is a spec error, not an implementation error.** The implementation
+faithfully followed the spec. Three problems with the spec:
+
+1. **Dual/primal conflation.** The spec references Forrest & Goldfarb (1992)
+   who developed BFRT for DUAL simplex. Row negation is natural in dual simplex
+   but wrong in primal simplex. ConvexFeld is primal. The correct primal
+   bound-flip is a conceptual column substitution (x → u-x), not row negation.
+
+2. **"Algebraic consistency" is undefined.** The spec claims negation maintains
+   an invariant but never addresses that the LU/eta factorization becomes
+   immediately invalid. The basis B has changed but B^{-1} hasn't.
+
+3. **Refactorization described as optional.** The spec says "periodic
+   refactorization resets drift" as if the issue is gradual. But the very
+   next FTRAN/BTRAN call produces wrong results.
+
+Standard primal BFRT (Koberstein 2005, Maros 2003)
 does NOT negate constraint rows. The BFRT procedure is:
 
 1. Find leaving variable (hits bound)
@@ -161,6 +180,14 @@ Phase I's job is to drive them to feasibility.
 
 **Also update Phase I→II transition** (lines 225-228) and remove the
 diag_coeff flip logic since diag is now unconditional.
+
+### V2 Spec Omission
+
+The v2 spec does NOT use the term "diag_coeff" anywhere. It provides no guidance
+on how to initialize the diagonal of the Phase I basis matrix, or whether the
+sign should depend on initial feasibility. This is an implementation detail the
+spec left entirely unaddressed, leading to the conditional-sign choice that causes
+8 of 30 failures.
 
 ### Risk
 

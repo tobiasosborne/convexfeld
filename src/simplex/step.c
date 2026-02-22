@@ -85,60 +85,6 @@ static void extract_column_ext(const SolverState *state, int col,
     }
 }
 
-/**
- * @brief P3.5: Negate constraint row in working matrix copies.
- *
- * When a basic variable flips bounds during BFRT, the corresponding constraint
- * row coefficients, RHS, and diagonal coefficient must be negated to maintain
- * algebraic consistency for subsequent ratio tests and refactorizations.
- * Spec: harris_ratio_test.md Stage 3 Step 6c.
- */
-static void negate_constraint_row(SolverState *state, int row) {
-    int n = state->num_vars;
-
-    /* Negate CSR row (if available) and matching CSC entries */
-    if (state->csr_row_ptr != NULL && state->csr_col_idx != NULL &&
-        state->csr_values != NULL) {
-        int64_t rs = state->csr_row_ptr[row];
-        int64_t re = state->csr_row_ptr[row + 1];
-        for (int64_t k = rs; k < re; k++) {
-            state->csr_values[k] = -state->csr_values[k];
-            /* Find matching CSC entry and negate */
-            int col = state->csr_col_idx[k];
-            if (col >= 0 && col < n && state->csc_col_ptr != NULL) {
-                int64_t cs = state->csc_col_ptr[col];
-                int64_t ce = state->csc_col_ptr[col + 1];
-                for (int64_t kk = cs; kk < ce; kk++) {
-                    if (state->csc_row_idx[kk] == row) {
-                        state->csc_values[kk] = -state->csc_values[kk];
-                        break;
-                    }
-                }
-            }
-        }
-    } else if (state->csc_col_ptr != NULL) {
-        /* CSR not available — scan all CSC columns */
-        for (int j = 0; j < n; j++) {
-            int64_t cs = state->csc_col_ptr[j];
-            int64_t ce = state->csc_col_ptr[j + 1];
-            for (int64_t k = cs; k < ce; k++) {
-                if (state->csc_row_idx[k] == row) {
-                    state->csc_values[k] = -state->csc_values[k];
-                    break;
-                }
-            }
-        }
-    }
-
-    /* Negate RHS */
-    if (state->work_rhs != NULL)
-        state->work_rhs[row] = -state->work_rhs[row];
-
-    /* Negate diagonal coefficient (slack/surplus direction) */
-    if (state->basis != NULL && state->basis->diag_coeff != NULL)
-        state->basis->diag_coeff[row] = -state->basis->diag_coeff[row];
-}
-
 /*---------------------------------------------------------------------------*/
 
 /**
@@ -186,17 +132,22 @@ int cxf_apply_pivot(SolverState *state, int entering, int leavingRow,
 /*---------------------------------------------------------------------------*/
 
 /**
- * @brief BFRT: find next blocking variable after a flip.
+ * @brief BFRT: find minimum-ratio non-flipped row.
  *
- * Scans basic variables for the minimum ratio > current step among
- * rows not already flipped. Ties broken by largest |pivot element|.
+ * Scans ALL non-flipped basic variables for the minimum non-negative
+ * ratio. This is the next variable that would block the entering
+ * variable from moving further. Ties broken by largest |pivot element|.
+ *
+ * Unlike the previous version, this does NOT skip ratios below cur_step.
+ * The caller decides whether the blocker falls before or after the flip
+ * extension point.
  *
  * @return Row index of next blocker, or -1 if none.
  */
 static int find_next_blocker(SolverState *state, const double *pivotCol,
                              const int *flipped, int num_flipped,
-                             double cur_step, int entering_sign,
-                             double *out_pivot) {
+                             int entering_sign,
+                             double *out_ratio, double *out_pivot) {
     int best_row = -1;
     double best_ratio = CXF_INFINITY;
     double best_pivot = 0.0;
@@ -227,10 +178,7 @@ static int find_next_blocker(SolverState *state, const double *pivotCol,
 
         if (ratio < -CXF_FEASIBILITY_TOL) continue;
 
-        /* Must be beyond current step (with tolerance) */
-        if (ratio < cur_step - CXF_FEASIBILITY_TOL) continue;
-
-        /* Harris Pass 2 logic: among near-minimum, pick largest pivot */
+        /* Standard minimum-ratio selection with pivot tie-breaking */
         if (ratio < best_ratio - CXF_FEASIBILITY_TOL) {
             best_ratio = ratio;
             best_row = i;
@@ -243,6 +191,7 @@ static int find_next_blocker(SolverState *state, const double *pivotCol,
         }
     }
 
+    if (out_ratio) *out_ratio = best_ratio;
     if (out_pivot) *out_pivot = best_pivot;
     return best_row;
 }
@@ -535,46 +484,21 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env) {
     int flipped_rows[MAX_BFRT_FLIPS];
     int num_flips = 0;
 
-    if (!state->use_bland) {  /* BFRT disabled under Bland's rule */
-        while (num_flips < MAX_BFRT_FLIPS) {
-            int lv = basis->basic_vars[leavingRow];
-            double lb_l = state->work_lb[lv];
-            double ub_l = state->work_ub[lv];
-
-            /* Can flip? Needs finite bounds on BOTH sides */
-            if (lb_l <= -CXF_INFINITY || ub_l >= CXF_INFINITY) break;
-            double range = ub_l - lb_l;
-            if (range < CXF_FEASIBILITY_TOL) break;
-
-            /* Record flip and extend step */
-            flipped_rows[num_flips++] = leavingRow;
-            stepSize += range / fabs(pivotCol[leavingRow]);
-
-            /* Find next blocking variable */
-            double next_pivot = 0.0;
-            int next_row = find_next_blocker(
-                state, pivotCol, flipped_rows, num_flips,
-                stepSize, entering_sign, &next_pivot);
-            if (next_row < 0) {
-                /* No more blockers — undo last flip, use it as
-                 * the true leaving variable instead */
-                num_flips--;
-                stepSize -= range / fabs(pivotCol[leavingRow]);
-                break;
-            }
-
-            leavingRow = next_row;
-            pivotElement = next_pivot;
-        }
-    }
+    /* BFRT disabled: the implementation has multiple interacting bugs
+     * (row negation, blocker search, step limiting by entering bound).
+     * Standard ratio test without flips is correct. BFRT is a performance
+     * optimization that can be re-enabled once properly implemented.
+     * See docs/remediation_plan.md RC1. */
+    (void)flipped_rows;
     state->flip_count += num_flips;
 
-    /* P3.5: Negate constraint matrix rows for flipped variables.
-     * Maintains algebraic consistency when flipped variables reappear
-     * in subsequent ratio tests and refactorizations.
-     * Spec: harris_ratio_test.md Stage 3 Step 6c. */
-    for (int f = 0; f < num_flips; f++)
-        negate_constraint_row(state, flipped_rows[f]);
+    /* NOTE: v2 spec (harris_ratio_test.md Stage 3 Step 6c) prescribed
+     * negate_constraint_row() here. REMOVED — spec bug. The spec imported
+     * a dual-simplex technique (Forrest & Goldfarb 1992) into primal simplex.
+     * Row negation invalidates the LU/eta factorization without updating it,
+     * causing cumulative bound violations → false UNBOUNDED on 18 Netlib
+     * instances. Standard primal BFRT does not modify the matrix.
+     * See docs/remediation_plan.md RC1, docs/architecture_contract_map.md. */
 
     /* Cycling detection */
     if (stepSize < 1e-8) {
