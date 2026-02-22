@@ -67,10 +67,19 @@ int cxf_simplex_post_iterate(SolverState *state, CxfEnv *env,
 
         state->obj_at_last_refactor = state->obj_value;
 
-        /* Trigger refactorization */
-        int rc = cxf_fix_variables_at_bounds(state->basis);
-        if (rc != CXF_OK) return rc;
-        state->eta_count = 0;
+        /* Trigger full refactorization + recompute.
+         * Previously called cxf_fix_variables_at_bounds which only
+         * cleared etas WITHOUT refactoring — destroying the basis
+         * inverse and corrupting all subsequent FTRAN/BTRAN. */
+        {
+            extern int cxf_solver_refactor(SolverState *, CxfEnv *);
+            extern int cxf_recompute_xB(SolverState *);
+            extern void cxf_recompute_objective(SolverState *);
+            cxf_solver_refactor(state, env);
+            cxf_recompute_xB(state);
+            cxf_recompute_objective(state);
+            cxf_compute_reduced_costs(state);
+        }
         state->rows_eliminated = 0;
         state->cols_eliminated = 0;
     }

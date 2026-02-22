@@ -42,71 +42,34 @@ int cxf_simplex_refine(SolverState *state, CxfEnv *env) {
     int m = state->num_constrs;
     int total = n + m;
 
-    /*--- Pass 1: Nonbasic variable cleanup ---*/
+    /*--- Pass 1: Nonbasic variable cleanup ---
+     * Only snap values to their CURRENT status bound (fix float drift).
+     * Do NOT reassign status based on RC signs — that moves variables
+     * to different bounds without pivoting, violating Ax=b.
+     * The final accuracy pass (refactorize + recompute_xB) handles
+     * constraint consistency after snapping. */
     for (int j = 0; j < total; j++) {
-        if (basis->var_status[j] >= 0) continue;  /* Skip basic */
+        if (basis->var_status[j] >= 0) continue;
         if (basis->var_status[j] == CXF_VAR_FIXED) continue;
 
-        double rc = (state->work_dj && j < total) ? state->work_dj[j] : 0.0;
         double lb = state->work_lb[j];
         double ub = state->work_ub[j];
 
-        /* Skip if already at correct bound */
-        if (fabs(rc) <= dual_tol) {
-            /* Near-zero RC: snap to nearest bound */
-            double x = state->work_x[j];
-            if (fabs(x - lb) < fabs(x - ub)) {
-                state->work_x[j] = lb;
-                basis->var_status[j] = CXF_VAR_AT_LOWER;
-            } else if (ub < CXF_INFINITY) {
-                state->work_x[j] = ub;
-                basis->var_status[j] = CXF_VAR_AT_UPPER;
-            }
-            continue;
-        }
-
-        if (rc > dual_tol) {
-            /* Positive RC (minimization): fix at lower bound */
-            if (lb > -CXF_INFINITY) {
-                state->work_x[j] = lb;
-                basis->var_status[j] = CXF_VAR_AT_LOWER;
-            } else {
-                return CXF_UNBOUNDED;
-            }
-        } else {
-            /* Negative RC: fix at upper bound */
-            if (ub < CXF_INFINITY) {
-                state->work_x[j] = ub;
-                basis->var_status[j] = CXF_VAR_AT_UPPER;
-            } else {
-                return CXF_UNBOUNDED;
-            }
-        }
+        /* Snap to current status bound (fix floating-point drift) */
+        if (basis->var_status[j] == CXF_VAR_AT_LOWER && lb > -CXF_INFINITY)
+            state->work_x[j] = lb;
+        else if (basis->var_status[j] == CXF_VAR_AT_UPPER && ub < CXF_INFINITY)
+            state->work_x[j] = ub;
     }
 
-    /*--- Pass 2: Basic variable recovery ---*/
-    for (int i = 0; i < m; i++) {
-        int bv = basis->basic_vars[i];
-        if (bv < 0 || bv >= total) continue;
+    /*--- Pass 2: Basic variable recovery ---
+     * Disabled: recovery pivots change the basis and can move
+     * the solution to a suboptimal vertex. The final accuracy
+     * pass (recompute_xB) handles consistency without pivoting. */
 
-        double x = state->work_x[bv];
-        double ub = state->work_ub[bv];
-
-        /* If basic variable is near its upper bound, recover via pivot */
-        if (ub < CXF_INFINITY && fabs(x - ub) < tol && bv < n) {
-            int rc = cxf_pivot_primal(env, state, bv, tol);
-            if (rc != 0 && rc != 3) return rc;
-            /* rc == 3 (infeasible for this var) is ok — skip it */
-        }
-    }
-
-    /*--- Pass 3: Recompute objective ---*/
-    if (state->work_obj && state->work_x) {
-        double obj = 0.0;
-        for (int j = 0; j < n; j++)
-            obj += state->work_obj[j] * state->work_x[j];
-        state->obj_value = obj;
-    }
+    /*--- Pass 3: Objective recomputation ---
+     * Skipped: the final accuracy pass (recompute_xB + recompute_objective)
+     * does a full recomputation over ALL variables with consistent x_B. */
 
     if (state->work_counter)
         *state->work_counter += (double)(total + m);
