@@ -121,7 +121,7 @@ int cxf_simplex_perturbation(SolverState *state, CxfEnv *env) {
     double feas_tol = env->feasibility_tol;
     if (feas_tol <= 0.0) feas_tol = CXF_FEASIBILITY_TOL;
 
-    int total = n + 2 * m;
+    int total = n + m;
     int perturbed = 0;
 
     /*--- Phase 1: Save bounds for later restoration ---*/
@@ -269,9 +269,9 @@ int cxf_simplex_unperturb(SolverState *state, CxfEnv *env) {
 
     int n = state->num_vars;
     int m = state->num_constrs;
-    int total = n + 2 * m;
+    int total = n + m;
 
-    /* Prefer saved bounds (includes auxiliaries) over model bounds */
+    /* Prefer saved bounds over model bounds */
     if (state->saved_lb && state->saved_ub) {
         memcpy(state->work_lb, state->saved_lb,
                (size_t)total * sizeof(double));

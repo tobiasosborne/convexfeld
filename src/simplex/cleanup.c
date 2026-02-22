@@ -75,7 +75,7 @@ int cxf_simplex_postsolve(SolverState *state, CxfEnv *env) {
     if (basis && basis->basic_vars && state->work_x) {
         for (int i = 0; i < m; i++) {
             int bv = basis->basic_vars[i];
-            if (bv < 0 || bv >= n + 2 * m) continue;
+            if (bv < 0 || bv >= n + m) continue;
             double x = state->work_x[bv];
             double lb = state->work_lb[bv];
             double ub = state->work_ub[bv];

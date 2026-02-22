@@ -110,7 +110,7 @@ int cxf_simplex_phase_end(SolverState *state, CxfEnv *env, int doScan) {
     double feas_tol = env->feasibility_tol;
     int n = state->num_vars;
     int m = state->num_constrs;
-    int total = n + 2 * m;
+    int total = n + m;
 
     /* Track modified constraints for selective activity recomputation */
     int modified[256];

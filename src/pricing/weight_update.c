@@ -52,7 +52,7 @@ void cxf_pricing_update_weights(PricingState *ctx, SolverState *state,
 
     int m = state->num_constrs;
     int n = state->num_vars;
-    int total = n + 2 * m;
+    int total = n + m;
     double pivot_elem = pivotCol[leavingRow];
     if (fabs(pivot_elem) < MIN_WEIGHT) return;
 

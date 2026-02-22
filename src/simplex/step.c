@@ -54,12 +54,9 @@ extern void cxf_pricing_candidates_v2(PricingState *ctx, SolverState *state,
 static double get_auxiliary_coeff_fallback(const SolverState *state, int row) {
     if (state == NULL || state->work_sense == NULL) return 1.0;
     char sense = state->work_sense[row];
-    double rhs = (state->work_rhs != NULL) ? state->work_rhs[row] : 0.0;
-    /* P0.4: unified with get_auxiliary_coeff in reduced_costs.c */
+    /* Unconditional per natural form — matches phase_one.c diag_coeff init */
     if (sense == '>' || sense == 'G') return -1.0;
-    if (sense == '<' || sense == 'L') return (rhs < 0) ? -1.0 : 1.0;
-    if (sense == '=')                 return (rhs < 0) ? -1.0 : 1.0;
-    return 1.0;
+    return 1.0;  /* <= and = always +1 */
 }
 
 static void extract_column_ext(const SolverState *state, int col,
@@ -84,15 +81,8 @@ static void extract_column_ext(const SolverState *state, int col,
                 get_auxiliary_coeff_fallback(state, row);
             dense[row] = coeff;
         }
-    } else {
-        /* Artificial variable at [n+m, n+2m): use art_coeff */
-        int row = col - n - m;
-        if (row >= 0 && row < m) {
-            double coeff = (state->art_coeff != NULL) ?
-                state->art_coeff[row] : 1.0;
-            dense[row] = coeff;
-        }
     }
+    /* No artificial variable range — implicit Phase I has no artificials */
 }
 
 /*---------------------------------------------------------------------------*/
@@ -107,7 +97,7 @@ int cxf_apply_pivot(SolverState *state, int entering, int leavingRow,
 
     BasisState *basis = state->basis;
     int leaving = basis->basic_vars[leavingRow];
-    int total = state->num_vars + 2 * state->num_constrs;
+    int total = state->num_vars + state->num_constrs;
 
     /* Update basic variable values */
     for (int i = 0; i < state->num_constrs; i++) {
@@ -220,13 +210,29 @@ static double compute_step(SolverState *state, int leavingRow,
     double step;
 
     /* Use effective pivot direction s * pivotElement to determine
-     * which bound the leaving variable hits */
+     * which bound the leaving variable hits.
+     * Phase I: basic vars can be outside [lb, ub], check both bounds. */
     double sp = entering_sign * pivotElement;
-    if (sp > 0)
-        step = (x_l - state->work_lb[leaving]) / sp;
-    else
-        step = (x_l - state->work_ub[leaving]) / sp;
-    if (step < 0) step = 0;
+    double lb_l = state->work_lb[leaving];
+    double ub_l = state->work_ub[leaving];
+    step = CXF_INFINITY;
+    if (sp > 0 && lb_l > -CXF_INFINITY) {
+        double r = (x_l - lb_l) / sp;
+        if (r >= 0 && r < step) step = r;
+    }
+    if (sp > 0 && ub_l < CXF_INFINITY && x_l > ub_l + CXF_FEASIBILITY_TOL) {
+        double r = (x_l - ub_l) / sp;
+        if (r >= 0 && r < step) step = r;
+    }
+    if (sp < 0 && ub_l < CXF_INFINITY) {
+        double r = (x_l - ub_l) / sp;
+        if (r >= 0 && r < step) step = r;
+    }
+    if (sp < 0 && lb_l > -CXF_INFINITY && x_l < lb_l - CXF_FEASIBILITY_TOL) {
+        double r = (x_l - lb_l) / sp;
+        if (r >= 0 && r < step) step = r;
+    }
+    if (step >= CXF_INFINITY) step = 0;
 
     /* Limit by entering variable's bound range */
     if (basis->var_status[entering] == CXF_VAR_AT_LOWER) {
@@ -250,7 +256,7 @@ static void update_reduced_costs(SolverState *state, int entering,
                                  double pivotElement, const double *rho) {
     int n = state->num_vars;
     int m = state->num_constrs;
-    int total = n + 2 * m;
+    int total = n + m;
     BasisState *basis = state->basis;
     double step_dual = d_entering / pivotElement;
 
@@ -275,14 +281,6 @@ static void update_reduced_costs(SolverState *state, int entering,
                 basis->diag_coeff[row] :
                 get_auxiliary_coeff_fallback(state, row);
             rho_aj = rho[row] * coeff;
-        } else if (j >= n + m) {
-            /* Artificial: use art_coeff */
-            int row = j - n - m;
-            if (row >= 0 && row < m) {
-                double coeff = (state->art_coeff) ?
-                    state->art_coeff[row] : 1.0;
-                rho_aj = rho[row] * coeff;
-            }
         }
         state->work_dj[j] -= step_dual * rho_aj;
     }
@@ -303,7 +301,7 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env) {
 
     int m = state->num_constrs;
     int n = state->num_vars;
-    int total = n + 2 * m;
+    int total = n + m;
 
     if (m == 0) { state->iteration++; return ITERATE_OPTIMAL; }
     if (state->csc_col_ptr == NULL) return CXF_ERROR_NULL_ARGUMENT;
@@ -581,12 +579,41 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env) {
     }
 
     /*--- Phase 6: Update objective ---*/
-    /* entering_sign accounts for direction: +1 from lower, -1 from upper.
-     * Spec: revised_simplex.md Step 4 item 4 */
-    state->obj_value += entering_sign * d_entering * stepSize;
+    if (state->phase == 1) {
+        /* Phase I: recompute w coefficients and objective from scratch.
+         * The incremental formula is invalid because w changes after pivot.
+         * Spec: two_phase_method.md — dynamic w coefficient update. */
+        for (int j2 = 0; j2 < total; j2++)
+            state->work_obj[j2] = 0.0;
+        double p1_obj = 0.0;
+        for (int ii = 0; ii < m; ii++) {
+            int bv2 = basis->basic_vars[ii];
+            if (bv2 < 0 || bv2 >= total) continue;
+            double xv = state->work_x[bv2];
+            double lbv = state->work_lb[bv2];
+            double ubv = state->work_ub[bv2];
+            if (xv < lbv - CXF_FEASIBILITY_TOL) {
+                state->work_obj[bv2] = -1.0;
+                p1_obj += (lbv - xv);
+            } else if (xv > ubv + CXF_FEASIBILITY_TOL) {
+                state->work_obj[bv2] = +1.0;
+                p1_obj += (xv - ubv);
+            }
+        }
+        state->obj_value = p1_obj;
+        /* Leaving variable (now nonbasic) always gets w = 0 */
+        if (leaving >= 0 && leaving < total)
+            state->work_obj[leaving] = 0.0;
+    } else {
+        /* Phase II: standard incremental objective update */
+        state->obj_value += entering_sign * d_entering * stepSize;
+    }
 
-    /*--- Phase 7: Incremental reduced cost update ---*/
-    if (btran_ok) {
+    /*--- Phase 7: Reduced cost update ---*/
+    if (state->phase == 1) {
+        /* Phase I: w changed, must recompute reduced costs from scratch */
+        cxf_compute_reduced_costs(state);
+    } else if (btran_ok) {
         update_reduced_costs(state, entering, leaving,
                              d_entering, pivotElement, rho);
     } else {

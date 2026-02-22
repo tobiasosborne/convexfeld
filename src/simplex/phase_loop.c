@@ -5,8 +5,8 @@
  * Contains cxf_check_phase_one_end which determines whether Phase I
  * has achieved feasibility and orchestrates the transition to Phase II.
  *
- * P1.1 (x5dj): Removed correct_basic_variables hack. Now uses the
- * Phase I surrogate objective directly, as the spec intends.
+ * Phase I uses implicit bound-violation approach per two_phase_method.md.
+ * Phase I objective = sum of basic variable bound violations.
  */
 
 #include "convexfeld/cxf_solver.h"
@@ -21,33 +21,28 @@ extern int cxf_simplex_step(SolverState *state, CxfEnv *env);
 extern int cxf_compute_reduced_costs(SolverState *state);
 
 /**
- * @brief Compute Phase I objective from scratch: sum of artificial values.
- *
- * Cross-checks state->obj_value (maintained incrementally) against a
- * fresh computation from work_x to detect numerical drift.
+ * @brief Compute Phase I objective: sum of basic variable bound violations.
  */
 static double compute_phase1_objective(SolverState *state) {
-    int n = state->num_vars;
+    BasisState *basis = state->basis;
     int m = state->num_constrs;
     double obj = 0.0;
-    /* Artificials are at [n+m, n+2m) */
     for (int i = 0; i < m; i++) {
-        int ai = n + m + i;
-        if (state->work_obj[ai] > 0.0 && state->work_x[ai] > 0.0)
-            obj += state->work_x[ai];
+        int bv = basis->basic_vars[i];
+        double x = state->work_x[bv];
+        double lb = state->work_lb[bv];
+        double ub = state->work_ub[bv];
+        if (x < lb) obj += (lb - x);
+        else if (x > ub) obj += (x - ub);
     }
     return obj;
 }
 
 /**
  * @brief Safety net: check if any nonbasic variable has improving reduced cost.
- *
- * This catches cases where the pricing subsystem (partial pricing) declared
- * ITERATE_OPTIMAL but a full scan finds candidates it missed. Keeps us from
- * declaring false INFEASIBLE due to pricing gaps.
  */
 static int has_improving_direction(SolverState *state, CxfEnv *env) {
-    int total = state->num_vars + 2 * state->num_constrs;
+    int total = state->num_vars + state->num_constrs;
     for (int j = 0; j < total; j++) {
         if (state->basis->var_status[j] >= 0) continue;
         double lb = state->work_lb[j], ub = state->work_ub[j];
@@ -65,14 +60,6 @@ static int has_improving_direction(SolverState *state, CxfEnv *env) {
 /**
  * @brief Check Phase I termination and handle transition to Phase II.
  *
- * Called from the unified loop when cxf_simplex_step returns ITERATE_OPTIMAL
- * during Phase I. Uses the Phase I surrogate objective (sum of artificial
- * variable values) to determine feasibility.
- *
- * P1.1: No longer uses correct_basic_variables. The surrogate objective
- * is the correct signal — when pricing declares optimal and the objective
- * is zero, the basis IS feasible by construction.
- *
  * @return CXF_OK if transitioned to Phase II,
  *         CXF_INFEASIBLE if truly infeasible,
  *         1 if has improving direction (continue Phase I)
@@ -80,13 +67,10 @@ static int has_improving_direction(SolverState *state, CxfEnv *env) {
 int cxf_check_phase_one_end(SolverState *state, CxfModel *model, CxfEnv *env) {
     double tol = env->feasibility_tol;
 
-    /* Compute Phase I objective fresh from work_x to guard against drift.
-     * Use the larger of incremental and fresh as conservative check. */
+    /* Compute Phase I objective fresh to guard against drift */
     double fresh_obj = compute_phase1_objective(state);
     double phase1_obj = (fresh_obj > state->obj_value)
                         ? fresh_obj : state->obj_value;
-
-    /* Reset incremental tracker to fresh value to prevent drift accumulation */
     state->obj_value = fresh_obj;
 
     if (phase1_obj <= tol) {
@@ -99,11 +83,10 @@ int cxf_check_phase_one_end(SolverState *state, CxfModel *model, CxfEnv *env) {
     }
 
     /* Phase I optimal but objective still positive.
-     * Safety net: recompute reduced costs and do a full scan for improving
-     * directions. Partial pricing may have missed candidates. */
+     * Safety net: recompute reduced costs and scan for improving dirs. */
     cxf_compute_reduced_costs(state);
     if (has_improving_direction(state, env)) return 1;
 
-    /* No improving direction found by full scan either → truly infeasible */
+    /* No improving direction → truly infeasible */
     return CXF_INFEASIBLE;
 }

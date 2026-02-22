@@ -66,12 +66,10 @@ int cxf_simplex_init(CxfModel *model, SolverState **stateP) {
     ctx->last_refactor_iter = 0;
 
     /* Allocate working arrays for variables.
-     * Size is n + 2*m to accommodate separate slack/surplus AND artificial:
-     *   [0, n):       structural variables
-     *   [n, n+m):     slack/surplus (one per constraint, natural diag)
-     *   [n+m, n+2m):  artificial variables (used in Phase I when needed)
+     * Size is n + m (structural + slack/surplus). No artificial variable slots.
+     * Phase I uses implicit bound-violation approach per two_phase_method.md.
      */
-    int total_vars = n + 2 * m;
+    int total_vars = n + m;
     ctx->num_artificials = 0;  /* Set during Phase I setup */
 
     if (total_vars > 0) {
@@ -100,16 +98,6 @@ int cxf_simplex_init(CxfModel *model, SolverState **stateP) {
             ctx->work_lb[i] = 0.0;
             ctx->work_ub[i] = CXF_INFINITY;
             ctx->work_obj[i] = 0.0;
-        }
-    }
-
-    /* Allocate artificial column coefficients */
-    ctx->art_coeff = NULL;
-    if (m > 0) {
-        ctx->art_coeff = (double *)calloc((size_t)m, sizeof(double));
-        if (ctx->art_coeff == NULL) {
-            cxf_simplex_final(ctx);
-            return CXF_ERROR_OUT_OF_MEMORY;
         }
     }
 
@@ -356,7 +344,6 @@ void cxf_simplex_final(SolverState *state) {
     free(state->csr_values);
     free(state->work_rhs);
     free(state->work_sense);
-    free(state->art_coeff);
 
     /* Free basis */
     cxf_basis_free(state->basis);

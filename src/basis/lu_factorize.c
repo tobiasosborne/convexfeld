@@ -45,15 +45,8 @@ static int extract_basis_matrix(double *B, int *row_count, int *col_count,
             int slack_row = var - n_orig;
             if (slack_row >= 0 && slack_row < m)
                 B[slack_row * m + j] = basis->diag_coeff[slack_row];
-        } else {
-            /* Artificial variable: use art_coeff */
-            int art_row = var - n_orig - m;
-            if (art_row >= 0 && art_row < m) {
-                double coeff = (ctx->art_coeff != NULL)
-                    ? ctx->art_coeff[art_row] : 1.0;
-                B[art_row * m + j] = coeff;
-            }
         }
+        /* No artificial variable case — implicit Phase I has no artificials */
     }
 
     /* Count nonzeros and compute column maxima */

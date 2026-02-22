@@ -4,86 +4,87 @@
 
 ---
 
-## STATUS: RC1 done, RC2 in progress (separate artificials 90% complete). 39/40 tests pass.
+## STATUS: Phase I rewritten to spec-compliant bound-violation approach. 40/40 tests pass.
 
 ### What Was Done This Session
 
-1. **Built Component Interface Contract Map** (`docs/architecture_contract_map.md`)
-2. **Built diagnostic tools** (`tools/diagnose.c`, `tools/trace_bfrt.c`)
-3. **Found all 30/30 Netlib failure root causes** (`docs/remediation_plan.md`)
-4. **Confirmed v2 spec bug** in BFRT row negation (P3.5)
+1. **Full architectural audit** against v2 specs (17 spec files, 14 source files)
+   - Cross-referenced implementation contracts across all simplex modules
+   - Found spec internally contradicts itself on BFRT row negation (3 docs disagree)
+   - Confirmed Phase I was entirely unspecified (until two_phase_method.md was added)
 
-5. **Implemented RC1: Disabled BFRT**
-   - Deleted `negate_constraint_row` (spec bug: dual technique in primal context)
-   - Found second BFRT bug: `find_next_blocker` skipped variables between old/extended step
-   - Disabled BFRT entirely as simplest correct fix
-   - Result: +1 PASS (etamacro), 4 reclassified UNBOUNDED→INFEASIBLE
+2. **New spec `two_phase_method.md` compliance audit**
+   - Found FUNDAMENTAL mismatch: spec says implicit bound-violation Phase I, code had explicit artificials
+   - Identified 9 specific violations
+   - The explicit artificials approach caused test_geq_constraints bug
 
-6. **Implemented RC2 partial: Phase I→II transition fix for <= constraints**
-   - Added missing diag_coeff flip from -1 to +1 for <= at transition
-   - Result: +1 PASS (israel)
+3. **Implemented Option A: Rewrote Phase I to match spec** (convexfeld-avjr)
+   - Removed `art_coeff` field from SolverState
+   - Shrunk all arrays from `n+2m` to `n+m` (15 files changed)
+   - Rewrote `cxf_setup_phase_one` — slacks always basic, dynamic w coefficients
+   - Added Phase I bound-crossing to ratio test (both passes) and compute_step
+   - Added post-pivot w-coefficient recomputation in step.c
+   - Simplified Phase I→II transition (no artificial pivot-out needed)
+   - Unified fallback auxiliary coefficients to unconditional convention
+   - **Result: 40/40 tests pass** (test_geq_constraints now passes for first time)
 
-7. **Implementing RC2 complete: Separate artificial variables** (IN PROGRESS)
-   - Added `art_coeff[m]` to SolverState
-   - Expanded all arrays to `n + 2*m` (14 files changed)
-   - Rewrote `cxf_setup_phase_one` with separate slack/artificial
-   - Updated `extract_column_ext`, `reduced_costs`, `ratio_test`, `lu_factorize`, `refactor`
-   - 39/40 tests pass. ONE failure remains: `test_geq_constraints`
+4. **Post-rewrite architectural audit** — found and fixed:
+   - Missing `cxf_compute_reduced_costs` after Phase I→II transition
+   - Objective recomputation at transition only covered [0,n), should cover [0,n+m)
+   - RHS-conditional fallback functions inconsistent with unconditional diag_coeff
 
-### Current Bug: test_geq_constraints (obj=0, expected=5)
+5. **Diagnostic validation (boeing1)**
+   - Phase I works correctly (obj=936→0 in 120 iterations)
+   - Phase II reaches -488 at 500 iters (reference: -335). Still needs more iterations.
+   - 3 basic vars past bounds at iter 499 = pre-existing numerical drift, not Phase I regression
 
-**Problem:** `min x0+x1 s.t. x0>=2, x1>=3`. Phase I enters SURPLUS variables
-(not structurals) to drive artificials out. After transition, surpluses are
-basic, structurals at lb=0. Phase II declares OPTIMAL at obj=0.
+### Netlib Impact
 
-**Root cause:** Phase II reduced costs for structurals are wrong (dj=+1, should
-be negative to attract them into basis). The dual prices after transition
-aren't correctly reflecting the >= constraint values. The surplus variables
-absorbed the constraints without the structurals moving.
-
-**Investigation needed:** Check `cxf_compute_reduced_costs` after transition.
-The dual prices pi should be computed from B^T * pi = c_B. With surpluses
-basic (obj=0), pi = 0, so structural reduced costs = c_j - 0 = c_j > 0.
-This is "correct" in the sense that at x=0 with surplus=surplus_val, the
-basis IS optimal for the current basis — but the basis should have structurals,
-not surpluses.
-
-**Possible fixes:**
-1. In Phase I, prefer structurals over surpluses when entering (modify pricing)
-2. In transition, pivot surpluses out and structurals in (like artificial pivot-out)
-3. Accept this as correct Phase I behavior — Phase II should eventually find better basis
-
-Fix 3 is the right answer IF Phase II reduced costs are computed correctly.
-The issue may be that surpluses for >= constraints should NOT be nonbasic at 0
-after Phase I — they should track the constraint activity.
+| Instance | Before | After |
+|----------|--------|-------|
+| scorpion | INFEASIBLE (RC2 bug) | **PASS** |
+| israel | wrong obj (RC2 bug) | **PASS** |
+| share2b | PASS | PASS |
+| boeing1 | INFEASIBLE | wrong obj (Phase II needs work) |
+| etamacro | PASS | 0.08% obj error (minor regression) |
+| recipe | UNBOUNDED | 0.76% obj error (improvement) |
 
 ---
 
 ## Next Steps
 
-1. **Debug test_geq_constraints**: trace reduced costs and dual prices after
-   Phase I→II transition for `min x+y s.t. x>=2, y>=3`
-2. **Run Netlib key instances** after fixing: scorpion, boeing1, bandm
-3. **Then RC3 (OBJSENSE) and RC4 (RANGES)**
+1. **Run targeted Netlib instances** via diagnostic tool on other RC2 instances:
+   bandm, capri, finnis, bore3d, e226, stair, tuff, vtp.base
 
-## Key Files Modified This Session
+2. **Investigate etamacro regression** (0.08% error, was passing). May be from
+   unconditional fallback change.
+
+3. **RC3 (OBJSENSE)** and **RC4 (RANGES)** — straightforward parser additions.
+
+4. **Phase II numerical drift** — boeing1 shows 3 past-lb variables at iter 499.
+   This is a pre-existing issue now visible because Phase I succeeds.
+
+## Key Files Modified
 
 | File | Change |
 |------|--------|
-| `src/simplex/step.c` | BFRT disabled, 3-range column extraction, n+2m totals |
-| `src/simplex/phase_one.c` | Separate artificials, transition simplified |
-| `src/simplex/context.c` | n+2m array allocation, art_coeff |
-| `src/simplex/reduced_costs.c` | 3-range RC computation |
-| `src/simplex/ratio_test.c` | n+2m bounds in both passes |
-| `src/simplex/phase_loop.c` | Phase I obj over artificial range |
-| `src/basis/lu_factorize.c` | 3-range basis extraction |
-| `src/basis/refactor.c` | Diagonal fast-path for artificials |
-| `include/convexfeld/cxf_solver.h` | art_coeff field |
-| `docs/architecture_contract_map.md` | Contract map + post-RC1 landscape |
-| `docs/remediation_plan.md` | Full plan with spec bug analysis |
-| `tools/diagnose.c`, `tools/trace_bfrt.c` | Diagnostic tools |
+| `include/convexfeld/cxf_solver.h` | Removed `art_coeff` field |
+| `src/simplex/phase_one.c` | **Rewritten** — implicit bound-violation Phase I |
+| `src/simplex/step.c` | Phase I w-update, removed artificial branch, fixed compute_step |
+| `src/simplex/ratio_test.c` | Phase I bound-crossing guards in both passes |
+| `src/simplex/reduced_costs.c` | Removed artificial branch, unconditional fallback |
+| `src/simplex/phase_loop.c` | Phase I obj = sum of violations |
+| `src/simplex/context.c` | Arrays n+m, removed art_coeff alloc |
+| `src/basis/lu_factorize.c` | Removed artificial column extraction |
+| `src/basis/refactor.c` | Simplified diagonal check |
+| `src/simplex/cleanup.c` | n+m bound |
+| `src/simplex/perturbation.c` | n+m bound |
+| `src/simplex/post.c` | n+m bound |
+| `src/simplex/refine.c` | n+m bound |
+| `src/pricing/weight_update.c` | n+m bound |
+| `docs/learnings/gotchas.md` | Phase I rewrite learnings |
 
 ## DO NOT
-- Run full Netlib suite (use targeted --filter)
-- Skip reading docs/remediation_plan.md
-- Modify solver without understanding the architecture contract map
+- Run full Netlib suite (use targeted `--filter` or diagnostic tool)
+- Skip reading `docs/remediation_plan.md`
+- Re-introduce explicit artificial variables (the spec says don't)

@@ -24,18 +24,16 @@ extern int cxf_btran_vec(BasisState *basis, const double *input, double *result)
 static double get_auxiliary_coeff(const SolverState *state, int row) {
     if (state == NULL || state->work_sense == NULL) return 1.0;
     char sense = state->work_sense[row];
-    double rhs = (state->work_rhs != NULL) ? state->work_rhs[row] : 0.0;
+    /* Unconditional per natural form — matches phase_one.c diag_coeff init */
     if (sense == '>' || sense == 'G') return -1.0;
-    if (sense == '<' || sense == 'L') return (rhs < 0) ? -1.0 : 1.0;
-    if (sense == '=') return (rhs < 0) ? -1.0 : 1.0;
-    return 1.0;
+    return 1.0;  /* <= and = always +1 */
 }
 
 int cxf_compute_reduced_costs(SolverState *state) {
     BasisState *basis = state->basis;
     int n = state->num_vars;
     int m = state->num_constrs;
-    int total_vars = n + 2 * m;
+    int total_vars = n + m;
 
     /* Step 1: Compute dual prices pi = B^(-T) * c_B via BTRAN */
     /* P0.5: propagate errors instead of silently substituting pi = c_B */
@@ -72,14 +70,6 @@ int cxf_compute_reduced_costs(SolverState *state) {
                     basis->diag_coeff[row] :
                     get_auxiliary_coeff(state, row);
                 dj -= state->work_pi[row] * coeff;
-            } else if (j >= n + m) {
-                /* Artificial */
-                int row = j - n - m;
-                if (row >= 0 && row < m) {
-                    double coeff = (state->art_coeff != NULL) ?
-                        state->art_coeff[row] : 1.0;
-                    dj -= state->work_pi[row] * coeff;
-                }
             }
             state->work_dj[j] = dj;
         }

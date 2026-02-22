@@ -61,10 +61,11 @@ struct SolverState {
     double tolerance;         /**< Optimality tolerance */
     double obj_value;         /**< Current objective value */
 
-    /* Working arrays - sized for num_vars + num_constrs to hold artificials */
+    /* Working arrays — sized for num_vars + num_constrs (structural + slack).
+     * Phase I uses implicit bound violations (no artificial variable slots). */
     double *work_lb;          /**< Working lower bounds [num_vars + num_constrs] */
     double *work_ub;          /**< Working upper bounds [num_vars + num_constrs] */
-    double *work_obj;         /**< Working objective [num_vars + num_constrs] */
+    double *work_obj;         /**< Working objective / Phase I w-coefficients [num_vars + num_constrs] */
     double *work_x;           /**< Current solution [num_vars + num_constrs] */
     double *work_pi;          /**< Dual values [num_constrs] */
     double *work_dj;          /**< Reduced costs [num_vars + num_constrs] */
@@ -144,12 +145,8 @@ struct SolverState {
     double *work_rhs;         /**< RHS working copy [num_constrs] */
     char *work_sense;         /**< Constraint senses working copy [num_constrs] */
 
-    /* Phase I: separate artificial variables at indices [num_vars+num_constrs, num_vars+2*num_constrs).
-     * art_coeff[i] = column coefficient of artificial for constraint i (+1 or -1).
-     * Sign chosen so that the artificial value is always non-negative:
-     *   art_coeff[i] = +1 if slack_val >= 0, -1 if slack_val < 0.
-     * Allocated at init, valid during Phase I. */
-    double *art_coeff;        /**< Artificial column coefficients [num_constrs] */
+    /* (art_coeff removed — Phase I now uses implicit bound-violation approach
+     * per two_phase_method.md spec. No explicit artificial variables.) */
 };
 
 /*******************************************************************************

@@ -923,6 +923,41 @@ AT_LOWER→AT_UPPER status flip (which changes work_x), not lb/ub modification.
 
 ---
 
+### Phase I Rewrite: Explicit Artificials → Implicit Bound-Violation (2026-02-22)
+
+**Context:** V2 spec `two_phase_method.md` mandates implicit bound-violation Phase I
+(Maros 2003 Section 6.3). Previous implementation used explicit artificial variables
+at `[n+m, n+2m)` with `art_coeff` — the opposite of what the spec prescribes.
+
+**Key learnings:**
+
+1. **Ratio test needs Phase I bound-crossing guards.** Standard ratio test only checks
+   lb for sd>0 and ub for sd<0. In Phase I, basic variables can be OUTSIDE [lb,ub].
+   A variable below lb increasing toward lb is a valid leaving event the standard test
+   misses → false UNBOUNDED. Fix: add guarded checks for out-of-bounds variables.
+
+2. **compute_step must match ratio_test.** Same bound-crossing logic needed in both.
+   Without it, ratio_test finds the right leaving variable but compute_step computes
+   the wrong step size (infinity instead of the correct crossing distance).
+
+3. **Phase I w-coefficients must be recomputed after every pivot.** The incremental
+   objective formula `obj += s * dj * θ` is WRONG for Phase I because the objective
+   function itself changes when basic variables cross bounds. Must recompute from scratch.
+
+4. **Transition must recompute reduced costs.** After swapping from Phase I w-coefficients
+   to original objective, reduced costs are stale. Must call `cxf_compute_reduced_costs`
+   before Phase II begins.
+
+5. **Fallback auxiliary coefficient functions must be unconditional.** The RHS-conditional
+   logic `(rhs < 0) ? -1.0 : 1.0` for <= and = constraints was inconsistent with the
+   unconditional `diag_coeff` set by phase_one.c. Simplified to always return +1.0 for
+   <= and =, -1.0 for >=.
+
+**Result:** 40/40 tests pass (including previously-failing test_geq_constraints).
+scorpion and israel now pass Netlib (were RC2 false INFEASIBLE). Net ~200 LOC removed.
+
+---
+
 ### Don't Bandaid the Orchestrator — Fix the Components
 
 **Date:** 2026-02-20

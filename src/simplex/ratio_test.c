@@ -86,9 +86,8 @@ int cxf_ratio_test(SolverState *state, CxfEnv *env, int enteringVar,
         /* Get basic variable at this row */
         basicVar = state->basis->basic_vars[i];
 
-        /* Skip invalid variable indices
-         * Valid range: [0, num_vars + 2*num_constrs) — includes artificials */
-        int total_vars = state->num_vars + 2 * state->num_constrs;
+        /* Skip invalid variable indices */
+        int total_vars = state->num_vars + state->num_constrs;
         if (basicVar < 0 || basicVar >= total_vars) {
             continue;
         }
@@ -105,19 +104,33 @@ int cxf_ratio_test(SolverState *state, CxfEnv *env, int enteringVar,
          * - If sd_i < 0: basic var increases, hits upper bound
          */
         double sd_i = s * d_i;
+        ratio = infinity;  /* will take min of bound candidates */
         if (sd_i > relaxedTol) {
-            if (lb <= -infinity) {
-                continue;  /* Lower bound is infinite */
+            /* Standard: variable decreasing → check lower bound */
+            if (lb > -infinity) {
+                double r = (x_i - lb) / sd_i;
+                if (r >= -feasTol && r < ratio) ratio = r;
             }
-            ratio = (x_i - lb) / sd_i;
+            /* Phase I: variable above ub, decreasing toward ub */
+            if (ub < infinity && x_i > ub + feasTol) {
+                double r = (x_i - ub) / sd_i;
+                if (r >= -feasTol && r < ratio) ratio = r;
+            }
         } else if (sd_i < -relaxedTol) {
-            if (ub >= infinity) {
-                continue;  /* Upper bound is infinite */
+            /* Standard: variable increasing → check upper bound */
+            if (ub < infinity) {
+                double r = (x_i - ub) / sd_i;
+                if (r >= -feasTol && r < ratio) ratio = r;
             }
-            ratio = (x_i - ub) / sd_i;  /* sd_i < 0 makes this positive */
+            /* Phase I: variable below lb, increasing toward lb */
+            if (lb > -infinity && x_i < lb - feasTol) {
+                double r = (x_i - lb) / sd_i;
+                if (r >= -feasTol && r < ratio) ratio = r;
+            }
         } else {
             continue;  /* Effective coefficient too small */
         }
+        if (ratio >= infinity) continue;
 
         /* Update minimum if this ratio is smaller */
         if (ratio >= -feasTol && ratio < minRatio) {
@@ -152,8 +165,8 @@ int cxf_ratio_test(SolverState *state, CxfEnv *env, int enteringVar,
         /* Get basic variable at this row */
         basicVar = state->basis->basic_vars[i];
 
-        /* Skip invalid variable indices (include artificials) */
-        int total_vars2 = state->num_vars + 2 * state->num_constrs;
+        /* Skip invalid variable indices */
+        int total_vars2 = state->num_vars + state->num_constrs;
         if (basicVar < 0 || basicVar >= total_vars2) {
             continue;
         }
@@ -163,21 +176,31 @@ int cxf_ratio_test(SolverState *state, CxfEnv *env, int enteringVar,
         lb = state->work_lb[basicVar];
         ub = state->work_ub[basicVar];
 
-        /* Compute ratio (same s * d_i logic as first pass) */
+        /* Compute ratio (same Phase I bound-crossing logic as first pass) */
         double sd_i2 = s * d_i;
+        ratio = infinity;
         if (sd_i2 > relaxedTol) {
-            if (lb <= -infinity) {
-                continue;
+            if (lb > -infinity) {
+                double r = (x_i - lb) / sd_i2;
+                if (r >= -feasTol && r < ratio) ratio = r;
             }
-            ratio = (x_i - lb) / sd_i2;
+            if (ub < infinity && x_i > ub + feasTol) {
+                double r = (x_i - ub) / sd_i2;
+                if (r >= -feasTol && r < ratio) ratio = r;
+            }
         } else if (sd_i2 < -relaxedTol) {
-            if (ub >= infinity) {
-                continue;
+            if (ub < infinity) {
+                double r = (x_i - ub) / sd_i2;
+                if (r >= -feasTol && r < ratio) ratio = r;
             }
-            ratio = (x_i - ub) / sd_i2;
+            if (lb > -infinity && x_i < lb - feasTol) {
+                double r = (x_i - lb) / sd_i2;
+                if (r >= -feasTol && r < ratio) ratio = r;
+            }
         } else {
             continue;
         }
+        if (ratio >= infinity) continue;
 
         /* If ratio is within threshold, consider this pivot */
         if (ratio <= threshold) {
