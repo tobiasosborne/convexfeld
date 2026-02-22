@@ -87,6 +87,12 @@ int cxf_solve_lp(CxfModel *model) {
         return CXF_ERROR_NOT_SUPPORTED;
     }
 
+    /* P6.4: Save environment parameters for restore after solve */
+    double saved_feas_tol = env->feasibility_tol;
+    double saved_opt_tol = env->optimality_tol;
+    int saved_refactor_interval = env->refactor_interval;
+    int saved_max_eta = env->max_eta_count;
+
     /* Presolve */
     if (cxf_check_obvious_infeasibility(model)) {
         model->status = CXF_INFEASIBLE; return CXF_INFEASIBLE;
@@ -121,9 +127,12 @@ int cxf_solve_lp(CxfModel *model) {
         cxf_progress_snapshot(state);
 
         while (state->iteration < state->max_iterations) {
-            /* Anti-cycling: Bland's rule fallback */
+            /* P5.4: Bland's rule is last resort, after perturbation fails.
+             * Only activate if perturbation has been tried (perturb_count > 0)
+             * AND we still have excessive degenerate pivots. */
             if (!state->use_bland &&
-                state->iteration > 3 * state->num_constrs)
+                state->perturb_count > 0 &&
+                state->degenerate_count > 3 * state->num_constrs)
                 state->use_bland = 1;
 
             /* (1) Progress snapshot — taken at round start */
@@ -223,8 +232,27 @@ int cxf_solve_lp(CxfModel *model) {
     /* Post-solve */
     cxf_simplex_unperturb(state, env);
     cxf_simplex_refine(state, env);
-    if (model->status == CXF_OPTIMAL) cxf_extract_solution(state, model);
+
+    /* P6.1: Postsolve — restore fixed variables and unscale (stub for now) */
+    {
+        extern int cxf_simplex_postsolve(SolverState *, CxfEnv *);
+        cxf_simplex_postsolve(state, env);
+    }
+
+    /* P6.3: Extract solution for all terminal statuses, not just OPTIMAL.
+     * Iteration-limit and time-limit should still provide best-available. */
+    if (model->status == CXF_OPTIMAL ||
+        model->status == CXF_ITERATION_LIMIT ||
+        model->status == CXF_TIME_LIMIT)
+        cxf_extract_solution(state, model);
 
     cxf_simplex_final(state);
+
+    /* P6.4: Restore environment parameters */
+    env->feasibility_tol = saved_feas_tol;
+    env->optimality_tol = saved_opt_tol;
+    env->refactor_interval = saved_refactor_interval;
+    env->max_eta_count = saved_max_eta;
+
     return model->status;
 }

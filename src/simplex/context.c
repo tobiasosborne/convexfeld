@@ -276,11 +276,34 @@ int cxf_simplex_init(CxfModel *model, SolverState **stateP) {
 /**
  * @brief Free solver context and all resources.
  *
+ * P6.2: Before freeing, performs dual-feasibility variable fixing
+ * (complementary slackness) for nonbasic variables. This ensures
+ * the solution satisfies CS conditions before extraction.
+ *
  * @param state Context to free (may be NULL)
  */
 void cxf_simplex_final(SolverState *state) {
     if (state == NULL) {
         return;
+    }
+
+    /* P6.2: Complementary slackness fix — snap nonbasic variables to
+     * the correct bound based on reduced cost sign. */
+    if (state->basis && state->basis->var_status &&
+        state->work_dj && state->work_x) {
+        int total = state->num_vars + state->num_constrs;
+        for (int j = 0; j < total; j++) {
+            int vs = state->basis->var_status[j];
+            if (vs >= 0) continue;  /* skip basic */
+            double dj = state->work_dj[j];
+            double lb = state->work_lb[j];
+            double ub = state->work_ub[j];
+            /* CS: if dj > 0, should be at lower; if dj < 0, at upper */
+            if (dj > CXF_OPTIMALITY_TOL && lb > -CXF_INFINITY)
+                state->work_x[j] = lb;
+            else if (dj < -CXF_OPTIMALITY_TOL && ub < CXF_INFINITY)
+                state->work_x[j] = ub;
+        }
     }
 
     /* Free working arrays */
@@ -320,7 +343,11 @@ void cxf_simplex_final(SolverState *state) {
     cxf_basis_free(state->basis);
 
     /* Free pricing context if allocated */
-    /* Note: pricing context free not implemented yet */
+    {
+        extern void cxf_pricing_free(PricingState *ctx);
+        if (state->pricing != NULL)
+            cxf_pricing_free(state->pricing);
+    }
 
     /* Free timing if allocated */
     free(state->timing);

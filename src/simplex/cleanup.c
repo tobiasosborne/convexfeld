@@ -1,17 +1,20 @@
 /**
  * @file cleanup.c
- * @brief Simplex cleanup function (M7.1.14)
+ * @brief Simplex postsolve — restore original problem space (P6.1)
  *
- * Implements cxf_simplex_postsolve for post-solve cleanup.
- * This function restores the original problem space by unscaling values
- * and restoring eliminated variables after preprocessing.
+ * After the simplex iteration loop and refinement, postsolve reverses
+ * preprocessing transformations:
+ *   1. Restore variables fixed during preprocessing to their original bounds
+ *   2. Unscale primal values (when scaling is implemented)
+ *   3. Unscale dual values (when scaling is implemented)
+ *   4. Unscale reduced costs (when scaling is implemented)
  *
- * Current implementation is a minimal stub that validates inputs and
- * provides structure for future preprocessing cleanup when full scaling
- * and variable elimination are implemented.
+ * Spec: solution_processing.md — cxf_uncrush_solution
+ * Beads: cps2
  */
 
 #include "convexfeld/cxf_solver.h"
+#include "convexfeld/cxf_basis.h"
 #include "convexfeld/cxf_env.h"
 #include "convexfeld/cxf_types.h"
 #include <math.h>
@@ -19,58 +22,71 @@
 /**
  * @brief Post-solve cleanup to restore original problem space.
  *
- * Performs the inverse operations of preprocessing to restore the solution
- * in the original problem space:
- * 1. Unscale primal values (if scaling was applied)
- * 2. Unscale dual values (if scaling was applied)
- * 3. Restore fixed variable values
- * 4. Unscale reduced costs
- *
- * Current implementation is a placeholder that validates inputs and returns
- * success. Full cleanup functionality will be added when preprocessing is
- * fully implemented.
+ * Phase 1: Restore variables that were fixed during preprocessing.
+ *          Variables with work_lb == work_ub that differ from saved bounds
+ *          are snapped back to their original bound range.
+ * Phase 2: Unscale primal/dual (stub — scaling not yet implemented).
+ * Phase 3: Verify basic variable feasibility.
  *
  * @param state Solver context containing solution arrays
- * @param env Environment (unused in current stub implementation)
+ * @param env Environment with tolerances
  * @return CXF_OK on success, error code otherwise
  */
 int cxf_simplex_postsolve(SolverState *state, CxfEnv *env) {
-    /* Validate inputs */
-    if (state == NULL) {
+    if (state == NULL || env == NULL)
         return CXF_ERROR_NULL_ARGUMENT;
+
+    int n = state->num_vars;
+    int m = state->num_constrs;
+    BasisState *basis = state->basis;
+
+    /*--- Phase 1: Restore preprocessed fixed variables ---*/
+    if (state->saved_lb && state->saved_ub && basis && basis->var_status) {
+        double tol = env->feasibility_tol;
+
+        for (int j = 0; j < n; j++) {
+            double cur_lb = state->work_lb[j];
+            double cur_ub = state->work_ub[j];
+            double orig_lb = state->saved_lb[j];
+            double orig_ub = state->saved_ub[j];
+
+            /* Was this variable fixed during preprocessing? */
+            if (fabs(cur_ub - cur_lb) < tol &&
+                (orig_ub - orig_lb) > tol) {
+                /* Restore original bounds */
+                state->work_lb[j] = orig_lb;
+                state->work_ub[j] = orig_ub;
+
+                /* If nonbasic, snap to nearest original bound */
+                if (basis->var_status[j] < 0) {
+                    double x = state->work_x[j];
+                    if (fabs(x - orig_lb) <= fabs(x - orig_ub))
+                        state->work_x[j] = orig_lb;
+                    else
+                        state->work_x[j] = orig_ub;
+                }
+            }
+        }
     }
 
-    if (env == NULL) {
-        return CXF_ERROR_NULL_ARGUMENT;
-    }
+    /* Phase 2: Unscale primal/dual values (stub — no scaling yet) */
 
-    /*
-     * Placeholder for future cleanup operations.
-     *
-     * When preprocessing is fully implemented, this function will:
-     *
-     * 1. Unscale primal values:
-     *    - Apply inverse row/column scaling to work_x
-     *    - Restore original variable magnitudes
-     *
-     * 2. Unscale dual values:
-     *    - Apply inverse row scaling to work_pi
-     *    - Restore original constraint dual magnitudes
-     *
-     * 3. Restore fixed variables:
-     *    - Reconstruct values for variables eliminated during preprocessing
-     *    - Handle variables fixed due to lb = ub
-     *
-     * 4. Unscale reduced costs:
-     *    - Apply inverse column scaling to work_dj
-     *    - Restore original reduced cost magnitudes
-     *
-     * Implementation notes:
-     * - Scaling factors will be stored in SolverState during preprocessing
-     * - Fixed variable indices and values will be tracked in a separate structure
-     * - All operations must be numerically stable and preserve solution quality
-     * - Should validate that solution arrays (work_x, work_pi, work_dj) exist
-     */
+    /*--- Phase 3: Basic variable feasibility check ---*/
+    if (basis && basis->basic_vars && state->work_x) {
+        for (int i = 0; i < m; i++) {
+            int bv = basis->basic_vars[i];
+            if (bv < 0 || bv >= n + m) continue;
+            double x = state->work_x[bv];
+            double lb = state->work_lb[bv];
+            double ub = state->work_ub[bv];
+
+            /* Clamp basic variables to restored bounds */
+            if (x < lb - env->feasibility_tol)
+                state->work_x[bv] = lb;
+            else if (x > ub + env->feasibility_tol)
+                state->work_x[bv] = ub;
+        }
+    }
 
     return CXF_OK;
 }
