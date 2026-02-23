@@ -64,6 +64,8 @@ void cxf_free_attribute_table(SolverState *ctx) {
     /* Free activity bounds (B2) */
     free(ctx->min_activity);
     free(ctx->max_activity);
+    free(ctx->negUnbdCount);
+    free(ctx->posUnbdCount);
 
     /* Free crash basis arrays */
     free(ctx->row_status);

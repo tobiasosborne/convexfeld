@@ -46,12 +46,18 @@ void cxf_compute_activity_bounds(SolverState *state, int count,
     if (do_all) {
         memset(state->min_activity, 0, (size_t)m * sizeof(double));
         memset(state->max_activity, 0, (size_t)m * sizeof(double));
+        if (state->negUnbdCount)
+            memset(state->negUnbdCount, 0, (size_t)m * sizeof(int));
+        if (state->posUnbdCount)
+            memset(state->posUnbdCount, 0, (size_t)m * sizeof(int));
     } else {
         for (int k = 0; k < count; k++) {
             int i = indices[k];
             if (i >= 0 && i < m) {
                 state->min_activity[i] = 0.0;
                 state->max_activity[i] = 0.0;
+                if (state->negUnbdCount) state->negUnbdCount[i] = 0;
+                if (state->posUnbdCount) state->posUnbdCount[i] = 0;
             }
         }
     }
@@ -84,25 +90,33 @@ void cxf_compute_activity_bounds(SolverState *state, int count,
             double prod_ub = a * ub_j;
 
             if (lb_j <= -CXF_INFINITY || ub_j >= CXF_INFINITY) {
-                /* Infinite bound: set activity to infinity */
+                /* Infinite bound: track count, accumulate finite part */
                 if (a > 0) {
-                    if (lb_j <= -CXF_INFINITY)
-                        state->min_activity[row] = -CXF_INFINITY;
-                    if (ub_j >= CXF_INFINITY)
-                        state->max_activity[row] = CXF_INFINITY;
-                    if (lb_j > -CXF_INFINITY)
+                    if (lb_j <= -CXF_INFINITY) {
+                        if (state->negUnbdCount)
+                            state->negUnbdCount[row]++;
+                    } else {
                         state->min_activity[row] += prod_lb;
-                    if (ub_j < CXF_INFINITY)
+                    }
+                    if (ub_j >= CXF_INFINITY) {
+                        if (state->posUnbdCount)
+                            state->posUnbdCount[row]++;
+                    } else {
                         state->max_activity[row] += prod_ub;
+                    }
                 } else {
-                    if (ub_j >= CXF_INFINITY)
-                        state->min_activity[row] = -CXF_INFINITY;
-                    if (lb_j <= -CXF_INFINITY)
-                        state->max_activity[row] = CXF_INFINITY;
-                    if (ub_j < CXF_INFINITY)
+                    if (ub_j >= CXF_INFINITY) {
+                        if (state->negUnbdCount)
+                            state->negUnbdCount[row]++;
+                    } else {
                         state->min_activity[row] += prod_ub;
-                    if (lb_j > -CXF_INFINITY)
+                    }
+                    if (lb_j <= -CXF_INFINITY) {
+                        if (state->posUnbdCount)
+                            state->posUnbdCount[row]++;
+                    } else {
                         state->max_activity[row] += prod_lb;
+                    }
                 }
             } else {
                 /* Finite bounds */

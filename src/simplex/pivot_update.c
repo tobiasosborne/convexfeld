@@ -2,7 +2,11 @@
  * @file pivot_update.c
  * @brief Incremental activity bound update after bound changes (F2 P3.19)
  *
+ * Implements cancellation detection with conservative rounding and
+ * infinity threshold transitions per numerical_stability.md Section B.
+ *
  * Spec: docs/specs-v2/specs/modules/pivot_operations.md
+ *       docs/specs-v2/specs/reference/numerical_stability.md Section B
  */
 
 #include "convexfeld/cxf_solver.h"
@@ -10,47 +14,116 @@
 #include "convexfeld/cxf_types.h"
 #include <math.h>
 
+/* Conservative rounding factors (numerical_stability.md Section B) */
+#define CANCEL_WIDEN_MIN  (1.0 + 1e-12)
+#define CANCEL_WIDEN_MAX  (1.0 - 1e-12)
+
 /**
- * @brief Incrementally update activity bounds when a variable bound changes.
- *
- * When variable j's bound changes by delta, update each constraint i where
- * a_ij != 0: adjust min/max activity by a_ij * delta (sign-dependent).
- *
- * @param state  Solver state with activity bounds and CSC matrix
- * @param var    Variable index whose bound changed
- * @param delta  Change in bound value (new - old)
- * @param is_lb  1 if lower bound changed, 0 if upper bound changed
+ * Apply cancellation-safe incremental update to an activity bound.
+ * When floating-point cancellation detected (addition not reversible),
+ * apply conservative rounding to widen bounds.
  */
-void cxf_pivot_update(SolverState *state, int var, double delta, int is_lb) {
-    if (state == NULL || fabs(delta) < 1e-15) return;
+static double safe_add(double existing, double delta, int is_min) {
+    double result = existing + delta;
+    if ((result - delta) != existing) {
+        result *= is_min ? CANCEL_WIDEN_MIN : CANCEL_WIDEN_MAX;
+    }
+    return result;
+}
+
+/**
+ * Process one bound transition (finite-to-finite, finite-to-infinite,
+ * or infinite-to-finite) for a single constraint row.
+ */
+static void apply_transition(double *act, int *unbd, double a,
+                             double old_val, double new_val,
+                             int old_inf, int new_inf, int is_min) {
+    if (!old_inf && !new_inf) {
+        /* Finite to finite: cancellation-safe delta */
+        *act = safe_add(*act, a * (new_val - old_val), is_min);
+    } else if (!old_inf && new_inf) {
+        /* Finite to infinite: remove old finite contribution */
+        *act -= a * old_val;
+        if (unbd) (*unbd)++;
+    } else if (old_inf && !new_inf) {
+        /* Infinite to finite: add new finite contribution */
+        *act += a * new_val;
+        if (unbd) (*unbd)--;
+    }
+    /* Infinite to infinite: no change */
+}
+
+/**
+ * @brief Incrementally update constraint activity bounds when variable
+ *        bounds change.
+ *
+ * Spec: pivot_operations.md cxf_pivot_update.
+ * Replaces naive += with cancellation-detecting safe_add and handles
+ * infinity threshold transitions with unbounded variable counts.
+ *
+ * @param state              Solver state with activity bounds and CSC matrix
+ * @param col                Variable index whose bounds changed
+ * @param oldLB              Previous lower bound value
+ * @param newLB              Updated lower bound value
+ * @param oldUB              Previous upper bound value
+ * @param newUB              Updated upper bound value
+ * @param infinityThreshold  Threshold beyond which a bound is infinite
+ */
+void cxf_pivot_update(SolverState *state, int col,
+                      double oldLB, double newLB,
+                      double oldUB, double newUB,
+                      double infinityThreshold) {
+    if (state == NULL) return;
     if (state->min_activity == NULL || state->max_activity == NULL) return;
+    if (state->csc_col_ptr == NULL) return;
+    if (col < 0 || col >= state->num_vars) return;
 
-    if (state->csc_col_ptr == NULL || var < 0 || var >= state->num_vars)
-        return;
+    int lb_changed = (fabs(newLB - oldLB) > 1e-15);
+    int ub_changed = (fabs(newUB - oldUB) > 1e-15);
+    if (!lb_changed && !ub_changed) return;
 
-    int64_t start = state->csc_col_ptr[var];
-    int64_t end = state->csc_col_ptr[var + 1];
+    double inf = infinityThreshold;
+    int64_t start = state->csc_col_ptr[col];
+    int64_t end = state->csc_col_ptr[col + 1];
 
     for (int64_t k = start; k < end; k++) {
         int row = state->csc_row_idx[k];
         double a = state->csc_values[k];
 
-        if (is_lb) {
-            /* Lower bound changed: affects min_activity if a>0, max if a<0 */
+        if (lb_changed) {
+            int oi = (oldLB <= -inf), ni = (newLB <= -inf);
             if (a > 0) {
-                state->min_activity[row] += a * delta;
+                /* LB + positive coeff -> min_activity, negUnbdCount */
+                apply_transition(&state->min_activity[row],
+                    state->negUnbdCount ? &state->negUnbdCount[row] : NULL,
+                    a, oldLB, newLB, oi, ni, 1);
             } else {
-                state->max_activity[row] += a * delta;
+                /* LB + negative coeff -> max_activity, posUnbdCount */
+                apply_transition(&state->max_activity[row],
+                    state->posUnbdCount ? &state->posUnbdCount[row] : NULL,
+                    a, oldLB, newLB, oi, ni, 0);
             }
-        } else {
-            /* Upper bound changed: affects max_activity if a>0, min if a<0 */
+        }
+
+        if (ub_changed) {
+            int oi = (oldUB >= inf), ni = (newUB >= inf);
             if (a > 0) {
-                state->max_activity[row] += a * delta;
+                /* UB + positive coeff -> max_activity, posUnbdCount */
+                apply_transition(&state->max_activity[row],
+                    state->posUnbdCount ? &state->posUnbdCount[row] : NULL,
+                    a, oldUB, newUB, oi, ni, 0);
             } else {
-                state->min_activity[row] += a * delta;
+                /* UB + negative coeff -> min_activity, negUnbdCount */
+                apply_transition(&state->min_activity[row],
+                    state->negUnbdCount ? &state->negUnbdCount[row] : NULL,
+                    a, oldUB, newUB, oi, ni, 1);
             }
         }
     }
+
+    /* Update work counter proportional to column nonzeros */
+    if (state->work_counter)
+        *state->work_counter += (double)(end - start) * state->scale_factor;
 }
 
 /**

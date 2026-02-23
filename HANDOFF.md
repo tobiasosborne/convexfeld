@@ -4,7 +4,7 @@
 
 ---
 
-## STATUS: 22/35 Netlib pass. 41/41 unit tests. Error/status codes fixed to spec.
+## STATUS: 22/35 Netlib pass. 42/42 unit tests. Kahan-stable pivot_update done.
 
 ### Scorecard
 
@@ -16,111 +16,56 @@
 
 ## Work Completed This Session (2026-02-23)
 
-### Issues Fixed (8)
+### convexfeld-heyz: P0 Redesign cxf_pivot_update for Kahan-stable addition — CLOSED
+
+Rewrote `cxf_pivot_update` from delta-only API to full spec-compliant signature:
+`(state, col, oldLB, newLB, oldUB, newUB, infinityThreshold)`
+
+**Changes:**
+- **pivot_update.c**: Full rewrite with:
+  - Case dispatch (LB only, UB only, both, neither)
+  - Cancellation detection: `(result - delta) != existing` triggers conservative rounding
+  - Conservative rounding: min_activity * (1+1e-12), max_activity * (1-1e-12)
+  - Infinity threshold transitions (finite↔infinite) with unbounded count tracking
+  - `safe_add()` and `apply_transition()` static helpers
+- **cxf_solver.h**: Added `negUnbdCount` and `posUnbdCount` int arrays to SolverState
+- **context.c**: Allocate/free negUnbdCount and posUnbdCount
+- **state_cleanup.c**: Free negUnbdCount and posUnbdCount
+- **setup.c**: Initialize unbounded counts during `cxf_compute_activity_bounds()`
+  - Counts infinite contributions instead of setting activity to +/-inf directly
+- **phase_steps.c**: Updated `tighten_bound()` caller to new signature
+  - Captures old LB/UB before mutation, passes both old and new values
+- **pivot_special.c**: Phase 6 of `cxf_pivot_bound` now calls `cxf_pivot_update`
+  instead of inline += math
+- **test_pivot_update.c**: 13 new direct tests (finite delta, infinity transitions,
+  cancellation detection, null safety)
+- **test_pivot_bound.c**: Added negUnbdCount/posUnbdCount to test fixtures
+- 42/42 tests pass
+
+### Previous Issues Fixed (same day, earlier sessions)
 
 **convexfeld-7rvr: P0 Implement 4-function error model + fix error/status codes** — CLOSED
-- Fixed CxfStatus enum: optimization status codes now match spec (OPTIMAL=2, INFEASIBLE=3, UNBOUNDED=5, etc.)
-- Fixed error codes from -1..-5 range to 10001+ range per spec (OUT_OF_MEMORY=10001, NULL_ARGUMENT=10002, etc.)
-- Added 27 missing error codes (10004-10032, 20001-20003) and 12 missing status codes (LOADED, CUTOFF, etc.)
-- Split CxfStatus into CxfOptimStatus (1-19) and CxfErrorCode (10001+) enums
-- Added CXF_IS_ERROR(code) macro for error detection
-- Added `error_code` field to CxfEnv struct (spec requires storing code separate from message)
-- Implemented 4-function error model in src/error/error_reporting.c + include/convexfeld/cxf_error.h:
-  - cxf_error_env() — custom message via Environment
-  - cxf_error_model() — custom message via Model
-  - cxf_set_error_message() — predefined message via Model
-  - cxf_env_set_status() — predefined message via Environment
-- Error message lookup table with 35 predefined messages
-- Buffer management: OOM always overwrites, overwrite flag, empty-buffer-only rule
-- Fixed solve_lp.c: replaced `status < 0` error checks with `CXF_IS_ERROR(status)`
-- Added 11 new tests for error reporting (41/41 total pass)
-
 **convexfeld-h8xm: P0 Implement full cxf_pivot_bound** — CLOSED
-- Rewrote stub into spec-compliant 7-phase implementation in pivot_special.c
-- Phase 1: compact eta record (type=3) with previous RC + status
-- Phase 2: linear objective update
-- Phases 3-4: quadratic no-op guards (LP-only solver)
-- Phase 5: pricing notification (cxf_pricing_update_var + mark_dirty)
-- Phase 6: activity bound propagation via CSC column scan
-- Phase 7: set bounds=fixedValue, status=CXF_VAR_FIXED
-- Fixed cxf_pivot_special callsites to pass correct upperBound param
-- Removed local AT_LOWER/AT_UPPER/THRESHOLD defines (use cxf_types.h)
-- Added 12 new tests in test_pivot_bound.c (41/41 total pass)
-
-
 **convexfeld-aal4: P1 CXF_ENV_MAGIC == CXF_MODEL_MAGIC defeats type safety** — CLOSED
-- Changed CXF_MODEL_MAGIC from 0xC0FEFE1DU to 0xC0FE0D31U in cxf_types.h
-- ENV and MODEL magic numbers are now distinct, enabling proper type validation
-
 **convexfeld-vk8l: P1 helpers.c bound propagation dead code** — CLOSED
-- Fixed tautological comparison: `newLB = lb_working[colIdx]; if (newLB > lb_working[colIdx])` was always false
-- Now computes implied bounds using FBBT (Savelsbergh 1994) with constraint coefficient and RHS
-- Extracted duplicated CSC activity update into static `update_activities()` helper
-- `coeff` variable (previously unused) now drives the implied bound derivation
-
 **convexfeld-vlja: P2 coef_stats.c int loop variable for int64_t nnz** — CLOSED
-- Changed `int k` to `int64_t k` in matrix coefficient scan loop (line 80)
-- Prevents silent truncation for matrices with >2^31 nonzeros
-
 **convexfeld-yhmx: P1 model_stub.c grow_vars partial realloc** — CLOSED
-- Realloc all 5 arrays into temps before committing to model fields
-- Check all 5 for NULL, then assign atomically — no more partial-growth inconsistency
-
-**convexfeld-vlja: P2 coef_stats.c int loop variable for int64_t nnz** — CLOSED
-- Changed `int k` to `int64_t k` in matrix coefficient scan loop
-
 **convexfeld-it1r: P2 Leaving variable always set AT_LOWER in pivot_with_eta** — CLOSED
-- Added `leavingStatus` parameter to `cxf_pivot_with_eta`
-- Callers now pass correct bound status instead of function hardcoding -1
-- Updated step.c (2 callsites) and test_pivot_eta.c (28 callsites)
-
-### Previous Issues Fixed (8)
-
-**convexfeld-3lpg: P0 ODR violations — 3 functions defined in both stub and real files** — CLOSED
-- Deleted 5 stub files: validation_stub.c, solve_lp_stub.c, error_stub.c, callback_stub.c, threading_stub.c
-- Removed duplicate `cxf_addqconstr` from constr_stub.c (real in quadratic_api.c)
-- Removed duplicate `cxf_log10_wrapper` from format.c (real in math_wrappers.c)
-- Updated CMakeLists.txt (228 lines deleted)
-
-**convexfeld-v0s3: P0 crash.c mutates original model matrix (CSR col_idx)** — CLOSED
-- Removed `mat->col_idx[k] = -1` write in crash.c that corrupted original model
-- Calling cxf_optimize() twice now produces consistent results
-- Updated test_crash to verify model preservation (not buggy -1 sentinels)
-
-**convexfeld-mo98: P1 eta_count in SolverState never incremented** — CLOSED
-- Added `state->eta_count = basis->eta_count` after both cxf_pivot_with_eta callsites in step.c
-- Eta-count-based refactorization trigger now functional (was permanently 0)
-
-**convexfeld-9wdg: P1 Complementary slackness fix runs AFTER solution extraction** — CLOSED
-- Moved CS correction from cxf_simplex_final (context.c) to solve_lp.c before cxf_extract_solution
-- Added `#include "convexfeld/cxf_basis.h"` to solve_lp.c for BasisState definition
-
-### Previous Session (also 2026-02-23)
-
-**convexfeld-pdv0: Integer overflow + realloc double-free in lu_factorize.c** — CLOSED
-**convexfeld-u7f3: Memory leak — state_cleanup.c only frees 6 of 24+ arrays** — CLOSED
-**convexfeld-0drc: Silent FTRAN/BTRAN corruption on malloc failure** — CLOSED
 
 ### Priority Fix Order (remaining)
 
 | Priority | What | Issues | Impact |
 |----------|------|--------|--------|
-| ~~P0~~ | ~~Fix error/status code values~~ | ~~convexfeld-7rvr~~ | DONE |
-| ~~P0~~ | ~~Implement full cxf_pivot_bound~~ | ~~convexfeld-h8xm~~ | DONE |
-| P0 | Redesign cxf_pivot_update for Kahan-stable addition | convexfeld-heyz | 1 day |
+| ~~P0~~ | ~~Redesign cxf_pivot_update~~ | ~~convexfeld-heyz~~ | DONE |
 | P1 | Create internal headers | convexfeld-mxjm | 2 hrs |
-| ~~P1~~ | ~~Fix magic number clash (ENV == MODEL)~~ | ~~convexfeld-aal4~~ | DONE |
-| ~~P1~~ | ~~Fix helpers.c dead code (tautological comparison)~~ | ~~convexfeld-vk8l~~ | DONE |
-| ~~P1~~ | ~~Fix model_stub.c partial realloc~~ | ~~convexfeld-yhmx~~ | DONE |
 | P1 | Eliminate hot-path malloc | convexfeld-7nyb | 1 hr |
 | P1 | Add core algorithm tests | convexfeld-sxgk | 1 day |
 
 ---
 
 ## DO NOT
-- Enable scaling without fixing C1+C3 (pivot_update) and H1 (Harris tolerance) first
+- Enable scaling without testing H1 (Harris tolerance) first
 - Change diag_coeff based on RHS sign (causes regressions on israel/stair/e226)
 - Re-add RC-based status reassignment in refine.c (corrupts obj)
 - Re-add recovery pivots in refine.c Pass 2 (changes basis during post-solve)
 - Skip reading this file and `docs/learnings/implementation_audit.md`
-- Run Netlib benchmarks (currently broken, that's OK — focus on fixing the code first)

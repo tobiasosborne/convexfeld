@@ -116,6 +116,8 @@ struct SolverState {
     /* B2: Activity bounds (v2 — P3.21 cxf_simplex_setup) */
     double *min_activity;     /**< Per-constraint min activity [num_constrs] */
     double *max_activity;     /**< Per-constraint max activity [num_constrs] */
+    int *negUnbdCount;        /**< Per-constraint -inf contribution count [num_constrs] */
+    int *posUnbdCount;        /**< Per-constraint +inf contribution count [num_constrs] */
 
     /* B3: Progress tracking (v2 — P3.20, P3.16, P3.25) */
 #define CXF_SNAPSHOT_SIZE 8

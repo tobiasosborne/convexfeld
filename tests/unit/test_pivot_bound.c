@@ -24,6 +24,7 @@ static BasisState test_basis;
 static double work_lb[3], work_ub[3], work_obj[3], work_x[3];
 static int var_status[3];
 static double min_act[2], max_act[2];
+static int neg_unbd[2], pos_unbd[2];
 
 /* CSC for 2x3 matrix: col0=[2.0 in row0], col1=[-1.0 in row1], col2=[3.0 in row0, -2.0 in row1] */
 static int64_t csc_col_ptr[4] = {0, 1, 2, 4};
@@ -64,8 +65,12 @@ void setUp(void) {
     /* Activity arrays */
     min_act[0] = 10.0; min_act[1] = 20.0;
     max_act[0] = 50.0; max_act[1] = 60.0;
+    neg_unbd[0] = 0; neg_unbd[1] = 0;
+    pos_unbd[0] = 0; pos_unbd[1] = 0;
     test_state.min_activity = min_act;
     test_state.max_activity = max_act;
+    test_state.negUnbdCount = neg_unbd;
+    test_state.posUnbdCount = pos_unbd;
 
     /* CSC data */
     test_state.csc_col_ptr = csc_col_ptr;

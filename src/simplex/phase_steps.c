@@ -15,8 +15,10 @@
 #include "convexfeld/cxf_types.h"
 #include <math.h>
 
-extern void cxf_pivot_update(SolverState *state, int var, double delta,
-                             int is_lb);
+extern void cxf_pivot_update(SolverState *state, int col,
+                             double oldLB, double newLB,
+                             double oldUB, double newUB,
+                             double infinityThreshold);
 
 /**
  * @brief Tighten one variable bound and propagate.
@@ -30,7 +32,6 @@ static int tighten_bound(SolverState *state, int var, double new_val,
                          int is_lb, double tol) {
     double *bound = is_lb ? state->work_lb : state->work_ub;
     double old = bound[var];
-    double delta = new_val - old;
 
     if (is_lb) {
         if (new_val <= old + tol) return 0;
@@ -42,9 +43,17 @@ static int tighten_bound(SolverState *state, int var, double new_val,
     if (is_lb && new_val > state->work_ub[var] + tol) return 0;
     if (!is_lb && new_val < state->work_lb[var] - tol) return 0;
 
+    /* Capture old bounds before mutation */
+    double old_lb = state->work_lb[var];
+    double old_ub = state->work_ub[var];
     bound[var] = new_val;
-    if (var < state->num_vars)
-        cxf_pivot_update(state, var, delta, is_lb);
+
+    if (var < state->num_vars) {
+        double new_lb = is_lb ? new_val : old_lb;
+        double new_ub = is_lb ? old_ub : new_val;
+        cxf_pivot_update(state, var, old_lb, new_lb, old_ub, new_ub,
+                         CXF_INFINITY);
+    }
     if (state->pricing)
         cxf_pricing_mark_dirty(state->pricing, var);
     return 1;

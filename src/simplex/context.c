@@ -134,7 +134,10 @@ int cxf_simplex_init(CxfModel *model, SolverState **stateP) {
     if (m > 0) {
         ctx->min_activity = (double *)calloc((size_t)m, sizeof(double));
         ctx->max_activity = (double *)calloc((size_t)m, sizeof(double));
-        if (ctx->min_activity == NULL || ctx->max_activity == NULL) {
+        ctx->negUnbdCount = (int *)calloc((size_t)m, sizeof(int));
+        ctx->posUnbdCount = (int *)calloc((size_t)m, sizeof(int));
+        if (ctx->min_activity == NULL || ctx->max_activity == NULL ||
+            ctx->negUnbdCount == NULL || ctx->posUnbdCount == NULL) {
             cxf_simplex_final(ctx);
             return CXF_ERROR_OUT_OF_MEMORY;
         }
@@ -313,6 +316,8 @@ void cxf_simplex_final(SolverState *state) {
     /* Free activity bounds (B2) */
     free(state->min_activity);
     free(state->max_activity);
+    free(state->negUnbdCount);
+    free(state->posUnbdCount);
 
     /* Free crash basis arrays (v2) */
     free(state->row_status);

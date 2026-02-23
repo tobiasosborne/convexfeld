@@ -21,6 +21,12 @@
 /* Arena allocator (eta_pool.c) */
 extern void *cxf_eta_pool_alloc(EtaBuffer *pool, size_t size);
 
+/* pivot_update.c — cancellation-safe activity bound update */
+extern void cxf_pivot_update(SolverState *state, int col,
+                                  double oldLB, double newLB,
+                                  double oldUB, double newUB,
+                                  double infinityThreshold);
+
 /**
  * @brief Fix a variable at a specific bound value (7-phase spec).
  *
@@ -88,26 +94,11 @@ int cxf_pivot_bound(void *env, void *state, int var, double new_value,
         cxf_pricing_mark_dirty(ctx->pricing, var);
     }
 
-    /* Phase 6: Activity bound propagation */
+    /* Phase 6: Activity bound propagation (via cxf_pivot_update) */
     old_lb = ctx->work_lb[var];
     old_ub = upperBound;
-    if (ctx->min_activity != NULL && ctx->max_activity != NULL &&
-        ctx->csc_col_ptr != NULL) {
-        int64_t col_start = ctx->csc_col_ptr[var];
-        int64_t col_end = ctx->csc_col_ptr[var + 1];
-        int64_t k;
-        for (k = col_start; k < col_end; k++) {
-            int row = ctx->csc_row_idx[k];
-            double coeff = ctx->csc_values[k];
-            if (coeff > 0.0) {
-                ctx->min_activity[row] += coeff * (new_value - old_lb);
-                ctx->max_activity[row] += coeff * (new_value - old_ub);
-            } else {
-                ctx->min_activity[row] += coeff * (new_value - old_ub);
-                ctx->max_activity[row] += coeff * (new_value - old_lb);
-            }
-        }
-    }
+    cxf_pivot_update(ctx, var, old_lb, new_value, old_ub, new_value,
+                          CXF_INFINITY);
 
     /* Phase 7: Matrix cleanup */
     ctx->work_lb[var] = new_value;
