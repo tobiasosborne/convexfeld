@@ -97,11 +97,8 @@ int cxf_simplex_crash(SolverState *state, CxfEnv *env) {
 
                     for (int64_t k = start; k < end; k++) {
                         int col = mat->col_idx[k];
-                        if (col >= 0) {
-                            if (state->col_nz_count) {
-                                state->col_nz_count[col]--;
-                            }
-                            mat->col_idx[k] = -1;  /* Mark inactive */
+                        if (col >= 0 && state->col_nz_count) {
+                            state->col_nz_count[col]--;
                         }
                     }
 

@@ -265,11 +265,11 @@ void test_crash_candidate_removal(void) {
     TEST_ASSERT_EQUAL_INT(0, state->col_nz_count[0]);
     TEST_ASSERT_EQUAL_INT(0, state->col_nz_count[1]);
 
-    /* CSR col_idx entries should be marked inactive */
+    /* Model CSR must NOT be mutated (bug fix: was writing -1) */
     int64_t r1_start = mat->row_ptr[1];
     int64_t r1_end = mat->row_ptr[2];
     for (int64_t k = r1_start; k < r1_end; k++) {
-        TEST_ASSERT_EQUAL_INT(-1, mat->col_idx[k]);
+        TEST_ASSERT_TRUE(mat->col_idx[k] >= 0);
     }
 
     free_crash_state(state);
