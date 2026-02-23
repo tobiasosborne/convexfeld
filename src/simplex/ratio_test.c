@@ -61,11 +61,17 @@ int cxf_ratio_test(SolverState *state, CxfEnv *env, int enteringVar,
 
     /* Entering direction: +1 if entering from lower bound (increases),
      * -1 if entering from upper bound (decreases).
+     * For free/superbasic vars: direction from reduced cost sign.
      * Spec: harris_ratio_test.md Stage 1 "Entering direction" */
     int s = 1;
-    if (state->basis != NULL && enteringVar >= 0 &&
-        state->basis->var_status[enteringVar] == CXF_VAR_AT_UPPER)
-        s = -1;
+    if (state->basis != NULL && enteringVar >= 0) {
+        int vstatus = state->basis->var_status[enteringVar];
+        if (vstatus == CXF_VAR_AT_UPPER)
+            s = -1;
+        else if (vstatus == CXF_VAR_SUPERBASIC && state->work_dj != NULL &&
+                 state->work_dj[enteringVar] > 0.0)
+            s = -1;
+    }
 
     /* Initialize for first pass */
     minRatio = infinity;

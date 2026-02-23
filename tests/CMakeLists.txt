@@ -171,6 +171,10 @@ target_link_libraries(test_pivot_bound PRIVATE m)
 add_cxf_test(test_pivot_update unit/test_pivot_update.c)
 target_link_libraries(test_pivot_update PRIVATE m)
 
+# Ratio test (free variable direction) tests
+add_cxf_test(test_ratio_test unit/test_ratio_test.c)
+target_link_libraries(test_ratio_test PRIVATE m)
+
 # MPS Solve integration tests
 add_cxf_test(test_mps_solve unit/test_mps_solve.c)
 target_link_libraries(test_mps_solve PRIVATE m)

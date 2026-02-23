@@ -4,7 +4,7 @@
 
 ---
 
-## STATUS: 22/35 Netlib pass. 42/42 unit tests. Hot-path malloc eliminated.
+## STATUS: 22/35 Netlib pass (not re-run). 43/43 unit tests. Hot-path malloc eliminated.
 
 ### Scorecard
 
@@ -12,9 +12,21 @@
 
 **FAIL (13):** etamacro (0.016%), recipe (0.02%), boeing2 (0.09%), scagr25 (2.2%), bore3d (7.5%), finnis (7.3%), capri (10%), grow7 (12.5%), boeing1 (18%), vtp.base (20%), forplan (43%), scsd1 (TIMEOUT), bandm (TIMEOUT), tuff (TIMEOUT)
 
+### DO NOT run Netlib suite in CI/agent sessions — it is slow. Run manually if needed.
+
 ---
 
 ## Work Completed This Session (2026-02-23)
+
+### convexfeld-66he: P2 Free variable entering sign always +1 — CLOSED
+
+Fixed correctness bug: free/superbasic variables always got `s=+1` entering direction regardless of reduced cost sign. For `dj > 0`, the variable should decrease (`s=-1`).
+
+**Changes:**
+- **ratio_test.c:65-72**: Added `CXF_VAR_SUPERBASIC` case — sets `s=-1` when `work_dj[enteringVar] > 0`
+- **step.c:448-452**: Same fix for `entering_sign` computation
+- **test_ratio_test.c**: 8 new unit tests (null args, at-lower, at-upper, free with negative dj, free with positive dj, direction-affects-leaving, unbounded)
+- 43/43 tests pass
 
 ### convexfeld-7nyb: P1 Eliminate malloc/free from FTRAN/BTRAN/reduced_costs hot path — CLOSED
 

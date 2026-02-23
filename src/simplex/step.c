@@ -446,6 +446,9 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env) {
     for (int ci = 0; ci < num_cand; ci++) {
         entering = candidates[ci];
         entering_sign = (basis->var_status[entering] == CXF_VAR_AT_UPPER)
+                        ? -1
+                        : (basis->var_status[entering] == CXF_VAR_SUPERBASIC &&
+                           state->work_dj[entering] > 0.0)
                         ? -1 : 1;
 
         /* Infeasibility check */
