@@ -293,24 +293,7 @@ void cxf_simplex_final(SolverState *state) {
         return;
     }
 
-    /* P6.2: Complementary slackness fix — snap nonbasic variables to
-     * the correct bound based on reduced cost sign. */
-    if (state->basis && state->basis->var_status &&
-        state->work_dj && state->work_x) {
-        int total = state->num_vars + state->num_constrs;
-        for (int j = 0; j < total; j++) {
-            int vs = state->basis->var_status[j];
-            if (vs >= 0) continue;  /* skip basic */
-            double dj = state->work_dj[j];
-            double lb = state->work_lb[j];
-            double ub = state->work_ub[j];
-            /* CS: if dj > 0, should be at lower; if dj < 0, at upper */
-            if (dj > CXF_OPTIMALITY_TOL && lb > -CXF_INFINITY)
-                state->work_x[j] = lb;
-            else if (dj < -CXF_OPTIMALITY_TOL && ub < CXF_INFINITY)
-                state->work_x[j] = ub;
-        }
-    }
+    /* P6.2: CS fix moved to solve_lp.c (before extract_solution) */
 
     /* Free working arrays */
     free(state->work_lb);

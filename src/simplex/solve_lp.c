@@ -21,6 +21,7 @@
 #include "convexfeld/cxf_model.h"
 #include "convexfeld/cxf_env.h"
 #include "convexfeld/cxf_matrix.h"
+#include "convexfeld/cxf_basis.h"
 #include "convexfeld/cxf_types.h"
 #include <math.h>
 #include <string.h>
@@ -307,6 +308,26 @@ int cxf_solve_lp(CxfModel *model) {
         if (model->ub)
             memcpy(state->work_ub, model->ub,
                    (size_t)state->num_vars * sizeof(double));
+    }
+
+    /* P6.2: Complementary slackness fix — snap nonbasic variables to
+     * the correct bound based on reduced cost sign. Must run BEFORE
+     * extract so the solution includes CS corrections. */
+    if (state->basis && state->basis->var_status &&
+        state->work_dj && state->work_x) {
+        int total_cs = state->num_vars + state->num_constrs;
+        for (int j = 0; j < total_cs; j++) {
+            int vs = state->basis->var_status[j];
+            if (vs >= 0) continue;  /* skip basic */
+            double dj = state->work_dj[j];
+            double lb = state->work_lb[j];
+            double ub = state->work_ub[j];
+            /* CS: if dj > 0, should be at lower; if dj < 0, at upper */
+            if (dj > CXF_OPTIMALITY_TOL && lb > -CXF_INFINITY)
+                state->work_x[j] = lb;
+            else if (dj < -CXF_OPTIMALITY_TOL && ub < CXF_INFINITY)
+                state->work_x[j] = ub;
+        }
     }
 
     /* Extract solution for all terminal statuses, not just OPTIMAL.
