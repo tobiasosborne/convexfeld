@@ -32,9 +32,9 @@
  * @param m Dimension.
  * @param result Vector (modified in place).
  */
-static void apply_lu_btran(const LUFactors *lu, int m, double *result) {
+static int apply_lu_btran(const LUFactors *lu, int m, double *result) {
     double *temp = (double *)malloc((size_t)m * sizeof(double));
-    if (temp == NULL) return;
+    if (temp == NULL) return CXF_ERROR_OUT_OF_MEMORY;
 
     /* Step 1: Apply column permutation Q: temp = Q * result
      * Q: temp[k] = result[perm_col[k]] */
@@ -79,6 +79,7 @@ static void apply_lu_btran(const LUFactors *lu, int m, double *result) {
     }
 
     free(temp);
+    return 0;
 }
 
 /**
@@ -198,7 +199,8 @@ int cxf_btran(BasisState *basis, int row, double *result) {
 
     /* Step 3: Apply B_0^(-T) - must be done AFTER eta vectors */
     if (basis->lu != NULL && basis->lu->valid) {
-        apply_lu_btran(basis->lu, m, result);
+        int rc = apply_lu_btran(basis->lu, m, result);
+        if (rc != 0) return rc;
     } else if (basis->diag_coeff != NULL) {
         apply_diag_btran(basis->diag_coeff, m, result);
     }
@@ -301,7 +303,8 @@ int cxf_btran_vec(BasisState *basis, const double *input, double *result) {
 
     /* Step 3: Apply B_0^(-T) - must be done AFTER eta vectors */
     if (basis->lu != NULL && basis->lu->valid) {
-        apply_lu_btran(basis->lu, m, result);
+        int rc = apply_lu_btran(basis->lu, m, result);
+        if (rc != 0) return rc;
     } else if (basis->diag_coeff != NULL) {
         apply_diag_btran(basis->diag_coeff, m, result);
     }

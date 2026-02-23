@@ -4,7 +4,7 @@
 
 ---
 
-## STATUS: 22/35 Netlib pass. 40/40 unit tests. Comprehensive code review complete.
+## STATUS: 22/35 Netlib pass. 40/40 unit tests. 3 P0 memory safety bugs fixed.
 
 ### Scorecard
 
@@ -14,60 +14,28 @@
 
 ---
 
-## Comprehensive Code Review (2026-02-23)
+## Work Completed This Session (2026-02-23)
 
-9-agent parallel review covering spec compliance, architecture, algorithms, memory safety, performance, test coverage, and code quality. ~250 unique findings across ~16K LOC.
+### P0 Issues Fixed (3)
 
-### Review Agents & Key Results
+**convexfeld-pdv0: Integer overflow + realloc double-free in lu_factorize.c** — CLOSED
+- lu_factorize.c:293: explicit `(size_t)m * (size_t)m` cast
+- lu_factorize.c: 3 realloc sites fixed with assign-immediately pattern (eliminate_step L arrays, build_lu_output U arrays, build_lu_output L arrays)
+- mps_state.c: same realloc pattern fix (removed incorrect `cxf_free(new_idx)` that caused double-free)
 
-| Agent | Model | Findings |
-|-------|-------|----------|
-| Spec: Modules & Data Model | Sonnet | 114 deviations. Error codes wrong range, status codes off-by-one, 18-array memory leak, missing primary/working matrix split |
-| Spec: Algorithms | Opus | 23 deviations (14 NEW). Pivot operations module mostly stubbed. Post-iterate missing. |
-| Architecture | Opus | 10 risks. eta_count never incremented, crash mutates model, CS fix after extract |
-| Test Coverage | Sonnet | Core algorithm has ZERO unit tests. 40/40 tests are infrastructure-only. |
-| Linus Torvalds | Opus | Integer overflow in LU, 3 realloc double-frees, silent FTRAN OOM, 116 externs |
-| Donald Knuth | Opus | Algorithmic health 6.4/10. FTRAN/BTRAN math verified correct. No Kahan summation is #1 issue. |
-| John Carmack | Opus | Performance 3/10. malloc in hot path, dense LU is scalability wall, redundant tau_j |
-| Code Smells: Core | Sonnet | 84 smells. solve_lp_stub.c still exists, STRATEGY_AUTO dead, ratio test duplication |
-| Code Smells: Infra | Sonnet | 72 smells. ODR violations, dead bound propagation, fabricated query results |
+**convexfeld-u7f3: Memory leak — state_cleanup.c only frees 6 of 24+ arrays** — CLOSED
+- `cxf_free_attribute_table()` now frees all dynamically allocated SolverState fields (was 6, now 24+): work_counter/column/cB, saved_lb/ub, min/max_activity, row_status/col_nz_count, csc_*/csr_* (8 arrays), work_rhs/sense, row/col_scale, timing
+- Added NULL guard on `cxf_pricing_free()` call
 
-### New Issues Created: 34 (+ 3 existing issues updated)
+**convexfeld-0drc: Silent FTRAN/BTRAN corruption on malloc failure** — CLOSED
+- ftran.c: `apply_lu_solve` changed from `void` to `int`, returns `CXF_ERROR_OUT_OF_MEMORY`; `cxf_ftran` propagates error
+- btran.c: `apply_lu_btran` changed from `void` to `int`; both `cxf_btran` and `cxf_btran_vec` propagate error
+- recompute.c: `cxf_ftran_residual` returns `INFINITY` on error (was `0.0` which looked like "perfect accuracy")
 
-**P0 (5 new + 1 updated to P0):**
-- convexfeld-pdv0: Integer overflow + realloc double-free in lu_factorize.c
-- convexfeld-u7f3: Memory leak — 18+ arrays not freed in state_cleanup.c
-- convexfeld-0drc: Silent FTRAN/BTRAN corruption on malloc failure
-- convexfeld-v0s3: crash.c mutates original model matrix
-- convexfeld-3lpg: ODR violations — 3 functions defined in stub + real files
-- convexfeld-7rvr: (UPDATED to P0) Error codes wrong range + status codes off-by-one
-
-**P1 (10 new):**
-- convexfeld-mo98: eta_count sync broken
-- convexfeld-9wdg: CS fix runs after extract
-- convexfeld-aal4: ENV_MAGIC == MODEL_MAGIC
-- convexfeld-7nyb: Eliminate hot-path malloc
-- convexfeld-mxjm: Create internal headers (replace 116 externs)
-- convexfeld-sxgk: Add core algorithm unit tests
-- convexfeld-n426: Decompose step.c
-- convexfeld-lmkg: pivot_special stub
-- convexfeld-vk8l: helpers.c dead bound propagation
-- convexfeld-yhmx: grow_vars partial realloc corruption
-
-**P2 (18 new):** tolerance leak, static last_log_time, CMake sanitizers, post_iterate missing, Phase I→II cleanup, free var sign, RC+weight fusion, ratio test fusion, STRATEGY_AUTO dead, VAR constants 4x, fabricated query results, API stubs succeed silently, atof+MPS names, mixed allocator, weight recomputation, leaving var AT_LOWER, pivot_bound slack range, int64 loop var
-
-**P3 (6 new):** constant dedup, dead code cleanup, 7 files >200 LOC, lock naming, header/portability, copy-paste duplication
-
-**Closed:** convexfeld-bgl4 (H4: Phase I w-coefficients — confirmed FIXED)
-
-### Priority Fix Order
+### Priority Fix Order (remaining)
 
 | Priority | What | Issues | Impact |
 |----------|------|--------|--------|
-| P0 first | Fix integer overflow `(size_t)m*(size_t)m` | convexfeld-pdv0 | 1 min, prevents heap corruption |
-| P0 | Fix realloc double-free (3 locations) | convexfeld-pdv0 | 30 min |
-| P0 | Fix state_cleanup memory leaks | convexfeld-u7f3 | 30 min |
-| P0 | Fix FTRAN/BTRAN OOM → return error | convexfeld-0drc | 15 min |
 | P0 | Delete ODR-violating stub files | convexfeld-3lpg | 15 min |
 | P0 | Fix crash.c model mutation | convexfeld-v0s3 | 30 min |
 | P0 | Fix error/status code values | convexfeld-7rvr | 1 hr |

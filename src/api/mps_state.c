@@ -168,13 +168,10 @@ int mps_add_coeff(MpsState *s, int col_idx, int row_idx, double val) {
     if (c->ncoeffs >= c->coeff_cap) {
         int new_cap = (c->coeff_cap == 0) ? 8 : c->coeff_cap * 2;
         int *new_idx = cxf_realloc(c->constr_idx, (size_t)new_cap * sizeof(int));
+        if (new_idx) c->constr_idx = new_idx;
         double *new_val = cxf_realloc(c->constr_val, (size_t)new_cap * sizeof(double));
-        if (!new_idx || !new_val) {
-            cxf_free(new_idx);
-            return -1;
-        }
-        c->constr_idx = new_idx;
-        c->constr_val = new_val;
+        if (new_val) c->constr_val = new_val;
+        if (!new_idx || !new_val) return -1;
         c->coeff_cap = new_cap;
     }
     c->constr_idx[c->ncoeffs] = row_idx;

@@ -151,10 +151,12 @@ static int eliminate_step(double *B, int m,
         if (*L_count >= *L_cap) {
             *L_cap *= 2;
             int *ni = realloc(*L_i, (size_t)*L_cap * sizeof(int));
+            if (ni) *L_i = ni;
             int *nj = realloc(*L_j, (size_t)*L_cap * sizeof(int));
+            if (nj) *L_j = nj;
             double *nv = realloc(*L_v, (size_t)*L_cap * sizeof(double));
+            if (nv) *L_v = nv;
             if (!ni || !nj || !nv) return 1001;
-            *L_i = ni; *L_j = nj; *L_v = nv;
         }
         (*L_i)[*L_count] = i;
         (*L_j)[*L_count] = step;
@@ -215,10 +217,10 @@ static int build_lu_output(LUFactors *lu, const double *B, int m,
 
     if (lu->U_nnz > 0) {
         int *ur = realloc(lu->U_row_idx, (size_t)lu->U_nnz * sizeof(int));
+        if (ur) lu->U_row_idx = ur;
         double *uv = realloc(lu->U_values, (size_t)lu->U_nnz * sizeof(double));
+        if (uv) lu->U_values = uv;
         if (!ur || !uv) return 1001;
-        lu->U_row_idx = ur;
-        lu->U_values = uv;
 
         int64_t idx = 0;
         for (int step = 0; step < m; step++) {
@@ -239,10 +241,10 @@ static int build_lu_output(LUFactors *lu, const double *B, int m,
     lu->L_nnz = (int64_t)L_count;
     if (L_count > 0) {
         int *lr = realloc(lu->L_row_idx, (size_t)L_count * sizeof(int));
+        if (lr) lu->L_row_idx = lr;
         double *lv = realloc(lu->L_values, (size_t)L_count * sizeof(double));
+        if (lv) lu->L_values = lv;
         if (!lr || !lv) return 1001;
-        lu->L_row_idx = lr;
-        lu->L_values = lv;
     }
 
     memset(lu->L_col_ptr, 0, (size_t)(m + 1) * sizeof(int64_t));
@@ -290,7 +292,7 @@ int cxf_lu_factorize(LUFactors *lu, SolverState *ctx) {
     if (!ctx->csc_col_ptr) return CXF_ERROR_NULL_ARGUMENT;
 
     /* Allocate working storage */
-    double *B = calloc((size_t)m * m, sizeof(double));
+    double *B = calloc((size_t)m * (size_t)m, sizeof(double));
     int *row_count = calloc((size_t)m, sizeof(int));
     int *col_count = calloc((size_t)m, sizeof(int));
     double *col_max = calloc((size_t)m, sizeof(double));

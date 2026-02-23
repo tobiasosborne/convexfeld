@@ -155,14 +155,14 @@ void cxf_recompute_objective(SolverState *state) {
  */
 double cxf_ftran_residual(SolverState *state, const double *a,
                           const double *x) {
-    if (!state || !state->basis || !a || !x) return 0.0;
+    if (!state || !state->basis || !a || !x) return INFINITY;
 
     int m = state->num_constrs;
     int n = state->num_vars;
     BasisState *basis = state->basis;
 
     double *Bx = (double *)calloc((size_t)m, sizeof(double));
-    if (!Bx) return 0.0;
+    if (!Bx) return INFINITY;
 
     /* Compute B * x = sum over basis columns k: col_k * x[k] */
     for (int k = 0; k < m; k++) {

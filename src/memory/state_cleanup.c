@@ -27,13 +27,17 @@ extern void cxf_pricing_free(PricingState *ctx);
 /**
  * @brief Free a SolverState and all associated memory.
  *
- * Deallocates:
- * - All working arrays (work_lb, work_ub, work_obj, work_x, work_pi, work_dj)
- * - BasisState subcomponent (via cxf_basis_free)
- * - PricingState subcomponent (via cxf_pricing_free)
- * - The SolverState structure itself
+ * Deallocates all dynamically allocated fields:
+ * - Working arrays (work_lb/ub/obj/x/pi/dj, work_counter/column/cB)
+ * - Saved bounds (saved_lb/ub), activity bounds (min/max_activity)
+ * - Crash arrays (row_status, col_nz_count)
+ * - Matrix copies (csc_col_ptr/row_idx/values, csr_row_ptr/col_idx/values)
+ * - Constraint metadata (work_rhs, work_sense)
+ * - Scaling factors (row_scale, col_scale)
+ * - Subcomponents: BasisState, PricingState, TimingState
  *
- * Does NOT free the model_ref (owned by caller).
+ * Does NOT free model_ref (owned by caller).
+ * Does NOT perform complementary slackness fixing (use cxf_simplex_final).
  *
  * @param ctx SolverState to free (may be NULL)
  */
@@ -49,15 +53,43 @@ void cxf_free_attribute_table(SolverState *ctx) {
     free(ctx->work_x);
     free(ctx->work_pi);
     free(ctx->work_dj);
+    free(ctx->work_counter);
+    free(ctx->work_column);
+    free(ctx->work_cB);
+
+    /* Free saved bounds (B1: EXPAND perturbation) */
+    free(ctx->saved_lb);
+    free(ctx->saved_ub);
+
+    /* Free activity bounds (B2) */
+    free(ctx->min_activity);
+    free(ctx->max_activity);
+
+    /* Free crash basis arrays */
+    free(ctx->row_status);
+    free(ctx->col_nz_count);
+
+    /* Free matrix working copies (P3.1) */
+    free(ctx->csc_col_ptr);
+    free(ctx->csc_row_idx);
+    free(ctx->csc_values);
+    free(ctx->csr_row_ptr);
+    free(ctx->csr_col_idx);
+    free(ctx->csr_values);
+    free(ctx->work_rhs);
+    free(ctx->work_sense);
+
+    /* Free scaling factors */
+    free(ctx->row_scale);
+    free(ctx->col_scale);
 
     /* Free subcomponents */
     cxf_basis_free(ctx->basis);
-    cxf_pricing_free(ctx->pricing);
+    if (ctx->pricing != NULL)
+        cxf_pricing_free(ctx->pricing);
 
-    /* Clear pointers before freeing */
-    ctx->model_ref = NULL;
-    ctx->basis = NULL;
-    ctx->pricing = NULL;
+    /* Free timing */
+    free(ctx->timing);
 
     free(ctx);
 }
