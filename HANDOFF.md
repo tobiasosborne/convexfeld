@@ -4,7 +4,7 @@
 
 ---
 
-## STATUS: 22/35 Netlib pass. 40/40 unit tests. 3 P0 memory safety bugs fixed.
+## STATUS: 22/35 Netlib pass. 40/40 unit tests. 4 bug fixes this session.
 
 ### Scorecard
 
@@ -16,33 +16,44 @@
 
 ## Work Completed This Session (2026-02-23)
 
-### P0 Issues Fixed (3)
+### Issues Fixed (4)
+
+**convexfeld-3lpg: P0 ODR violations — 3 functions defined in both stub and real files** — CLOSED
+- Deleted 5 stub files: validation_stub.c, solve_lp_stub.c, error_stub.c, callback_stub.c, threading_stub.c
+- Removed duplicate `cxf_addqconstr` from constr_stub.c (real in quadratic_api.c)
+- Removed duplicate `cxf_log10_wrapper` from format.c (real in math_wrappers.c)
+- Updated CMakeLists.txt (228 lines deleted)
+
+**convexfeld-v0s3: P0 crash.c mutates original model matrix (CSR col_idx)** — CLOSED
+- Removed `mat->col_idx[k] = -1` write in crash.c that corrupted original model
+- Calling cxf_optimize() twice now produces consistent results
+- Updated test_crash to verify model preservation (not buggy -1 sentinels)
+
+**convexfeld-mo98: P1 eta_count in SolverState never incremented** — CLOSED
+- Added `state->eta_count = basis->eta_count` after both cxf_pivot_with_eta callsites in step.c
+- Eta-count-based refactorization trigger now functional (was permanently 0)
+
+**convexfeld-9wdg: P1 Complementary slackness fix runs AFTER solution extraction** — CLOSED
+- Moved CS correction from cxf_simplex_final (context.c) to solve_lp.c before cxf_extract_solution
+- Added `#include "convexfeld/cxf_basis.h"` to solve_lp.c for BasisState definition
+
+### Previous Session (also 2026-02-23)
 
 **convexfeld-pdv0: Integer overflow + realloc double-free in lu_factorize.c** — CLOSED
-- lu_factorize.c:293: explicit `(size_t)m * (size_t)m` cast
-- lu_factorize.c: 3 realloc sites fixed with assign-immediately pattern (eliminate_step L arrays, build_lu_output U arrays, build_lu_output L arrays)
-- mps_state.c: same realloc pattern fix (removed incorrect `cxf_free(new_idx)` that caused double-free)
-
 **convexfeld-u7f3: Memory leak — state_cleanup.c only frees 6 of 24+ arrays** — CLOSED
-- `cxf_free_attribute_table()` now frees all dynamically allocated SolverState fields (was 6, now 24+): work_counter/column/cB, saved_lb/ub, min/max_activity, row_status/col_nz_count, csc_*/csr_* (8 arrays), work_rhs/sense, row/col_scale, timing
-- Added NULL guard on `cxf_pricing_free()` call
-
 **convexfeld-0drc: Silent FTRAN/BTRAN corruption on malloc failure** — CLOSED
-- ftran.c: `apply_lu_solve` changed from `void` to `int`, returns `CXF_ERROR_OUT_OF_MEMORY`; `cxf_ftran` propagates error
-- btran.c: `apply_lu_btran` changed from `void` to `int`; both `cxf_btran` and `cxf_btran_vec` propagate error
-- recompute.c: `cxf_ftran_residual` returns `INFINITY` on error (was `0.0` which looked like "perfect accuracy")
 
 ### Priority Fix Order (remaining)
 
 | Priority | What | Issues | Impact |
 |----------|------|--------|--------|
-| P0 | Delete ODR-violating stub files | convexfeld-3lpg | 15 min |
-| P0 | Fix crash.c model mutation | convexfeld-v0s3 | 30 min |
 | P0 | Fix error/status code values | convexfeld-7rvr | 1 hr |
-| P1 next | Create internal headers | convexfeld-mxjm | 2 hrs |
-| P1 | Add Kahan summation | convexfeld-heyz | 1 day |
-| P1 | Fix eta_count sync | convexfeld-mo98 | 15 min |
-| P1 | Fix CS ordering | convexfeld-9wdg | 15 min |
+| P0 | Implement full cxf_pivot_bound | convexfeld-h8xm | medium |
+| P0 | Redesign cxf_pivot_update for Kahan-stable addition | convexfeld-heyz | 1 day |
+| P1 | Create internal headers | convexfeld-mxjm | 2 hrs |
+| P1 | Fix magic number clash (ENV == MODEL) | convexfeld-aal4 | 15 min |
+| P1 | Fix helpers.c dead code (tautological comparison) | convexfeld-vk8l | 15 min |
+| P1 | Fix model_stub.c partial realloc | convexfeld-yhmx | 30 min |
 | P1 | Eliminate hot-path malloc | convexfeld-7nyb | 1 hr |
 | P1 | Add core algorithm tests | convexfeld-sxgk | 1 day |
 
