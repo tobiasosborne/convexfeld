@@ -77,7 +77,7 @@ int cxf_compute_coef_stats(CxfModel *model,
     /* Scan matrix coefficients (CSC format) */
     if (model->matrix != NULL && model->matrix->values != NULL) {
         MatrixData *mat = model->matrix;
-        for (int k = 0; k < mat->nnz; k++) {
+        for (int64_t k = 0; k < mat->nnz; k++) {
             double val = fabs(mat->values[k]);
             if (val > 0.0) {
                 if (val < m_min) m_min = val;

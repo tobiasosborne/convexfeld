@@ -4,7 +4,7 @@
 
 ---
 
-## STATUS: 22/35 Netlib pass. 40/40 unit tests. 6 bug fixes this session.
+## STATUS: 22/35 Netlib pass. 40/40 unit tests. 8 bug fixes this session.
 
 ### Scorecard
 
@@ -28,7 +28,15 @@
 - Extracted duplicated CSC activity update into static `update_activities()` helper
 - `coeff` variable (previously unused) now drives the implied bound derivation
 
-### Previous Issues Fixed (4)
+**convexfeld-vlja: P2 coef_stats.c int loop variable for int64_t nnz** — CLOSED
+- Changed `int k` to `int64_t k` in matrix coefficient scan loop (line 80)
+- Prevents silent truncation for matrices with >2^31 nonzeros
+
+**convexfeld-yhmx: P1 model_stub.c grow_vars partial realloc** — CLOSED
+- Realloc all 5 arrays into temps before committing to model fields
+- Check all 5 for NULL, then assign atomically — no more partial-growth inconsistency
+
+### Previous Issues Fixed (6)
 
 **convexfeld-3lpg: P0 ODR violations — 3 functions defined in both stub and real files** — CLOSED
 - Deleted 5 stub files: validation_stub.c, solve_lp_stub.c, error_stub.c, callback_stub.c, threading_stub.c
@@ -65,7 +73,7 @@
 | P1 | Create internal headers | convexfeld-mxjm | 2 hrs |
 | ~~P1~~ | ~~Fix magic number clash (ENV == MODEL)~~ | ~~convexfeld-aal4~~ | DONE |
 | ~~P1~~ | ~~Fix helpers.c dead code (tautological comparison)~~ | ~~convexfeld-vk8l~~ | DONE |
-| P1 | Fix model_stub.c partial realloc | convexfeld-yhmx | 30 min |
+| ~~P1~~ | ~~Fix model_stub.c partial realloc~~ | ~~convexfeld-yhmx~~ | DONE |
 | P1 | Eliminate hot-path malloc | convexfeld-7nyb | 1 hr |
 | P1 | Add core algorithm tests | convexfeld-sxgk | 1 day |
 

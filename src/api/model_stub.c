@@ -34,43 +34,34 @@ static int cxf_model_grow_vars(CxfModel *model, int needed_capacity) {
         new_capacity *= 2;
     }
 
-    /* Reallocate all 5 arrays */
-    new_obj = (double *)cxf_realloc(model->obj_coeffs,
-                                     (size_t)new_capacity * sizeof(double));
-    if (new_obj == NULL) {
-        return CXF_ERROR_OUT_OF_MEMORY;
-    }
-    model->obj_coeffs = new_obj;
-
-    new_lb = (double *)cxf_realloc(model->lb,
-                                    (size_t)new_capacity * sizeof(double));
-    if (new_lb == NULL) {
-        return CXF_ERROR_OUT_OF_MEMORY;
-    }
-    model->lb = new_lb;
-
-    new_ub = (double *)cxf_realloc(model->ub,
-                                    (size_t)new_capacity * sizeof(double));
-    if (new_ub == NULL) {
-        return CXF_ERROR_OUT_OF_MEMORY;
-    }
-    model->ub = new_ub;
-
+    /* Reallocate all 5 arrays into temps before committing */
+    size_t dsz = (size_t)new_capacity * sizeof(double);
+    new_obj = (double *)cxf_realloc(model->obj_coeffs, dsz);
+    new_lb = (double *)cxf_realloc(model->lb, dsz);
+    new_ub = (double *)cxf_realloc(model->ub, dsz);
     new_vtype = (char *)cxf_realloc(model->vtype,
                                      (size_t)new_capacity * sizeof(char));
-    if (new_vtype == NULL) {
+    new_solution = (double *)cxf_realloc(model->solution, dsz);
+
+    if (!new_obj || !new_lb || !new_ub || !new_vtype || !new_solution) {
+        /* On failure, keep any successful reallocs (they're still valid
+         * at the old capacity) but don't update model pointers for ones
+         * that failed. realloc guarantees original ptr is still valid on
+         * failure, so we safely reassign all non-NULL results. */
+        if (new_obj) model->obj_coeffs = new_obj;
+        if (new_lb) model->lb = new_lb;
+        if (new_ub) model->ub = new_ub;
+        if (new_vtype) model->vtype = new_vtype;
+        if (new_solution) model->solution = new_solution;
         return CXF_ERROR_OUT_OF_MEMORY;
     }
+
+    /* All succeeded — commit atomically */
+    model->obj_coeffs = new_obj;
+    model->lb = new_lb;
+    model->ub = new_ub;
     model->vtype = new_vtype;
-
-    new_solution = (double *)cxf_realloc(model->solution,
-                                          (size_t)new_capacity * sizeof(double));
-    if (new_solution == NULL) {
-        return CXF_ERROR_OUT_OF_MEMORY;
-    }
     model->solution = new_solution;
-
-    /* Update capacity */
     model->var_capacity = new_capacity;
 
     return CXF_OK;
