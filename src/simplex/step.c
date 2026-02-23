@@ -122,6 +122,7 @@ int cxf_apply_pivot(SolverState *state, int entering, int leavingRow,
     /* Create eta vector and exchange basis */
     int rc = cxf_pivot_with_eta(basis, leavingRow, pivotCol,
                                 entering, leaving);
+    state->eta_count = basis->eta_count;
 
     /* Fix leaving variable at appropriate bound (P0.3) */
     if (rc == CXF_OK && leaving >= 0 && leaving < total) {
@@ -602,6 +603,7 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env) {
         rc = cxf_pivot_with_eta(basis, leavingRow, pivotCol,
                                 entering, leaving);
         if (rc != CXF_OK) return rc;
+        state->eta_count = basis->eta_count;
 
         /* Fix leaving variable at appropriate bound (P0.3) */
         if (leaving >= 0 && leaving < total) {
