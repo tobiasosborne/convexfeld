@@ -163,6 +163,10 @@ add_cxf_test(test_mps_parser unit/test_mps_parser.c)
 target_link_libraries(test_mps_parser PRIVATE m)
 target_compile_definitions(test_mps_parser PRIVATE SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 
+# Pivot bound (7-phase variable fixing) tests
+add_cxf_test(test_pivot_bound unit/test_pivot_bound.c)
+target_link_libraries(test_pivot_bound PRIVATE m)
+
 # MPS Solve integration tests
 add_cxf_test(test_mps_solve unit/test_mps_solve.c)
 target_link_libraries(test_mps_solve PRIVATE m)

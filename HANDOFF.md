@@ -16,7 +16,20 @@
 
 ## Work Completed This Session (2026-02-23)
 
-### Issues Fixed (6)
+### Issues Fixed (7)
+
+**convexfeld-h8xm: P0 Implement full cxf_pivot_bound** — CLOSED
+- Rewrote stub into spec-compliant 7-phase implementation in pivot_special.c
+- Phase 1: compact eta record (type=3) with previous RC + status
+- Phase 2: linear objective update
+- Phases 3-4: quadratic no-op guards (LP-only solver)
+- Phase 5: pricing notification (cxf_pricing_update_var + mark_dirty)
+- Phase 6: activity bound propagation via CSC column scan
+- Phase 7: set bounds=fixedValue, status=CXF_VAR_FIXED
+- Fixed cxf_pivot_special callsites to pass correct upperBound param
+- Removed local AT_LOWER/AT_UPPER/THRESHOLD defines (use cxf_types.h)
+- Added 12 new tests in test_pivot_bound.c (41/41 total pass)
+
 
 **convexfeld-aal4: P1 CXF_ENV_MAGIC == CXF_MODEL_MAGIC defeats type safety** — CLOSED
 - Changed CXF_MODEL_MAGIC from 0xC0FEFE1DU to 0xC0FE0D31U in cxf_types.h
@@ -76,7 +89,7 @@
 | Priority | What | Issues | Impact |
 |----------|------|--------|--------|
 | P0 | Fix error/status code values | convexfeld-7rvr | 1 hr |
-| P0 | Implement full cxf_pivot_bound | convexfeld-h8xm | medium |
+| ~~P0~~ | ~~Implement full cxf_pivot_bound~~ | ~~convexfeld-h8xm~~ | DONE |
 | P0 | Redesign cxf_pivot_update for Kahan-stable addition | convexfeld-heyz | 1 day |
 | P1 | Create internal headers | convexfeld-mxjm | 2 hrs |
 | ~~P1~~ | ~~Fix magic number clash (ENV == MODEL)~~ | ~~convexfeld-aal4~~ | DONE |

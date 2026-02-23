@@ -3,102 +3,117 @@
  * @brief Special pivot case handling for LP solver.
  *
  * Implements cxf_pivot_bound and cxf_pivot_special as specified in:
- * - docs/specs/functions/ratio_test/cxf_pivot_bound.md
- * - docs/specs/functions/ratio_test/cxf_pivot_special.md
+ * - docs/specs-v2/specs/modules/pivot_operations.md
  *
- * This is a simplified implementation focusing on core functionality:
- * - Bound movement with objective updates
- * - Unboundedness detection
- * - Basic variable status management
- *
- * Full implementation would include matrix updates, eta vectors, and
- * constraint RHS propagation when constraint matrix access is available.
+ * cxf_pivot_bound: 7-phase variable fixing (eta, objective, pricing,
+ *   activity propagation, matrix cleanup).
+ * cxf_pivot_special: unboundedness detection and bound flipping.
  */
 
 #include "convexfeld/cxf_solver.h"
 #include "convexfeld/cxf_env.h"
 #include "convexfeld/cxf_basis.h"
+#include "convexfeld/cxf_pricing.h"
 #include "convexfeld/cxf_types.h"
 #include <math.h>
+#include <stdlib.h>
 
-/** @brief Threshold for objective coefficient significance */
-#define THRESHOLD 1e-10
-
-/** @brief Variable status codes */
-#define AT_LOWER -1
-#define AT_UPPER -2
+/* Arena allocator (eta_pool.c) */
+extern void *cxf_eta_pool_alloc(EtaBuffer *pool, size_t size);
 
 /**
- * @brief Move non-basic variable to specified bound value.
+ * @brief Fix a variable at a specific bound value (7-phase spec).
  *
- * Simplified implementation that:
- * 1. Updates objective value to account for variable movement
- * 2. Sets objective coefficient to zero (variable contribution fixed)
- * 3. Updates variable bounds to the new value
- * 4. Updates variable status to reflect bound position
+ * Updates objective, creates eta record, notifies pricing, propagates
+ * activity bounds, and marks the variable as fixed.
  *
- * Full implementation would also:
- * - Update constraint RHS values (requires sparse matrix access)
- * - Create eta vectors for basis update history
- * - Handle piecewise linear and quadratic objectives
- * - Update dual pricing arrays
- *
- * @param env Environment pointer (cast from void*)
- * @param state Solver context pointer (cast from void*)
- * @param var Variable index to move
- * @param new_value Target bound value
- * @param tolerance Numerical tolerance for comparisons (unused in simplified version)
- * @param fix_mode 0=move to bound, 1=fix and eliminate (unused in simplified version)
- * @return CXF_OK (0) on success, CXF_ERROR_OUT_OF_MEMORY (0x2711) on allocation failure
+ * @param env        Environment pointer (cast from void*)
+ * @param state      Solver context pointer (cast from void*)
+ * @param var        Variable index to fix
+ * @param new_value  Value at which to fix the variable
+ * @param upperBound Variable's current upper bound (for activity delta)
+ * @param mode       0=unconditional, nonzero=check variable flags first
+ * @return CXF_OK on success, CXF_ERROR_OUT_OF_MEMORY on eta alloc failure
  */
 int cxf_pivot_bound(void *env, void *state, int var, double new_value,
-                    double tolerance, int fix_mode) {
-    CxfEnv *e;
-    SolverState *ctx;
-    double obj_coeff;
-    int n;
-
-    /* Unused parameters in simplified version */
-    (void)tolerance;
-    (void)fix_mode;
-
-    /* Cast void pointers to proper types */
-    e = (CxfEnv *)env;
-    ctx = (SolverState *)state;
+                    double upperBound, int mode) {
+    CxfEnv *e = (CxfEnv *)env;
+    SolverState *ctx = (SolverState *)state;
+    BasisState *basis;
+    double old_lb, old_ub;
 
     /* Validate arguments */
-    if (ctx == NULL || e == NULL) {
-        return CXF_ERROR_NULL_ARGUMENT;
+    if (ctx == NULL || e == NULL) return CXF_ERROR_NULL_ARGUMENT;
+    if (var < 0 || var >= ctx->num_vars) return CXF_ERROR_INVALID_ARGUMENT;
+
+    basis = ctx->basis;
+
+    /* Phase 1: Flag eval + eta record */
+    /* mode != 0: check var flags (LP-only — no PWL/special flags to check) */
+    (void)mode;
+    if (basis != NULL) {
+        EtaVector *eta;
+        if (basis->eta_pool != NULL) {
+            eta = (EtaVector *)cxf_eta_pool_alloc(basis->eta_pool,
+                                                   sizeof(EtaVector));
+        } else {
+            eta = (EtaVector *)calloc(1, sizeof(EtaVector));
+        }
+        if (eta == NULL) return CXF_ERROR_OUT_OF_MEMORY;
+
+        eta->type = 3;                           /* Variable-fixing record */
+        eta->pivot_row = -1;
+        eta->pivot_var = var;
+        eta->pivot_elem = new_value;
+        eta->obj_coeff = ctx->work_obj[var];     /* Previous reduced cost */
+        eta->status = basis->var_status[var];     /* Previous status */
+        eta->nnz = 0;
+        eta->indices = NULL;
+        eta->values = NULL;
+        eta->next = basis->eta_head;
+        basis->eta_head = eta;
+        basis->eta_count++;
     }
 
-    n = ctx->num_vars;
-
-    /* Validate variable index */
-    if (var < 0 || var >= n) {
-        return CXF_ERROR_INVALID_ARGUMENT;
-    }
-
-    /* Get objective coefficient */
-    obj_coeff = ctx->work_obj[var];
-
-    /* Step 1: Update objective value */
-    ctx->obj_value += obj_coeff * new_value;
-
-    /* Step 2: Set objective coefficient to zero */
+    /* Phase 2: Linear objective update */
+    ctx->obj_value += ctx->work_obj[var] * new_value;
     ctx->work_obj[var] = 0.0;
 
-    /* Step 3: Update bounds to new value */
+    /* Phase 3: Quadratic — no Q-matrix in LP-only solver */
+    /* Phase 4: Q-neighbor linearization — no Q-matrix in LP-only solver */
+
+    /* Phase 5: Pricing notification */
+    if (ctx->pricing != NULL) {
+        cxf_pricing_update_var(ctx->pricing, ctx, var);
+        cxf_pricing_mark_dirty(ctx->pricing, var);
+    }
+
+    /* Phase 6: Activity bound propagation */
+    old_lb = ctx->work_lb[var];
+    old_ub = upperBound;
+    if (ctx->min_activity != NULL && ctx->max_activity != NULL &&
+        ctx->csc_col_ptr != NULL) {
+        int64_t col_start = ctx->csc_col_ptr[var];
+        int64_t col_end = ctx->csc_col_ptr[var + 1];
+        int64_t k;
+        for (k = col_start; k < col_end; k++) {
+            int row = ctx->csc_row_idx[k];
+            double coeff = ctx->csc_values[k];
+            if (coeff > 0.0) {
+                ctx->min_activity[row] += coeff * (new_value - old_lb);
+                ctx->max_activity[row] += coeff * (new_value - old_ub);
+            } else {
+                ctx->min_activity[row] += coeff * (new_value - old_ub);
+                ctx->max_activity[row] += coeff * (new_value - old_lb);
+            }
+        }
+    }
+
+    /* Phase 7: Matrix cleanup */
     ctx->work_lb[var] = new_value;
     ctx->work_ub[var] = new_value;
-
-    /* Step 4: Update variable status based on value position */
-    if (ctx->basis != NULL && ctx->basis->var_status != NULL) {
-        /* Determine status based on bound position */
-        if (fabs(new_value - ctx->work_lb[var]) < THRESHOLD) {
-            ctx->basis->var_status[var] = AT_LOWER;
-        } else {
-            ctx->basis->var_status[var] = AT_UPPER;
-        }
+    if (basis != NULL && basis->var_status != NULL) {
+        basis->var_status[var] = CXF_VAR_FIXED;
     }
 
     return CXF_OK;
@@ -160,8 +175,8 @@ int cxf_pivot_special(void *env, void *state, int var, double lb_limit,
      * - Positive objective: decreasing variable improves objective
      * - Negative objective: increasing variable improves objective
      */
-    can_decrease = (obj_coeff > THRESHOLD && lb > -CXF_INFINITY);
-    can_increase = (obj_coeff < -THRESHOLD && ub < CXF_INFINITY);
+    can_decrease = (obj_coeff > 1e-10 && lb > -CXF_INFINITY);
+    can_increase = (obj_coeff < -1e-10 && ub < CXF_INFINITY);
 
     /* Step 3: If neither direction possible, return success */
     if (!can_decrease && !can_increase) {
@@ -175,7 +190,7 @@ int cxf_pivot_special(void *env, void *state, int var, double lb_limit,
             return CXF_UNBOUNDED;
         }
         /* Bounded - move to upper bound */
-        return cxf_pivot_bound(env, state, var, ub, 0.0, 0);
+        return cxf_pivot_bound(env, state, var, ub, ub, 0);
     }
 
     if (can_decrease) {
@@ -184,7 +199,7 @@ int cxf_pivot_special(void *env, void *state, int var, double lb_limit,
             return CXF_UNBOUNDED;
         }
         /* Bounded - move to lower bound */
-        return cxf_pivot_bound(env, state, var, lb, 0.0, 0);
+        return cxf_pivot_bound(env, state, var, lb, ub, 0);
     }
 
     return CXF_OK;
