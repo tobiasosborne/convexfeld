@@ -4,7 +4,7 @@
 
 ---
 
-## STATUS: 22/35 Netlib pass. 40/40 unit tests. 10 bug fixes this session.
+## STATUS: 22/35 Netlib pass. 41/41 unit tests. Error/status codes fixed to spec.
 
 ### Scorecard
 
@@ -16,7 +16,24 @@
 
 ## Work Completed This Session (2026-02-23)
 
-### Issues Fixed (7)
+### Issues Fixed (8)
+
+**convexfeld-7rvr: P0 Implement 4-function error model + fix error/status codes** — CLOSED
+- Fixed CxfStatus enum: optimization status codes now match spec (OPTIMAL=2, INFEASIBLE=3, UNBOUNDED=5, etc.)
+- Fixed error codes from -1..-5 range to 10001+ range per spec (OUT_OF_MEMORY=10001, NULL_ARGUMENT=10002, etc.)
+- Added 27 missing error codes (10004-10032, 20001-20003) and 12 missing status codes (LOADED, CUTOFF, etc.)
+- Split CxfStatus into CxfOptimStatus (1-19) and CxfErrorCode (10001+) enums
+- Added CXF_IS_ERROR(code) macro for error detection
+- Added `error_code` field to CxfEnv struct (spec requires storing code separate from message)
+- Implemented 4-function error model in src/error/error_reporting.c + include/convexfeld/cxf_error.h:
+  - cxf_error_env() — custom message via Environment
+  - cxf_error_model() — custom message via Model
+  - cxf_set_error_message() — predefined message via Model
+  - cxf_env_set_status() — predefined message via Environment
+- Error message lookup table with 35 predefined messages
+- Buffer management: OOM always overwrites, overwrite flag, empty-buffer-only rule
+- Fixed solve_lp.c: replaced `status < 0` error checks with `CXF_IS_ERROR(status)`
+- Added 11 new tests for error reporting (41/41 total pass)
 
 **convexfeld-h8xm: P0 Implement full cxf_pivot_bound** — CLOSED
 - Rewrote stub into spec-compliant 7-phase implementation in pivot_special.c
@@ -88,7 +105,7 @@
 
 | Priority | What | Issues | Impact |
 |----------|------|--------|--------|
-| P0 | Fix error/status code values | convexfeld-7rvr | 1 hr |
+| ~~P0~~ | ~~Fix error/status code values~~ | ~~convexfeld-7rvr~~ | DONE |
 | ~~P0~~ | ~~Implement full cxf_pivot_bound~~ | ~~convexfeld-h8xm~~ | DONE |
 | P0 | Redesign cxf_pivot_update for Kahan-stable addition | convexfeld-heyz | 1 day |
 | P1 | Create internal headers | convexfeld-mxjm | 2 hrs |

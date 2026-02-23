@@ -131,6 +131,7 @@ target_sources(convexfeld PRIVATE
     src/error/model_flags.c
     src/error/terminate.c
     src/error/pivot_check.c
+    src/error/error_reporting.c
     # Parameters module (M2.2.1)
     src/parameters/params.c
     # Logging module (M3.2.2, M3.2.3, M3.2.4)

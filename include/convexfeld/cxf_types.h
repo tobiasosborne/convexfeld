@@ -22,29 +22,79 @@
  ******************************************************************************/
 
 /**
- * @brief Return status codes for all ConvexFeld functions.
+ * @brief Optimization status codes (1-19 range per spec).
  *
- * Non-negative values indicate success or optimization outcome.
- * Negative values indicate errors.
+ * Returned by cxf_optimize / cxf_solve_lp to indicate the solver outcome.
+ * CXF_OK (0) indicates a successful API call with no optimization result.
  */
 typedef enum {
-    /* Success codes */
     CXF_OK              = 0,   /**< Operation completed successfully */
-    CXF_OPTIMAL         = 1,   /**< Optimal solution found */
-    CXF_INFEASIBLE      = 2,   /**< Problem is infeasible */
-    CXF_UNBOUNDED       = 3,   /**< Problem is unbounded */
+    CXF_LOADED          = 1,   /**< Model loaded, no solution yet */
+    CXF_OPTIMAL         = 2,   /**< Optimal solution found */
+    CXF_INFEASIBLE      = 3,   /**< Problem is infeasible */
     CXF_INF_OR_UNBD     = 4,   /**< Problem is infeasible or unbounded */
-    CXF_ITERATION_LIMIT = 5,   /**< Iteration limit reached */
-    CXF_TIME_LIMIT      = 6,   /**< Time limit reached */
-    CXF_NUMERIC         = 7,   /**< Numerical difficulties encountered */
+    CXF_UNBOUNDED       = 5,   /**< Problem is unbounded */
+    CXF_CUTOFF          = 6,   /**< Optimal objective worse than cutoff */
+    CXF_ITERATION_LIMIT = 7,   /**< Iteration limit reached */
+    CXF_NODE_LIMIT      = 8,   /**< Node limit reached (MIP) */
+    CXF_TIME_LIMIT      = 9,   /**< Time limit reached */
+    CXF_SOLUTION_LIMIT  = 10,  /**< Solution limit reached (MIP) */
+    CXF_INTERRUPTED     = 11,  /**< User interrupt */
+    CXF_NUMERIC         = 12,  /**< Numerical difficulties encountered */
+    CXF_SUBOPTIMAL      = 13,  /**< Sub-optimal solution available */
+    CXF_INPROGRESS      = 14,  /**< Async call still in progress */
+    CXF_USER_OBJ_LIMIT  = 15,  /**< User objective limit reached */
+    CXF_WORK_LIMIT      = 16,  /**< Work limit exceeded */
+    CXF_MEM_LIMIT       = 17,  /**< Memory limit exceeded */
+    CXF_LOCALLY_OPTIMAL = 18,  /**< Locally optimal (non-convex) */
+    CXF_LOCALLY_INFEASIBLE = 19 /**< Locally infeasible (non-convex) */
+} CxfOptimStatus;
 
-    /* Error codes */
-    CXF_ERROR_OUT_OF_MEMORY     = -1,  /**< Memory allocation failed */
-    CXF_ERROR_NULL_ARGUMENT     = -2,  /**< NULL pointer passed as argument */
-    CXF_ERROR_INVALID_ARGUMENT  = -3,  /**< Invalid argument value */
-    CXF_ERROR_DATA_NOT_AVAILABLE = -4, /**< Requested data not available */
-    CXF_ERROR_NOT_SUPPORTED     = -5   /**< Feature not supported */
-} CxfStatus;
+/**
+ * @brief Error codes (10001+ range per spec).
+ *
+ * Returned by API functions to indicate specific error conditions.
+ */
+typedef enum {
+    CXF_ERROR_OUT_OF_MEMORY       = 10001, /**< Memory allocation failed */
+    CXF_ERROR_NULL_ARGUMENT       = 10002, /**< NULL pointer passed */
+    CXF_ERROR_INVALID_ARGUMENT    = 10003, /**< Invalid argument value */
+    CXF_ERROR_UNKNOWN_ATTRIBUTE   = 10004, /**< Unknown attribute name */
+    CXF_ERROR_DATA_NOT_AVAILABLE  = 10005, /**< Data not accessible */
+    CXF_ERROR_INDEX_OUT_OF_RANGE  = 10006, /**< Index outside valid range */
+    CXF_ERROR_UNKNOWN_PARAMETER   = 10007, /**< Unknown parameter name */
+    CXF_ERROR_VALUE_OUT_OF_RANGE  = 10008, /**< Parameter value out of range */
+    CXF_ERROR_NO_LICENSE          = 10009, /**< License validation failed */
+    CXF_ERROR_SIZE_LIMIT_EXCEEDED = 10010, /**< Model exceeds size limit */
+    CXF_ERROR_CALLBACK            = 10011, /**< Error in user callback */
+    CXF_ERROR_FILE_READ           = 10012, /**< Failed to read file */
+    CXF_ERROR_FILE_WRITE          = 10013, /**< Failed to write file */
+    CXF_ERROR_NUMERIC             = 10014, /**< Numerical error encountered */
+    CXF_ERROR_IIS_NOT_INFEASIBLE  = 10015, /**< IIS on feasible model */
+    CXF_ERROR_NOT_FOR_MIP         = 10016, /**< Operation invalid for MIP */
+    CXF_ERROR_OPTIMIZATION_IN_PROGRESS = 10017, /**< Concurrent access */
+    CXF_ERROR_DUPLICATES          = 10018, /**< Duplicate indices */
+    CXF_ERROR_NODEFILE            = 10019, /**< Node file I/O error */
+    CXF_ERROR_Q_NOT_PSD           = 10020, /**< Q matrix not PSD */
+    CXF_ERROR_QCP_EQUALITY        = 10021, /**< Non-convex QCP equality */
+    CXF_ERROR_NETWORK             = 10022, /**< Network error */
+    CXF_ERROR_JOB_REJECTED        = 10023, /**< Server rejected job */
+    CXF_ERROR_NOT_SUPPORTED       = 10024, /**< Feature not supported */
+    CXF_ERROR_EXCEED_2B_NONZEROS  = 10025, /**< Matrix exceeds 2B nonzeros */
+    CXF_ERROR_INVALID_PIECEWISE   = 10026, /**< Invalid piecewise objective */
+    CXF_ERROR_UPDATEMODE_CHANGE   = 10027, /**< UpdateMode modification */
+    CXF_ERROR_CLOUD               = 10028, /**< Cloud computing error */
+    CXF_ERROR_MODEL_MODIFICATION  = 10029, /**< Model modification invalid */
+    CXF_ERROR_CSWORKER            = 10030, /**< Client-server worker error */
+    CXF_ERROR_TUNE_MODEL_TYPES    = 10031, /**< Multi-type tuning */
+    CXF_ERROR_SECURITY            = 10032, /**< Authentication failure */
+    CXF_ERROR_NOT_IN_MODEL        = 20001, /**< Element not in model */
+    CXF_ERROR_FAILED_TO_CREATE    = 20002, /**< Failed to create model */
+    CXF_ERROR_INTERNAL            = 20003  /**< Internal error */
+} CxfErrorCode;
+
+/** @brief Check if a return code is an error (10001+ range) */
+#define CXF_IS_ERROR(code) ((code) >= 10001)
 
 /*******************************************************************************
  * Variable Types

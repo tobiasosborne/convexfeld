@@ -20,6 +20,7 @@
 struct CxfEnv {
     uint32_t magic;           /**< Validation magic (CXF_ENV_MAGIC) */
     int active;               /**< 1 if environment is active, 0 otherwise */
+    int error_code;           /**< Last error code (CxfErrorCode, always written) */
     char error_buffer[512];   /**< Last error message */
 
     /* Tolerances */

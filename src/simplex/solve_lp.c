@@ -220,7 +220,7 @@ int cxf_solve_lp(CxfModel *model) {
             if (status == ITERATE_INFEASIBLE) {
                 model->status = CXF_INFEASIBLE; terminated = 1; break;
             }
-            if (status < 0) {
+            if (CXF_IS_ERROR(status)) {
                 model->status = status; terminated = 1; break;
             }
 
@@ -263,7 +263,7 @@ int cxf_solve_lp(CxfModel *model) {
                 model->status = CXF_ITERATION_LIMIT;
                 terminated = 1; break;
             }
-            if (status < 0) {
+            if (CXF_IS_ERROR(status)) {
                 model->status = status; terminated = 1; break;
             }
         }
