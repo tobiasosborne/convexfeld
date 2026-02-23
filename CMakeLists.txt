@@ -131,7 +131,6 @@ target_sources(convexfeld PRIVATE
     src/error/model_flags.c
     src/error/terminate.c
     src/error/pivot_check.c
-    src/error/error_stub.c
     # Parameters module (M2.2.1)
     src/parameters/params.c
     # Logging module (M3.2.2, M3.2.3, M3.2.4)
@@ -183,12 +182,9 @@ target_sources(convexfeld PRIVATE
     src/callbacks/init.c
     src/callbacks/invoke.c
     src/callbacks/terminate.c
-    src/callbacks/callback_stub.c
     # Validation module (M2.3.2)
     src/validation/arrays.c
-    src/validation/validation_stub.c
     # Threading module (M3.3.1 stubs + M3.3.2-M3.3.5)
-    src/threading/threading_stub.c
     src/threading/locks.c
     src/threading/config.c
     src/threading/cpu.c

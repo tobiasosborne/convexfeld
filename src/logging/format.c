@@ -3,51 +3,12 @@
  * @brief Format helper functions for logging (M3.2.3)
  *
  * Provides safe wrappers for formatting operations:
- * - cxf_log10_wrapper: safe base-10 logarithm
  * - cxf_snprintf_wrapper: safe printf-style formatting
  */
 
 #include "convexfeld/cxf_types.h"
-#include <math.h>
 #include <stdio.h>
 #include <stdarg.h>
-
-/**
- * @brief Safe wrapper for base-10 logarithm.
- *
- * Handles edge cases consistently across platforms:
- * - Zero returns -Infinity
- * - Negative returns NaN
- * - NaN returns NaN (propagation)
- * - +Infinity returns +Infinity
- *
- * @param value Input value
- * @return log10(value) or special value for edge cases
- */
-double cxf_log10_wrapper(double value) {
-    /* Check for NaN first (propagation) */
-    if (isnan(value)) {
-        return value;  /* Return the NaN */
-    }
-
-    /* Check for negative values (undefined) */
-    if (value < 0.0) {
-        return NAN;
-    }
-
-    /* Check for zero (mathematical limit) */
-    if (value == 0.0) {
-        return -INFINITY;
-    }
-
-    /* Check for positive infinity */
-    if (isinf(value)) {
-        return INFINITY;
-    }
-
-    /* Normal case: delegate to standard library */
-    return log10(value);
-}
 
 /**
  * @brief Safe wrapper for snprintf.

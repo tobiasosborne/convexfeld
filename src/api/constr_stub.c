@@ -219,15 +219,6 @@ int cxf_addconstrs(CxfModel *model, int numconstrs, int numnz,
     return CXF_OK;
 }
 
-int cxf_addqconstr(CxfModel *model, int numlnz, const int *lind,
-                   const double *lval, int numqnz, const int *qrow,
-                   const int *qcol, const double *qval, char sense,
-                   double rhs, const char *name) {
-    (void)model; (void)numlnz; (void)lind; (void)lval; (void)numqnz;
-    (void)qrow; (void)qcol; (void)qval; (void)sense; (void)rhs; (void)name;
-    return CXF_ERROR_NOT_SUPPORTED;
-}
-
 int cxf_addgenconstrIndicator(CxfModel *model, const char *name,
                               int binvar, int binval, int nvars,
                               const int *ind, const double *val,
