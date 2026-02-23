@@ -4,7 +4,7 @@
 
 ---
 
-## STATUS: 22/35 Netlib pass. 40/40 unit tests. 4 bug fixes this session.
+## STATUS: 22/35 Netlib pass. 40/40 unit tests. 6 bug fixes this session.
 
 ### Scorecard
 
@@ -16,7 +16,19 @@
 
 ## Work Completed This Session (2026-02-23)
 
-### Issues Fixed (4)
+### Issues Fixed (6)
+
+**convexfeld-aal4: P1 CXF_ENV_MAGIC == CXF_MODEL_MAGIC defeats type safety** — CLOSED
+- Changed CXF_MODEL_MAGIC from 0xC0FEFE1DU to 0xC0FE0D31U in cxf_types.h
+- ENV and MODEL magic numbers are now distinct, enabling proper type validation
+
+**convexfeld-vk8l: P1 helpers.c bound propagation dead code** — CLOSED
+- Fixed tautological comparison: `newLB = lb_working[colIdx]; if (newLB > lb_working[colIdx])` was always false
+- Now computes implied bounds using FBBT (Savelsbergh 1994) with constraint coefficient and RHS
+- Extracted duplicated CSC activity update into static `update_activities()` helper
+- `coeff` variable (previously unused) now drives the implied bound derivation
+
+### Previous Issues Fixed (4)
 
 **convexfeld-3lpg: P0 ODR violations — 3 functions defined in both stub and real files** — CLOSED
 - Deleted 5 stub files: validation_stub.c, solve_lp_stub.c, error_stub.c, callback_stub.c, threading_stub.c
@@ -51,8 +63,8 @@
 | P0 | Implement full cxf_pivot_bound | convexfeld-h8xm | medium |
 | P0 | Redesign cxf_pivot_update for Kahan-stable addition | convexfeld-heyz | 1 day |
 | P1 | Create internal headers | convexfeld-mxjm | 2 hrs |
-| P1 | Fix magic number clash (ENV == MODEL) | convexfeld-aal4 | 15 min |
-| P1 | Fix helpers.c dead code (tautological comparison) | convexfeld-vk8l | 15 min |
+| ~~P1~~ | ~~Fix magic number clash (ENV == MODEL)~~ | ~~convexfeld-aal4~~ | DONE |
+| ~~P1~~ | ~~Fix helpers.c dead code (tautological comparison)~~ | ~~convexfeld-vk8l~~ | DONE |
 | P1 | Fix model_stub.c partial realloc | convexfeld-yhmx | 30 min |
 | P1 | Eliminate hot-path malloc | convexfeld-7nyb | 1 hr |
 | P1 | Add core algorithm tests | convexfeld-sxgk | 1 day |

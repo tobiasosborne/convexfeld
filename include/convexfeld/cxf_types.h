@@ -188,7 +188,7 @@ typedef enum {
 #define CXF_ENV_MAGIC       0xC0FEFE1DU
 
 /** @brief Magic number for CxfModel validation */
-#define CXF_MODEL_MAGIC     0xC0FEFE1DU
+#define CXF_MODEL_MAGIC     0xC0FE0D31U
 
 /** @brief Magic number for CallbackContext validation (32-bit) */
 #define CXF_CALLBACK_MAGIC  0xCA11BAC7U

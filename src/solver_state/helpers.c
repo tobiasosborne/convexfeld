@@ -9,18 +9,38 @@
 #include "convexfeld/cxf_basis.h"
 #include "convexfeld/cxf_types.h"
 #include <stdlib.h>
-#include <string.h>
 #include <math.h>
 
 #define MAX_PASSES 10
 #define BOUND_TOL 1e-10
 
-/**
- * @brief Worklist-based bound propagation for simplex cleanup.
- *
- * Iteratively tightens variable bounds through constraint activity analysis.
- * Returns 0 on success, CXF_INFEASIBLE if infeasible, or error code.
- */
+/** Update constraint activities after tightening a variable bound.
+ *  pos_arr gets delta for positive coefficients, neg_arr for negative. */
+static void update_activities(
+    MatrixData *matrix, int colIdx, double delta,
+    double *pos_arr, double *neg_arr,
+    int num_constrs, int num_vars,
+    int *worklist, int *tail, uint8_t *inWorklist)
+{
+    if (!matrix->col_ptr || !matrix->row_idx || !matrix->values) return;
+    int64_t cs = matrix->col_ptr[colIdx];
+    int64_t ce = matrix->col_ptr[colIdx + 1];
+    for (int64_t p = cs; p < ce; p++) {
+        int r = matrix->row_idx[p];
+        if (r < 0 || r >= num_constrs) continue;
+        double a_r = matrix->values[p];
+        if (a_r > 0.0) pos_arr[r] += a_r * delta;
+        else            neg_arr[r] += a_r * delta;
+        if (r < num_vars && !inWorklist[r]) {
+            worklist[*tail] = r;
+            *tail = (*tail + 1) % num_vars;
+            inWorklist[r] = 1;
+        }
+    }
+}
+
+/** Worklist-based FBBT bound propagation for simplex cleanup.
+ *  Returns 0 on success, CXF_INFEASIBLE if infeasible, or error code. */
 int cxf_propagate_bounds(
     void *env,
     SolverState *state,
@@ -35,7 +55,6 @@ int cxf_propagate_bounds(
     double ub_threshold
 ) {
     (void)env;
-
     if (!state || !lb_working || !ub_working || !constrSenses ||
         !lb_delta || !ub_delta || !lb_count || !ub_count) {
         return CXF_ERROR_NULL_ARGUMENT;
@@ -114,67 +133,60 @@ int cxf_propagate_bounds(
             if (colIdx < 0 || colIdx >= num_vars) continue;
 
             double coeff = matrix->row_values[k];
+            if (fabs(coeff) < 1e-15) continue;
+
+            double rhs_val = matrix->rhs ? matrix->rhs[varIdx] : 0.0;
+
+            /* FBBT implied bounds (Savelsbergh 1994):
+             * Subtract this variable's contribution from constraint activity,
+             * then derive what range x_j must lie in. */
             double newLB = lb_working[colIdx];
             double newUB = ub_working[colIdx];
 
+            if (coeff > 0.0) {
+                double other_min = lb_delta[varIdx] - coeff * lb_working[colIdx];
+                double other_max = ub_delta[varIdx] - coeff * ub_working[colIdx];
+                if ((sense == CXF_LESS_EQUAL || sense == CXF_EQUAL) &&
+                    ub_count[varIdx] == 0)
+                    newUB = fmin(newUB, (rhs_val - other_min) / coeff);
+                if ((sense == CXF_GREATER_EQUAL || sense == CXF_EQUAL) &&
+                    lb_count[varIdx] == 0)
+                    newLB = fmax(newLB, (rhs_val - other_max) / coeff);
+            } else {
+                double other_min = lb_delta[varIdx] - coeff * ub_working[colIdx];
+                double other_max = ub_delta[varIdx] - coeff * lb_working[colIdx];
+                if ((sense == CXF_LESS_EQUAL || sense == CXF_EQUAL) &&
+                    ub_count[varIdx] == 0)
+                    newLB = fmax(newLB, (rhs_val - other_min) / coeff);
+                if ((sense == CXF_GREATER_EQUAL || sense == CXF_EQUAL) &&
+                    lb_count[varIdx] == 0)
+                    newUB = fmin(newUB, (rhs_val - other_max) / coeff);
+            }
+
             if (newLB > lb_working[colIdx] + BOUND_TOL) {
-                if (newLB > newUB + BOUND_TOL) {
+                if (newLB > ub_working[colIdx] + BOUND_TOL) {
                     free(worklist);
                     free(inWorklist);
                     return CXF_INFEASIBLE;
                 }
-
+                double old_lb = lb_working[colIdx];
                 lb_working[colIdx] = newLB;
-
-                if (matrix->col_ptr && matrix->row_idx) {
-                    int64_t col_start = matrix->col_ptr[colIdx];
-                    int64_t col_end = matrix->col_ptr[colIdx + 1];
-
-                    for (int64_t p = col_start; p < col_end; p++) {
-                        int affectedRow = matrix->row_idx[p];
-                        if (affectedRow >= 0 && affectedRow < num_vars &&
-                            !inWorklist[affectedRow]) {
-                            worklist[tail] = affectedRow;
-                            tail = (tail + 1) % num_vars;
-                            inWorklist[affectedRow] = 1;
-                        }
-                    }
-                }
-
-                if (varIdx < num_constrs) {
-                    lb_count[varIdx]++;
-                    lb_delta[varIdx] += (newLB - lb_working[colIdx]);
-                }
+                update_activities(matrix, colIdx, newLB - old_lb,
+                    lb_delta, ub_delta, num_constrs, num_vars,
+                    worklist, &tail, inWorklist);
             }
 
             if (newUB < ub_working[colIdx] - BOUND_TOL) {
-                if (newUB < newLB - BOUND_TOL) {
+                if (newUB < lb_working[colIdx] - BOUND_TOL) {
                     free(worklist);
                     free(inWorklist);
                     return CXF_INFEASIBLE;
                 }
-
+                double old_ub = ub_working[colIdx];
                 ub_working[colIdx] = newUB;
-
-                if (matrix->col_ptr && matrix->row_idx) {
-                    int64_t col_start = matrix->col_ptr[colIdx];
-                    int64_t col_end = matrix->col_ptr[colIdx + 1];
-
-                    for (int64_t p = col_start; p < col_end; p++) {
-                        int affectedRow = matrix->row_idx[p];
-                        if (affectedRow >= 0 && affectedRow < num_vars &&
-                            !inWorklist[affectedRow]) {
-                            worklist[tail] = affectedRow;
-                            tail = (tail + 1) % num_vars;
-                            inWorklist[affectedRow] = 1;
-                        }
-                    }
-                }
-
-                if (varIdx < num_constrs) {
-                    ub_count[varIdx]++;
-                    ub_delta[varIdx] += (ub_working[colIdx] - newUB);
-                }
+                update_activities(matrix, colIdx, newUB - old_ub,
+                    ub_delta, lb_delta, num_constrs, num_vars,
+                    worklist, &tail, inWorklist);
             }
         }
 
