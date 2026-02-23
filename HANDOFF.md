@@ -1,10 +1,10 @@
 # Agent Handoff
 
-*Last updated: 2026-02-22*
+*Last updated: 2026-02-23*
 
 ---
 
-## STATUS: 22/35 Netlib pass. 40/40 unit tests. Implementation audit complete.
+## STATUS: 22/35 Netlib pass. 40/40 unit tests. Comprehensive code review complete.
 
 ### Scorecard
 
@@ -14,54 +14,69 @@
 
 ---
 
-## Implementation Audit (2026-02-22)
+## Comprehensive Code Review (2026-02-23)
 
-**Full analysis: `docs/learnings/implementation_audit.md`**
+9-agent parallel review covering spec compliance, architecture, algorithms, memory safety, performance, test coverage, and code quality. ~250 unique findings across ~16K LOC.
 
-The spec agent audited 5 subsystems across ~30 source files and found **14 significant deviations** from the cleanroom spec. The single highest-impact finding: Kahan-stable addition is entirely absent, and `cxf_pivot_update` has a wrong API that prevents correct implementation.
+### Review Agents & Key Results
 
-### Priority Fix Order (items 1-6 fix ~12 of 13 failures)
+| Agent | Model | Findings |
+|-------|-------|----------|
+| Spec: Modules & Data Model | Sonnet | 114 deviations. Error codes wrong range, status codes off-by-one, 18-array memory leak, missing primary/working matrix split |
+| Spec: Algorithms | Opus | 23 deviations (14 NEW). Pivot operations module mostly stubbed. Post-iterate missing. |
+| Architecture | Opus | 10 risks. eta_count never incremented, crash mutates model, CS fix after extract |
+| Test Coverage | Sonnet | Core algorithm has ZERO unit tests. 40/40 tests are infrastructure-only. |
+| Linus Torvalds | Opus | Integer overflow in LU, 3 realloc double-frees, silent FTRAN OOM, 116 externs |
+| Donald Knuth | Opus | Algorithmic health 6.4/10. FTRAN/BTRAN math verified correct. No Kahan summation is #1 issue. |
+| John Carmack | Opus | Performance 3/10. malloc in hot path, dense LU is scalability wall, redundant tau_j |
+| Code Smells: Core | Sonnet | 84 smells. solve_lp_stub.c still exists, STRATEGY_AUTO dead, ratio test duplication |
+| Code Smells: Infra | Sonnet | 72 smells. ODR violations, dead bound propagation, fabricated query results |
 
-| # | Issue ID | Finding | Fixes | Effort |
-|---|----------|---------|-------|--------|
-| 1 | convexfeld-heyz | **C1+C3**: Redesign `cxf_pivot_update` — old/new bounds API + Kahan-stable add | 10 numerical drift | Medium |
-| 2 | convexfeld-h8xm | **C2**: Full `cxf_pivot_bound` — eta, activity, matrix cleanup | All bound-tightening | Medium |
-| 3 | convexfeld-bgl4 | **H4**: Phase I w-coefficients updated per pivot | boeing2, capri | Low |
-| 4 | convexfeld-xd5l | **C4**: `specialMode` flag + Phase I UNBOUNDED suppression | scsd1, scagr25 | Low |
-| 5 | convexfeld-70c0 | **H2**: Two-stage infeasibility confirmation in step2/step3 | boeing2, capri | Low |
-| 6 | convexfeld-ifo2 | **H1**: Harris tolerance `feasTol` → `10*feasTol` | All (pivot quality) | Trivial |
-| 7 | convexfeld-94em | **H3**: Inner loop convergence — remove dimension scaling, add dead zone | Large problems | Low |
-| 8 | convexfeld-mbbr | **M2**: Sparse LU factorization | bandm, tuff, vtp.base | High |
+### New Issues Created: 34 (+ 3 existing issues updated)
 
-### Other Audit Issues Created
+**P0 (5 new + 1 updated to P0):**
+- convexfeld-pdv0: Integer overflow + realloc double-free in lu_factorize.c
+- convexfeld-u7f3: Memory leak — 18+ arrays not freed in state_cleanup.c
+- convexfeld-0drc: Silent FTRAN/BTRAN corruption on malloc failure
+- convexfeld-v0s3: crash.c mutates original model matrix
+- convexfeld-3lpg: ODR violations — 3 functions defined in stub + real files
+- convexfeld-7rvr: (UPDATED to P0) Error codes wrong range + status codes off-by-one
 
-| Issue ID | Finding | Priority |
-|----------|---------|----------|
-| convexfeld-s9am | M1: Re-enable BFRT | P2 |
-| convexfeld-36qh | M3: Basis snapshot → progress counters | P2 |
-| convexfeld-l0ca | M4: V1 pricing weight update drops nonbasic | P2 |
-| convexfeld-ro9z | M6: refine.c must create eta records | P2 |
-| convexfeld-vwpt | M5: Pricing level init 1→0 | P3 |
-| convexfeld-muxv | M7: Primal crash second pass | P3 |
-| convexfeld-yf1c | M8: fix_variables_at_bounds stub (deferred) | P4 |
+**P1 (10 new):**
+- convexfeld-mo98: eta_count sync broken
+- convexfeld-9wdg: CS fix runs after extract
+- convexfeld-aal4: ENV_MAGIC == MODEL_MAGIC
+- convexfeld-7nyb: Eliminate hot-path malloc
+- convexfeld-mxjm: Create internal headers (replace 116 externs)
+- convexfeld-sxgk: Add core algorithm unit tests
+- convexfeld-n426: Decompose step.c
+- convexfeld-lmkg: pivot_special stub
+- convexfeld-vk8l: helpers.c dead bound propagation
+- convexfeld-yhmx: grow_vars partial realloc corruption
 
----
+**P2 (18 new):** tolerance leak, static last_log_time, CMake sanitizers, post_iterate missing, Phase I→II cleanup, free var sign, RC+weight fusion, ratio test fusion, STRATEGY_AUTO dead, VAR constants 4x, fabricated query results, API stubs succeed silently, atof+MPS names, mixed allocator, weight recomputation, leaving var AT_LOWER, pivot_bound slack range, int64 loop var
 
-## What Changed This Session
+**P3 (6 new):** constant dedup, dead code cleanup, 7 files >200 LOC, lock naming, header/portability, copy-paste duplication
 
-### Code Changes
-1. **ftran.c** — FTRAN diagonal fallback: `*=` → `/=` (backward-compatible)
-2. **btran.c** — BTRAN diagonal fallback: same fix
-3. **scaling.c** — Full row+column Ruiz equilibration (DISABLED, threshold=1e30)
-4. **solve_lp.c** — Scaling wiring + unscaling before extraction
-5. **phase_one.c** — Phase I diag_coeff with row_scale; Phase II obj re-scale
-6. **step.c** — Ratio test: bound-flip fallback + column rejection across candidates
-7. **cxf_solver.h** — `row_scale`, `col_scale` fields
-8. **context.c** — Scale factor allocation/freeing
+**Closed:** convexfeld-bgl4 (H4: Phase I w-coefficients — confirmed FIXED)
 
-### Scaling Analysis
+### Priority Fix Order
 
-Scaling infrastructure is complete and mathematically correct. Disabled because enabling it regresses all tested problems. Root cause: solver baseline robustness insufficient. The spec agent confirmed the reference solver handles scaling through general robustness (residual monitoring, column rejection, EXPAND), not scaling-aware mechanisms. See `docs/learnings/scaling_report.md`.
+| Priority | What | Issues | Impact |
+|----------|------|--------|--------|
+| P0 first | Fix integer overflow `(size_t)m*(size_t)m` | convexfeld-pdv0 | 1 min, prevents heap corruption |
+| P0 | Fix realloc double-free (3 locations) | convexfeld-pdv0 | 30 min |
+| P0 | Fix state_cleanup memory leaks | convexfeld-u7f3 | 30 min |
+| P0 | Fix FTRAN/BTRAN OOM → return error | convexfeld-0drc | 15 min |
+| P0 | Delete ODR-violating stub files | convexfeld-3lpg | 15 min |
+| P0 | Fix crash.c model mutation | convexfeld-v0s3 | 30 min |
+| P0 | Fix error/status code values | convexfeld-7rvr | 1 hr |
+| P1 next | Create internal headers | convexfeld-mxjm | 2 hrs |
+| P1 | Add Kahan summation | convexfeld-heyz | 1 day |
+| P1 | Fix eta_count sync | convexfeld-mo98 | 15 min |
+| P1 | Fix CS ordering | convexfeld-9wdg | 15 min |
+| P1 | Eliminate hot-path malloc | convexfeld-7nyb | 1 hr |
+| P1 | Add core algorithm tests | convexfeld-sxgk | 1 day |
 
 ---
 
@@ -71,3 +86,4 @@ Scaling infrastructure is complete and mathematically correct. Disabled because 
 - Re-add RC-based status reassignment in refine.c (corrupts obj)
 - Re-add recovery pivots in refine.c Pass 2 (changes basis during post-solve)
 - Skip reading this file and `docs/learnings/implementation_audit.md`
+- Run Netlib benchmarks (currently broken, that's OK — focus on fixing the code first)
