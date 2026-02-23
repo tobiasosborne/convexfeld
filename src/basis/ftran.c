@@ -28,11 +28,10 @@
  * @param m Dimension.
  * @param result Vector (modified in place).
  */
-static int apply_lu_solve(const LUFactors *lu, int m, double *result) {
+static int apply_lu_solve(const LUFactors *lu, int m, double *result,
+                          double *temp) {
     /* Step 1: Permute input by row permutation: temp = P * result
      * perm_row[k] = original row that becomes position k */
-    double *temp = (double *)malloc((size_t)m * sizeof(double));
-    if (temp == NULL) return CXF_ERROR_OUT_OF_MEMORY;
 
     for (int k = 0; k < m; k++) {
         temp[k] = result[lu->perm_row[k]];
@@ -70,7 +69,6 @@ static int apply_lu_solve(const LUFactors *lu, int m, double *result) {
         result[lu->perm_col[k]] = temp[k];
     }
 
-    free(temp);
     return 0;
 }
 
@@ -108,7 +106,7 @@ int cxf_ftran(BasisState *basis, const double *column, double *result) {
 
     /* Step 2: Apply LU solve if factors are available */
     if (basis->lu != NULL && basis->lu->valid) {
-        int rc = apply_lu_solve(basis->lu, m, result);
+        int rc = apply_lu_solve(basis->lu, m, result, basis->work2);
         if (rc != 0) return rc;
     } else if (basis->diag_coeff != NULL) {
         /* Fall back to diagonal B_0^{-1}: result = diag(1/d) * result.

@@ -4,7 +4,7 @@
 
 ---
 
-## STATUS: 22/35 Netlib pass. 42/42 unit tests. Kahan-stable pivot_update done.
+## STATUS: 22/35 Netlib pass. 42/42 unit tests. Hot-path malloc eliminated.
 
 ### Scorecard
 
@@ -15,6 +15,20 @@
 ---
 
 ## Work Completed This Session (2026-02-23)
+
+### convexfeld-7nyb: P1 Eliminate malloc/free from FTRAN/BTRAN/reduced_costs hot path — CLOSED
+
+Removed 5 per-iteration malloc/free sites (30K+ pairs over 10K iterations):
+
+**Changes:**
+- **cxf_basis.h**: Added `work2` field to BasisState (size m, FTRAN/BTRAN LU temp)
+- **basis_state.c**: Allocate/free/cleanup `work2` alongside `work`
+- **ftran.c**: `apply_lu_solve` takes `double *temp` param instead of malloc; caller passes `basis->work2`
+- **btran.c**: `apply_lu_btran` takes `double *temp` param instead of malloc; both call sites pass `basis->work2`
+- **reduced_costs.c**: Replaced `calloc(cB)` with `state->work_cB` (preallocated, same size). Removed `<stdlib.h>`.
+- **recompute.c**: `cxf_recompute_xB` uses `state->work_column` for rhs_adj and `state->work_cB` for xB. `cxf_ftran_residual` uses `state->work_cB` for Bx (memset to zero). Removed `<stdlib.h>`.
+
+Workspace safety analysis: `work_column` and `work_cB` are only used as scratch in step.c iteration body; recompute is called at refactorization boundaries where those buffers are re-extracted afterward.
 
 ### convexfeld-heyz: P0 Redesign cxf_pivot_update for Kahan-stable addition — CLOSED
 

@@ -14,7 +14,6 @@
 #include "convexfeld/cxf_solver.h"
 #include "convexfeld/cxf_basis.h"
 #include "convexfeld/cxf_types.h"
-#include <stdlib.h>
 #include <string.h>
 #include <math.h>
 
@@ -38,13 +37,13 @@ int cxf_recompute_xB(SolverState *state) {
     int total = n + m;
     BasisState *basis = state->basis;
 
-    double *rhs_adj = (double *)malloc((size_t)m * sizeof(double));
-    double *xB = (double *)malloc((size_t)m * sizeof(double));
-    if (!rhs_adj || !xB) {
-        free(rhs_adj);
-        free(xB);
-        return CXF_ERROR_OUT_OF_MEMORY;
-    }
+    /* Use preallocated workspace to avoid per-call malloc.
+     * work_column is safe: callers re-extract column after recompute.
+     * work_cB is safe: not used until later in iteration. */
+    double *rhs_adj = state->work_column;
+    double *xB = state->work_cB;
+    if (!rhs_adj || !xB)
+        return CXF_ERROR_NULL_ARGUMENT;
 
     /* Start with original RHS */
     memcpy(rhs_adj, state->work_rhs, (size_t)m * sizeof(double));
@@ -79,11 +78,8 @@ int cxf_recompute_xB(SolverState *state) {
 
     /* FTRAN: solve B * x_B = rhs_adj */
     int rc = cxf_ftran(basis, rhs_adj, xB);
-    if (rc != CXF_OK) {
-        free(rhs_adj);
-        free(xB);
+    if (rc != CXF_OK)
         return rc;
-    }
 
     /* Update basic variable values */
     for (int i = 0; i < m; i++) {
@@ -92,8 +88,6 @@ int cxf_recompute_xB(SolverState *state) {
             state->work_x[bv] = xB[i];
     }
 
-    free(rhs_adj);
-    free(xB);
     return CXF_OK;
 }
 
@@ -161,8 +155,10 @@ double cxf_ftran_residual(SolverState *state, const double *a,
     int n = state->num_vars;
     BasisState *basis = state->basis;
 
-    double *Bx = (double *)calloc((size_t)m, sizeof(double));
+    /* Use preallocated work_cB — safe because callers don't overlap */
+    double *Bx = state->work_cB;
     if (!Bx) return INFINITY;
+    memset(Bx, 0, (size_t)m * sizeof(double));
 
     /* Compute B * x = sum over basis columns k: col_k * x[k] */
     for (int k = 0; k < m; k++) {
@@ -189,6 +185,5 @@ double cxf_ftran_residual(SolverState *state, const double *a,
         if (ri > max_res) max_res = ri;
     }
 
-    free(Bx);
     return max_res;
 }

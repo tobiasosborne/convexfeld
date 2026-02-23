@@ -9,7 +9,6 @@
 #include "convexfeld/cxf_solver.h"
 #include "convexfeld/cxf_basis.h"
 #include "convexfeld/cxf_types.h"
-#include <stdlib.h>
 #include <math.h>
 
 extern int cxf_btran_vec(BasisState *basis, const double *input, double *result);
@@ -36,17 +35,13 @@ int cxf_compute_reduced_costs(SolverState *state) {
     int total_vars = n + m;
 
     /* Step 1: Compute dual prices pi = B^(-T) * c_B via BTRAN */
-    /* P0.5: propagate errors instead of silently substituting pi = c_B */
-    double *cB = (double *)calloc((size_t)m, sizeof(double));
-    if (cB == NULL) {
-        return CXF_ERROR_OUT_OF_MEMORY;
-    }
+    /* Uses preallocated work_cB to avoid per-iteration malloc */
+    double *cB = state->work_cB;
     for (int i = 0; i < m; i++) {
         int bv = basis->basic_vars[i];
         cB[i] = (bv >= 0 && bv < total_vars) ? state->work_obj[bv] : 0.0;
     }
     int rc = cxf_btran_vec(basis, cB, state->work_pi);
-    free(cB);
     if (rc != CXF_OK) {
         return rc;
     }

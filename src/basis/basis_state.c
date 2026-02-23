@@ -54,11 +54,13 @@ BasisState *cxf_basis_create(int m, int n) {
     if (m > 0) {
         basis->basic_vars = (int *)calloc((size_t)m, sizeof(int));
         basis->work = (double *)calloc((size_t)m, sizeof(double));
+        basis->work2 = (double *)calloc((size_t)m, sizeof(double));
         basis->diag_coeff = (double *)malloc((size_t)m * sizeof(double));
         if (basis->basic_vars == NULL || basis->work == NULL ||
-            basis->diag_coeff == NULL) {
+            basis->work2 == NULL || basis->diag_coeff == NULL) {
             free(basis->basic_vars);
             free(basis->work);
+            free(basis->work2);
             free(basis->diag_coeff);
             free(basis);
             return NULL;
@@ -75,6 +77,7 @@ BasisState *cxf_basis_create(int m, int n) {
         if (basis->var_status == NULL) {
             free(basis->basic_vars);
             free(basis->work);
+            free(basis->work2);
             free(basis->diag_coeff);
             free(basis);
             return NULL;
@@ -124,6 +127,7 @@ void cxf_basis_free(BasisState *basis) {
     free(basis->basic_vars);
     free(basis->var_status);
     free(basis->work);
+    free(basis->work2);
     free(basis->diag_coeff);
     free(basis);
 }

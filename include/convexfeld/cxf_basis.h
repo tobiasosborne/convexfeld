@@ -100,7 +100,8 @@ struct BasisState {
     int64_t fill_in_estimate; /**< Estimated LU fill-in for buffer sizing */
 
     /* Working storage */
-    double *work;             /**< Working array [m] */
+    double *work;             /**< Working array [m] (used as pivotCol) */
+    double *work2;            /**< Working array [m] (FTRAN/BTRAN LU temp) */
 
     /* Refactorization control */
     int refactor_freq;        /**< Refactorization frequency */
