@@ -100,10 +100,10 @@ int cxf_pricing_init(PricingState *ctx, int num_vars, int strategy) {
     int effective_strategy = strategy;
     if (strategy == STRATEGY_AUTO) {
         if (num_vars < SMALL_PROBLEM_THRESHOLD) {
-            /* Small problems: use full pricing (Dantzig) */
-            effective_strategy = STRATEGY_PARTIAL;  /* Actually uses full scan */
+            /* Small problems: steepest edge (full scan, best pivot quality) */
+            effective_strategy = STRATEGY_STEEPEST_EDGE;
         } else {
-            /* Large problems: use partial pricing */
+            /* Large problems: partial pricing (fast scans, good enough) */
             effective_strategy = STRATEGY_PARTIAL;
         }
     }
