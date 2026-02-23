@@ -4,7 +4,7 @@
 
 ---
 
-## STATUS: 22/35 Netlib pass. 40/40 unit tests. 8 bug fixes this session.
+## STATUS: 22/35 Netlib pass. 40/40 unit tests. 10 bug fixes this session.
 
 ### Scorecard
 
@@ -36,7 +36,15 @@
 - Realloc all 5 arrays into temps before committing to model fields
 - Check all 5 for NULL, then assign atomically — no more partial-growth inconsistency
 
-### Previous Issues Fixed (6)
+**convexfeld-vlja: P2 coef_stats.c int loop variable for int64_t nnz** — CLOSED
+- Changed `int k` to `int64_t k` in matrix coefficient scan loop
+
+**convexfeld-it1r: P2 Leaving variable always set AT_LOWER in pivot_with_eta** — CLOSED
+- Added `leavingStatus` parameter to `cxf_pivot_with_eta`
+- Callers now pass correct bound status instead of function hardcoding -1
+- Updated step.c (2 callsites) and test_pivot_eta.c (28 callsites)
+
+### Previous Issues Fixed (8)
 
 **convexfeld-3lpg: P0 ODR violations — 3 functions defined in both stub and real files** — CLOSED
 - Deleted 5 stub files: validation_stub.c, solve_lp_stub.c, error_stub.c, callback_stub.c, threading_stub.c

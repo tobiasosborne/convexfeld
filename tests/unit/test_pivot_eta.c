@@ -15,7 +15,7 @@
 BasisState *cxf_basis_create(int m, int n);
 void cxf_basis_free(BasisState *basis);
 int cxf_pivot_with_eta(BasisState *basis, int pivotRow, const double *pivotCol,
-                       int enteringVar, int leavingVar);
+                       int enteringVar, int leavingVar, int leavingStatus);
 void cxf_eta_free(EtaVector *eta);
 
 /*******************************************************************************
@@ -53,12 +53,12 @@ void tearDown(void) {
 
 void test_pivot_eta_null_basis_returns_error(void) {
     double pivotCol[] = {1.0, 0.5, 0.2};
-    int result = cxf_pivot_with_eta(NULL, 0, pivotCol, 0, 3);
+    int result = cxf_pivot_with_eta(NULL, 0, pivotCol, 0, 3, CXF_VAR_AT_LOWER);
     TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT, result);
 }
 
 void test_pivot_eta_null_column_returns_error(void) {
-    int result = cxf_pivot_with_eta(test_basis, 0, NULL, 0, 3);
+    int result = cxf_pivot_with_eta(test_basis, 0, NULL, 0, 3, CXF_VAR_AT_LOWER);
     TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT, result);
 }
 
@@ -68,19 +68,19 @@ void test_pivot_eta_null_column_returns_error(void) {
 
 void test_pivot_eta_negative_row_returns_error(void) {
     double pivotCol[] = {1.0, 0.5, 0.2};
-    int result = cxf_pivot_with_eta(test_basis, -1, pivotCol, 0, 3);
+    int result = cxf_pivot_with_eta(test_basis, -1, pivotCol, 0, 3, CXF_VAR_AT_LOWER);
     TEST_ASSERT_EQUAL_INT(CXF_ERROR_INVALID_ARGUMENT, result);
 }
 
 void test_pivot_eta_row_too_large_returns_error(void) {
     double pivotCol[] = {1.0, 0.5, 0.2};
-    int result = cxf_pivot_with_eta(test_basis, 3, pivotCol, 0, 3);
+    int result = cxf_pivot_with_eta(test_basis, 3, pivotCol, 0, 3, CXF_VAR_AT_LOWER);
     TEST_ASSERT_EQUAL_INT(CXF_ERROR_INVALID_ARGUMENT, result);
 }
 
 void test_pivot_eta_row_equals_m_returns_error(void) {
     double pivotCol[] = {1.0, 0.5, 0.2};
-    int result = cxf_pivot_with_eta(test_basis, test_basis->m, pivotCol, 0, 3);
+    int result = cxf_pivot_with_eta(test_basis, test_basis->m, pivotCol, 0, 3, CXF_VAR_AT_LOWER);
     TEST_ASSERT_EQUAL_INT(CXF_ERROR_INVALID_ARGUMENT, result);
 }
 
@@ -90,25 +90,25 @@ void test_pivot_eta_row_equals_m_returns_error(void) {
 
 void test_pivot_eta_zero_pivot_returns_minus_one(void) {
     double pivotCol[] = {0.0, 0.5, 0.2};  /* Pivot element is 0 */
-    int result = cxf_pivot_with_eta(test_basis, 0, pivotCol, 0, 3);
+    int result = cxf_pivot_with_eta(test_basis, 0, pivotCol, 0, 3, CXF_VAR_AT_LOWER);
     TEST_ASSERT_EQUAL_INT(-1, result);
 }
 
 void test_pivot_eta_tiny_pivot_returns_minus_one(void) {
     double pivotCol[] = {1e-15, 0.5, 0.2};  /* Below CXF_PIVOT_TOL */
-    int result = cxf_pivot_with_eta(test_basis, 0, pivotCol, 0, 3);
+    int result = cxf_pivot_with_eta(test_basis, 0, pivotCol, 0, 3, CXF_VAR_AT_LOWER);
     TEST_ASSERT_EQUAL_INT(-1, result);
 }
 
 void test_pivot_eta_pivot_at_tolerance_returns_minus_one(void) {
     double pivotCol[] = {CXF_PIVOT_TOL * 0.5, 0.5, 0.2};  /* Just below tolerance */
-    int result = cxf_pivot_with_eta(test_basis, 0, pivotCol, 0, 3);
+    int result = cxf_pivot_with_eta(test_basis, 0, pivotCol, 0, 3, CXF_VAR_AT_LOWER);
     TEST_ASSERT_EQUAL_INT(-1, result);
 }
 
 void test_pivot_eta_negative_large_pivot_succeeds(void) {
     double pivotCol[] = {-1.0, 0.5, 0.2};  /* Large negative pivot */
-    int result = cxf_pivot_with_eta(test_basis, 0, pivotCol, 0, 3);
+    int result = cxf_pivot_with_eta(test_basis, 0, pivotCol, 0, 3, CXF_VAR_AT_LOWER);
     TEST_ASSERT_EQUAL_INT(CXF_OK, result);
 }
 
@@ -118,7 +118,7 @@ void test_pivot_eta_negative_large_pivot_succeeds(void) {
 
 void test_pivot_eta_basic_pivot_succeeds(void) {
     double pivotCol[] = {2.0, 0.5, 0.25};
-    int result = cxf_pivot_with_eta(test_basis, 0, pivotCol, 0, 3);
+    int result = cxf_pivot_with_eta(test_basis, 0, pivotCol, 0, 3, CXF_VAR_AT_LOWER);
     TEST_ASSERT_EQUAL_INT(CXF_OK, result);
 }
 
@@ -127,7 +127,7 @@ void test_pivot_eta_updates_basic_vars(void) {
     int enteringVar = 0;
     int leavingVar = 3;  /* Was basic in row 0 */
 
-    cxf_pivot_with_eta(test_basis, 0, pivotCol, enteringVar, leavingVar);
+    cxf_pivot_with_eta(test_basis, 0, pivotCol, enteringVar, leavingVar, CXF_VAR_AT_LOWER);
 
     TEST_ASSERT_EQUAL_INT(enteringVar, test_basis->basic_vars[0]);
     /* Other basic vars unchanged */
@@ -140,7 +140,7 @@ void test_pivot_eta_updates_var_status(void) {
     int enteringVar = 0;
     int leavingVar = 3;
 
-    cxf_pivot_with_eta(test_basis, 0, pivotCol, enteringVar, leavingVar);
+    cxf_pivot_with_eta(test_basis, 0, pivotCol, enteringVar, leavingVar, CXF_VAR_AT_LOWER);
 
     TEST_ASSERT_EQUAL_INT(0, test_basis->var_status[enteringVar]);  /* Basic in row 0 */
     TEST_ASSERT_EQUAL_INT(-1, test_basis->var_status[leavingVar]);  /* Nonbasic lower */
@@ -150,7 +150,7 @@ void test_pivot_eta_increments_eta_count(void) {
     double pivotCol[] = {2.0, 0.5, 0.25};
     int initial_count = test_basis->eta_count;
 
-    cxf_pivot_with_eta(test_basis, 0, pivotCol, 0, 3);
+    cxf_pivot_with_eta(test_basis, 0, pivotCol, 0, 3, CXF_VAR_AT_LOWER);
 
     TEST_ASSERT_EQUAL_INT(initial_count + 1, test_basis->eta_count);
 }
@@ -159,7 +159,7 @@ void test_pivot_eta_increments_pivots_since_refactor(void) {
     double pivotCol[] = {2.0, 0.5, 0.25};
     int initial_pivots = test_basis->pivots_since_refactor;
 
-    cxf_pivot_with_eta(test_basis, 0, pivotCol, 0, 3);
+    cxf_pivot_with_eta(test_basis, 0, pivotCol, 0, 3, CXF_VAR_AT_LOWER);
 
     TEST_ASSERT_EQUAL_INT(initial_pivots + 1, test_basis->pivots_since_refactor);
 }
@@ -168,21 +168,21 @@ void test_pivot_eta_creates_eta_head(void) {
     double pivotCol[] = {2.0, 0.5, 0.25};
     TEST_ASSERT_NULL(test_basis->eta_head);
 
-    cxf_pivot_with_eta(test_basis, 0, pivotCol, 0, 3);
+    cxf_pivot_with_eta(test_basis, 0, pivotCol, 0, 3, CXF_VAR_AT_LOWER);
 
     TEST_ASSERT_NOT_NULL(test_basis->eta_head);
 }
 
 void test_pivot_eta_sets_eta_type_to_2(void) {
     double pivotCol[] = {2.0, 0.5, 0.25};
-    cxf_pivot_with_eta(test_basis, 0, pivotCol, 0, 3);
+    cxf_pivot_with_eta(test_basis, 0, pivotCol, 0, 3, CXF_VAR_AT_LOWER);
 
     TEST_ASSERT_EQUAL_INT(2, test_basis->eta_head->type);
 }
 
 void test_pivot_eta_sets_eta_pivot_row(void) {
     double pivotCol[] = {2.0, 0.5, 0.25};
-    cxf_pivot_with_eta(test_basis, 1, pivotCol, 0, 4);
+    cxf_pivot_with_eta(test_basis, 1, pivotCol, 0, 4, CXF_VAR_AT_LOWER);
 
     TEST_ASSERT_EQUAL_INT(1, test_basis->eta_head->pivot_row);
 }
@@ -190,14 +190,14 @@ void test_pivot_eta_sets_eta_pivot_row(void) {
 void test_pivot_eta_sets_eta_pivot_var(void) {
     double pivotCol[] = {2.0, 0.5, 0.25};
     int enteringVar = 2;
-    cxf_pivot_with_eta(test_basis, 0, pivotCol, enteringVar, 3);
+    cxf_pivot_with_eta(test_basis, 0, pivotCol, enteringVar, 3, CXF_VAR_AT_LOWER);
 
     TEST_ASSERT_EQUAL_INT(enteringVar, test_basis->eta_head->pivot_var);
 }
 
 void test_pivot_eta_sets_eta_multiplier(void) {
     double pivotCol[] = {2.0, 0.5, 0.25};
-    cxf_pivot_with_eta(test_basis, 0, pivotCol, 0, 3);
+    cxf_pivot_with_eta(test_basis, 0, pivotCol, 0, 3, CXF_VAR_AT_LOWER);
 
     /* pivot_elem = pivot value (raw) = 2.0 */
     TEST_ASSERT_DOUBLE_WITHIN(1e-12, 2.0, test_basis->eta_head->pivot_elem);
@@ -210,7 +210,7 @@ void test_pivot_eta_sets_eta_multiplier(void) {
 void test_pivot_eta_sparse_column_counts_nnz(void) {
     /* pivotCol[0] = 2.0 (pivot), pivotCol[1] = 0.5, pivotCol[2] near zero */
     double pivotCol[] = {2.0, 0.5, 1e-14};
-    cxf_pivot_with_eta(test_basis, 0, pivotCol, 0, 3);
+    cxf_pivot_with_eta(test_basis, 0, pivotCol, 0, 3, CXF_VAR_AT_LOWER);
 
     /* nnz = 1 (only row 1 is nonzero, excluding pivot row) */
     TEST_ASSERT_EQUAL_INT(1, test_basis->eta_head->nnz);
@@ -218,7 +218,7 @@ void test_pivot_eta_sparse_column_counts_nnz(void) {
 
 void test_pivot_eta_dense_column_counts_nnz(void) {
     double pivotCol[] = {2.0, 0.5, 0.25};
-    cxf_pivot_with_eta(test_basis, 0, pivotCol, 0, 3);
+    cxf_pivot_with_eta(test_basis, 0, pivotCol, 0, 3, CXF_VAR_AT_LOWER);
 
     /* nnz = 2 (rows 1 and 2 are nonzero, excluding pivot row 0) */
     TEST_ASSERT_EQUAL_INT(2, test_basis->eta_head->nnz);
@@ -226,7 +226,7 @@ void test_pivot_eta_dense_column_counts_nnz(void) {
 
 void test_pivot_eta_computes_eta_values(void) {
     double pivotCol[] = {2.0, 0.6, 0.4};
-    cxf_pivot_with_eta(test_basis, 0, pivotCol, 0, 3);
+    cxf_pivot_with_eta(test_basis, 0, pivotCol, 0, 3, CXF_VAR_AT_LOWER);
 
     /* Values are stored raw (unscaled, positive):
      * eta[1] = 0.6 (raw column value)
@@ -242,7 +242,7 @@ void test_pivot_eta_computes_eta_values(void) {
 void test_pivot_eta_identity_column_has_zero_nnz(void) {
     /* Only pivot element nonzero - identity column */
     double pivotCol[] = {1.0, 0.0, 0.0};
-    cxf_pivot_with_eta(test_basis, 0, pivotCol, 0, 3);
+    cxf_pivot_with_eta(test_basis, 0, pivotCol, 0, 3, CXF_VAR_AT_LOWER);
 
     TEST_ASSERT_EQUAL_INT(0, test_basis->eta_head->nnz);
     TEST_ASSERT_NULL(test_basis->eta_head->indices);
@@ -255,21 +255,21 @@ void test_pivot_eta_identity_column_has_zero_nnz(void) {
 
 void test_pivot_eta_first_row_pivot(void) {
     double pivotCol[] = {1.5, 0.3, 0.1};
-    int result = cxf_pivot_with_eta(test_basis, 0, pivotCol, 0, 3);
+    int result = cxf_pivot_with_eta(test_basis, 0, pivotCol, 0, 3, CXF_VAR_AT_LOWER);
     TEST_ASSERT_EQUAL_INT(CXF_OK, result);
     TEST_ASSERT_EQUAL_INT(0, test_basis->basic_vars[0]);
 }
 
 void test_pivot_eta_last_row_pivot(void) {
     double pivotCol[] = {0.1, 0.3, 1.5};
-    int result = cxf_pivot_with_eta(test_basis, 2, pivotCol, 0, 5);
+    int result = cxf_pivot_with_eta(test_basis, 2, pivotCol, 0, 5, CXF_VAR_AT_LOWER);
     TEST_ASSERT_EQUAL_INT(CXF_OK, result);
     TEST_ASSERT_EQUAL_INT(0, test_basis->basic_vars[2]);
 }
 
 void test_pivot_eta_middle_row_pivot(void) {
     double pivotCol[] = {0.1, 1.5, 0.3};
-    int result = cxf_pivot_with_eta(test_basis, 1, pivotCol, 0, 4);
+    int result = cxf_pivot_with_eta(test_basis, 1, pivotCol, 0, 4, CXF_VAR_AT_LOWER);
     TEST_ASSERT_EQUAL_INT(CXF_OK, result);
     TEST_ASSERT_EQUAL_INT(0, test_basis->basic_vars[1]);
 }
@@ -282,8 +282,8 @@ void test_pivot_eta_multiple_pivots_chain_etas(void) {
     double pivotCol1[] = {2.0, 0.5, 0.25};
     double pivotCol2[] = {0.1, 1.5, 0.3};
 
-    cxf_pivot_with_eta(test_basis, 0, pivotCol1, 0, 3);
-    cxf_pivot_with_eta(test_basis, 1, pivotCol2, 1, 4);
+    cxf_pivot_with_eta(test_basis, 0, pivotCol1, 0, 3, CXF_VAR_AT_LOWER);
+    cxf_pivot_with_eta(test_basis, 1, pivotCol2, 1, 4, CXF_VAR_AT_LOWER);
 
     TEST_ASSERT_EQUAL_INT(2, test_basis->eta_count);
     /* New eta is prepended to head */

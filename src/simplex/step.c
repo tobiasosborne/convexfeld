@@ -30,7 +30,7 @@
 /* External declarations */
 extern int cxf_pivot_with_eta(BasisState *basis, int pivotRow,
                               const double *pivotCol, int enteringVar,
-                              int leavingVar);
+                              int leavingVar, int leavingStatus);
 extern int cxf_pricing_candidates(PricingState *ctx, const double *rc,
                                   const int *vs, int nv, double tol,
                                   int *out, int max_out);
@@ -119,21 +119,20 @@ int cxf_apply_pivot(SolverState *state, int entering, int leavingRow,
     else
         state->work_x[entering] = state->work_x[entering] - stepSize;
 
-    /* Create eta vector and exchange basis */
-    int rc = cxf_pivot_with_eta(basis, leavingRow, pivotCol,
-                                entering, leaving);
-    state->eta_count = basis->eta_count;
-
-    /* Fix leaving variable at appropriate bound (P0.3) */
-    if (rc == CXF_OK && leaving >= 0 && leaving < total) {
+    /* Determine leaving variable's nonbasic status before pivot */
+    int leave_status = CXF_VAR_AT_LOWER;
+    if (leaving >= 0 && leaving < total) {
         double x = state->work_x[leaving];
-        double lb = state->work_lb[leaving];
-        double ub = state->work_ub[leaving];
-        basis->var_status[leaving] = CXF_VAR_AT_LOWER;
-        if (fabs(x - ub) < fabs(x - lb) && ub < CXF_INFINITY)
-            basis->var_status[leaving] = CXF_VAR_AT_UPPER;
+        if (fabs(x - state->work_ub[leaving]) <
+            fabs(x - state->work_lb[leaving]) &&
+            state->work_ub[leaving] < CXF_INFINITY)
+            leave_status = CXF_VAR_AT_UPPER;
     }
 
+    /* Create eta vector and exchange basis */
+    int rc = cxf_pivot_with_eta(basis, leavingRow, pivotCol,
+                                entering, leaving, leave_status);
+    state->eta_count = basis->eta_count;
     return rc;
 }
 
@@ -599,21 +598,21 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env) {
         else
             state->work_x[entering] = state->work_x[entering] - stepSize;
 
-        /* Basis exchange: eta + status update */
-        rc = cxf_pivot_with_eta(basis, leavingRow, pivotCol,
-                                entering, leaving);
-        if (rc != CXF_OK) return rc;
-        state->eta_count = basis->eta_count;
-
-        /* Fix leaving variable at appropriate bound (P0.3) */
+        /* Determine leaving variable's nonbasic status before pivot */
+        int lv_status = CXF_VAR_AT_LOWER;
         if (leaving >= 0 && leaving < total) {
             double x = state->work_x[leaving];
-            basis->var_status[leaving] = CXF_VAR_AT_LOWER;
             if (fabs(x - state->work_ub[leaving]) <
                 fabs(x - state->work_lb[leaving]) &&
                 state->work_ub[leaving] < CXF_INFINITY)
-                basis->var_status[leaving] = CXF_VAR_AT_UPPER;
+                lv_status = CXF_VAR_AT_UPPER;
         }
+
+        /* Basis exchange: eta + status update */
+        rc = cxf_pivot_with_eta(basis, leavingRow, pivotCol,
+                                entering, leaving, lv_status);
+        if (rc != CXF_OK) return rc;
+        state->eta_count = basis->eta_count;
     } else {
         /* Standard path (no flips) */
         rc = cxf_apply_pivot(state, entering, leavingRow,

@@ -38,11 +38,13 @@ extern void *cxf_eta_pool_alloc(EtaBuffer *pool, size_t size);
  * @param pivotCol Pivot column from FTRAN (B^(-1) * a_entering), length m.
  * @param enteringVar Index of entering variable.
  * @param leavingVar Index of leaving variable.
+ * @param leavingStatus Nonbasic status for leaving var (CXF_VAR_AT_LOWER or
+ *                      CXF_VAR_AT_UPPER). Caller determines from bound proximity.
  * @return CXF_OK on success, CXF_ERROR_OUT_OF_MEMORY on allocation failure,
  *         -1 if pivot element is too small (|pivot| < CXF_PIVOT_TOL).
  */
 int cxf_pivot_with_eta(BasisState *basis, int pivotRow, const double *pivotCol,
-                       int enteringVar, int leavingVar) {
+                       int enteringVar, int leavingVar, int leavingStatus) {
     /* Validate arguments */
     if (basis == NULL || pivotCol == NULL) {
         return CXF_ERROR_NULL_ARGUMENT;
@@ -136,7 +138,7 @@ int cxf_pivot_with_eta(BasisState *basis, int pivotRow, const double *pivotCol,
     /* Step 7: Update basis state arrays */
     basis->basic_vars[pivotRow] = enteringVar;
     basis->var_status[enteringVar] = pivotRow;     /* Basic in this row */
-    basis->var_status[leavingVar] = -1;            /* Nonbasic at lower bound */
+    basis->var_status[leavingVar] = leavingStatus;
     basis->pivots_since_refactor++;
 
     return CXF_OK;
