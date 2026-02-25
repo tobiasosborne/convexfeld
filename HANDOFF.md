@@ -4,7 +4,7 @@
 
 ---
 
-## STATUS: 24/35 Netlib pass. 46/46 unit tests. convexfeld-ic80 closed.
+## STATUS: 24/35 Netlib pass. 46/46 unit tests. convexfeld-4nrf closed.
 
 ### Scorecard
 
@@ -18,47 +18,31 @@
 
 ## Work Completed This Session (2026-02-25)
 
-### convexfeld-ic80: Phase I→II constraint cleanup — CLOSED
+### convexfeld-4nrf: Activity bounds RHS initialization — CLOSED
 
-Two bugs fixed in the Phase I→II transition per `two_phase_method.md` Transition Steps 3-4:
-
-#### Bug 1: Inactive constraint slack formula was wrong (post.c)
-
-`cxf_simplex_phase_end` computed constraint slack as `-max_activity`. Our activity bounds represent `sum a_j x_j` range **without RHS subtraction**, so `-max_activity` is NOT `rhs - max(a^T x)`. This made the constraint cleanup a complete no-op — no constraint was ever identified as inactive.
-
-**Fix:** Sense-aware slack computation using RHS:
-- `<=` constraints: `slack = rhs - max_activity`
-- `>=` constraints: `slack = min_activity - rhs`
-- `=` constraints: always active, skip
-
-Also removed `cols_eliminated++` from the cleanup path. This counter feeds stall detection thresholds in `post_iterate`. The old (broken) formula never incremented it, but the corrected formula flags many genuinely inactive constraints, which would have caused false stall detection and premature perturbation.
+Root cause fix for bound propagation: `cxf_compute_activity_bounds` (setup.c)
+initialized accumulators with `0` instead of `-rhs_i` per the spec. The
+step2/step3 implied bound formulas (`lb - min_act/a`, `ub - max_act/a`)
+were derived assuming activity represents `a^T x - b`, so they produced
+wrong implied bounds whenever `rhs != 0`.
 
 **Changes:**
-- **post.c:138-192**: Rewrote inactive constraint detection with sense-aware, RHS-relative slack computation
 
-#### Bug 2: Stale activity bounds at Phase I→II transition (phase_one.c)
+- **setup.c:36-63**: Initialize activity accumulators with `-rhs_i` instead
+  of `0`. Both `do_all` and selective paths now read `state->work_rhs`.
+  The final values represent `a^T x - b` (zero = constraint exactly satisfied).
 
-`cxf_transition_to_phase_two` didn't recompute activity bounds after unperturbation and bound restoration. Phase I perturbation (EXPAND widening) and bound propagation leave activity bounds stale. The first Phase II `phase_end` call would operate on inaccurate data.
+- **post.c:150-163**: Simplified phase_end slack formula. Since RHS is now
+  embedded in activity, slack is just `-max_activity` for `<=` and
+  `min_activity` for `>=`. No explicit `rhs` variable needed.
 
-**Fix:** Added `cxf_compute_activity_bounds(state, 0, NULL)` after the pricing reset in `cxf_transition_to_phase_two`.
+- **tests/unit/test_phase_end.c**: Updated all test data to use RHS-inclusive
+  activity values (e.g., `max_act = -90` instead of `10` for a constraint with
+  `rhs=100, max(a^T x)=10`).
 
-**Changes:**
-- **phase_one.c:278-287**: Fresh activity bound recomputation at transition
+### convexfeld-ic80: Phase I→II constraint cleanup — CLOSED (earlier)
 
-#### Tests: 13 new tests in test_phase_end.c
-
-- `<=` inactive (large slack), active (tight), active (near-tight)
-- `>=` inactive (large slack), active (tight)
-- Equality never inactive
-- Infinite activity skipped
-- Basic slack constraint skipped
-- Mixed senses — only truly inactive flagged
-- Free variable dual infeasibility detection
-- Null argument handling
-
-**Changes:**
-- **tests/unit/test_phase_end.c**: New file, 13 tests
-- **tests/CMakeLists.txt**: Registered new test target
+See git log for details.
 
 ---
 
@@ -71,18 +55,6 @@ Also removed `cols_eliminated++` from the cleanup path. This counter feeds stall
 | P2 | Sparse LU (M2) | new issue needed | Fixes timeouts + grow7/boeing1 |
 | P2 | V1 pricing weight update | convexfeld-l0ca | Pricing quality |
 | P2 | Stall detection (post_iterate) | convexfeld-5z94 | Convergence |
-
----
-
-## Known Issue: Activity Bounds Don't Include RHS
-
-**Discovery during this session:** `cxf_compute_activity_bounds` (setup.c) initializes activity accumulators to 0 and accumulates `a_j * bound_j` products. The spec says accumulators should initialize with `-rhs_i`. This means `min_activity`/`max_activity` represent the range of `a^T x`, NOT `a^T x - b`.
-
-The bound propagation formulas in step2/step3 use `impl_ub = lb - min_act/a`, which derives from assuming activity DOES include `-rhs`. This formula is correct only when `rhs = 0`.
-
-**Impact:** Bound propagation (step2/step3) produces slightly wrong implied bounds for constraints with nonzero RHS. This may contribute to numerical issues but hasn't been root-caused to specific failures yet.
-
-**Fix:** Either subtract RHS during activity initialization in `cxf_compute_activity_bounds`, or adjust the step2/step3 formulas to add `rhs/a`. Filed as separate investigation — don't mix with ic80.
 
 ---
 

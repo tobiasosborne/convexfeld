@@ -148,17 +148,18 @@ int cxf_simplex_phase_end(SolverState *state, CxfEnv *env, int doScan) {
             if (min_a <= -CXF_INFINITY || max_a >= CXF_INFINITY) continue;
 
             char sense = (state->work_sense) ? state->work_sense[i] : '<';
-            double rhs = (state->work_rhs) ? state->work_rhs[i] : 0.0;
             double slack;
 
-            /* Compute slack from activity bounds and RHS:
-             *   <= : slack = rhs - max(a^T x). Positive when loose.
-             *   >= : slack = min(a^T x) - rhs. Positive when loose.
+            /* Activity bounds include -rhs (setup.c), so they represent
+             * a^T x - b. For feasibility: <= needs activity <= 0,
+             * >= needs activity >= 0.
+             *   <= : slack = -max_activity (positive when max < 0).
+             *   >= : slack =  min_activity (positive when min > 0).
              *   =  : always active, skip. */
             if (sense == '<' || sense == 'L')
-                slack = rhs - max_a;
+                slack = -max_a;
             else if (sense == '>' || sense == 'G')
-                slack = min_a - rhs;
+                slack = min_a;
             else
                 continue;  /* Equality constraints are always active */
 

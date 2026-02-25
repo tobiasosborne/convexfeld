@@ -1175,25 +1175,29 @@ passes at least 30/35 Netlib without it.
 
 ---
 
-### Inactive Constraint Slack Must Use RHS (2026-02-25)
+### Activity Bounds Must Include -RHS (2026-02-25)
 
-**Context:** `cxf_simplex_phase_end` constraint cleanup computed slack as
-`-max_activity`. Activity bounds don't include RHS (they're just `sum a_j x_j`
-range). This made `slack = -max(a^T x)`, which is almost always negative for
-non-trivial problems, so the constraint cleanup was a no-op.
+**Context:** `cxf_compute_activity_bounds` (setup.c) initialized accumulators
+to `0` and accumulated `a_j * bound_j` products. The spec says initialize with
+`-rhs_i` so the final values represent `a^T x - b` (surplus/deficit relative
+to RHS). Zero = exactly satisfied.
 
-**Fix:** Use `rhs - max_activity` for `<=` constraints, `min_activity - rhs`
-for `>=` constraints. Skip `=` constraints (always active). Also removed
-`cols_eliminated++` from the cleanup path — constraint identification is not
-column elimination and was corrupting stall detection thresholds.
+**Impact:** The step2/step3 implied bound formulas (`lb - min_act/a`,
+`ub - max_act/a`) were derived assuming activity includes `-rhs`. Without it,
+they produced wrong implied bounds whenever `rhs != 0`. The step3 infeasibility
+check (`min_act > tol` for `<=`) was also only correct with RHS included.
 
-**Also:** Added `cxf_compute_activity_bounds(state, 0, NULL)` to
-`cxf_transition_to_phase_two`. Phase I perturbation and bound propagation
-leave activity bounds stale; fresh computation at transition ensures the
-first Phase II phase_end call operates on accurate data.
+**Fix (two sessions):**
+1. First session: Added explicit `rhs` to phase_end slack computation
+   (`slack = rhs - max_activity` for `<=`). Worked around the root cause.
+2. Second session: Fixed the root cause — initialize accumulators with `-rhs_i`.
+   This made step2/step3 formulas correct, step3 infeasibility checks correct,
+   and simplified phase_end back to `slack = -max_activity` (RHS now embedded).
 
-**Lesson:** When functions compute derived quantities (like slack), verify
-the formula accounts for ALL inputs. The activity bounds were relative to
-the origin, not relative to the RHS. A formula like `slack = -max_a` only
-works if RHS is already embedded in the activity bounds (which it wasn't).
+Also removed `cols_eliminated++` from constraint cleanup (feeds stall detection).
+Also added fresh `cxf_compute_activity_bounds` at Phase I→II transition.
+
+**Lesson:** When a derived quantity has a systematic offset (like RHS), encode
+it at initialization time rather than patching every consumer. The Savelsbergh
+(1994) formulas assume `activity = a^T x - b` — match that convention.
 
