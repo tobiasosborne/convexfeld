@@ -24,13 +24,8 @@
  * @brief Compute per-constraint activity bounds (v2 P3.21).
  *
  * For each constraint i, compute:
- *   min_activity[i] = -rhs_i + sum over j of min(a_ij*lb_j, a_ij*ub_j)
- *   max_activity[i] = -rhs_i + sum over j of max(a_ij*lb_j, a_ij*ub_j)
- *
- * Per simplex_phases.md Step 1: "accumulators are initialized using the
- * negated constraint bound." Final values represent surplus/deficit relative
- * to RHS — zero means the constraint is exactly satisfied.
- *
+ *   min_activity[i] = sum over j of min(a_ij*lb_j, a_ij*ub_j)
+ *   max_activity[i] = sum over j of max(a_ij*lb_j, a_ij*ub_j)
  * Handles infinite bounds: any infinite contribution sets activity to +/-inf.
  * Applies rounding correction when min/max are very close.
  *
@@ -46,15 +41,11 @@ void cxf_compute_activity_bounds(SolverState *state, int count,
     int m = state->num_constrs;
     int n = state->num_vars;
 
-    /* Initialize accumulators with negated RHS (simplex_phases.md Step 1).
-     * This makes activity values represent a^T x - b, so zero = satisfied. */
+    /* Determine which constraints to compute */
     int do_all = (count == 0 || indices == NULL);
     if (do_all) {
-        for (int i = 0; i < m; i++) {
-            double rhs = (state->work_rhs) ? state->work_rhs[i] : 0.0;
-            state->min_activity[i] = -rhs;
-            state->max_activity[i] = -rhs;
-        }
+        memset(state->min_activity, 0, (size_t)m * sizeof(double));
+        memset(state->max_activity, 0, (size_t)m * sizeof(double));
         if (state->negUnbdCount)
             memset(state->negUnbdCount, 0, (size_t)m * sizeof(int));
         if (state->posUnbdCount)
@@ -63,9 +54,8 @@ void cxf_compute_activity_bounds(SolverState *state, int count,
         for (int k = 0; k < count; k++) {
             int i = indices[k];
             if (i >= 0 && i < m) {
-                double rhs = (state->work_rhs) ? state->work_rhs[i] : 0.0;
-                state->min_activity[i] = -rhs;
-                state->max_activity[i] = -rhs;
+                state->min_activity[i] = 0.0;
+                state->max_activity[i] = 0.0;
                 if (state->negUnbdCount) state->negUnbdCount[i] = 0;
                 if (state->posUnbdCount) state->posUnbdCount[i] = 0;
             }
