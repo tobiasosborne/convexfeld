@@ -433,8 +433,11 @@ void test_basis_diff_with_progress(void) {
     state.cols_eliminated = 3;
 
     double diff = cxf_basis_diff(&state);
-    /* (10 + 0 + 3) / 10 = 1.3 */
-    TEST_ASSERT_DOUBLE_WITHIN(1e-10, 1.3, diff);
+    /* Per-category normalization (audit H3):
+     * delta_iter/6 + delta_rows/5 + delta_cols/10 + delta_props/15
+     * = 10/6 + 0/5 + 3/10 + 0/15 ≈ 1.96667 */
+    double expected = 10.0/6.0 + 0.0/5.0 + 3.0/10.0 + 0.0/15.0;
+    TEST_ASSERT_DOUBLE_WITHIN(1e-6, expected, diff);
 }
 
 void test_basis_diff_null_returns_zero(void) {

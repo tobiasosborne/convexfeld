@@ -170,6 +170,7 @@ int cxf_solve_lp(CxfModel *model) {
 
     for (int round = 0; round < MAX_OUTER_ROUNDS && !terminated; round++) {
         cxf_progress_snapshot(state);
+        int inner_checks = 0;  /* convergence check count within this round */
 
         while (state->iteration < state->max_iterations) {
             /* P5.4: Bland's rule is last resort, after perturbation fails.
@@ -243,15 +244,21 @@ int cxf_solve_lp(CxfModel *model) {
                 model->status = CXF_INFEASIBLE; terminated = 1; break;
             }
 
-            /* (9) Basis diff — convergence detection */
+            /* (9) Basis diff — convergence detection (audit H3).
+             * 5-check dead zone: skip convergence testing for the first
+             * 5 evaluations to let the solver establish its working basis.
+             * After that, test per-category-normalized progress score. */
             if (state->iteration_mode == 1 &&
                 state->iteration > 0 &&
                 state->iteration % (state->num_constrs + 1) == 0) {
-                double progress = cxf_basis_diff(state);
-                double threshold = CONVERGENCE_BASE / (1.0 + round);
-                if (progress < threshold) {
-                    state->iteration_mode = 0;
-                    break;
+                inner_checks++;
+                if (inner_checks > 5) {
+                    double progress = cxf_basis_diff(state);
+                    double threshold = CONVERGENCE_BASE / (1.0 + round);
+                    if (progress < threshold) {
+                        state->iteration_mode = 0;
+                        break;
+                    }
                 }
                 state->iteration_mode = 0;
                 cxf_progress_snapshot(state);
@@ -284,10 +291,14 @@ int cxf_solve_lp(CxfModel *model) {
         cxf_simplex_postsolve(state, env);
     }
 
-    /* P6.3: Final accuracy pass at OPTIMAL (numerical_stability.md).
+    /* P6.3: Final accuracy pass (numerical_stability.md).
      * Force refactorization + from-scratch x_B and obj recomputation
-     * to eliminate all accumulated drift before reporting the answer. */
-    if (model->status == CXF_OPTIMAL) {
+     * to eliminate all accumulated drift before reporting the answer.
+     * Runs for OPTIMAL, ITERATION_LIMIT, and TIME_LIMIT — any status
+     * where a solution will be extracted needs accurate primal values. */
+    if (model->status == CXF_OPTIMAL ||
+        model->status == CXF_ITERATION_LIMIT ||
+        model->status == CXF_TIME_LIMIT) {
         extern int cxf_recompute_xB(SolverState *state);
         extern void cxf_recompute_objective(SolverState *state);
         cxf_solver_refactor(state, env);

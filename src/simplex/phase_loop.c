@@ -106,17 +106,16 @@ int cxf_check_phase_one_end(SolverState *state, CxfModel *model, CxfEnv *env) {
 
     /* Phase I near-feasibility: try tighter pricing tolerance.
      * Spec: two_phase_method.md line 142 — "solver may attempt
-     * additional iterations with tighter tolerances." */
+     * additional iterations with tighter tolerances."
+     * IMPORTANT: restore tolerance before returning — leaking the
+     * tighter value corrupts all subsequent Phase I/II pricing. */
     if (phase1_obj < 100.0 * tol) {
         double save_tol = env->optimality_tol;
         env->optimality_tol *= 0.01;
         cxf_compute_reduced_costs(state);
-        if (has_improving_direction(state, env)) {
-            /* Weak improving direction found — continue Phase I.
-             * Tighter tolerance stays active; restored in solve_lp.c. */
-            return 1;
-        }
-        env->optimality_tol = save_tol;
+        int found = has_improving_direction(state, env);
+        env->optimality_tol = save_tol;  /* always restore */
+        if (found) return 1;
     }
 
     /* No improving direction → truly infeasible */

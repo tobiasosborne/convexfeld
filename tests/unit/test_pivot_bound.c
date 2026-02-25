@@ -20,9 +20,9 @@ static CxfEnv test_env;
 static SolverState test_state;
 static BasisState test_basis;
 
-/* Working arrays (3 vars, 2 constraints) */
-static double work_lb[3], work_ub[3], work_obj[3], work_x[3];
-static int var_status[3];
+/* Working arrays (3 vars + 2 slacks = 5 total) */
+static double work_lb[5], work_ub[5], work_obj[5], work_x[5];
+static int var_status[5];
 static double min_act[2], max_act[2];
 static int neg_unbd[2], pos_unbd[2];
 
@@ -40,18 +40,22 @@ void setUp(void) {
     test_state.num_constrs = 2;
     test_state.basis = &test_basis;
 
-    test_basis.n = 3;
+    test_basis.n = 5;  /* total = num_vars + num_constrs */
     test_basis.var_status = var_status;
     test_basis.eta_pool = NULL;
     test_basis.eta_head = NULL;
     test_basis.eta_count = 0;
 
-    /* Default bounds: var0=[0,10], var1=[1,5], var2=[-2,8] */
+    /* Default bounds: var0=[0,10], var1=[1,5], var2=[-2,8]
+     * Slacks: var3=[0,inf], var4=[0,inf] */
     work_lb[0] = 0.0;  work_ub[0] = 10.0;
     work_lb[1] = 1.0;  work_ub[1] = 5.0;
     work_lb[2] = -2.0; work_ub[2] = 8.0;
+    work_lb[3] = 0.0;  work_ub[3] = CXF_INFINITY;
+    work_lb[4] = 0.0;  work_ub[4] = CXF_INFINITY;
 
     work_obj[0] = 3.0; work_obj[1] = -2.0; work_obj[2] = 1.5;
+    work_obj[3] = 0.0; work_obj[4] = 0.0;
     test_state.obj_value = 0.0;
     test_state.work_lb = work_lb;
     test_state.work_ub = work_ub;
@@ -61,6 +65,8 @@ void setUp(void) {
     var_status[0] = CXF_VAR_AT_LOWER;
     var_status[1] = CXF_VAR_AT_UPPER;
     var_status[2] = CXF_VAR_AT_LOWER;
+    var_status[3] = CXF_VAR_AT_LOWER;  /* slack 0 */
+    var_status[4] = CXF_VAR_AT_LOWER;  /* slack 1 */
 
     /* Activity arrays */
     min_act[0] = 10.0; min_act[1] = 20.0;
@@ -111,8 +117,16 @@ void test_invalid_var_negative(void) {
 }
 
 void test_invalid_var_too_large(void) {
-    int rc = cxf_pivot_bound(&test_env, &test_state, 3, 5.0, 10.0, 0);
+    /* var=5 exceeds num_vars(3) + num_constrs(2) = 5 total */
+    int rc = cxf_pivot_bound(&test_env, &test_state, 5, 5.0, 10.0, 0);
     TEST_ASSERT_EQUAL_INT(CXF_ERROR_INVALID_ARGUMENT, rc);
+}
+
+void test_slack_var_accepted(void) {
+    /* var=3 is first slack (num_vars=3), should be accepted */
+    work_obj[0] = 0.0; /* reuse array — extend if needed */
+    int rc = cxf_pivot_bound(&test_env, &test_state, 3, 2.0, 5.0, 0);
+    TEST_ASSERT_EQUAL_INT(CXF_OK, rc);
 }
 
 /*=== Objective update tests ===*/
@@ -207,6 +221,7 @@ int main(void) {
     RUN_TEST(test_null_state);
     RUN_TEST(test_invalid_var_negative);
     RUN_TEST(test_invalid_var_too_large);
+    RUN_TEST(test_slack_var_accepted);
     RUN_TEST(test_objective_update);
     RUN_TEST(test_bounds_set_to_fixed_value);
     RUN_TEST(test_status_set_to_fixed);

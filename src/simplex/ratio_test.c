@@ -58,6 +58,11 @@ int cxf_ratio_test(SolverState *state, CxfEnv *env, int enteringVar,
     /* P0.6: Use CXF_PIVOT_TOL (1e-9) for element skip, not 10*feasTol (1e-5).
      * Spec: tolerances_constants.md §3 — Harris pivot threshold ~1e-9 */
     relaxedTol = CXF_PIVOT_TOL;
+    /* Harris band width: 10x feasibility tolerance (Maros 2003 §8.3).
+     * This is added to slack in Pass 1 to create the candidate band.
+     * A wider band admits more tie-breaking candidates in Pass 2,
+     * improving numerical stability via larger pivot selection. */
+    double harrisBand = 10.0 * feasTol;
 
     /* Entering direction: +1 if entering from lower bound (increases),
      * -1 if entering from upper bound (decreases).
@@ -78,7 +83,9 @@ int cxf_ratio_test(SolverState *state, CxfEnv *env, int enteringVar,
     minRow = -1;
 
     /*
-     * First pass: Find minimum ratio with relaxed tolerance.
+     * First pass: Find theta_max = min { (slack_i + harrisBand) / |d_i| }
+     * (harris_ratio_test.md Pass 1). The harrisBand term widens the
+     * candidate pool so Pass 2 can pick the largest pivot element.
      * Skip near-zero pivot elements to avoid numerical instability.
      */
     for (i = 0; i < state->num_constrs; i++) {
@@ -103,42 +110,36 @@ int cxf_ratio_test(SolverState *state, CxfEnv *env, int enteringVar,
         lb = state->work_lb[basicVar];
         ub = state->work_ub[basicVar];
 
-        /* Compute ratio using effective pivot direction s * d_i.
-         * When entering var moves by theta, basic var changes by -s*theta*d_i.
-         * Using sd_i = s * d_i:
-         * - If sd_i > 0: basic var decreases, hits lower bound
-         * - If sd_i < 0: basic var increases, hits upper bound
-         */
+        /* Compute RELAXED ratio: (slack + harrisBand) / |sd_i|.
+         * For sd_i > 0: add harrisBand to numerator.
+         * For sd_i < 0: subtract harrisBand from numerator
+         * (both produce ratio_strict + harrisBand / |sd_i|). */
         double sd_i = s * d_i;
-        ratio = infinity;  /* will take min of bound candidates */
+        ratio = infinity;
         if (sd_i > relaxedTol) {
-            /* Standard: variable decreasing → check lower bound */
             if (lb > -infinity) {
-                double r = (x_i - lb) / sd_i;
+                double r = (x_i - lb + harrisBand) / sd_i;
                 if (r >= -feasTol && r < ratio) ratio = r;
             }
-            /* Phase I: variable above ub, decreasing toward ub */
             if (ub < infinity && x_i > ub + feasTol) {
-                double r = (x_i - ub) / sd_i;
+                double r = (x_i - ub + harrisBand) / sd_i;
                 if (r >= -feasTol && r < ratio) ratio = r;
             }
         } else if (sd_i < -relaxedTol) {
-            /* Standard: variable increasing → check upper bound */
             if (ub < infinity) {
-                double r = (x_i - ub) / sd_i;
+                double r = (x_i - ub - harrisBand) / sd_i;
                 if (r >= -feasTol && r < ratio) ratio = r;
             }
-            /* Phase I: variable below lb, increasing toward lb */
             if (lb > -infinity && x_i < lb - feasTol) {
-                double r = (x_i - lb) / sd_i;
+                double r = (x_i - lb - harrisBand) / sd_i;
                 if (r >= -feasTol && r < ratio) ratio = r;
             }
         } else {
-            continue;  /* Effective coefficient too small */
+            continue;
         }
         if (ratio >= infinity) continue;
 
-        /* Update minimum if this ratio is smaller */
+        /* Update theta_max (minimum relaxed ratio) */
         if (ratio >= -feasTol && ratio < minRatio) {
             minRatio = ratio;
             minRow = i;
@@ -151,11 +152,15 @@ int cxf_ratio_test(SolverState *state, CxfEnv *env, int enteringVar,
     }
 
     /*
-     * Second pass: Among near-minimum ratios, select by:
+     * Second pass (harris_ratio_test.md Pass 2): Among candidates with
+     * STRICT ratio <= theta_max, select by:
      * - Bland's rule: smallest variable index (anti-cycling guarantee)
      * - Normal: largest pivot magnitude (numerical stability)
+     *
+     * theta_max from Pass 1 already includes the harrisBand, so no
+     * additional tolerance is added here.
      */
-    threshold = minRatio + feasTol;
+    threshold = minRatio;  /* theta_max from Pass 1 (relaxed) */
     maxPivot = fabs(pivotColumn[minRow]);
     finalRow = minRow;
     int bland_best_var = state->basis->basic_vars[minRow];
@@ -182,7 +187,7 @@ int cxf_ratio_test(SolverState *state, CxfEnv *env, int enteringVar,
         lb = state->work_lb[basicVar];
         ub = state->work_ub[basicVar];
 
-        /* Compute ratio (same Phase I bound-crossing logic as first pass) */
+        /* Compute STRICT ratio (no harrisBand — that's baked into threshold) */
         double sd_i2 = s * d_i;
         ratio = infinity;
         if (sd_i2 > relaxedTol) {
@@ -208,7 +213,7 @@ int cxf_ratio_test(SolverState *state, CxfEnv *env, int enteringVar,
         }
         if (ratio >= infinity) continue;
 
-        /* If ratio is within threshold, consider this pivot */
+        /* If strict ratio is within theta_max, consider this pivot */
         if (ratio <= threshold) {
             if (state->use_bland) {
                 /* Bland's leaving rule: smallest variable index breaks ties */

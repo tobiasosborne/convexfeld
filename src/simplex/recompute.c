@@ -88,6 +88,79 @@ int cxf_recompute_xB(SolverState *state) {
             state->work_x[bv] = xB[i];
     }
 
+    /* Iterative refinement (numerical_stability.md):
+     * Compute residual r = (b - N*x_N) - B*x_B, solve B*dx = r,
+     * then x_B += dx. One round typically recovers 2-4 digits.
+     * Only run when infeasibility exceeds tolerance. */
+    {
+        /* Check if refinement is needed: scan for worst infeasibility */
+        double worst = 0.0;
+        for (int i2 = 0; i2 < m; i2++) {
+            int bv2 = basis->basic_vars[i2];
+            if (bv2 < 0 || bv2 >= total) continue;
+            double x2 = state->work_x[bv2];
+            if (x2 < state->work_lb[bv2])
+                worst = fmax(worst, state->work_lb[bv2] - x2);
+            else if (x2 > state->work_ub[bv2])
+                worst = fmax(worst, x2 - state->work_ub[bv2]);
+        }
+
+        if (worst > 100.0 * CXF_FEASIBILITY_TOL) {
+            /* Recompute residual r = (b - N*x_N) - B*x_B.
+             * rhs_adj still holds (b - N*x_N) from above. But we
+             * overwrote it during the first FTRAN. Rebuild it. */
+            memcpy(rhs_adj, state->work_rhs, (size_t)m * sizeof(double));
+            for (int j2 = 0; j2 < total; j2++) {
+                if (basis->var_status[j2] >= 0) continue;
+                double xj2 = state->work_x[j2];
+                if (fabs(xj2) < CXF_ZERO_TOL) continue;
+                if (j2 < n && state->csc_col_ptr) {
+                    int64_t s2 = state->csc_col_ptr[j2];
+                    int64_t e2 = state->csc_col_ptr[j2 + 1];
+                    for (int64_t k2 = s2; k2 < e2; k2++)
+                        rhs_adj[state->csc_row_idx[k2]] -=
+                            state->csc_values[k2] * xj2;
+                } else if (j2 >= n && j2 < total) {
+                    int row2 = j2 - n;
+                    double c2 = basis->diag_coeff ?
+                        basis->diag_coeff[row2] : 1.0;
+                    rhs_adj[row2] -= c2 * xj2;
+                }
+            }
+
+            /* Subtract B*x_B to get residual */
+            for (int i2 = 0; i2 < m; i2++) {
+                int bv2 = basis->basic_vars[i2];
+                if (bv2 < 0 || bv2 >= total) continue;
+                double xb2 = state->work_x[bv2];
+                if (fabs(xb2) < CXF_ZERO_TOL) continue;
+                if (bv2 < n && state->csc_col_ptr) {
+                    int64_t s2 = state->csc_col_ptr[bv2];
+                    int64_t e2 = state->csc_col_ptr[bv2 + 1];
+                    for (int64_t k2 = s2; k2 < e2; k2++)
+                        rhs_adj[state->csc_row_idx[k2]] -=
+                            state->csc_values[k2] * xb2;
+                } else if (bv2 >= n && bv2 < total) {
+                    int row2 = bv2 - n;
+                    double c2 = basis->diag_coeff ?
+                        basis->diag_coeff[row2] : 1.0;
+                    rhs_adj[row2] -= c2 * xb2;
+                }
+            }
+
+            /* Solve B*dx = residual */
+            rc = cxf_ftran(basis, rhs_adj, xB);
+            if (rc == CXF_OK) {
+                /* Apply correction: x_B += dx */
+                for (int i2 = 0; i2 < m; i2++) {
+                    int bv2 = basis->basic_vars[i2];
+                    if (bv2 >= 0 && bv2 < total)
+                        state->work_x[bv2] += xB[i2];
+                }
+            }
+        }
+    }
+
     return CXF_OK;
 }
 

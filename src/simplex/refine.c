@@ -16,8 +16,10 @@
 #include "convexfeld/cxf_matrix.h"
 #include "convexfeld/cxf_types.h"
 #include <math.h>
+#include <stdlib.h>
 
 extern int cxf_pivot_primal(void *env, void *state, int var, double tol);
+extern void *cxf_eta_pool_alloc(EtaBuffer *pool, size_t size);
 
 /**
  * @brief Refine solution after simplex termination (v2 P3.21).
@@ -55,11 +57,41 @@ int cxf_simplex_refine(SolverState *state, CxfEnv *env) {
         double lb = state->work_lb[j];
         double ub = state->work_ub[j];
 
-        /* Snap to current status bound (fix floating-point drift) */
-        if (basis->var_status[j] == CXF_VAR_AT_LOWER && lb > -CXF_INFINITY)
-            state->work_x[j] = lb;
-        else if (basis->var_status[j] == CXF_VAR_AT_UPPER && ub < CXF_INFINITY)
-            state->work_x[j] = ub;
+        /* Snap to current status bound (fix floating-point drift).
+         * Create Variant 2 (variable-fixing) eta record per
+         * simplex_phases.md for future warm-start/crossover recovery. */
+        double snap_val = state->work_x[j];
+        int snapped = 0;
+        if (basis->var_status[j] == CXF_VAR_AT_LOWER && lb > -CXF_INFINITY) {
+            snap_val = lb; snapped = 1;
+        } else if (basis->var_status[j] == CXF_VAR_AT_UPPER &&
+                   ub < CXF_INFINITY) {
+            snap_val = ub; snapped = 1;
+        }
+        if (snapped && snap_val != state->work_x[j]) {
+            /* Create compact Variant 2 eta record */
+            EtaVector *eta;
+            if (basis->eta_pool != NULL)
+                eta = (EtaVector *)cxf_eta_pool_alloc(basis->eta_pool,
+                                                       sizeof(EtaVector));
+            else
+                eta = (EtaVector *)calloc(1, sizeof(EtaVector));
+            if (eta != NULL) {
+                eta->type = 3;  /* Variable-fixing */
+                eta->pivot_row = -1;
+                eta->pivot_var = j;
+                eta->pivot_elem = snap_val;
+                eta->obj_coeff = state->work_obj[j];
+                eta->status = basis->var_status[j];
+                eta->nnz = 0;
+                eta->indices = NULL;
+                eta->values = NULL;
+                eta->next = basis->eta_head;
+                basis->eta_head = eta;
+                basis->eta_count++;
+            }
+            state->work_x[j] = snap_val;
+        }
     }
 
     /*--- Pass 2: Basic variable recovery ---

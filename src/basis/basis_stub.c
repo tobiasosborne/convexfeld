@@ -61,17 +61,28 @@ void cxf_progress_snapshot(SolverState *state) {
  * @brief Compare current counters against last snapshot (v2 P3.16).
  *
  * Returns weighted progress score (0.0 = no progress, higher = more).
- * Dimension-scaled: score = (delta_iterations + delta_elims) / max(n,m,1).
+ * Per-category normalization: each delta divided by its own denominator
+ * so categories contribute proportionally regardless of problem size.
+ * NOT single-dimension-scaled (audit H3: that causes large problems
+ * to appear to converge faster, triggering premature inner loop exit).
  */
 double cxf_basis_diff(SolverState *state) {
     if (state == NULL) return 0.0;
     int delta_iter = state->iteration - state->progress_snapshot[0];
     int delta_rows = state->rows_eliminated - state->progress_snapshot[3];
     int delta_cols = state->cols_eliminated - state->progress_snapshot[4];
-    int dim = state->num_vars > state->num_constrs ?
-              state->num_vars : state->num_constrs;
-    if (dim < 1) dim = 1;
-    return (double)(delta_iter + delta_rows + delta_cols) / (double)dim;
+    int delta_props = state->bounds_propagated - state->progress_snapshot[5];
+    int m = state->num_constrs > 0 ? state->num_constrs : 1;
+    int n = state->num_vars > 0 ? state->num_vars : 1;
+    /* Each category normalized by its own dimension:
+     * - iterations / (m+1): ~1.0 per check interval
+     * - row/col eliminations / dimension: fraction eliminated
+     * - bound propagations / total vars: propagation activity */
+    double score = (double)delta_iter / (double)(m + 1);
+    score += (double)delta_rows / (double)m;
+    score += (double)delta_cols / (double)n;
+    score += (double)delta_props / (double)(n + m);
+    return score;
 }
 
 /*******************************************************************************

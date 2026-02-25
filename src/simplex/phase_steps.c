@@ -19,6 +19,8 @@ extern void cxf_pivot_update(SolverState *state, int col,
                              double oldLB, double newLB,
                              double oldUB, double newUB,
                              double infinityThreshold);
+extern void cxf_compute_activity_bounds(SolverState *state, int count,
+                                        const int *indices);
 
 /**
  * @brief Tighten one variable bound and propagate.
@@ -87,8 +89,57 @@ int cxf_simplex_step2(SolverState *state, CxfEnv *env) {
         double ub = state->work_ub[j];
         if (ub - lb < tol) continue;
 
-        /* Infeasibility check */
-        if (lb > ub + tol) return CXF_INFEASIBLE;
+        /* Two-stage infeasibility check (simplex_iteration.md).
+         * Stage 1: preliminary — bounds crossed. Stage 2: confirmation —
+         * recompute activity from scratch, restore bounds, re-derive.
+         * Prevents false infeasibility from drifted activity bounds. */
+        if (lb > ub + tol) {
+            /* Stage 2: recompute activity for rows touching this var */
+            int64_t cs2 = state->csc_col_ptr[j];
+            int64_t ce2 = state->csc_col_ptr[j + 1];
+            int rows2[64]; int nr2 = 0;
+            for (int64_t k2 = cs2; k2 < ce2 && nr2 < 64; k2++)
+                rows2[nr2++] = state->csc_row_idx[k2];
+            if (nr2 > 0)
+                cxf_compute_activity_bounds(state, nr2, rows2);
+
+            /* Restore bounds from saved originals and re-derive */
+            double safe_lb = state->saved_lb ? state->saved_lb[j] : lb;
+            double safe_ub = state->saved_ub ? state->saved_ub[j] : ub;
+            for (int64_t k2 = cs2; k2 < ce2; k2++) {
+                int r2 = state->csc_row_idx[k2];
+                double a2 = state->csc_values[k2];
+                if (fabs(a2) < CXF_PIVOT_TOL) continue;
+                double fmin = state->min_activity[r2];
+                double fmax = state->max_activity[r2];
+                if (fmin <= -CXF_INFINITY || fmax >= CXF_INFINITY) continue;
+                char s2 = state->work_sense ? state->work_sense[r2] : '<';
+                if (s2 == '<' || s2 == 'L' || s2 == '=' || s2 == 'E') {
+                    if (a2 > 0) {
+                        double iu = safe_lb - fmin / a2;
+                        if (iu < safe_ub) safe_ub = iu;
+                    } else {
+                        double il = safe_lb - fmax / a2;
+                        if (il > safe_lb) safe_lb = il;
+                    }
+                }
+                if (s2 == '>' || s2 == 'G' || s2 == '=' || s2 == 'E') {
+                    if (a2 > 0) {
+                        double il = safe_ub - fmax / a2;
+                        if (il > safe_lb) safe_lb = il;
+                    } else {
+                        double iu = safe_ub - fmin / a2;
+                        if (iu < safe_ub) safe_ub = iu;
+                    }
+                }
+            }
+            if (safe_lb > safe_ub + tol) return CXF_INFEASIBLE; /* Confirmed */
+            /* Confirmation failed: restore bounds and continue */
+            state->work_lb[j] = safe_lb;
+            state->work_ub[j] = safe_ub;
+            lb = safe_lb; ub = safe_ub;
+            if (ub - lb < tol) continue;
+        }
 
         /* Scan CSC column: for each constraint this variable appears in,
          * compute implied bound from constraint activity */
@@ -192,14 +243,39 @@ int cxf_simplex_step3(SolverState *state, CxfEnv *env) {
 
         char sense = (state->work_sense) ? state->work_sense[row] : '<';
 
-        /* Infeasibility check */
-        if ((sense == '<' || sense == 'L') && min_act > tol)
-            return CXF_INFEASIBLE;
-        if ((sense == '>' || sense == 'G') && max_act < -tol)
-            return CXF_INFEASIBLE;
-        if (sense == '=' || sense == 'E') {
-            if (min_act > tol || max_act < -tol)
-                return CXF_INFEASIBLE;
+        /* Two-stage infeasibility check (simplex_iteration.md).
+         * Stage 1: preliminary — activity bounds indicate violation.
+         * Stage 2: confirmation — recompute activity from scratch.
+         * Prevents false infeasibility from accumulated numerical noise
+         * in incrementally-maintained min/max activity. */
+        {
+            int stage1 = 0;
+            if ((sense == '<' || sense == 'L') && min_act > tol)
+                stage1 = 1;
+            if ((sense == '>' || sense == 'G') && max_act < -tol)
+                stage1 = 1;
+            if ((sense == '=' || sense == 'E') &&
+                (min_act > tol || max_act < -tol))
+                stage1 = 1;
+            if (stage1) {
+                /* Stage 2: recompute activity from scratch */
+                cxf_compute_activity_bounds(state, 1, &row);
+                double fresh_min = state->min_activity[row];
+                double fresh_max = state->max_activity[row];
+                int confirmed = 0;
+                if ((sense == '<' || sense == 'L') && fresh_min > tol)
+                    confirmed = 1;
+                if ((sense == '>' || sense == 'G') && fresh_max < -tol)
+                    confirmed = 1;
+                if ((sense == '=' || sense == 'E') &&
+                    (fresh_min > tol || fresh_max < -tol))
+                    confirmed = 1;
+                if (confirmed)
+                    return CXF_INFEASIBLE;
+                /* Confirmation failed — continue processing */
+                min_act = fresh_min;
+                max_act = fresh_max;
+            }
         }
 
         /* Scan CSR row for implied bounds */

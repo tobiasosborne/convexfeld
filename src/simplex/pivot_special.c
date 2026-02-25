@@ -48,9 +48,10 @@ int cxf_pivot_bound(void *env, void *state, int var, double new_value,
     BasisState *basis;
     double old_lb, old_ub;
 
-    /* Validate arguments */
+    /* Validate arguments — accept structural + slack variable indices */
     if (ctx == NULL || e == NULL) return CXF_ERROR_NULL_ARGUMENT;
-    if (var < 0 || var >= ctx->num_vars) return CXF_ERROR_INVALID_ARGUMENT;
+    if (var < 0 || var >= ctx->num_vars + ctx->num_constrs)
+        return CXF_ERROR_INVALID_ARGUMENT;
 
     basis = ctx->basis;
 
@@ -151,8 +152,8 @@ int cxf_pivot_special(void *env, void *state, int var, double lb_limit,
 
     n = ctx->num_vars;
 
-    /* Validate variable index */
-    if (var < 0 || var >= n) {
+    /* Validate variable index — accept structural + slack indices */
+    if (var < 0 || var >= n + ctx->num_constrs) {
         return CXF_ERROR_INVALID_ARGUMENT;
     }
 
@@ -174,10 +175,15 @@ int cxf_pivot_special(void *env, void *state, int var, double lb_limit,
         return CXF_OK;
     }
 
-    /* Step 4: Check for unboundedness */
+    /* Step 4: Check for unboundedness.
+     * Phase I suppression (spec pivot_operations.md line 247):
+     * "A special mode flag on the solver state can disable unboundedness
+     * detection; this is used during Phase I of two-phase simplex, where
+     * unboundedness of the auxiliary problem does not imply unboundedness
+     * of the original problem." */
     if (can_increase) {
-        /* Can improve by increasing - check if unbounded */
         if (ub >= ub_limit) {
+            if (ctx->phase == 1) return CXF_OK;  /* suppress in Phase I */
             return CXF_UNBOUNDED;
         }
         /* Bounded - move to upper bound */
@@ -185,8 +191,8 @@ int cxf_pivot_special(void *env, void *state, int var, double lb_limit,
     }
 
     if (can_decrease) {
-        /* Can improve by decreasing - check if unbounded */
         if (lb <= -lb_limit) {
+            if (ctx->phase == 1) return CXF_OK;  /* suppress in Phase I */
             return CXF_UNBOUNDED;
         }
         /* Bounded - move to lower bound */

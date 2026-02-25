@@ -167,6 +167,10 @@ target_compile_definitions(test_mps_parser PRIVATE SOURCE_DIR="${CMAKE_SOURCE_DI
 add_cxf_test(test_pivot_bound unit/test_pivot_bound.c)
 target_link_libraries(test_pivot_bound PRIVATE m)
 
+# Pivot special (Phase I unboundedness suppression) tests
+add_cxf_test(test_pivot_special unit/test_pivot_special.c)
+target_link_libraries(test_pivot_special PRIVATE m)
+
 # Pivot update (cancellation-safe activity bound update) tests
 add_cxf_test(test_pivot_update unit/test_pivot_update.c)
 target_link_libraries(test_pivot_update PRIVATE m)

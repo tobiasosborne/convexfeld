@@ -1,91 +1,102 @@
 # Agent Handoff
 
-*Last updated: 2026-02-23*
+*Last updated: 2026-02-25*
 
 ---
 
-## STATUS: 22/35 Netlib pass (not re-run). 43/43 unit tests. Hot-path malloc eliminated.
+## STATUS: 24/35 Netlib pass. 44/44 unit tests. Audit items C1-C4, H1-H3 complete.
 
 ### Scorecard
 
-**PASS (22):** afiro, sc50b, sc105, share2b, israel, adlittle, blend, lotfi, beaconfd, stocfor1, ship04l, scfxm1, standata, standgub, standmps, scagr7, sctap1, brandy, scorpion, kb2, stair, e226
+**PASS (24):** afiro, sc50b, sc105, share2b, israel, adlittle, blend, lotfi, beaconfd, stocfor1, ship04l, scfxm1, standata, standgub, standmps, scagr7, sctap1, brandy, scorpion, kb2, stair, e226, **recipe**, **scagr25**
 
-**FAIL (13):** etamacro (0.016%), recipe (0.02%), boeing2 (0.09%), scagr25 (2.2%), bore3d (7.5%), finnis (7.3%), capri (10%), grow7 (12.5%), boeing1 (18%), vtp.base (20%), forplan (43%), scsd1 (TIMEOUT), bandm (TIMEOUT), tuff (TIMEOUT)
+**FAIL (11):** etamacro (0.016%), boeing2 (2.4%), bore3d (7.5%), finnis (7.1%), capri (10%), grow7 (12.5%), boeing1 (18%), vtp.base (20%), forplan (43%), scsd1 (TIMEOUT), bandm (TIMEOUT), tuff (TIMEOUT)
 
 ### DO NOT run Netlib suite in CI/agent sessions — it is slow. Run manually if needed.
 
 ---
 
-## Work Completed This Session (2026-02-23)
+## Work Completed This Session (2026-02-25)
 
-### convexfeld-66he: P2 Free variable entering sign always +1 — CLOSED
+### 7 issues closed, 2 new Netlib PASS (recipe, scagr25)
 
-Fixed correctness bug: free/superbasic variables always got `s=+1` entering direction regardless of reduced cost sign. For `dj > 0`, the variable should decrease (`s=-1`).
+#### convexfeld-xd5l: C4 Phase I unboundedness suppression — CLOSED
 
-**Changes:**
-- **ratio_test.c:65-72**: Added `CXF_VAR_SUPERBASIC` case — sets `s=-1` when `work_dj[enteringVar] > 0`
-- **step.c:448-452**: Same fix for `entering_sign` computation
-- **test_ratio_test.c**: 8 new unit tests (null args, at-lower, at-upper, free with negative dj, free with positive dj, direction-affects-leaving, unbounded)
-- 43/43 tests pass
-
-### convexfeld-7nyb: P1 Eliminate malloc/free from FTRAN/BTRAN/reduced_costs hot path — CLOSED
-
-Removed 5 per-iteration malloc/free sites (30K+ pairs over 10K iterations):
+Spec pivot_operations.md line 247: Phase I unboundedness doesn't imply original problem unbounded.
 
 **Changes:**
-- **cxf_basis.h**: Added `work2` field to BasisState (size m, FTRAN/BTRAN LU temp)
-- **basis_state.c**: Allocate/free/cleanup `work2` alongside `work`
-- **ftran.c**: `apply_lu_solve` takes `double *temp` param instead of malloc; caller passes `basis->work2`
-- **btran.c**: `apply_lu_btran` takes `double *temp` param instead of malloc; both call sites pass `basis->work2`
-- **reduced_costs.c**: Replaced `calloc(cB)` with `state->work_cB` (preallocated, same size). Removed `<stdlib.h>`.
-- **recompute.c**: `cxf_recompute_xB` uses `state->work_column` for rhs_adj and `state->work_cB` for xB. `cxf_ftran_residual` uses `state->work_cB` for Bx (memset to zero). Removed `<stdlib.h>`.
+- **step.c:531**: When ratio test returns UNBOUNDED during Phase I, suppress: refactorize + recompute + continue instead of terminating
+- **pivot_special.c:180,190**: Added `if (ctx->phase == 1) return CXF_OK` before both `CXF_UNBOUNDED` returns (future-proofing, currently dead code)
+- **test_pivot_special.c**: New file, 10 tests
+- **tests/CMakeLists.txt**: Registered new test target
 
-Workspace safety analysis: `work_column` and `work_cB` are only used as scratch in step.c iteration body; recompute is called at refactorization boundaries where those buffers are re-extracted afterward.
+#### convexfeld-70c0: H2 Two-stage infeasibility confirmation — CLOSED
 
-### convexfeld-heyz: P0 Redesign cxf_pivot_update for Kahan-stable addition — CLOSED
-
-Rewrote `cxf_pivot_update` from delta-only API to full spec-compliant signature:
-`(state, col, oldLB, newLB, oldUB, newUB, infinityThreshold)`
+step2/step3 returned CXF_INFEASIBLE immediately. Now recompute activity from scratch before confirming.
 
 **Changes:**
-- **pivot_update.c**: Full rewrite with:
-  - Case dispatch (LB only, UB only, both, neither)
-  - Cancellation detection: `(result - delta) != existing` triggers conservative rounding
-  - Conservative rounding: min_activity * (1+1e-12), max_activity * (1-1e-12)
-  - Infinity threshold transitions (finite↔infinite) with unbounded count tracking
-  - `safe_add()` and `apply_transition()` static helpers
-- **cxf_solver.h**: Added `negUnbdCount` and `posUnbdCount` int arrays to SolverState
-- **context.c**: Allocate/free negUnbdCount and posUnbdCount
-- **state_cleanup.c**: Free negUnbdCount and posUnbdCount
-- **setup.c**: Initialize unbounded counts during `cxf_compute_activity_bounds()`
-  - Counts infinite contributions instead of setting activity to +/-inf directly
-- **phase_steps.c**: Updated `tighten_bound()` caller to new signature
-  - Captures old LB/UB before mutation, passes both old and new values
-- **pivot_special.c**: Phase 6 of `cxf_pivot_bound` now calls `cxf_pivot_update`
-  instead of inline += math
-- **test_pivot_update.c**: 13 new direct tests (finite delta, infinity transitions,
-  cancellation detection, null safety)
-- **test_pivot_bound.c**: Added negUnbdCount/posUnbdCount to test fixtures
-- 42/42 tests pass
+- **phase_steps.c step2**: When lb > ub, recomputes activity for affected rows, restores bounds from saved_lb/saved_ub, re-derives implied bounds, only returns INFEASIBLE if confirmed
+- **phase_steps.c step3**: When activity indicates violation, recomputes via `cxf_compute_activity_bounds(state, 1, &row)`, only returns INFEASIBLE if confirmed
+- Filed convexfeld-rlll for phase_steps.c refactor (331 LOC)
 
-### Previous Issues Fixed (same day, earlier sessions)
+#### convexfeld-ifo2: H1 Harris ratio test band formula — CLOSED (+2 PASS)
 
-**convexfeld-7rvr: P0 Implement 4-function error model + fix error/status codes** — CLOSED
-**convexfeld-h8xm: P0 Implement full cxf_pivot_bound** — CLOSED
-**convexfeld-aal4: P1 CXF_ENV_MAGIC == CXF_MODEL_MAGIC defeats type safety** — CLOSED
-**convexfeld-vk8l: P1 helpers.c bound propagation dead code** — CLOSED
-**convexfeld-vlja: P2 coef_stats.c int loop variable for int64_t nnz** — CLOSED
-**convexfeld-yhmx: P1 model_stub.c grow_vars partial realloc** — CLOSED
-**convexfeld-it1r: P2 Leaving variable always set AT_LOWER in pivot_with_eta** — CLOSED
+Wrong formula AND band 10x too tight. Two fixes:
+1. Pass 1 now uses `(slack + harrisBand) / |d|` (per-candidate band per spec)
+2. Band width: `10 * feasTol` (Maros 2003 §8.3), was raw `feasTol`
 
-### Priority Fix Order (remaining)
+**Changes:**
+- **ratio_test.c**: Pass 1 adds harrisBand to slack. Pass 2 uses theta_max directly (no `+ feasTol`)
+- **Result: recipe and scagr25 now PASS**
+
+#### convexfeld-94em: H3 Convergence criterion — CLOSED
+
+Two fixes:
+1. `cxf_basis_diff` now uses per-category normalization (iter/(m+1), rows/m, cols/n, props/(n+m)) instead of single max(n,m) denominator
+2. Added 5-check dead zone before convergence testing
+
+**Changes:**
+- **basis_stub.c**: Per-category normalization, added delta_props
+- **solve_lp.c**: Added inner_checks counter, 5-check dead zone
+- **test_basis.c**: Updated expected value
+
+#### convexfeld-n8hn: Tolerance leak fix — CLOSED
+
+`env->optimality_tol` was permanently set 100x tighter during Phase I near-feasibility check in phase_loop.c. Fixed by always restoring before returning.
+
+**Changes:**
+- **phase_loop.c**: `int found = has_improving_direction(...)` + restore before `if (found) return 1`
+
+#### convexfeld-6jjb: pivot_bound/special slack range — CLOSED
+
+`cxf_pivot_bound` and `cxf_pivot_special` rejected slack variable indices. Changed `var >= num_vars` to `var >= num_vars + num_constrs`.
+
+**Changes:**
+- **pivot_special.c**: Both functions accept slack indices
+- **test_pivot_bound.c**: Expanded arrays to 5 elements, added test_slack_var_accepted
+- **test_pivot_special.c**: Updated test_invalid_var_too_large to var=5
+
+#### convexfeld-ro9z: Refine eta records + accuracy pass — CLOSED
+
+Two fixes:
+1. **solve_lp.c**: Final accuracy pass (refactorize + recompute) now runs for ITERATION_LIMIT/TIME_LIMIT too
+2. **refine.c**: Creates compact Variant 2 eta records when snapping nonbasic vars
+
+### convexfeld-n9ok: Phase II primal accuracy — INVESTIGATED, OPEN
+
+Investigated grow7 (4.5M units past bounds). Root cause is dense LU factorization quality — parameter tuning (tighter eta limits, tighter residual thresholds) does not help. Blocked on sparse LU (audit M2).
+
+---
+
+## Priority Fix Order (remaining)
 
 | Priority | What | Issues | Impact |
 |----------|------|--------|--------|
-| ~~P0~~ | ~~Redesign cxf_pivot_update~~ | ~~convexfeld-heyz~~ | DONE |
-| P1 | Create internal headers | convexfeld-mxjm | 2 hrs |
-| P1 | Eliminate hot-path malloc | convexfeld-7nyb | 1 hr |
-| P1 | Add core algorithm tests | convexfeld-sxgk | 1 day |
+| P1 | Create internal headers | convexfeld-mxjm | Unblocks 6 issues |
+| P1 | Flesh out pivot_special | convexfeld-lmkg | Unblocks BFRT |
+| P2 | Sparse LU (M2) | new issue needed | Fixes timeouts + grow7/boeing1 |
+| P2 | V1 pricing weight update | convexfeld-l0ca | Pricing quality |
+| P2 | Phase I→II constraint cleanup | convexfeld-ic80 | Transition quality |
 
 ---
 
@@ -94,4 +105,5 @@ Rewrote `cxf_pivot_update` from delta-only API to full spec-compliant signature:
 - Change diag_coeff based on RHS sign (causes regressions on israel/stair/e226)
 - Re-add RC-based status reassignment in refine.c (corrupts obj)
 - Re-add recovery pivots in refine.c Pass 2 (changes basis during post-solve)
+- Hack refactorization parameters to fix primal accuracy — needs sparse LU
 - Skip reading this file and `docs/learnings/implementation_audit.md`

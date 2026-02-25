@@ -528,6 +528,18 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env) {
                 state->iteration++;
                 return ITERATE_CONTINUE;
             }
+            /* Phase I: auxiliary unboundedness does NOT imply original
+             * problem is unbounded (spec pivot_operations.md line 247).
+             * Suppress and refactorize to clear any drift that caused
+             * a spurious no-blocker result from the ratio test. */
+            if (state->phase == 1) {
+                cxf_solver_refactor(state, env);
+                cxf_recompute_xB(state);
+                cxf_recompute_objective(state);
+                cxf_compute_reduced_costs(state);
+                state->iteration++;
+                return ITERATE_CONTINUE;
+            }
             return ITERATE_UNBOUNDED;
         }
         if (rc != CXF_OK) return rc;
