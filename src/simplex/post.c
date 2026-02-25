@@ -136,19 +136,32 @@ int cxf_simplex_phase_end(SolverState *state, CxfEnv *env, int doScan) {
     }
 
     /* 1b. Inactive constraint removal — both phases.
-     * P1.2 (fiyt): removed phase==2 guard per spec. */
+     * two_phase_method.md Transition Step 4: remove constraints whose
+     * activity bounds show they are not binding. Reduces effective
+     * problem size. */
     if (state->min_activity && state->max_activity) {
         for (int i = 0; i < m; i++) {
-            /* Check if constraint is inactive: both activity bounds
-             * are well within the constraint's slack range */
             double min_a = state->min_activity[i];
             double max_a = state->max_activity[i];
 
-            /* Skip infinite activities */
+            /* Skip infinite activities — can't determine slack */
             if (min_a <= -CXF_INFINITY || max_a >= CXF_INFINITY) continue;
 
-            /* Inactive if max_activity is far from zero (much slack) */
-            double slack = -max_a;  /* For <= : slack = rhs - max(sum) */
+            char sense = (state->work_sense) ? state->work_sense[i] : '<';
+            double rhs = (state->work_rhs) ? state->work_rhs[i] : 0.0;
+            double slack;
+
+            /* Compute slack from activity bounds and RHS:
+             *   <= : slack = rhs - max(a^T x). Positive when loose.
+             *   >= : slack = min(a^T x) - rhs. Positive when loose.
+             *   =  : always active, skip. */
+            if (sense == '<' || sense == 'L')
+                slack = rhs - max_a;
+            else if (sense == '>' || sense == 'G')
+                slack = min_a - rhs;
+            else
+                continue;  /* Equality constraints are always active */
+
             if (slack < 10.0 * feas_tol) continue;  /* Active constraint */
 
             /* This constraint has significant slack — mark for cleanup */
@@ -173,7 +186,9 @@ int cxf_simplex_phase_end(SolverState *state, CxfEnv *env, int doScan) {
             if (num_modified < 256)
                 modified[num_modified++] = i;
 
-            state->cols_eliminated++;
+            /* Note: do NOT increment cols_eliminated here. Inactive
+             * constraint identification is not column elimination —
+             * it feeds stall detection thresholds in post_iterate. */
         }
     }
 

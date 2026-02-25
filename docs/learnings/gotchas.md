@@ -772,7 +772,7 @@ the patches were band-aids that did NOT align with v2 spec architecture.
 - Perturbation called ONCE upfront (v2: on stall detection within loop)
 - No crash basis (trivial all-slack → many artificial variables)
 - No activity bounds / preprocessing
-- No `cxf_simplex_phase_end` (v2: manages transition inline in single loop)
+- `cxf_simplex_phase_end` implemented in post.c (called pre+post pivot per spec)
 - No `cxf_simplex_post_iterate` (v2: stall detection via basis snapshots)
 - Wolfe perturbation (v2: EXPAND method, Gill 1989)
 
@@ -1172,4 +1172,28 @@ math is simple (D_r * A * D_c). The hard part is that every downstream component
 (pricing, ratio test, Phase I, perturbation, refine) must be robust enough to
 handle the changed numerical landscape. Don't enable scaling until the solver
 passes at least 30/35 Netlib without it.
+
+---
+
+### Inactive Constraint Slack Must Use RHS (2026-02-25)
+
+**Context:** `cxf_simplex_phase_end` constraint cleanup computed slack as
+`-max_activity`. Activity bounds don't include RHS (they're just `sum a_j x_j`
+range). This made `slack = -max(a^T x)`, which is almost always negative for
+non-trivial problems, so the constraint cleanup was a no-op.
+
+**Fix:** Use `rhs - max_activity` for `<=` constraints, `min_activity - rhs`
+for `>=` constraints. Skip `=` constraints (always active). Also removed
+`cols_eliminated++` from the cleanup path — constraint identification is not
+column elimination and was corrupting stall detection thresholds.
+
+**Also:** Added `cxf_compute_activity_bounds(state, 0, NULL)` to
+`cxf_transition_to_phase_two`. Phase I perturbation and bound propagation
+leave activity bounds stale; fresh computation at transition ensures the
+first Phase II phase_end call operates on accurate data.
+
+**Lesson:** When functions compute derived quantities (like slack), verify
+the formula accounts for ALL inputs. The activity bounds were relative to
+the origin, not relative to the RHS. A formula like `slack = -max_a` only
+works if RHS is already embedded in the activity bounds (which it wasn't).
 

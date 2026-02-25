@@ -184,6 +184,10 @@ add_cxf_test(test_mps_solve unit/test_mps_solve.c)
 target_link_libraries(test_mps_solve PRIVATE m)
 target_compile_definitions(test_mps_solve PRIVATE SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 
+# Phase-end constraint cleanup tests (two_phase_method.md Transition Step 4)
+add_cxf_test(test_phase_end unit/test_phase_end.c)
+target_link_libraries(test_phase_end PRIVATE m)
+
 ################################################################################
 # Integration Tests
 ################################################################################

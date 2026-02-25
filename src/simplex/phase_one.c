@@ -275,5 +275,16 @@ int cxf_transition_to_phase_two(SolverState *state, CxfModel *model) {
         cxf_pricing_set_level(state->pricing, 0);
     }
 
+    /* Step 4: Recompute activity bounds for clean Phase II start.
+     * two_phase_method.md Transition Step 4: Phase I perturbation and
+     * bound propagation leave activity bounds stale. Fresh computation
+     * ensures the pre-pivot phase_end call has accurate data for
+     * inactive constraint cleanup. */
+    {
+        extern void cxf_compute_activity_bounds(SolverState *, int,
+                                                const int *);
+        cxf_compute_activity_bounds(state, 0, NULL);
+    }
+
     return CXF_OK;
 }
