@@ -1,10 +1,21 @@
 # Agent Handoff
 
-*Last updated: 2026-02-25*
+*Last updated: 2026-02-26*
 
 ---
 
-## STATUS: REGRESSION from 4nrf. Unit tests 46/46 pass but Netlib regressions.
+## STATUS: REGRESSION from 4nrf. Unit tests 45/45 pass but Netlib regressions.
+
+### Latest Change (2026-02-26): Removed dead V1 pricing function
+
+**convexfeld-l0ca closed.** Removed `cxf_pricing_update` (V1) from `update.c` — a dead function containing a broken SE weight-update stub that suppressed all nonbasic weight updates with `(void)gamma_entering`. The function was:
+- Not declared in `cxf_pricing.h` (not part of public API)
+- Never called from any production code in `src/`
+- Only tested by unit tests that verified incorrect behavior
+
+The correct, active implementation is `cxf_pricing_update_weights` in `weight_update.c` (V2, P4.9), which properly implements simplified one-BTRAN DSE (Forrest & Goldfarb 1992). Called from `step.c` Phase 7b.
+
+Files changed: `src/pricing/update.c`, `src/pricing/pricing_stub.c`, `tests/unit/test_pricing.c`. 45/45 tests pass. No Netlib behavior change (confirmed share2b OPTIMAL).
 
 ### Spot Check Results (post-4nrf)
 

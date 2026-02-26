@@ -30,11 +30,6 @@ int cxf_pricing_steepest(PricingState *ctx, const double *reduced_costs,
                          const double *weights, const int *var_status,
                          int num_vars, double tolerance);
 
-/* Post-pivot update */
-int cxf_pricing_update(PricingState *ctx, int entering_var, int leaving_row,
-                       const double *pivot_column, const double *pivot_row,
-                       int num_rows);
-
 /* Cache management */
 void cxf_pricing_invalidate(PricingState *ctx, int flags);
 
@@ -273,32 +268,6 @@ void test_pricing_steepest_handles_zero_weight(void) {
 }
 
 /*============================================================================
- * cxf_pricing_update Tests
- *===========================================================================*/
-
-void test_pricing_update_basic(void) {
-    PricingState *ctx = cxf_pricing_create(5, 1);
-    TEST_ASSERT_NOT_NULL(ctx);
-    cxf_pricing_init(ctx, 5, 1);
-
-    double pivot_column[] = {0.5, 1.0, 0.0};
-    double pivot_row[] = {0.1, 0.2, 0.0, 0.0, 0.0};
-
-    int result = cxf_pricing_update(ctx, 2, 1, pivot_column, pivot_row, 3);
-    TEST_ASSERT_EQUAL_INT(CXF_OK, result);
-
-    cxf_pricing_free(ctx);
-}
-
-void test_pricing_update_null_context(void) {
-    double pivot_column[] = {0.5, 1.0};
-    double pivot_row[] = {0.1, 0.2};
-
-    int result = cxf_pricing_update(NULL, 0, 0, pivot_column, pivot_row, 2);
-    TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT, result);
-}
-
-/*============================================================================
  * cxf_pricing_invalidate Tests
  *===========================================================================*/
 
@@ -413,10 +382,6 @@ int main(void) {
     RUN_TEST(test_pricing_steepest_considers_weight);
     RUN_TEST(test_pricing_steepest_optimal_returns_minus_one);
     RUN_TEST(test_pricing_steepest_handles_zero_weight);
-
-    /* cxf_pricing_update */
-    RUN_TEST(test_pricing_update_basic);
-    RUN_TEST(test_pricing_update_null_context);
 
     /* cxf_pricing_invalidate */
     RUN_TEST(test_pricing_invalidate_candidates);
