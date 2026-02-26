@@ -7,7 +7,25 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <errno.h>
 #include "mps_internal.h"
+
+/**
+ * @brief Parse a double from a string with error detection.
+ *
+ * Uses strtod() instead of atof() to detect malformed numbers.
+ * Returns CXF_OK on success, CXF_ERROR_INVALID_ARGUMENT if the
+ * string contains no valid number or has trailing non-whitespace.
+ */
+static int parse_double(const char *str, double *out) {
+    char *end;
+    errno = 0;
+    double val = strtod(str, &end);
+    if (end == str) return CXF_ERROR_INVALID_ARGUMENT;  /* no digits */
+    if (errno == ERANGE) return CXF_ERROR_INVALID_ARGUMENT;  /* overflow */
+    *out = val;
+    return CXF_OK;
+}
 
 /* Parser sections */
 typedef enum {
@@ -84,7 +102,9 @@ static int parse_col_line(MpsState *s, const char *line) {
 
     while (next_token(line, &pos, row_name, sizeof(row_name))) {
         if (!next_token(line, &pos, val_str, sizeof(val_str))) break;
-        double val = atof(val_str);
+        double val;
+        if (parse_double(val_str, &val) != CXF_OK)
+            return CXF_ERROR_INVALID_ARGUMENT;
 
         int row_idx = mps_find_row(s, row_name);
         if (row_idx < 0) continue;
@@ -108,7 +128,9 @@ static int parse_rhs_line(MpsState *s, const char *line) {
 
     while (next_token(line, &pos, row_name, sizeof(row_name))) {
         if (!next_token(line, &pos, val_str, sizeof(val_str))) break;
-        double val = atof(val_str);
+        double val;
+        if (parse_double(val_str, &val) != CXF_OK)
+            return CXF_ERROR_INVALID_ARGUMENT;
 
         int row_idx = mps_find_row(s, row_name);
         if (row_idx >= 0) s->rows[row_idx].rhs = val;
@@ -129,7 +151,10 @@ static int parse_bounds_line(MpsState *s, const char *line) {
     if (col_idx < 0) return CXF_OK;
 
     double val = 0.0;
-    if (next_token(line, &pos, val_str, sizeof(val_str))) val = atof(val_str);
+    if (next_token(line, &pos, val_str, sizeof(val_str))) {
+        if (parse_double(val_str, &val) != CXF_OK)
+            return CXF_ERROR_INVALID_ARGUMENT;
+    }
 
     MpsCol *c = &s->cols[col_idx];
     if (strcmp(type, "LO") == 0) c->lb = val;
@@ -152,7 +177,9 @@ static int parse_ranges_line(MpsState *s, const char *line) {
 
     while (next_token(line, &pos, row_name, sizeof(row_name))) {
         if (!next_token(line, &pos, val_str, sizeof(val_str))) break;
-        double val = atof(val_str);
+        double val;
+        if (parse_double(val_str, &val) != CXF_OK)
+            return CXF_ERROR_INVALID_ARGUMENT;
 
         int row_idx = mps_find_row(s, row_name);
         if (row_idx >= 0) s->rows[row_idx].range_value = val;

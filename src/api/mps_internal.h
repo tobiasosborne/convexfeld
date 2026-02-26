@@ -9,7 +9,7 @@
 #include <stdio.h>
 #include "convexfeld/cxf_types.h"
 
-#define MPS_MAX_NAME 16
+#define MPS_MAX_NAME 64
 #define MPS_MAX_LINE 256
 #define MPS_INITIAL_CAP 64
 #define MPS_HASH_SIZE 2048  /* Hash table size - power of 2 for fast modulo */

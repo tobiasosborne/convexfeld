@@ -21,6 +21,9 @@
 **convexfeld-lmkg closed.** Added equality constraint column scan (Phase 3) to `cxf_pivot_special` per `pivot_operations.md`. Variables in equalities return CXF_OK.
 - Files: `pivot_special.c`, `test_pivot_special.c`.
 
+**convexfeld-rcrg closed.** Fixed MPS parser: replaced `atof()` with `strtod()`-based `parse_double()` at all 4 numeric parsing sites (COLUMNS, RHS, BOUNDS, RANGES). Malformed numbers now return `CXF_ERROR_INVALID_ARGUMENT` instead of silently producing 0.0. Increased `MPS_MAX_NAME` from 16 to 64 for extended MPS format names.
+- Files: `mps_internal.h`, `mps_parse.c`.
+
 **convexfeld-l0ca closed.** Removed dead V1 `cxf_pricing_update` (broken SE weight stub, never called). V2 `cxf_pricing_update_weights` is correct and active.
 - Files: `update.c`, `pricing_stub.c`, `test_pricing.c`.
 
