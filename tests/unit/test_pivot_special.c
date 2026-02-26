@@ -29,6 +29,7 @@ static double work_lb[3], work_ub[3], work_obj[3], work_x[3];
 static int var_status[3];
 static double min_act[2], max_act[2];
 static int neg_unbd[2], pos_unbd[2];
+static char work_sense[2];
 
 /* CSC for 2x3 matrix */
 static int64_t csc_col_ptr[4] = {0, 1, 2, 4};
@@ -82,6 +83,11 @@ void setUp(void) {
     test_state.csc_col_ptr = csc_col_ptr;
     test_state.csc_row_idx = csc_row_idx;
     test_state.csc_values = csc_values;
+
+    /* Default: inequality constraints (no equality guard triggered) */
+    work_sense[0] = '<';
+    work_sense[1] = '<';
+    test_state.work_sense = work_sense;
 
     test_state.pricing = NULL;
 }
@@ -177,6 +183,46 @@ void test_no_improving_direction(void) {
     TEST_ASSERT_EQUAL_INT(CXF_OK, rc);
 }
 
+/*=== Phase 3: Equality constraint column scan ===*/
+
+void test_equality_guard_blocks_action(void) {
+    /* var0: obj=3.0 (decrease improves), bounded [0,10].
+     * Without equality guard: would bound-flip to lb=0.
+     * With row 0 as equality: must return CXF_OK (no action). */
+    work_sense[0] = '=';
+    int rc = cxf_pivot_special(&test_env, &test_state, 0, 1e20, 1e20);
+    TEST_ASSERT_EQUAL_INT(CXF_OK, rc);
+    /* Verify no bound change occurred (obj_value unchanged) */
+    TEST_ASSERT_DOUBLE_WITHIN(1e-10, 0.0, test_state.obj_value);
+}
+
+void test_equality_guard_E_sense(void) {
+    /* Same test with 'E' sense variant */
+    work_sense[0] = 'E';
+    int rc = cxf_pivot_special(&test_env, &test_state, 0, 1e20, 1e20);
+    TEST_ASSERT_EQUAL_INT(CXF_OK, rc);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-10, 0.0, test_state.obj_value);
+}
+
+void test_equality_guard_inequality_allows_action(void) {
+    /* var0: obj=3.0, bounded [0,10], all constraints are inequalities.
+     * Should proceed to bound flip (not blocked). */
+    work_sense[0] = '<';
+    work_sense[1] = '<';
+    int rc = cxf_pivot_special(&test_env, &test_state, 0, 1e20, 1e20);
+    TEST_ASSERT_NOT_EQUAL(CXF_UNBOUNDED, rc);
+    /* Bound flip should have changed obj_value */
+}
+
+void test_equality_guard_no_csc_skips_scan(void) {
+    /* If CSC data is NULL, scan is skipped (no crash, normal behavior) */
+    test_state.csc_col_ptr = NULL;
+    work_sense[0] = '=';
+    /* var0 has obj=3.0, bounded: should proceed past equality guard */
+    int rc = cxf_pivot_special(&test_env, &test_state, 0, 1e20, 1e20);
+    TEST_ASSERT_NOT_EQUAL(CXF_ERROR_NULL_ARGUMENT, rc);
+}
+
 /*=== Main ===*/
 
 int main(void) {
@@ -192,6 +238,12 @@ int main(void) {
     RUN_TEST(test_phase1_suppress_unbounded_decrease);
     RUN_TEST(test_bounded_var_not_unbounded);
     RUN_TEST(test_no_improving_direction);
+
+    /* Phase 3: Equality constraint column scan */
+    RUN_TEST(test_equality_guard_blocks_action);
+    RUN_TEST(test_equality_guard_E_sense);
+    RUN_TEST(test_equality_guard_inequality_allows_action);
+    RUN_TEST(test_equality_guard_no_csc_skips_scan);
 
     return UNITY_END();
 }

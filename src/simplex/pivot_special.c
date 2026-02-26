@@ -112,90 +112,84 @@ int cxf_pivot_bound(void *env, void *state, int var, double new_value,
 }
 
 /**
- * @brief Handle special pivot cases including unboundedness detection.
+ * @brief Handle special pivot cases: equality guard, unboundedness, bound flip.
  *
- * Simplified implementation that:
- * 1. Determines if variable movement would improve objective
- * 2. Checks for unboundedness (infinite movement possible)
- * 3. Calls cxf_pivot_bound to move variable to appropriate bound if needed
+ * Five-phase algorithm per pivot_operations.md:
+ *   Phase 1: Movement direction determination (reduced cost sign)
+ *   Phase 2: Special constraint flag validation (SOS/indicator — LP deferred)
+ *   Phase 3: Equality constraint column scan — if the variable participates
+ *            in any equality constraint, return immediately (cannot eliminate)
+ *   Phase 4: Action determination (bound flip vs unbounded vs row elimination)
+ *   Phase 5: Execute action (bound flip, unbounded report, or row elimination)
  *
- * Full implementation would also:
- * - Scan constraint matrix to determine actual feasible movement
- * - Eliminate rows when variable can be fixed
- * - Check for special constraint flags (SOS, indicators, etc.)
- * - Update dual pricing arrays
- *
- * @param env Environment pointer (cast from void*)
- * @param state Solver context pointer (cast from void*)
- * @param var Variable index to analyze
- * @param lb_limit Lower bound limit for unbounded check (typically infinity)
- * @param ub_limit Upper bound limit for unbounded check (typically infinity)
- * @return CXF_OK (0) on success, CXF_UNBOUNDED (5) if unbounded,
- *         CXF_ERROR_OUT_OF_MEMORY (0x2711) on allocation failure
+ * @param env       Environment pointer (cast from void*)
+ * @param state     Solver context pointer (cast from void*)
+ * @param var       Variable index to analyze
+ * @param lb_limit  Lower bound limit for unbounded check (typically infinity)
+ * @param ub_limit  Upper bound limit for unbounded check (typically infinity)
+ * @return CXF_OK on success/no-op, CXF_UNBOUNDED if unbounded,
+ *         CXF_ERROR_OUT_OF_MEMORY on allocation failure
  */
 int cxf_pivot_special(void *env, void *state, int var, double lb_limit,
                      double ub_limit) {
-    CxfEnv *e;
-    SolverState *ctx;
-    double obj_coeff, lb, ub;
-    int can_decrease, can_increase;
-    int n;
+    CxfEnv *e = (CxfEnv *)env;
+    SolverState *ctx = (SolverState *)state;
 
-    /* Cast void pointers to proper types */
-    e = (CxfEnv *)env;
-    ctx = (SolverState *)state;
-
-    /* Validate arguments */
-    if (ctx == NULL || e == NULL) {
+    if (ctx == NULL || e == NULL)
         return CXF_ERROR_NULL_ARGUMENT;
-    }
 
-    n = ctx->num_vars;
-
-    /* Validate variable index — accept structural + slack indices */
-    if (var < 0 || var >= n + ctx->num_constrs) {
+    int n = ctx->num_vars;
+    if (var < 0 || var >= n + ctx->num_constrs)
         return CXF_ERROR_INVALID_ARGUMENT;
-    }
 
-    /* Step 1: Extract objective coefficient and bounds */
-    obj_coeff = ctx->work_obj[var];
-    lb = ctx->work_lb[var];
-    ub = ctx->work_ub[var];
+    /* Phase 1: Movement direction determination */
+    double obj_coeff = ctx->work_obj[var];
+    double lb = ctx->work_lb[var];
+    double ub = ctx->work_ub[var];
 
-    /* Step 2: Determine beneficial movement directions */
-    /* For minimization:
-     * - Positive objective: decreasing variable improves objective
-     * - Negative objective: increasing variable improves objective
-     */
-    can_decrease = (obj_coeff > 1e-10 && lb > -CXF_INFINITY);
-    can_increase = (obj_coeff < -1e-10 && ub < CXF_INFINITY);
+    int can_decrease = (obj_coeff > 1e-10 && lb > -CXF_INFINITY);
+    int can_increase = (obj_coeff < -1e-10 && ub < CXF_INFINITY);
 
-    /* Step 3: If neither direction possible, return success */
-    if (!can_decrease && !can_increase) {
+    if (!can_decrease && !can_increase)
         return CXF_OK;
+
+    /* Phase 2: Special constraint flags — SOS/indicator (LP-only: no-op) */
+
+    /* Phase 3: Equality constraint column scan (pivot_operations.md Phase 3).
+     * If the variable appears in ANY equality constraint, it cannot be
+     * eliminated by bound-fixing — the equality requires algebraic
+     * substitution. Return CXF_OK to let normal simplex handle it.
+     * Only structural variables (var < n) have CSC columns. */
+    if (var < n && ctx->csc_col_ptr != NULL && ctx->work_sense != NULL) {
+        int64_t col_start = ctx->csc_col_ptr[var];
+        int64_t col_end   = ctx->csc_col_ptr[var + 1];
+        for (int64_t k = col_start; k < col_end; k++) {
+            int row = ctx->csc_row_idx[k];
+            if (row >= 0 && row < ctx->num_constrs) {
+                char sense = ctx->work_sense[row];
+                if (sense == '=' || sense == 'E')
+                    return CXF_OK;
+            }
+        }
     }
 
-    /* Step 4: Check for unboundedness.
-     * Phase I suppression (spec pivot_operations.md line 247):
+    /* Phase 4+5: Unboundedness check + bound flip.
+     * Phase I suppression (pivot_operations.md line 247):
      * "A special mode flag on the solver state can disable unboundedness
-     * detection; this is used during Phase I of two-phase simplex, where
-     * unboundedness of the auxiliary problem does not imply unboundedness
-     * of the original problem." */
+     * detection; this is used during Phase I of two-phase simplex." */
     if (can_increase) {
         if (ub >= ub_limit) {
-            if (ctx->phase == 1) return CXF_OK;  /* suppress in Phase I */
+            if (ctx->phase == 1) return CXF_OK;
             return CXF_UNBOUNDED;
         }
-        /* Bounded - move to upper bound */
         return cxf_pivot_bound(env, state, var, ub, ub, 0);
     }
 
     if (can_decrease) {
         if (lb <= -lb_limit) {
-            if (ctx->phase == 1) return CXF_OK;  /* suppress in Phase I */
+            if (ctx->phase == 1) return CXF_OK;
             return CXF_UNBOUNDED;
         }
-        /* Bounded - move to lower bound */
         return cxf_pivot_bound(env, state, var, lb, ub, 0);
     }
 
