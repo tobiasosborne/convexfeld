@@ -7,10 +7,8 @@
 #include <string.h>
 #include "mps_internal.h"
 
-extern void *cxf_malloc(size_t size);
-extern void *cxf_calloc(size_t count, size_t size);
-extern void *cxf_realloc(void *ptr, size_t size);
-extern void cxf_free(void *ptr);
+#include "../memory/memory_internal.h"
+
 
 /**
  * @brief djb2 hash function for strings.

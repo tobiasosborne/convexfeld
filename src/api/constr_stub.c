@@ -12,15 +12,12 @@
 #include "convexfeld/cxf_matrix.h"
 #include "convexfeld/cxf_env.h"
 
+#include "../memory/memory_internal.h"
+#include "../matrix/matrix_internal.h"
+
 /* Forward declare memory functions */
-extern void *cxf_calloc(size_t count, size_t size);
-extern void *cxf_malloc(size_t size);
-extern void *cxf_realloc(void *ptr, size_t size);
-extern void cxf_free(void *ptr);
 
 /* Forward declare sparse matrix helper */
-extern int cxf_sparse_init_csc(MatrixData *mat, int num_rows, int num_cols,
-                               int64_t nnz);
 
 /* Initial capacity for constraint tracking */
 #define INITIAL_CONSTR_CAPACITY 16

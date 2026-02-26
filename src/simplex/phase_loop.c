@@ -17,8 +17,9 @@
 #include "convexfeld/cxf_types.h"
 #include <math.h>
 
-extern int cxf_simplex_step(SolverState *state, CxfEnv *env);
-extern int cxf_compute_reduced_costs(SolverState *state);
+#include "simplex_internal.h"
+#include "../basis/basis_internal.h"
+
 
 /**
  * @brief Compute Phase I objective: sum of basic variable bound violations.
@@ -75,7 +76,6 @@ int cxf_check_phase_one_end(SolverState *state, CxfModel *model, CxfEnv *env) {
 
     if (phase1_obj <= tol) {
         /* Phase I objective is zero — feasible, transition to Phase II */
-        extern int cxf_transition_to_phase_two(SolverState *, CxfModel *);
         int rc = cxf_transition_to_phase_two(state, model);
         if (rc != CXF_OK) return rc;
         cxf_compute_reduced_costs(state);
@@ -86,15 +86,11 @@ int cxf_check_phase_one_end(SolverState *state, CxfModel *model, CxfEnv *env) {
      * Safety net: force refactorization + recompute to clear drift,
      * then scan for improving directions. */
     {
-        extern int cxf_solver_refactor(SolverState *, CxfEnv *);
-        extern int cxf_recompute_xB(SolverState *);
-        extern void cxf_recompute_objective(SolverState *);
         cxf_solver_refactor(state, env);
         cxf_recompute_xB(state);
         cxf_recompute_objective(state);
         /* Re-check: recomputation may have made us feasible */
         if (state->obj_value <= tol) {
-            extern int cxf_transition_to_phase_two(SolverState *, CxfModel *);
             int rc2 = cxf_transition_to_phase_two(state, model);
             if (rc2 != CXF_OK) return rc2;
             cxf_compute_reduced_costs(state);

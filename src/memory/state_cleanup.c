@@ -16,9 +16,10 @@
 #include "convexfeld/cxf_callback.h"
 #include <stdlib.h>
 
+#include "../basis/basis_internal.h"
+#include "../pricing/pricing_internal.h"
+
 /* Forward declarations for module-specific free functions */
-extern void cxf_basis_free(BasisState *basis);
-extern void cxf_pricing_free(PricingState *ctx);
 
 /*============================================================================
  * cxf_free_attribute_table - SolverState Cleanup

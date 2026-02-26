@@ -27,47 +27,22 @@
 #include <string.h>
 #include <stdlib.h>
 
-#define ITERATE_CONTINUE   0
-#define ITERATE_OPTIMAL    1
-#define ITERATE_INFEASIBLE 2
-#define ITERATE_UNBOUNDED  3
+#include "simplex_internal.h"
+#include "../basis/basis_internal.h"
+
 #define STALL_THRESHOLD    50
 
 /* Lifecycle */
-extern int cxf_simplex_init(CxfModel *model, SolverState **stateP);
-extern void cxf_simplex_final(SolverState *state);
-extern int cxf_extract_solution(SolverState *state, CxfModel *model);
 
 /* Scaling (disabled — see TODO in solve flow) */
 
 /* Simplex phases (P3.21) */
-extern int cxf_simplex_crash(SolverState *state, CxfEnv *env);
-extern int cxf_simplex_perturbation(SolverState *state, CxfEnv *env);
-extern int cxf_simplex_unperturb(SolverState *state, CxfEnv *env);
-extern int cxf_simplex_refine(SolverState *state, CxfEnv *env);
-extern int cxf_simplex_phase_end(SolverState *state, CxfEnv *env,
-                                 int doScan);
 
 /* Presolve */
-extern int cxf_check_obvious_infeasibility(CxfModel *model);
-extern int cxf_check_obvious_unboundedness(CxfModel *model);
-extern int cxf_solve_unconstrained(CxfModel *model);
-extern int cxf_setup_phase_one(SolverState *state);
-extern int cxf_compute_reduced_costs(SolverState *state);
 
 /* Iteration loop (P3.20) */
-extern int cxf_simplex_step(SolverState *state, CxfEnv *env);
-extern int cxf_simplex_step2(SolverState *state, CxfEnv *env);
-extern int cxf_simplex_step3(SolverState *state, CxfEnv *env);
-extern void cxf_log_iteration_progress(CxfModel *model, SolverState *state);
-extern int cxf_simplex_post_iterate(SolverState *state, CxfEnv *env,
-                                    int *outStall);
-extern void cxf_progress_snapshot(SolverState *state);
-extern double cxf_basis_diff(SolverState *state);
 
 /* Phase I helpers */
-extern int cxf_check_phase_one_end(SolverState *state, CxfModel *model,
-                                   CxfEnv *env);
 
 #define MAX_OUTER_ROUNDS    100
 #define CONVERGENCE_BASE    0.01
@@ -114,7 +89,6 @@ int cxf_solve_lp(CxfModel *model) {
      * Must run AFTER init (copies matrix) but BEFORE crash/Phase I
      * (which use scaled data). */
     {
-        extern void cxf_scale_problem(SolverState *, double *, double *);
         int m_s = state->num_constrs;
         int n_s = state->num_vars;
         double *rs = (double *)malloc((size_t)m_s * sizeof(double));
@@ -288,7 +262,6 @@ int cxf_solve_lp(CxfModel *model) {
 
     /* P6.1: Postsolve — restore fixed variables and unscale (stub for now) */
     {
-        extern int cxf_simplex_postsolve(SolverState *, CxfEnv *);
         cxf_simplex_postsolve(state, env);
     }
 
@@ -300,8 +273,6 @@ int cxf_solve_lp(CxfModel *model) {
     if (model->status == CXF_OPTIMAL ||
         model->status == CXF_ITERATION_LIMIT ||
         model->status == CXF_TIME_LIMIT) {
-        extern int cxf_recompute_xB(SolverState *state);
-        extern void cxf_recompute_objective(SolverState *state);
         cxf_solver_refactor(state, env);
         cxf_recompute_xB(state);
         cxf_recompute_objective(state);

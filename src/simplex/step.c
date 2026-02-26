@@ -18,40 +18,15 @@
 #include <string.h>
 #include <math.h>
 
-#define ITERATE_CONTINUE   0
-#define ITERATE_OPTIMAL    1
-#define ITERATE_INFEASIBLE 2
-#define ITERATE_UNBOUNDED  3
+#include "simplex_internal.h"
+#include "../basis/basis_internal.h"
+
 
 #define REFACTOR_INTERVAL  100
 #define MAX_BFRT_FLIPS     10
 #define MAX_CANDIDATES     10
 
 /* External declarations */
-extern int cxf_pivot_with_eta(BasisState *basis, int pivotRow,
-                              const double *pivotCol, int enteringVar,
-                              int leavingVar, int leavingStatus);
-extern int cxf_pricing_candidates(PricingState *ctx, const double *rc,
-                                  const int *vs, int nv, double tol,
-                                  int *out, int max_out);
-extern int cxf_ftran(BasisState *basis, const double *column, double *result);
-extern int cxf_btran(BasisState *basis, int row, double *result);
-extern int cxf_ratio_test(SolverState *state, CxfEnv *env, int enteringVar,
-                          const double *pivotColumn, int columnNZ,
-                          int *leavingRow_out, double *pivotElement_out);
-extern int cxf_solver_refactor(SolverState *ctx, CxfEnv *env);
-extern int cxf_compute_reduced_costs(SolverState *state);
-extern int cxf_recompute_xB(SolverState *state);
-extern void cxf_recompute_objective(SolverState *state);
-extern double cxf_ftran_residual(SolverState *state, const double *a,
-                                 const double *x);
-extern void cxf_pricing_update_var(PricingState *ctx, SolverState *state,
-                                   int varIndex);
-extern void cxf_pricing_update_constr(PricingState *ctx, SolverState *state,
-                                      int constrIndex);
-extern void cxf_pricing_update_queues(PricingState *ctx, SolverState *state);
-extern void cxf_pricing_candidates_v2(PricingState *ctx, SolverState *state,
-                                      int *count, int **candidates);
 
 /*---------------------------------------------------------------------------*/
 
@@ -714,9 +689,6 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env) {
 
     /*--- Phase 7b: Update steepest edge / Devex weights (P4.9) ---*/
     if (state->pricing && state->pricing->weights != NULL) {
-        extern void cxf_pricing_update_weights(PricingState *, SolverState *,
-                                               int, int, const double *,
-                                               const double *);
         cxf_pricing_update_weights(state->pricing, state, entering,
                                    leavingRow, pivotCol,
                                    btran_ok ? rho : NULL);
@@ -739,7 +711,6 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env) {
 
     /*--- Phase 9: Refactorization (P0.7: use cxf_refactor_check) ---*/
     {
-        extern int cxf_refactor_check(SolverState *, CxfEnv *);
         if (cxf_refactor_check(state, env) > 0) {
             cxf_solver_refactor(state, env);
             cxf_recompute_xB(state);

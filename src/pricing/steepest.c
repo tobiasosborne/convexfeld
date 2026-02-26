@@ -13,15 +13,11 @@
 #include <math.h>
 #include "convexfeld/cxf_types.h"
 #include "convexfeld/cxf_pricing.h"
+#include "pricing_internal.h"
 
 /* Variable status codes */
-#define VAR_BASIC        0   /* Basic variable (>= 0 indicates row) */
-#define VAR_AT_LOWER    -1   /* Nonbasic at lower bound */
-#define VAR_AT_UPPER    -2   /* Nonbasic at upper bound */
-#define VAR_FREE        -3   /* Free (superbasic) variable */
 
 /* Minimum acceptable weight to avoid division by zero */
-#define MIN_WEIGHT 1e-10
 
 /**
  * @brief Select entering variable using steepest edge pricing.
@@ -94,7 +90,7 @@ int cxf_pricing_steepest(PricingState *ctx, const double *reduced_costs,
         if (attractive) {
             /* Get weight, using safeguard for zero/negative weights */
             double weight = weights[j];
-            if (weight < MIN_WEIGHT) {
+            if (weight < CXF_MIN_WEIGHT) {
                 weight = 1.0;  /* Default weight assumption */
             }
 

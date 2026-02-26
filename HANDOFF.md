@@ -8,6 +8,10 @@
 
 ### Latest Changes (2026-02-26)
 
+**convexfeld-mxjm closed (P1).** Created 5 internal headers replacing 88 scattered `extern` declarations across 28 source files. Centralized 38 duplicate constant definitions. Eliminates silent ABI mismatch risk — any signature change now produces a compiler error at all call sites. Unblocks 6 downstream issues (step.c decomposition, unit tests, constant deduplication, pricing loop fusion).
+- Headers: `simplex_internal.h`, `basis_internal.h`, `pricing_internal.h`, `memory_internal.h`, `matrix_internal.h`
+- 7 benign externs remain (public-header functions). 45/45 tests pass.
+
 **convexfeld-36qh closed.** Rewrote basis snapshot/diff system per spec (basis_operations.md, perturbation.md):
 - Snapshot expanded 8→10 slots: wired `ftran_count` (slot 2, was placeholder), added `degenerate_count` (slot 8), `perturb_count` (slot 9)
 - `cxf_basis_diff` rewritten with 4 weighted categories: structural (w=4.0, colDenom-normalized), iteration (w=0.25, colDenom-normalized), propagation (w=1.0, rowDenom-normalized), work (w=0.5, rowDenom-normalized). Deltas clamped >=0.

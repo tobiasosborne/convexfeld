@@ -14,8 +14,9 @@
 #include "convexfeld/cxf_solver.h"
 #include "convexfeld/cxf_types.h"
 
+#include "pricing_internal.h"
+
 /* V2 queue insertion helper (from queue_insert.c) */
-extern void v2_insert_var(PricingState *ctx, int var_idx);
 
 /**
  * @brief Mark structurally adjacent variables dirty after constraint change.

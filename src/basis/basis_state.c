@@ -13,6 +13,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "basis_internal.h"
+
 /* Default refactorization frequency (pivots between refactorizations) */
 #define DEFAULT_REFACTOR_FREQ 100
 
@@ -105,7 +107,6 @@ void cxf_basis_free(BasisState *basis) {
 
     /* P2.3: Free eta pool (frees all eta memory in bulk) or individual chain */
     {
-        extern void cxf_eta_pool_free(EtaBuffer *pool);
         if (basis->eta_pool != NULL) {
             cxf_eta_pool_free(basis->eta_pool);
         } else {

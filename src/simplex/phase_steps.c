@@ -15,12 +15,8 @@
 #include "convexfeld/cxf_types.h"
 #include <math.h>
 
-extern void cxf_pivot_update(SolverState *state, int col,
-                             double oldLB, double newLB,
-                             double oldUB, double newUB,
-                             double infinityThreshold);
-extern void cxf_compute_activity_bounds(SolverState *state, int count,
-                                        const int *indices);
+#include "simplex_internal.h"
+
 
 /**
  * @brief Tighten one variable bound and propagate.

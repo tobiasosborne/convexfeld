@@ -22,6 +22,8 @@
 #include <math.h>
 #include <string.h>
 
+#include "simplex_internal.h"
+
 #define MIN_BOUND_RANGE  1e-10
 #define MAX_PERTURBATION 1e-6
 
@@ -93,10 +95,6 @@ static int analyze_basic(SolverState *state, int row, int bvar,
     return 0;
 }
 
-extern void cxf_pricing_candidates_v2(PricingState *ctx, SolverState *state,
-                                      int *count, int **candidates);
-extern void cxf_compute_activity_bounds(SolverState *state, int count,
-                                        const int *indices);
 
 /**
  * @brief Apply EXPAND anti-cycling perturbation (v2 P2.6, P5.1).

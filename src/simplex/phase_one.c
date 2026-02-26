@@ -19,12 +19,11 @@
 #include <string.h>
 #include <stdio.h>
 
-extern int cxf_solver_refactor(SolverState *ctx, CxfEnv *env);
-extern int cxf_compute_reduced_costs(SolverState *state);
-extern void cxf_pricing_invalidate(PricingState *ctx, int flags);
-extern void cxf_pricing_set_level(PricingState *ctx, int level);
+#include "simplex_internal.h"
+#include "../basis/basis_internal.h"
+#include "../pricing/pricing_internal.h"
 
-#define CXF_INVALID_ALL 0xFF
+
 
 /**
  * @brief Set up Phase I using implicit bound-violation approach.
@@ -229,7 +228,6 @@ int cxf_transition_to_phase_two(SolverState *state, CxfModel *model) {
     /* Step 0: Unperturb if EXPAND bound widening was active in Phase I.
      * Restores saved bounds so Phase II starts with clean bounds. */
     if (state->perturb_expand_active) {
-        extern int cxf_simplex_unperturb(SolverState *, CxfEnv *);
         cxf_simplex_unperturb(state, model->env);
     }
 
@@ -281,8 +279,6 @@ int cxf_transition_to_phase_two(SolverState *state, CxfModel *model) {
      * ensures the pre-pivot phase_end call has accurate data for
      * inactive constraint cleanup. */
     {
-        extern void cxf_compute_activity_bounds(SolverState *, int,
-                                                const int *);
         cxf_compute_activity_bounds(state, 0, NULL);
     }
 

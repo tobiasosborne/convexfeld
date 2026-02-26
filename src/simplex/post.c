@@ -17,10 +17,9 @@
 #include "convexfeld/cxf_types.h"
 #include <math.h>
 
-extern int cxf_fix_variables_at_bounds(BasisState *basis);
-extern void cxf_compute_activity_bounds(SolverState *state, int count,
-                                        const int *indices);
-extern int cxf_compute_reduced_costs(SolverState *state);
+#include "simplex_internal.h"
+#include "../basis/basis_internal.h"
+
 
 #define STALL_ALPHA 0.5
 #define STALL_BETA  3

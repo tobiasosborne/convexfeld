@@ -18,11 +18,9 @@
 #include "convexfeld/cxf_pricing.h"
 #include "convexfeld/cxf_solver.h"
 #include "convexfeld/cxf_basis.h"
+#include "pricing_internal.h"
 
 /* Variable status codes */
-#define VAR_AT_LOWER   -1
-#define VAR_AT_UPPER   -2
-#define VAR_FREE       -3
 
 /* Pricing strategy constants */
 #define STRATEGY_PARTIAL       1

@@ -18,6 +18,8 @@
 #include <string.h>
 #include <math.h>
 
+#include "basis_internal.h"
+
 /* Error codes for refactorization */
 #define REFACTOR_OK             0
 #define REFACTOR_OUT_OF_MEMORY  1001
@@ -27,7 +29,6 @@
 #define MIN_PIVOT_TOL  CXF_PIVOT_TOL  /* 1e-9 */
 
 /* e2t: Shared eta list clear (eta_pool.c) */
-extern void cxf_eta_list_clear(BasisState *basis);
 #define clear_eta_list cxf_eta_list_clear
 
 /**

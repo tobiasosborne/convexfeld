@@ -16,12 +16,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "pricing_internal.h"
+
 /* V2 insertion helpers (queue_insert.c) */
-extern void v2_insert_var(PricingState *ctx, int var_idx);
-extern void v2_insert_constr(PricingState *ctx, int constr_idx);
 
 /* V2 queue consumer (update.c) */
-extern void cxf_pricing_update_queues(PricingState *ctx, SolverState *state);
 
 /**
  * @brief Mark a variable as dirty (P4.7: V1 + V2 flag-based insertion).

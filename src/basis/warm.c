@@ -14,6 +14,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "basis_internal.h"
+
 /*******************************************************************************
  * Validation flag definitions
  ******************************************************************************/
@@ -38,7 +40,6 @@
  ******************************************************************************/
 
 /* e2t: Shared eta list clear (eta_pool.c) */
-extern void cxf_eta_list_clear(BasisState *basis);
 #define clear_eta_list cxf_eta_list_clear
 
 /*******************************************************************************

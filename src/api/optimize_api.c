@@ -13,12 +13,9 @@
 #include "convexfeld/cxf_solver.h"
 #include "convexfeld/cxf_callback.h"
 
+#include "../simplex/simplex_internal.h"
+
 /* Forward declarations - external functions */
-extern int cxf_solve_lp(CxfModel *model);
-extern int cxf_checkmodel(CxfModel *model);
-extern void cxf_log_printf(CxfEnv *env, int level, const char *format, ...);
-extern int cxf_pre_optimize_hook(CxfModel *model);
-extern int cxf_post_optimize_hook(CxfModel *model);
 
 /**
  * @brief Internal optimization dispatcher.

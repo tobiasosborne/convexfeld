@@ -18,8 +18,9 @@
 #include <math.h>
 #include <stdlib.h>
 
-extern int cxf_pivot_primal(void *env, void *state, int var, double tol);
-extern void *cxf_eta_pool_alloc(EtaBuffer *pool, size_t size);
+#include "simplex_internal.h"
+#include "../basis/basis_internal.h"
+
 
 /**
  * @brief Refine solution after simplex termination (v2 P3.21).

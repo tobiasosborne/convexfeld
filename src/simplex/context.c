@@ -15,6 +15,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "../basis/basis_internal.h"
+
 /* Default iteration limit */
 #define DEFAULT_MAX_ITERATIONS 1000000
 
@@ -22,8 +24,6 @@
 #define DEFAULT_TOLERANCE 1e-6
 
 /* Forward declare basis creation */
-extern BasisState *cxf_basis_create(int m, int n);
-extern void cxf_basis_free(BasisState *basis);
 
 /**
  * @brief Create and initialize solver context.
@@ -263,7 +263,6 @@ int cxf_simplex_init(CxfModel *model, SolverState **stateP) {
 
     /* P2.3: Create eta memory pool for arena allocation */
     if (ctx->basis != NULL) {
-        extern EtaBuffer *cxf_eta_pool_create(size_t initial_size);
         ctx->basis->eta_pool = cxf_eta_pool_create(CXF_MIN_CHUNK_SIZE);
         /* Pool creation failure is non-fatal — falls back to calloc */
     }
@@ -342,7 +341,6 @@ void cxf_simplex_final(SolverState *state) {
 
     /* Free pricing context if allocated */
     {
-        extern void cxf_pricing_free(PricingState *ctx);
         if (state->pricing != NULL)
             cxf_pricing_free(state->pricing);
     }

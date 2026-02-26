@@ -9,9 +9,9 @@
 #include "convexfeld/cxf_env.h"
 #include "convexfeld/cxf_callback.h"
 
+#include "../memory/memory_internal.h"
+
 /* Forward declare memory functions */
-extern void *cxf_calloc(size_t count, size_t size);
-extern void cxf_free(void *ptr);
 
 /* Default values for refactorization parameters */
 #define DEFAULT_MAX_ETA_COUNT     100

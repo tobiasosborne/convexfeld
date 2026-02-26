@@ -17,7 +17,8 @@
 #include <string.h>
 #include <math.h>
 
-extern int cxf_ftran(BasisState *basis, const double *column, double *result);
+#include "../basis/basis_internal.h"
+
 
 /**
  * @brief Recompute basic variable values from scratch.

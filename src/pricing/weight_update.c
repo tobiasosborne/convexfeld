@@ -20,9 +20,9 @@
 #include "convexfeld/cxf_basis.h"
 #include "convexfeld/cxf_types.h"
 #include <math.h>
+#include "pricing_internal.h"
 
 /* Minimum weight to prevent division by zero */
-#define MIN_WEIGHT      1e-10
 /* Devex decay factor (Harris 1973) */
 #define DEVEX_DECAY     0.99
 /* Strategy constants */
@@ -54,11 +54,11 @@ void cxf_pricing_update_weights(PricingState *ctx, SolverState *state,
     int n = state->num_vars;
     int total = n + m;
     double pivot_elem = pivotCol[leavingRow];
-    if (fabs(pivot_elem) < MIN_WEIGHT) return;
+    if (fabs(pivot_elem) < CXF_MIN_WEIGHT) return;
 
     double pivot_sq = pivot_elem * pivot_elem;
     double gamma_q = ctx->weights[entering];
-    if (gamma_q < MIN_WEIGHT) gamma_q = 1.0;
+    if (gamma_q < CXF_MIN_WEIGHT) gamma_q = 1.0;
 
     /* Precompute common factor for DSE simplified update */
     double dse_factor = gamma_q - 2.0 * pivot_elem + 1.0;
@@ -93,7 +93,7 @@ void cxf_pricing_update_weights(PricingState *ctx, SolverState *state,
             /* Simplified DSE update (one-BTRAN approximation):
              * gamma_j' = gamma_j + ratio^2 * (gamma_q - 2*pivot + 1) */
             double new_w = ctx->weights[j] + ratio * ratio * dse_factor;
-            ctx->weights[j] = (new_w > MIN_WEIGHT) ? new_w : MIN_WEIGHT;
+            ctx->weights[j] = (new_w > CXF_MIN_WEIGHT) ? new_w : CXF_MIN_WEIGHT;
         } else {
             /* Devex update (Harris 1973):
              * gamma_j' = max(decay * gamma_j, ratio^2 + delta_j)
@@ -102,8 +102,8 @@ void cxf_pricing_update_weights(PricingState *ctx, SolverState *state,
             double devex_val = ratio * ratio + 1.0;
             double decayed = DEVEX_DECAY * ctx->weights[j];
             ctx->weights[j] = (devex_val > decayed) ? devex_val : decayed;
-            if (ctx->weights[j] < MIN_WEIGHT)
-                ctx->weights[j] = MIN_WEIGHT;
+            if (ctx->weights[j] < CXF_MIN_WEIGHT)
+                ctx->weights[j] = CXF_MIN_WEIGHT;
         }
     }
 
@@ -112,7 +112,7 @@ void cxf_pricing_update_weights(PricingState *ctx, SolverState *state,
     int leaving = basis->basic_vars[leavingRow];
     if (leaving >= 0 && leaving < ctx->num_vars) {
         double new_w = gamma_q / pivot_sq;
-        ctx->weights[leaving] = (new_w > MIN_WEIGHT) ? new_w : MIN_WEIGHT;
+        ctx->weights[leaving] = (new_w > CXF_MIN_WEIGHT) ? new_w : CXF_MIN_WEIGHT;
     }
 
     /* Entering variable is now basic — its weight is irrelevant until

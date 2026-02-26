@@ -15,8 +15,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "../memory/memory_internal.h"
+
 /* External memory allocation functions */
-extern void *cxf_malloc(size_t size);
 
 /**
  * @brief Extract solution from solver state to model.

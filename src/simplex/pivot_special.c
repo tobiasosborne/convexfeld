@@ -18,14 +18,12 @@
 #include <math.h>
 #include <stdlib.h>
 
+#include "simplex_internal.h"
+#include "../basis/basis_internal.h"
+
 /* Arena allocator (eta_pool.c) */
-extern void *cxf_eta_pool_alloc(EtaBuffer *pool, size_t size);
 
 /* pivot_update.c — cancellation-safe activity bound update */
-extern void cxf_pivot_update(SolverState *state, int col,
-                                  double oldLB, double newLB,
-                                  double oldUB, double newUB,
-                                  double infinityThreshold);
 
 /**
  * @brief Fix a variable at a specific bound value (7-phase spec).

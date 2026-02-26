@@ -16,12 +16,7 @@
 #include "convexfeld/cxf_pricing.h"
 #include "convexfeld/cxf_solver.h"
 #include "convexfeld/cxf_basis.h"
-
-/* Invalidation flags */
-#define CXF_INVALID_CANDIDATES     0x01
-#define CXF_INVALID_REDUCED_COSTS  0x02
-#define CXF_INVALID_WEIGHTS        0x04
-#define CXF_INVALID_ALL            0xFF
+#include "pricing_internal.h"
 
 /**
  * @brief Invalidate cached pricing information.
@@ -80,12 +75,6 @@ void cxf_pricing_invalidate(PricingState *ctx, int flags) {
  *===========================================================================*/
 
 /* Flag bit constants (same as queue_insert.c) */
-#define L1_COMMITTED 0x01
-#define L1_PENDING   0x02
-#define L1_MASK      0x03
-#define L2_COMMITTED 0x04
-#define L2_PENDING   0x08
-#define L2_MASK      0x0C
 
 /**
  * @brief Filter one queue at level 0: discard basic variables, compact.

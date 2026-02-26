@@ -10,14 +10,12 @@
 #include "convexfeld/cxf_model.h"
 #include "convexfeld/cxf_env.h"
 
+#include "../memory/memory_internal.h"
+#include "../matrix/matrix_internal.h"
+
 /* Forward declare memory functions */
-extern void *cxf_calloc(size_t count, size_t size);
-extern void *cxf_malloc(size_t size);
-extern void cxf_free(void *ptr);
 
 /* Forward declare sparse matrix functions */
-extern MatrixData *cxf_sparse_create(void);
-extern void cxf_sparse_free(MatrixData *mat);
 
 /* Initial capacity for variable arrays */
 #define INITIAL_VAR_CAPACITY 16
@@ -126,10 +124,6 @@ int cxf_newmodel(CxfEnv *env, CxfModel **modelP, const char *name,
     /* If numvars > 0, add initial variables using cxf_addvars */
     if (numvars > 0) {
         /* Forward declare cxf_addvars */
-        extern int cxf_addvars(CxfModel *model, int numvars, int numnz,
-                               const int *vbeg, const int *vind, const double *vval,
-                               const double *obj, const double *lb, const double *ub,
-                               const char *vtype, const char **varnames);
 
         status = cxf_addvars(model, numvars, 0, NULL, NULL, NULL,
                              obj, lb, ub, vtype, (const char **)varnames);

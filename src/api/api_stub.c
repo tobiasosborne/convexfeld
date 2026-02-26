@@ -10,8 +10,8 @@
 #include "convexfeld/cxf_model.h"
 #include "convexfeld/cxf_env.h"
 
+
 /* Forward declaration - implemented in src/api/optimize_api.c */
-extern int cxf_optimize_internal(CxfModel *model);
 
 /**
  * @brief Optimize the model.

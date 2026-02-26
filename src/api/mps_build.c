@@ -12,14 +12,9 @@
 #include "convexfeld/cxf_model.h"
 #include "convexfeld/cxf_matrix.h"
 
-extern void *cxf_malloc(size_t size);
-extern void *cxf_calloc(size_t count, size_t size);
-extern void *cxf_realloc(void *ptr, size_t size);
-extern void cxf_free(void *ptr);
-extern int cxf_addvar(CxfModel *model, int numnz, int *vind, double *vval,
-                      double obj, double lb, double ub, char vtype, const char *name);
-extern int cxf_sparse_init_csc(MatrixData *mat, int num_rows, int num_cols,
-                               int64_t nnz);
+#include "../memory/memory_internal.h"
+#include "../matrix/matrix_internal.h"
+
 
 /**
  * @brief Build CSC matrix directly from MPS column data.

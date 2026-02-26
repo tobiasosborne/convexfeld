@@ -14,8 +14,9 @@
 #include <stdlib.h>
 #include <math.h>
 
+#include "basis_internal.h"
+
 /* Arena allocator (eta_pool.c) */
-extern void *cxf_eta_pool_alloc(EtaBuffer *pool, size_t size);
 
 /**
  * @brief Update basis using product form of inverse (eta vector).

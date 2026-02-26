@@ -10,12 +10,9 @@
 #include <math.h>
 #include "convexfeld/cxf_types.h"
 #include "convexfeld/cxf_pricing.h"
+#include "pricing_internal.h"
 
 /* Variable status codes */
-#define VAR_BASIC        0   /* Basic variable */
-#define VAR_AT_LOWER    -1   /* Nonbasic at lower bound */
-#define VAR_AT_UPPER    -2   /* Nonbasic at upper bound */
-#define VAR_FREE        -3   /* Free (superbasic) */
 
 /**
  * @brief Full scan for any attractive variable (phase 2 / fallback).

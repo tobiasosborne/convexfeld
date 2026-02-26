@@ -13,8 +13,8 @@
 #include <string.h>
 #include <math.h>
 
-extern int cxf_prepare_row_data(MatrixData *mat);
-extern int cxf_build_row_major(MatrixData *mat);
+#include "../matrix/matrix_internal.h"
+
 
 /** @brief Get row coefficients as dense array (CSR fast path, CSC fallback). */
 static void get_row_coeffs(MatrixData *mat, int row, int n, double *coeffs) {

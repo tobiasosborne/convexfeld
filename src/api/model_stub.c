@@ -10,8 +10,9 @@
 #include "convexfeld/cxf_model.h"
 #include "convexfeld/cxf_env.h"
 
+#include "../memory/memory_internal.h"
+
 /* Forward declaration for memory allocation */
-extern void *cxf_realloc(void *ptr, size_t size);
 
 /**
  * @brief Grow variable arrays to accommodate more variables.

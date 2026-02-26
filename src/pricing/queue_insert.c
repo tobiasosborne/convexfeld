@@ -16,14 +16,9 @@
 #include "convexfeld/cxf_pricing.h"
 #include "convexfeld/cxf_types.h"
 #include <stdint.h>
+#include "pricing_internal.h"
 
 /* Flag bit positions for each level */
-#define L1_COMMITTED  0x01  /* bit 0 */
-#define L1_PENDING    0x02  /* bit 1 */
-#define L1_MASK       0x03  /* bits 0-1 */
-#define L2_COMMITTED  0x04  /* bit 2 */
-#define L2_PENDING    0x08  /* bit 3 */
-#define L2_MASK       0x0C  /* bits 2-3 */
 
 /**
  * @brief Insert a constraint index into V2 constraint queues at levels 1-2.
