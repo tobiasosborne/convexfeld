@@ -6,16 +6,16 @@
 
 ## STATUS: REGRESSION from 4nrf. Unit tests 45/45 pass but Netlib regressions.
 
-### Latest Change (2026-02-26): Removed dead V1 pricing function
+### Latest Changes (2026-02-26)
 
-**convexfeld-l0ca closed.** Removed `cxf_pricing_update` (V1) from `update.c` — a dead function containing a broken SE weight-update stub that suppressed all nonbasic weight updates with `(void)gamma_entering`. The function was:
-- Not declared in `cxf_pricing.h` (not part of public API)
-- Never called from any production code in `src/`
-- Only tested by unit tests that verified incorrect behavior
+**convexfeld-36qh closed.** Rewrote basis snapshot/diff system per spec (basis_operations.md, perturbation.md):
+- Snapshot expanded 8→10 slots: wired `ftran_count` (slot 2, was placeholder), added `degenerate_count` (slot 8), `perturb_count` (slot 9)
+- `cxf_basis_diff` rewritten with 4 weighted categories: structural (w=4.0, colDenom-normalized), iteration (w=0.25, colDenom-normalized), propagation (w=1.0, rowDenom-normalized), work (w=0.5, rowDenom-normalized). Deltas clamped >=0.
+- Threshold formula fixed: `CONVERGENCE_BASE/(1+round)` → `max(0, k-5)*CONVERGENCE_BASE` per spec. Grace period now integral to formula, not separate guard.
+- Files: `cxf_solver.h`, `basis_stub.c`, `solve_lp.c`, `test_basis.c`. 45/45 tests pass. share2b+afiro OPTIMAL.
 
-The correct, active implementation is `cxf_pricing_update_weights` in `weight_update.c` (V2, P4.9), which properly implements simplified one-BTRAN DSE (Forrest & Goldfarb 1992). Called from `step.c` Phase 7b.
-
-Files changed: `src/pricing/update.c`, `src/pricing/pricing_stub.c`, `tests/unit/test_pricing.c`. 45/45 tests pass. No Netlib behavior change (confirmed share2b OPTIMAL).
+**convexfeld-l0ca closed.** Removed dead V1 `cxf_pricing_update` (broken SE weight stub, never called from production code). V2 `cxf_pricing_update_weights` in `weight_update.c` is correct and active.
+- Files: `update.c`, `pricing_stub.c`, `test_pricing.c`.
 
 ### Spot Check Results (post-4nrf)
 

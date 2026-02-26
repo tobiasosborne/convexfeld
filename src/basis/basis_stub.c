@@ -41,47 +41,89 @@
 /**
  * @brief Capture progress counters into snapshot buffer (v2 P3.16).
  *
- * Lightweight: copies scalar counters, no loops over problem data.
+ * Lightweight O(1): copies scalar counters, no loops over problem data.
  * Snapshot stored in state->progress_snapshot[CXF_SNAPSHOT_SIZE].
+ *
+ * Slot layout:
+ *   [0] iteration          [5] bounds_propagated
+ *   [1] pivots_since_refac [6] flip_count
+ *   [2] ftran_count        [7] phase
+ *   [3] rows_eliminated    [8] degenerate_count
+ *   [4] cols_eliminated    [9] perturb_count
  */
 void cxf_progress_snapshot(SolverState *state) {
     if (state == NULL) return;
     state->progress_snapshot[0] = state->iteration;
     state->progress_snapshot[1] = (state->basis != NULL) ?
         state->basis->pivots_since_refactor : 0;
-    state->progress_snapshot[2] = 0;  /* pricing_ops placeholder */
+    state->progress_snapshot[2] = state->ftran_count;
     state->progress_snapshot[3] = state->rows_eliminated;
     state->progress_snapshot[4] = state->cols_eliminated;
     state->progress_snapshot[5] = state->bounds_propagated;
     state->progress_snapshot[6] = state->flip_count;
     state->progress_snapshot[7] = state->phase;
+    state->progress_snapshot[8] = state->degenerate_count;
+    state->progress_snapshot[9] = state->perturb_count;
 }
 
 /**
  * @brief Compare current counters against last snapshot (v2 P3.16).
  *
- * Returns weighted progress score (0.0 = no progress, higher = more).
- * Per-category normalization: each delta divided by its own denominator
- * so categories contribute proportionally regardless of problem size.
- * NOT single-dimension-scaled (audit H3: that causes large problems
- * to appear to converge faster, triggering premature inner loop exit).
+ * Returns a non-negative weighted progress score (0.0 = stalled).
+ *
+ * Spec: basis_operations.md — weighted multi-category formula with
+ * colDenom/rowDenom normalization. Structural changes (row/col
+ * elimination) receive heavy weight; routine iteration counters
+ * receive light weight. Deltas clamped to >= 0 so counter resets
+ * between snapshots produce zero signal rather than negative.
  */
 double cxf_basis_diff(SolverState *state) {
     if (state == NULL) return 0.0;
-    int delta_iter = state->iteration - state->progress_snapshot[0];
-    int delta_rows = state->rows_eliminated - state->progress_snapshot[3];
-    int delta_cols = state->cols_eliminated - state->progress_snapshot[4];
-    int delta_props = state->bounds_propagated - state->progress_snapshot[5];
+
+    int n = state->num_vars    > 0 ? state->num_vars    : 1;
     int m = state->num_constrs > 0 ? state->num_constrs : 1;
-    int n = state->num_vars > 0 ? state->num_vars : 1;
-    /* Each category normalized by its own dimension:
-     * - iterations / (m+1): ~1.0 per check interval
-     * - row/col eliminations / dimension: fraction eliminated
-     * - bound propagations / total vars: propagation activity */
-    double score = (double)delta_iter / (double)(m + 1);
-    score += (double)delta_rows / (double)m;
-    score += (double)delta_cols / (double)n;
-    score += (double)delta_props / (double)(n + m);
+
+    /* Deltas — clamped to >= 0 (counter resets = no signal, not noise) */
+    int d_iter  = state->iteration        - state->progress_snapshot[0];
+    int d_piv   = ((state->basis != NULL) ?
+        state->basis->pivots_since_refactor : 0) - state->progress_snapshot[1];
+    int d_ftran = state->ftran_count      - state->progress_snapshot[2];
+    int d_rows  = state->rows_eliminated  - state->progress_snapshot[3];
+    int d_cols  = state->cols_eliminated  - state->progress_snapshot[4];
+    int d_props = state->bounds_propagated - state->progress_snapshot[5];
+    int d_flips = state->flip_count       - state->progress_snapshot[6];
+
+    if (d_iter  < 0) d_iter  = 0;
+    if (d_piv   < 0) d_piv   = 0;
+    if (d_ftran < 0) d_ftran = 0;
+    if (d_rows  < 0) d_rows  = 0;
+    if (d_cols  < 0) d_cols  = 0;
+    if (d_props < 0) d_props = 0;
+    if (d_flips < 0) d_flips = 0;
+
+    /* Normalization denominators (spec: basis_operations.md)
+     * colDenom = working columns at snapshot time
+     * rowDenom = working rows at snapshot time */
+    int snap_cols = state->progress_snapshot[4];
+    int snap_rows = state->progress_snapshot[3];
+    double colDenom = (double)((n - snap_cols) > 1 ? (n - snap_cols) : 1);
+    double rowDenom = (double)((m - snap_rows) > 1 ? (m - snap_rows) : 1);
+
+    /* Category weights (spec: structural heavy, iteration light) */
+    double score = 0.0;
+
+    /* Term 1: Structural progress (heavy — problem reduction is real progress) */
+    score += 4.0 * (double)(d_cols + d_rows) / colDenom;
+
+    /* Term 2: Iteration activity (light — expected, only absence tells) */
+    score += 0.25 * (double)(d_iter + d_piv + d_flips) / colDenom;
+
+    /* Term 3: Bound propagation (unit — constraint-level tightening) */
+    score += 1.0 * (double)d_props / rowDenom;
+
+    /* Term 4: Computational effort (moderate — FTRAN work proxy) */
+    score += 0.5 * (double)d_ftran / rowDenom;
+
     return score;
 }
 

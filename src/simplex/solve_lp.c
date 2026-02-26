@@ -244,21 +244,22 @@ int cxf_solve_lp(CxfModel *model) {
                 model->status = CXF_INFEASIBLE; terminated = 1; break;
             }
 
-            /* (9) Basis diff — convergence detection (audit H3).
-             * 5-check dead zone: skip convergence testing for the first
-             * 5 evaluations to let the solver establish its working basis.
-             * After that, test per-category-normalized progress score. */
+            /* (9) Basis diff — convergence detection (spec: perturbation.md).
+             * Threshold = max(0, k - k_0) * tau where k = inner check count,
+             * k_0 = 5 (grace period), tau = CONVERGENCE_BASE.
+             * First 5 checks: threshold=0 → any nonneg progress continues.
+             * After grace: threshold grows linearly → increasingly impatient. */
             if (state->iteration_mode == 1 &&
                 state->iteration > 0 &&
                 state->iteration % (state->num_constrs + 1) == 0) {
                 inner_checks++;
-                if (inner_checks > 5) {
-                    double progress = cxf_basis_diff(state);
-                    double threshold = CONVERGENCE_BASE / (1.0 + round);
-                    if (progress < threshold) {
-                        state->iteration_mode = 0;
-                        break;
-                    }
+                double progress = cxf_basis_diff(state);
+                int grace = inner_checks - 5;
+                double threshold = (grace > 0)
+                    ? (double)grace * CONVERGENCE_BASE : 0.0;
+                if (progress < threshold) {
+                    state->iteration_mode = 0;
+                    break;
                 }
                 state->iteration_mode = 0;
                 cxf_progress_snapshot(state);

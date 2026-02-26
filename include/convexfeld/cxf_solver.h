@@ -120,7 +120,7 @@ struct SolverState {
     int *posUnbdCount;        /**< Per-constraint +inf contribution count [num_constrs] */
 
     /* B3: Progress tracking (v2 — P3.20, P3.16, P3.25) */
-#define CXF_SNAPSHOT_SIZE 8
+#define CXF_SNAPSHOT_SIZE 10
     int progress_snapshot[CXF_SNAPSHOT_SIZE]; /**< Snapshot buffer for basis diff */
     double obj_at_last_refactor; /**< Objective at last refactor (stagnation) */
     int iteration_mode;       /**< Strategy flag (0=normal, 1=stagnation) */
