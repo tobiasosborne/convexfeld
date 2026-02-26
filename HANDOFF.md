@@ -16,6 +16,7 @@
 
 **convexfeld-s9am closed.** Re-enabled BFRT long-step ratio test using standard clamping (Koberstein 2005). No row negation (the previous approach that corrupted LU/eta). Flipped basic vars stay in basis, clamped to exact opposite bounds. Only the final leaving variable creates an eta vector. Loop collects up to 10 flippable blockers, extending step by `(ub-lb)/|d_i|`. Disabled under Bland's rule.
 - Files: `step.c` (Phase 3 loop, ~25 lines). All dead-code infrastructure was correct.
+- **Testing note:** BFRT does not trigger on tested Netlib instances (blend, brandy, fit1d, boeing2, kb2, ship04l, d6cube). Root cause: leaving variables are consistently slacks with one-sided bounds `[0,+inf)`. BFRT requires the leaving variable itself to have finite bounds on both sides. Implementation is correct and will engage on production problems with many tightly bounded structural variables.
 
 **convexfeld-lmkg closed.** Added equality constraint column scan (Phase 3) to `cxf_pivot_special` per `pivot_operations.md`. Variables in equalities return CXF_OK.
 - Files: `pivot_special.c`, `test_pivot_special.c`.
