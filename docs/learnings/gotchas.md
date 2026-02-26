@@ -1197,3 +1197,44 @@ the formula accounts for ALL inputs. The activity bounds were relative to
 the origin, not relative to the RHS. A formula like `slack = -max_a` only
 works if RHS is already embedded in the activity bounds (which it wasn't).
 
+---
+
+### col_nz_count Initialization Order Bug (2026-02-26)
+
+**Context:** `col_nz_count` (column nonzero counts for crash candidate removal)
+was populated from `ctx->csc_col_ptr` at context.c:172, but the CSC copy that
+creates `ctx->csc_col_ptr` happened at context.c:193 — AFTER the population.
+Result: `col_nz_count[j]` was always 0 for all structural variables.
+
+**Impact:** Any code reading `col_nz_count` got zeros. The crash candidate
+removal path (which decrements these counts) would have produced negative
+counts. Phase I Step 3 (structural swap) was dead code because it checked
+`col_nz_count[j] != 1` — always true when everything is 0.
+
+**Fix:** Move `col_nz_count` population after the CSC copy block.
+
+**Lesson:** When initialization has ordering dependencies (array A populated
+from array B), verify B exists before reading it. `calloc` returns zeros,
+masking the bug — the code "worked" with all-zero counts.
+
+---
+
+### Phase I Step 3 Structural Swap is Non-Spec (2026-02-26)
+
+**Context:** phase_one.c had a Step 3 that searched for singleton structural
+variables to swap into the basis for infeasible slack rows. This code was
+dead (col_nz_count always 0) and was removed.
+
+**V2 spec (crash_basis.md line 176):** "Unlike more aggressive crash procedures
+that attempt to insert structural (non-slack) variables into the basis, this
+variant constructs a basis entirely from slack variables."
+
+**When activated** (by fixing col_nz_count), Step 3 caused regressions on
+test_geq_constraints and test_mixed_senses. The value computation
+`x_j = rhs / a_ij` is only correct for singletons but the basis change
+invalidates the LU factorization state that hasn't been computed yet.
+
+**Lesson:** Dead code that was never tested is a liability. When fixing a bug
+that activates dead code, verify the dead code against the spec BEFORE
+assuming it's correct. Removing non-spec dead code is better than debugging it.
+

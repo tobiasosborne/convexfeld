@@ -114,58 +114,10 @@ int cxf_setup_phase_one(SolverState *state) {
         }
     }
 
-    /* Step 3: Use crash results to swap structurals into basis.
-     * For rows marked BASIC_LOWER by crash, look for a singleton
-     * structural that can replace the slack. */
-    if (state->row_status != NULL && state->csc_col_ptr != NULL) {
-        for (int i = 0; i < m; i++) {
-            if (state->row_status[i] != CXF_ROW_BASIC_LOWER) continue;
-
-            int slack_var = n + i;
-            /* Only useful if slack is infeasible */
-            double sv = state->work_x[slack_var];
-            double sl = state->work_lb[slack_var];
-            double su = state->work_ub[slack_var];
-            if (sv >= sl - CXF_FEASIBILITY_TOL &&
-                sv <= su + CXF_FEASIBILITY_TOL)
-                continue;
-
-            /* Find best singleton structural column in this row */
-            int best_col = -1;
-            double best_abs = 0.0;
-            for (int j = 0; j < n; j++) {
-                if (basis->var_status[j] >= 0) continue;
-                if (state->col_nz_count == NULL) continue;
-                if (state->col_nz_count[j] != 1) continue;
-                int64_t cs = state->csc_col_ptr[j];
-                int64_t ce = state->csc_col_ptr[j + 1];
-                for (int64_t k = cs; k < ce; k++) {
-                    if (state->csc_row_idx[k] == i) {
-                        double aij = fabs(state->csc_values[k]);
-                        if (aij > CXF_PIVOT_TOL && aij > best_abs) {
-                            best_abs = aij;
-                            best_col = j;
-                        }
-                        break;
-                    }
-                }
-            }
-
-            if (best_col >= 0) {
-                basis->basic_vars[i] = best_col;
-                basis->var_status[best_col] = i;
-                basis->var_status[slack_var] = CXF_VAR_AT_LOWER;
-                state->work_x[slack_var] = 0.0;
-
-                /* Compute structural value from constraint */
-                double rhs = state->work_rhs ? state->work_rhs[i] : 0.0;
-                int64_t cs = state->csc_col_ptr[best_col];
-                double aij = state->csc_values[cs];
-                if (fabs(aij) > CXF_PIVOT_TOL)
-                    state->work_x[best_col] = rhs / aij;
-            }
-        }
-    }
+    /* V2 spec (crash_basis.md line 176): crash constructs a slack-only
+     * basis. No structural variable insertion during Phase I setup.
+     * Phase I's implicit bound-violation approach handles infeasible
+     * slacks via w-coefficients and simplex iteration. */
 
     /* Step 4: Compute Phase I w coefficients and objective */
     int total = n + m;

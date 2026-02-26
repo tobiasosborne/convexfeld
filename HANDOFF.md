@@ -4,67 +4,53 @@
 
 ---
 
-## STATUS: 45/45 unit tests pass. Architecture significantly improved this session.
+## STATUS: 45/45 unit tests pass. Three bugs fixed (col_nz_count init, non-spec dead code, row classification).
 
-### Session Summary (2026-02-26) — 8 issues closed
+### Session Summary (2026-02-26) — 1 issue closed, 1 new issue filed
 
 | Issue | Priority | What |
 |-------|----------|------|
-| convexfeld-n426 | P1 | Decomposed `cxf_simplex_step` 447→104 lines |
-| convexfeld-mxjm | P1 | Created 5 internal headers, replaced 88 extern declarations |
-| convexfeld-ojwu | P2 | VAR status constants centralized (by mxjm) |
-| convexfeld-lmkg | P1 | Equality constraint scan in `cxf_pivot_special` |
-| convexfeld-s9am | P2 | Re-enabled BFRT via standard clamping (Koberstein 2005) |
-| convexfeld-36qh | P2 | Basis snapshot/diff rewritten per spec |
-| convexfeld-rcrg | P2 | MPS parser: `atof()`→`strtod()`, name buffer 16→64 |
-| convexfeld-l0ca | P2 | Removed dead V1 pricing weight stub |
+| convexfeld-q45o | P1 | Fixed col_nz_count init order, removed non-spec Phase I Step 3, completed row classification |
+
+### What Changed
+
+1. **context.c** — `col_nz_count` was populated from `csc_col_ptr` BEFORE the CSC copy created it. Every element was always zero. Moved population after CSC copy. This is a prerequisite for any future crash candidate pre-classification.
+
+2. **phase_one.c** — Removed Phase I Step 3 structural swap (53 lines). V2 crash spec line 176 explicitly says crash constructs a slack-only basis. Step 3 violated this. It was dead code (col_nz_count always zero) that caused regressions when activated.
+
+3. **solve_lp.c** — Added 8-line loop after crash to mark remaining UNASSIGNED rows as BASIC_LOWER. Crash returns early on infeasible equality rows (V2 spec), leaving subsequent rows unclassified. This satisfies spec postcondition 1.
+
+### Pre-Existing Issues Discovered
+
+- **scsd1**: Returns CXF_ERROR_INVALID_ARGUMENT (10003) at iteration 87 through the full `cxf_solve_lp` path. The diagnose tool doesn't hit this because it uses a simpler loop (no phase_end, step2, step3, perturbation). Root cause is likely numerical corruption during degenerate Phase I cycling on the all-equality problem. Filed as convexfeld-5z94 update needed.
+
+- **kb2**: Returns ITERATION_LIMIT through `cxf_solve_lp` but works via diagnose tool. Same class of issue — the full iteration loop (with phase_end/step2/step3/perturbation) diverges from the diagnose loop.
 
 ### Audit Status
 
-Previous sessions fixed the major implementation audit items. Current status:
+All previous audit items unchanged. New items:
 
 | Audit Item | Status | Notes |
 |------------|--------|-------|
-| C1: Kahan-stable addition | DONE | `safe_add()` in `pivot_update.c`, `negUnbdCount`/`posUnbdCount` wired |
-| C2: `cxf_pivot_bound` stub | DONE | 7-phase implementation with eta, pricing, activity propagation |
-| C3: `cxf_pivot_update` API | DONE | New signature `(oldLB, newLB, oldUB, newUB, infinity)` |
-| C4: `cxf_pivot_special` | DONE | Equality constraint scan + Phase I suppression |
-| H1: Harris tolerance 10x tight | DONE | `harrisBand = 10.0 * feasTol` |
-| H2: Two-stage infeasibility | DONE | From-scratch recompute + re-derive in step2/step3 |
-| H3: Inner loop convergence | DONE | Weighted categories + `max(0,k-5)*tau` threshold |
-| H4: Phase I w-coefficients | DONE | Recomputed from scratch after each pivot |
-| M1: BFRT disabled | DONE | Standard clamping, no row negation |
-| M2: Dense LU | TODO | Causes timeouts on bandm/tuff (m>300) |
-| M3: Basis snapshot | DONE | 10-slot counter snapshot, colDenom/rowDenom normalization |
-| M4: V1 pricing weight | DONE | Dead code removed; V2 `weight_update.c` is correct |
-
-### What's Currently Deployed
-
-- **4nrf REVERTED** (794fdad) — activity `-rhs` init caused regressions. Zero-init is active.
-- **ic80 active** — Phase I→II constraint cleanup with `rhs - max_a` slack formula.
-- All unit + integration tests pass (45/45).
-- Netlib: share2b, afiro, adlittle, beaconfd, kb2 confirmed OPTIMAL this session.
-
-### Architecture Improvements This Session
-
-1. **5 internal headers** eliminate 88 scattered `extern` declarations. Signature changes now produce compiler errors at all call sites.
-2. **step.c decomposed** from 724→656 lines. `cxf_simplex_step` from 447→104 lines via `pricing_and_ftran()` and `post_pivot_updates()` extraction.
-3. **BFRT re-enabled** via standard clamping (no row negation). Does not trigger on tested Netlib instances (slacks dominate departures).
-4. **Convergence detection** rewritten with weighted multi-category formula and spec-compliant threshold.
+| col_nz_count init order | DONE | Was always zero; now correct |
+| Phase I Step 3 (non-spec) | DONE | Removed — violated V2 crash spec |
+| Row classification completion | DONE | solve_lp.c completes after crash |
+| M2: Dense LU | TODO | Causes timeouts on bandm/tuff |
+| scsd1 iter-87 error | TODO | Pre-existing, needs investigation |
 
 ### Next Steps (for next agent)
 
-1. **Sparse LU** (M2) — Dense `calloc(m*m)` working matrix causes timeouts on bandm (m=305), tuff (m=333). High effort but eliminates remaining timeout failures.
-2. **Run full Netlib suite** — Many audit fixes deployed since last full run. Some previously-failing instances may now pass.
-3. **Phase I convergence** (convexfeld-pr0h) — Near feasibility boundary pricing issues.
-4. **Phase II primal accuracy** (convexfeld-n9ok) — Basic vars past bounds on boeing1/e226/bore3d/grow7.
+1. **Investigate scsd1/kb2 iteration loop errors** — The full solve_lp iteration loop (phase_end + step2 + step3 + perturbation + post_iterate) produces errors that the diagnose tool's simpler loop doesn't. Something in the additional functions corrupts state during degenerate Phase I cycling.
+
+2. **Crash candidate pre-classification** — col_nz_count now works. The V2 spec (crash_basis.md line 82) describes a "separate initialization step" that marks rows with positive status for crash candidate removal. This is not yet implemented.
+
+3. **Sparse LU** (M2) — Dense `calloc(m*m)` causes timeouts on bandm/tuff.
 
 ---
 
 ## DO NOT
-- Enable scaling without testing H1 (Harris tolerance) first
+- Add structural variable insertion to Phase I setup (violates V2 crash spec line 176)
 - Change diag_coeff based on RHS sign (causes regressions on israel/stair/e226)
 - Re-add RC-based status reassignment in refine.c (corrupts obj)
 - Hack refactorization parameters to fix primal accuracy — needs sparse LU
-- Use `cols_eliminated` counter for constraint cleanup — it feeds stall detection
 - Use row negation for BFRT (corrupts LU/eta factorization)

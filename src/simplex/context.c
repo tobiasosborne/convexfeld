@@ -168,17 +168,7 @@ int cxf_simplex_init(CxfModel *model, SolverState **stateP) {
             cxf_simplex_final(ctx);
             return CXF_ERROR_OUT_OF_MEMORY;
         }
-        /* Compute initial column nonzero counts from owned CSC copy */
-        if (ctx->csc_col_ptr != NULL) {
-            for (int j = 0; j < n; j++) {
-                ctx->col_nz_count[j] = (int)(ctx->csc_col_ptr[j + 1]
-                                              - ctx->csc_col_ptr[j]);
-            }
-        }
-        /* Each slack variable column has exactly 1 nonzero (the diagonal) */
-        for (int i = 0; i < m; i++) {
-            ctx->col_nz_count[n + i] = 1;
-        }
+        /* col_nz_count populated after CSC copy below */
     }
 
     /* P3.1: Copy constraint matrix into SolverState-owned arrays.
@@ -251,6 +241,19 @@ int cxf_simplex_init(CxfModel *model, SolverState **stateP) {
                 cxf_simplex_final(ctx); return CXF_ERROR_OUT_OF_MEMORY;
             }
             memcpy(ctx->work_sense, mat->sense, (size_t)m * sizeof(char));
+        }
+    }
+
+    /* Populate col_nz_count from owned CSC copy (must run AFTER CSC copy).
+     * The CSC copy above creates ctx->csc_col_ptr; col_nz_count was
+     * allocated earlier but left zero-initialized until the copy exists. */
+    if (ctx->col_nz_count != NULL && ctx->csc_col_ptr != NULL) {
+        for (int j = 0; j < n; j++) {
+            ctx->col_nz_count[j] = (int)(ctx->csc_col_ptr[j + 1]
+                                          - ctx->csc_col_ptr[j]);
+        }
+        for (int i = 0; i < m; i++) {
+            ctx->col_nz_count[n + i] = 1;  /* slack: 1 nonzero (diagonal) */
         }
     }
 

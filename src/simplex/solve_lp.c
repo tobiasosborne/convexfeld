@@ -127,6 +127,18 @@ int cxf_solve_lp(CxfModel *model) {
     /* Crash basis (P2.5) */
     cxf_simplex_crash(state, env);
 
+    /* Complete row classification after crash.
+     * Crash returns early on infeasible rows (spec postcondition 2),
+     * leaving subsequent rows UNASSIGNED. Mark remaining rows
+     * BASIC_LOWER to satisfy spec postcondition 1 (all unassigned
+     * rows classified) and enable future crash improvements. */
+    if (state->row_status) {
+        for (int i = 0; i < state->num_constrs; i++) {
+            if (state->row_status[i] == CXF_ROW_UNASSIGNED)
+                state->row_status[i] = CXF_ROW_BASIC_LOWER;
+        }
+    }
+
     /* Phase I setup */
     rc = cxf_setup_phase_one(state);
     if (rc != CXF_OK) { model->status = rc; cxf_simplex_final(state); return rc; }
