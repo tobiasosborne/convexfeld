@@ -269,42 +269,31 @@ static void update_reduced_costs(SolverState *state, int entering,
 }
 
 /*===========================================================================
- * cxf_simplex_step — V2 simplex iteration engine (P3.20)
+ * Phase 1+2: Pricing selection → FTRAN → quality check → ratio test
  *
- * Pricing → FTRAN → Harris ratio test → BFRT → pivot → BTRAN →
- * RC update → pricing cascade → refactorization check
+ * Selects entering variable via multi-level pricing, computes pivot
+ * column, runs Harris ratio test, and computes step size.
+ *
+ * Returns ITERATE_OPTIMAL if no entering variable found,
+ * ITERATE_UNBOUNDED/ITERATE_INFEASIBLE on early termination,
+ * ITERATE_CONTINUE on successful bound flip (no pivot needed),
+ * or CXF_OK when a pivot should proceed.
  *===========================================================================*/
-
-int cxf_simplex_step(SolverState *state, CxfEnv *env) {
-    if (state == NULL || env == NULL) return CXF_ERROR_NULL_ARGUMENT;
-
+static int pricing_and_ftran(SolverState *state, CxfEnv *env,
+                             int *out_entering, int *out_entering_sign,
+                             int *out_leavingRow, double *out_pivotElement,
+                             double *out_stepSize) {
     BasisState *basis = state->basis;
-    if (basis == NULL) return CXF_ERROR_NULL_ARGUMENT;
-
     int m = state->num_constrs;
     int n = state->num_vars;
     int total = n + m;
-
-    if (m == 0) { state->iteration++; return ITERATE_OPTIMAL; }
-    if (state->csc_col_ptr == NULL) return CXF_ERROR_NULL_ARGUMENT;
-
     double *pivotCol = basis->work;
     double *column = state->work_column;
-    if (!pivotCol || !column) return CXF_ERROR_OUT_OF_MEMORY;
 
-    /*--- Phase 1+2: Multi-level pricing with tolerance escalation ---
-     * v2 P2.3 Phase 5 + P3.20 Phase 1-2 + P4.4/P4.5 V2 queue system
-     *
-     * Level 0 (loose):    optimality_tol * 10 — fast, only strong RCs
-     * Level 1 (standard): optimality_tol      — moderate
-     * Level 2 (tight):    optimality_tol * 0.1 — catches weak RCs
-     *
-     * Only declare ITERATE_OPTIMAL when ALL levels return 0 candidates.
-     *-------------------------------------------------------------------*/
+    /* Multi-level pricing (v2 P2.3 + P3.20 + P4.4/P4.5) */
     int candidates[MAX_CANDIDATES];
     int num_cand = 0;
 
-    /* P4.4: Process V2 queues before pricing evaluation */
     if (state->pricing)
         cxf_pricing_update_queues(state->pricing, state);
 
@@ -312,98 +301,71 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env) {
         if (state->pricing)
             cxf_pricing_set_level(state->pricing, level);
 
-        /* Tolerance selection per level (v2 P3.20 Phase 1) */
         double pricing_tol;
-        if (level == 0)
-            pricing_tol = env->optimality_tol * 10.0;
-        else if (level == 1)
-            pricing_tol = env->optimality_tol;
-        else
-            pricing_tol = env->optimality_tol * 0.1;
+        if (level == 0)      pricing_tol = env->optimality_tol * 10.0;
+        else if (level == 1) pricing_tol = env->optimality_tol;
+        else                 pricing_tol = env->optimality_tol * 0.1;
 
         num_cand = 0;
         if (state->use_bland) {
-            /* Bland's rule: full scan for anti-cycling guarantee */
             for (int j = 0; j < total && num_cand < MAX_CANDIDATES; j++) {
                 if (basis->var_status[j] >= 0) continue;
                 if (state->work_ub[j] <=
-                    state->work_lb[j] + CXF_FEASIBILITY_TOL)
-                    continue;
+                    state->work_lb[j] + CXF_FEASIBILITY_TOL) continue;
                 double rc = state->work_dj[j];
-                if (basis->var_status[j] == CXF_VAR_AT_LOWER &&
-                    rc < -pricing_tol)
+                if (basis->var_status[j] == CXF_VAR_AT_LOWER && rc < -pricing_tol)
                     candidates[num_cand++] = j;
-                else if (basis->var_status[j] == CXF_VAR_AT_UPPER &&
-                         rc > pricing_tol)
+                else if (basis->var_status[j] == CXF_VAR_AT_UPPER && rc > pricing_tol)
                     candidates[num_cand++] = j;
             }
         } else if (state->pricing) {
-            /* P4.5+P4.8: V2 adaptive candidate retrieval from queues */
             int v2_count = 0;
             int *v2_cands = NULL;
             cxf_pricing_candidates_v2(state->pricing, state,
                                       &v2_count, &v2_cands);
-
-            /* RC-filter the V2 dirty queue to find attractive candidates */
             if (v2_count > 0 && v2_cands != NULL) {
                 for (int k = 0; k < v2_count; k++) {
                     int j = v2_cands[k];
                     if (j < 0 || j >= total) continue;
                     if (basis->var_status[j] >= 0) continue;
                     if (state->work_ub[j] <=
-                        state->work_lb[j] + CXF_FEASIBILITY_TOL)
-                        continue;
+                        state->work_lb[j] + CXF_FEASIBILITY_TOL) continue;
                     double rc = state->work_dj[j];
-                    if ((basis->var_status[j] == CXF_VAR_AT_LOWER &&
-                         rc < -pricing_tol) ||
-                        (basis->var_status[j] == CXF_VAR_AT_UPPER &&
-                         rc > pricing_tol)) {
-                        if (num_cand < MAX_CANDIDATES)
-                            candidates[num_cand++] = j;
+                    if ((basis->var_status[j] == CXF_VAR_AT_LOWER && rc < -pricing_tol) ||
+                        (basis->var_status[j] == CXF_VAR_AT_UPPER && rc > pricing_tol)) {
+                        if (num_cand < MAX_CANDIDATES) candidates[num_cand++] = j;
                     }
                 }
             }
-
-            /* Fallback: V2 queues empty (first iterations). Dantzig scan. */
             if (num_cand == 0) {
                 double best = -pricing_tol;
                 for (int j = 0; j < total; j++) {
                     if (basis->var_status[j] >= 0) continue;
                     if (state->work_ub[j] <=
-                        state->work_lb[j] + CXF_FEASIBILITY_TOL)
-                        continue;
+                        state->work_lb[j] + CXF_FEASIBILITY_TOL) continue;
                     double rc = state->work_dj[j];
-                    if (basis->var_status[j] == CXF_VAR_AT_LOWER &&
-                        rc < best) {
+                    if (basis->var_status[j] == CXF_VAR_AT_LOWER && rc < best) {
                         best = rc; candidates[0] = j; num_cand = 1;
-                    } else if (basis->var_status[j] == CXF_VAR_AT_UPPER &&
-                               -rc < best) {
+                    } else if (basis->var_status[j] == CXF_VAR_AT_UPPER && -rc < best) {
                         best = -rc; candidates[0] = j; num_cand = 1;
                     }
                 }
             }
         } else {
-            /* No pricing context: Dantzig's rule (most negative RC) */
             double best = -pricing_tol;
             for (int j = 0; j < total; j++) {
                 if (basis->var_status[j] >= 0) continue;
                 if (state->work_ub[j] <=
-                    state->work_lb[j] + CXF_FEASIBILITY_TOL)
-                    continue;
+                    state->work_lb[j] + CXF_FEASIBILITY_TOL) continue;
                 double rc = state->work_dj[j];
-                if (basis->var_status[j] == CXF_VAR_AT_LOWER &&
-                    rc < best) {
+                if (basis->var_status[j] == CXF_VAR_AT_LOWER && rc < best) {
                     best = rc; candidates[0] = j; num_cand = 1;
-                } else if (basis->var_status[j] == CXF_VAR_AT_UPPER &&
-                           -rc < best) {
+                } else if (basis->var_status[j] == CXF_VAR_AT_UPPER && -rc < best) {
                     best = -rc; candidates[0] = j; num_cand = 1;
                 }
             }
         }
-
         if (num_cand > 0) break;
-
-        /* End this level before escalating (v2 P2.3 Phase 5) */
         if (state->pricing) {
             cxf_pricing_end_level(state->pricing);
             state->pricing->level_escalations++;
@@ -412,51 +374,37 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env) {
 
     if (num_cand == 0) return ITERATE_OPTIMAL;
 
-    /*--- Phase 2: Per-candidate evaluation ---*/
+    /* Per-candidate evaluation: FTRAN + quality check + ratio test */
     int entering = -1, leavingRow = -1;
     double pivotElement = 0.0, stepSize = 0.0;
-    int entering_sign = 1;  /* +1 from lower, -1 from upper */
+    int entering_sign = 1;
     int rc;
 
     for (int ci = 0; ci < num_cand; ci++) {
         entering = candidates[ci];
-        entering_sign = (basis->var_status[entering] == CXF_VAR_AT_UPPER)
-                        ? -1
-                        : (basis->var_status[entering] == CXF_VAR_SUPERBASIC &&
-                           state->work_dj[entering] > 0.0)
-                        ? -1 : 1;
+        entering_sign = (basis->var_status[entering] == CXF_VAR_AT_UPPER) ? -1
+            : (basis->var_status[entering] == CXF_VAR_SUPERBASIC &&
+               state->work_dj[entering] > 0.0) ? -1 : 1;
 
-        /* Infeasibility check */
         if (state->work_lb[entering] >
             state->work_ub[entering] + env->feasibility_tol)
             return ITERATE_INFEASIBLE;
 
-        /* FTRAN */
         extract_column_ext(state, entering, column);
         rc = cxf_ftran(basis, column, pivotCol);
         if (rc != CXF_OK) return rc;
 
-        /* P2.2: FTRAN quality checks — NaN/Inf + residual monitoring.
-         * column[] still holds the original entering column (pre-FTRAN).
-         * pivotCol[] holds B^{-1} * column. */
+        /* FTRAN quality: NaN/Inf + residual monitoring */
         {
             int need_refactor = 0;
-
-            /* Check for NaN/Inf in FTRAN result */
-            for (int ri = 0; ri < m; ri++) {
+            for (int ri = 0; ri < m; ri++)
                 if (!isfinite(pivotCol[ri])) { need_refactor = 1; break; }
-            }
 
-            /* Residual monitoring: ||a - B*(B^{-1}a)||_inf
-             * Periodic check when eta vectors have accumulated.
-             * Trigger refactorization if residual exceeds threshold. */
             if (!need_refactor && state->eta_count > 10 &&
                 state->iteration % 20 == 0) {
-                double residual = cxf_ftran_residual(state, column,
-                                                     pivotCol);
+                double residual = cxf_ftran_residual(state, column, pivotCol);
                 if (residual > 10.0 * env->feasibility_tol) {
                     need_refactor = 1;
-                    /* Adaptive: reduce future eta threshold */
                     int new_limit = state->eta_count;
                     if (new_limit < 25) new_limit = 25;
                     if (state->thresholds[5] <= 0 ||
@@ -464,28 +412,21 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env) {
                         state->thresholds[5] = new_limit;
                 }
             }
-
             if (need_refactor) {
                 cxf_solver_refactor(state, env);
                 cxf_recompute_xB(state);
                 cxf_recompute_objective(state);
                 cxf_compute_reduced_costs(state);
-                /* Re-FTRAN after refactorization */
                 extract_column_ext(state, entering, column);
                 rc = cxf_ftran(basis, column, pivotCol);
                 if (rc != CXF_OK) return rc;
             }
         }
 
-        /* Harris two-pass ratio test */
         rc = cxf_ratio_test(state, env, entering, pivotCol, m,
                             &leavingRow, &pivotElement);
         if (rc == CXF_UNBOUNDED) {
-            /* Per harris_ratio_test.md: reject column and reprice.
-             * If entering has finite opposite bound, flip it instead.
-             * Only return UNBOUNDED if genuinely unbounded. */
             if (ci + 1 < num_cand) continue;
-            /* Bound flip: entering has finite range → flip to opposite bound */
             double lb_e = state->work_lb[entering];
             double ub_e = state->work_ub[entering];
             if (lb_e > -CXF_INFINITY && ub_e < CXF_INFINITY) {
@@ -495,18 +436,12 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env) {
                 state->work_x[entering] = new_x;
                 basis->var_status[entering] = (entering_sign > 0)
                     ? CXF_VAR_AT_UPPER : CXF_VAR_AT_LOWER;
-                /* Update basic variable values for the flip */
                 for (int ii = 0; ii < m; ii++)
-                    state->work_x[basis->basic_vars[ii]] -=
-                        delta * pivotCol[ii];
+                    state->work_x[basis->basic_vars[ii]] -= delta * pivotCol[ii];
                 state->obj_value += state->work_dj[entering] * delta;
                 state->iteration++;
                 return ITERATE_CONTINUE;
             }
-            /* Phase I: auxiliary unboundedness does NOT imply original
-             * problem is unbounded (spec pivot_operations.md line 247).
-             * Suppress and refactorize to clear any drift that caused
-             * a spurious no-blocker result from the ratio test. */
             if (state->phase == 1) {
                 cxf_solver_refactor(state, env);
                 cxf_recompute_xB(state);
@@ -523,57 +458,138 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env) {
             return CXF_NUMERIC;
         }
 
-        /* Step size */
         stepSize = compute_step(state, leavingRow, pivotElement, entering,
                                 entering_sign);
-
-        /* Under Bland's rule, skip degenerate pivots if alternatives exist */
         if (state->use_bland && stepSize < 1e-8 && ci + 1 < num_cand)
             continue;
         break;
     }
 
-    /*--- Phase 3: BFRT — bound-flipping ratio test (P2.4 Stage 3) ---
-     * Standard clamping approach (Koberstein 2005): no row negation,
-     * no matrix modification, no factorization update for flips.
-     * The pivot column is precomputed by FTRAN and doesn't change.
-     * Flipped variables stay basic with values clamped to exact bounds.
-     * Only the final leaving variable creates an eta vector.
-     * Disabled under Bland's rule (anti-cycling guarantee). */
+    *out_entering = entering;
+    *out_entering_sign = entering_sign;
+    *out_leavingRow = leavingRow;
+    *out_pivotElement = pivotElement;
+    *out_stepSize = stepSize;
+    return CXF_OK;
+}
+
+/*===========================================================================
+ * Phases 6-9: Post-pivot updates (objective, RC, weights, pricing, refactor)
+ *===========================================================================*/
+static void post_pivot_updates(SolverState *state, CxfEnv *env,
+                               int entering, int leaving, int leavingRow,
+                               int entering_sign, double d_entering,
+                               double pivotElement, double stepSize,
+                               const double *pivotCol, const double *rho,
+                               int btran_ok,
+                               const int *flipped_rows, int num_flips) {
+    BasisState *basis = state->basis;
+    int m = state->num_constrs;
+    int total = state->num_vars + m;
+
+    /* Phase 6: Update objective */
+    if (state->phase == 1) {
+        for (int j = 0; j < total; j++) state->work_obj[j] = 0.0;
+        double p1_obj = 0.0;
+        for (int i = 0; i < m; i++) {
+            int bv = basis->basic_vars[i];
+            if (bv < 0 || bv >= total) continue;
+            double xv = state->work_x[bv];
+            double lbv = state->work_lb[bv], ubv = state->work_ub[bv];
+            if (xv < lbv - CXF_FEASIBILITY_TOL) {
+                state->work_obj[bv] = -1.0; p1_obj += (lbv - xv);
+            } else if (xv > ubv + CXF_FEASIBILITY_TOL) {
+                state->work_obj[bv] = +1.0; p1_obj += (xv - ubv);
+            }
+        }
+        state->obj_value = p1_obj;
+        if (leaving >= 0 && leaving < total) state->work_obj[leaving] = 0.0;
+    } else {
+        state->obj_value += entering_sign * d_entering * stepSize;
+    }
+
+    /* Phase 7: Reduced cost update */
+    if (state->phase == 1) {
+        cxf_compute_reduced_costs(state);
+    } else if (btran_ok) {
+        update_reduced_costs(state, entering, leaving,
+                             d_entering, pivotElement, rho);
+    } else {
+        cxf_compute_reduced_costs(state);
+    }
+
+    /* Phase 7b: Steepest edge / Devex weight update */
+    if (state->pricing && state->pricing->weights != NULL)
+        cxf_pricing_update_weights(state->pricing, state, entering,
+                                   leavingRow, pivotCol,
+                                   btran_ok ? rho : NULL);
+
+    /* Phase 8: V2 pricing notification */
+    if (state->pricing) {
+        cxf_pricing_update_var(state->pricing, state, entering);
+        cxf_pricing_update_constr(state->pricing, state, leavingRow);
+        for (int f = 0; f < num_flips; f++) {
+            int bv = basis->basic_vars[flipped_rows[f]];
+            if (bv >= 0 && bv < total)
+                cxf_pricing_update_var(state->pricing, state, bv);
+        }
+    }
+
+    /* Phase 9: Refactorization check */
+    if (cxf_refactor_check(state, env) > 0) {
+        cxf_solver_refactor(state, env);
+        cxf_recompute_xB(state);
+        cxf_recompute_objective(state);
+        cxf_compute_reduced_costs(state);
+    }
+}
+
+/*===========================================================================
+ * cxf_simplex_step — V2 simplex iteration engine (P3.20)
+ *
+ * Orchestrates: pricing → FTRAN → ratio test → BFRT → BTRAN → pivot →
+ *               objective → RC → weights → pricing cascade → refactor
+ *===========================================================================*/
+int cxf_simplex_step(SolverState *state, CxfEnv *env) {
+    if (state == NULL || env == NULL) return CXF_ERROR_NULL_ARGUMENT;
+    BasisState *basis = state->basis;
+    if (basis == NULL) return CXF_ERROR_NULL_ARGUMENT;
+    int m = state->num_constrs;
+    int total = state->num_vars + m;
+    if (m == 0) { state->iteration++; return ITERATE_OPTIMAL; }
+    if (state->csc_col_ptr == NULL) return CXF_ERROR_NULL_ARGUMENT;
+    if (!basis->work || !state->work_column) return CXF_ERROR_OUT_OF_MEMORY;
+
+    /* Phase 1+2: Select entering variable, FTRAN, ratio test, step size */
+    int entering = -1, entering_sign = 1, leavingRow = -1;
+    double pivotElement = 0.0, stepSize = 0.0;
+    int rc = pricing_and_ftran(state, env, &entering, &entering_sign,
+                               &leavingRow, &pivotElement, &stepSize);
+    if (rc != CXF_OK) return rc;
+
+    double *pivotCol = basis->work;
+
+    /* Phase 3: BFRT — extend step via bound flips (Koberstein 2005) */
     int flipped_rows[MAX_BFRT_FLIPS];
     int num_flips = 0;
-
     if (!state->use_bland) {
         int blocker_row = leavingRow;
         while (num_flips < MAX_BFRT_FLIPS) {
             int bv = basis->basic_vars[blocker_row];
-            double bv_lb = state->work_lb[bv];
-            double bv_ub = state->work_ub[bv];
-
-            /* Can this variable flip? Needs finite bounds on both sides
-             * with a non-negligible range. */
-            if (bv_lb <= -CXF_INFINITY || bv_ub >= CXF_INFINITY ||
-                (bv_ub - bv_lb) < CXF_FEASIBILITY_TOL)
-                break;  /* Non-flippable — this is the true leaving variable */
-
-            /* Record flip and extend step */
+            if (state->work_lb[bv] <= -CXF_INFINITY ||
+                state->work_ub[bv] >= CXF_INFINITY ||
+                (state->work_ub[bv] - state->work_lb[bv]) < CXF_FEASIBILITY_TOL)
+                break;
             flipped_rows[num_flips++] = blocker_row;
             double sd = fabs(entering_sign * pivotCol[blocker_row]);
             if (sd < CXF_PIVOT_TOL) break;
-            stepSize += (bv_ub - bv_lb) / sd;
-
-            /* Find next blocker among non-flipped variables */
+            stepSize += (state->work_ub[bv] - state->work_lb[bv]) / sd;
             double next_ratio, next_pivot;
             int next_row = find_next_blocker(state, pivotCol, flipped_rows,
                                              num_flips, entering_sign,
                                              &next_ratio, &next_pivot);
-            if (next_row < 0) break;  /* No more blockers */
-
-            /* If the next blocker hits before the flip extension completes,
-             * the step is limited to its ratio. */
-            if (next_ratio < stepSize)
-                stepSize = next_ratio;
-
+            if (next_row < 0) break;
+            if (next_ratio < stepSize) stepSize = next_ratio;
             blocker_row = next_row;
             leavingRow = next_row;
             pivotElement = next_pivot;
@@ -590,24 +606,19 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env) {
         state->degenerate_count = 0;
     }
 
-    /*--- Phase 4: BTRAN for leaving row (before pivot modifies basis) ---*/
+    /* Phase 4: BTRAN (before pivot modifies basis) */
     int leaving = basis->basic_vars[leavingRow];
     double d_entering = state->work_dj[entering];
     double *rho = state->work_cB;
-    int btran_ok = (rho != NULL &&
-                    cxf_btran(basis, leavingRow, rho) == CXF_OK);
+    int btran_ok = (rho != NULL && cxf_btran(basis, leavingRow, rho) == CXF_OK);
 
-    /*--- Phase 5: Execute pivot ---*/
+    /* Phase 5: Execute pivot */
     if (num_flips > 0) {
-        /* BFRT path: update all basic vars with total step */
         for (int i = 0; i < m; i++) {
             int bv = basis->basic_vars[i];
             if (bv >= 0 && bv < total)
                 state->work_x[bv] -= stepSize * pivotCol[i];
         }
-
-        /* Clamp flipped variables to their opposite bound.
-         * Use entering_sign * pivotCol to determine direction. */
         for (int f = 0; f < num_flips; f++) {
             int row = flipped_rows[f];
             int bv = basis->basic_vars[row];
@@ -616,108 +627,29 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env) {
             else
                 state->work_x[bv] = state->work_lb[bv];
         }
-
-        /* Update entering variable (use current x, not lb/ub — handles free vars) */
         if (basis->var_status[entering] == CXF_VAR_AT_LOWER)
-            state->work_x[entering] = state->work_x[entering] + stepSize;
+            state->work_x[entering] += stepSize;
         else
-            state->work_x[entering] = state->work_x[entering] - stepSize;
-
-        /* Determine leaving variable's nonbasic status before pivot */
+            state->work_x[entering] -= stepSize;
         int lv_status = CXF_VAR_AT_LOWER;
-        if (leaving >= 0 && leaving < total) {
-            double x = state->work_x[leaving];
-            if (fabs(x - state->work_ub[leaving]) <
-                fabs(x - state->work_lb[leaving]) &&
-                state->work_ub[leaving] < CXF_INFINITY)
-                lv_status = CXF_VAR_AT_UPPER;
-        }
-
-        /* Basis exchange: eta + status update */
+        if (leaving >= 0 && leaving < total &&
+            fabs(state->work_x[leaving] - state->work_ub[leaving]) <
+            fabs(state->work_x[leaving] - state->work_lb[leaving]) &&
+            state->work_ub[leaving] < CXF_INFINITY)
+            lv_status = CXF_VAR_AT_UPPER;
         rc = cxf_pivot_with_eta(basis, leavingRow, pivotCol,
                                 entering, leaving, lv_status);
         if (rc != CXF_OK) return rc;
         state->eta_count = basis->eta_count;
     } else {
-        /* Standard path (no flips) */
-        rc = cxf_apply_pivot(state, entering, leavingRow,
-                             pivotCol, stepSize);
+        rc = cxf_apply_pivot(state, entering, leavingRow, pivotCol, stepSize);
         if (rc != CXF_OK) return rc;
     }
 
-    /*--- Phase 6: Update objective ---*/
-    if (state->phase == 1) {
-        /* Phase I: recompute w coefficients and objective from scratch.
-         * The incremental formula is invalid because w changes after pivot.
-         * Spec: two_phase_method.md — dynamic w coefficient update. */
-        for (int j2 = 0; j2 < total; j2++)
-            state->work_obj[j2] = 0.0;
-        double p1_obj = 0.0;
-        for (int ii = 0; ii < m; ii++) {
-            int bv2 = basis->basic_vars[ii];
-            if (bv2 < 0 || bv2 >= total) continue;
-            double xv = state->work_x[bv2];
-            double lbv = state->work_lb[bv2];
-            double ubv = state->work_ub[bv2];
-            if (xv < lbv - CXF_FEASIBILITY_TOL) {
-                state->work_obj[bv2] = -1.0;
-                p1_obj += (lbv - xv);
-            } else if (xv > ubv + CXF_FEASIBILITY_TOL) {
-                state->work_obj[bv2] = +1.0;
-                p1_obj += (xv - ubv);
-            }
-        }
-        state->obj_value = p1_obj;
-        /* Leaving variable (now nonbasic) always gets w = 0 */
-        if (leaving >= 0 && leaving < total)
-            state->work_obj[leaving] = 0.0;
-    } else {
-        /* Phase II: standard incremental objective update */
-        state->obj_value += entering_sign * d_entering * stepSize;
-    }
-
-    /*--- Phase 7: Reduced cost update ---*/
-    if (state->phase == 1) {
-        /* Phase I: w changed, must recompute reduced costs from scratch */
-        cxf_compute_reduced_costs(state);
-    } else if (btran_ok) {
-        update_reduced_costs(state, entering, leaving,
-                             d_entering, pivotElement, rho);
-    } else {
-        cxf_compute_reduced_costs(state);
-    }
-
-    /*--- Phase 7b: Update steepest edge / Devex weights (P4.9) ---*/
-    if (state->pricing && state->pricing->weights != NULL) {
-        cxf_pricing_update_weights(state->pricing, state, entering,
-                                   leavingRow, pivotCol,
-                                   btran_ok ? rho : NULL);
-    }
-
-    /*--- Phase 8: V2 pricing notification (P4.2/P4.3/P4.8) ---*/
-    if (state->pricing) {
-        /* P4.2: entering variable → mark adjacent constraints dirty
-         * Also populates V1 dirty flags for step2/step3 compat */
-        cxf_pricing_update_var(state->pricing, state, entering);
-        /* P4.3: leaving row → mark adjacent variables dirty */
-        cxf_pricing_update_constr(state->pricing, state, leavingRow);
-        /* P0.9: Also notify BFRT-flipped variables */
-        for (int f = 0; f < num_flips; f++) {
-            int bv = basis->basic_vars[flipped_rows[f]];
-            if (bv >= 0 && bv < total)
-                cxf_pricing_update_var(state->pricing, state, bv);
-        }
-    }
-
-    /*--- Phase 9: Refactorization (P0.7: use cxf_refactor_check) ---*/
-    {
-        if (cxf_refactor_check(state, env) > 0) {
-            cxf_solver_refactor(state, env);
-            cxf_recompute_xB(state);
-            cxf_recompute_objective(state);
-            cxf_compute_reduced_costs(state);
-        }
-    }
+    /* Phases 6-9: Objective, RC, weights, pricing cascade, refactor */
+    post_pivot_updates(state, env, entering, leaving, leavingRow,
+                       entering_sign, d_entering, pivotElement, stepSize,
+                       pivotCol, rho, btran_ok, flipped_rows, num_flips);
 
     state->iteration++;
     return ITERATE_CONTINUE;

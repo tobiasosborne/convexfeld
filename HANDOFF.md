@@ -8,9 +8,14 @@
 
 ### Latest Changes (2026-02-26)
 
-**convexfeld-mxjm closed (P1).** Created 5 internal headers replacing 88 scattered `extern` declarations across 28 source files. Centralized 38 duplicate constant definitions. Eliminates silent ABI mismatch risk — any signature change now produces a compiler error at all call sites. Unblocks 6 downstream issues (step.c decomposition, unit tests, constant deduplication, pricing loop fusion).
+**convexfeld-n426 closed (P1).** Decomposed `cxf_simplex_step` from 447-line monolith into 3 focused functions:
+- `pricing_and_ftran()` — Phase 1+2: multi-level pricing, FTRAN, quality check, ratio test, step (~200 lines)
+- `post_pivot_updates()` — Phases 6-9: objective, RC, weights, pricing cascade, refactor (~65 lines)
+- `cxf_simplex_step()` — orchestrator: validate → select → BFRT → BTRAN → pivot → updates (104 lines)
+- File: `step.c` 724→656 lines. Also closed convexfeld-ojwu (VAR constants already centralized in pricing_internal.h).
+
+**convexfeld-mxjm closed (P1).** Created 5 internal headers replacing 88 scattered `extern` declarations across 28 source files. Centralized 38 duplicate constant definitions.
 - Headers: `simplex_internal.h`, `basis_internal.h`, `pricing_internal.h`, `memory_internal.h`, `matrix_internal.h`
-- 7 benign externs remain (public-header functions). 45/45 tests pass.
 
 **convexfeld-36qh closed.** Rewrote basis snapshot/diff system per spec (basis_operations.md, perturbation.md):
 - Snapshot expanded 8→10 slots: wired `ftran_count` (slot 2, was placeholder), added `degenerate_count` (slot 8), `perturb_count` (slot 9)
