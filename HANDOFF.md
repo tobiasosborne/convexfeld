@@ -14,8 +14,11 @@
 - Threshold formula fixed: `CONVERGENCE_BASE/(1+round)` → `max(0, k-5)*CONVERGENCE_BASE` per spec. Grace period now integral to formula, not separate guard.
 - Files: `cxf_solver.h`, `basis_stub.c`, `solve_lp.c`, `test_basis.c`. 45/45 tests pass. share2b+afiro OPTIMAL.
 
-**convexfeld-lmkg closed.** Added equality constraint column scan (Phase 3) to `cxf_pivot_special` per `pivot_operations.md`. Scans CSC column for `'='`/`'E'` senses before any bound-flip or unbounded action — variables in equalities return CXF_OK (require algebraic substitution, not elimination). Cleaned docstring to 5-phase algorithm. 4 new tests.
-- Files: `pivot_special.c`, `test_pivot_special.c`. SOS/indicator deferred (LP-only). Row elimination deferred (needs `cxf_fix_variable`).
+**convexfeld-s9am closed.** Re-enabled BFRT long-step ratio test using standard clamping (Koberstein 2005). No row negation (the previous approach that corrupted LU/eta). Flipped basic vars stay in basis, clamped to exact opposite bounds. Only the final leaving variable creates an eta vector. Loop collects up to 10 flippable blockers, extending step by `(ub-lb)/|d_i|`. Disabled under Bland's rule.
+- Files: `step.c` (Phase 3 loop, ~25 lines). All dead-code infrastructure was correct.
+
+**convexfeld-lmkg closed.** Added equality constraint column scan (Phase 3) to `cxf_pivot_special` per `pivot_operations.md`. Variables in equalities return CXF_OK.
+- Files: `pivot_special.c`, `test_pivot_special.c`.
 
 **convexfeld-l0ca closed.** Removed dead V1 `cxf_pricing_update` (broken SE weight stub, never called). V2 `cxf_pricing_update_weights` is correct and active.
 - Files: `update.c`, `pricing_stub.c`, `test_pricing.c`.

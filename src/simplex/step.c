@@ -558,17 +558,52 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env) {
         break;
     }
 
-    /*--- Phase 3: BFRT — bound-flipping ratio test (P2.4 Stage 3) ---*/
+    /*--- Phase 3: BFRT — bound-flipping ratio test (P2.4 Stage 3) ---
+     * Standard clamping approach (Koberstein 2005): no row negation,
+     * no matrix modification, no factorization update for flips.
+     * The pivot column is precomputed by FTRAN and doesn't change.
+     * Flipped variables stay basic with values clamped to exact bounds.
+     * Only the final leaving variable creates an eta vector.
+     * Disabled under Bland's rule (anti-cycling guarantee). */
     int flipped_rows[MAX_BFRT_FLIPS];
     int num_flips = 0;
 
-    /* BFRT disabled: negate_constraint_row() negated the matrix without
-     * updating the LU/eta factorization, corrupting all subsequent FTRAN/BTRAN.
-     * The spec IS correct (row negation is part of BFRT), but the implementation
-     * was incomplete — needs an eta vector for the negated row.
-     * Re-enable once factorization update is implemented.
-     * See docs/remediation_plan.md RC1, docs/architecture_contract_map.md. */
-    (void)flipped_rows;
+    if (!state->use_bland) {
+        int blocker_row = leavingRow;
+        while (num_flips < MAX_BFRT_FLIPS) {
+            int bv = basis->basic_vars[blocker_row];
+            double bv_lb = state->work_lb[bv];
+            double bv_ub = state->work_ub[bv];
+
+            /* Can this variable flip? Needs finite bounds on both sides
+             * with a non-negligible range. */
+            if (bv_lb <= -CXF_INFINITY || bv_ub >= CXF_INFINITY ||
+                (bv_ub - bv_lb) < CXF_FEASIBILITY_TOL)
+                break;  /* Non-flippable — this is the true leaving variable */
+
+            /* Record flip and extend step */
+            flipped_rows[num_flips++] = blocker_row;
+            double sd = fabs(entering_sign * pivotCol[blocker_row]);
+            if (sd < CXF_PIVOT_TOL) break;
+            stepSize += (bv_ub - bv_lb) / sd;
+
+            /* Find next blocker among non-flipped variables */
+            double next_ratio, next_pivot;
+            int next_row = find_next_blocker(state, pivotCol, flipped_rows,
+                                             num_flips, entering_sign,
+                                             &next_ratio, &next_pivot);
+            if (next_row < 0) break;  /* No more blockers */
+
+            /* If the next blocker hits before the flip extension completes,
+             * the step is limited to its ratio. */
+            if (next_ratio < stepSize)
+                stepSize = next_ratio;
+
+            blocker_row = next_row;
+            leavingRow = next_row;
+            pivotElement = next_pivot;
+        }
+    }
     state->flip_count += num_flips;
 
     /* Cycling detection */
