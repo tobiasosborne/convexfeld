@@ -1,14 +1,15 @@
 /**
  * @file lu_factorize.c
- * @brief Markowitz-ordered LU factorization for basis matrix.
+ * @brief Sparse Markowitz-ordered LU factorization for basis matrix.
  *
- * P2.1 (uxae): Optimized pivot search with maintained column maxima.
- * Eliminates the O(m) col_max scan per column per step, reducing
- * overall complexity from O(m^4) to O(m^2 * avg_nnz).
+ * Sparse Gaussian elimination with threshold pivoting per
+ * Suhl & Suhl (1990) and Maros (2003) Chapter 5. Dense phase
+ * transition when active submatrix density exceeds 40%.
  *
- * Spec: product_form_inverse.md Step 1
+ * Spec: product_form_inverse.md Step 1, numerical_stability.md §D
  */
 
+#include "basis_internal.h"
 #include "convexfeld/cxf_basis.h"
 #include "convexfeld/cxf_matrix.h"
 #include "convexfeld/cxf_model.h"
@@ -17,333 +18,298 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#define MARKOWITZ_THRESHOLD CXF_MARKOWITZ_TOL  /* 1/128 */
+#define MIN_PIVOT           CXF_MIN_PIVOT      /* 1e-13 */
+#define DENSE_THRESHOLD     0.4
+#define GROWTH_LIMIT        1e8
 
-#define MARKOWITZ_THRESHOLD CXF_MARKOWITZ_TOL   /* 1/128 */
-#define MIN_PIVOT           CXF_MIN_PIVOT       /* 1e-13 */
+/* --- Dense phase helpers (for small remaining submatrix) --- */
 
-/**
- * @brief Extract basis matrix into dense format and compute initial counts.
- * @return 0 on success, nonzero on error.
- */
-static int extract_basis_matrix(double *B, int *row_count, int *col_count,
-                                double *col_max, SolverState *ctx) {
-    BasisState *basis = ctx->basis;
-    int m = basis->m;
-    int n_orig = ctx->num_vars;
+static int dense_find_pivot(const double *D, int n,
+                            const int *relim, const int *celim,
+                            int *out_r, int *out_c, double *out_v) {
+    int best_r = -1, best_c = -1;
+    int64_t best_score = (int64_t)(n + 1) * (int64_t)(n + 1);
+    double best_abs = 0.0;
 
-    /* Extract basis columns into dense B (using SolverState's CSC copy) */
-    for (int j = 0; j < m; j++) {
-        int var = basis->basic_vars[j];
-        if (var < n_orig && ctx->csc_col_ptr != NULL) {
-            for (int64_t k = ctx->csc_col_ptr[var];
-                 k < ctx->csc_col_ptr[var + 1]; k++) {
-                int row = ctx->csc_row_idx[k];
-                if (row < m) B[row * m + j] = ctx->csc_values[k];
-            }
-        } else if (var < n_orig + m) {
-            /* Slack/surplus variable: use diag_coeff */
-            int slack_row = var - n_orig;
-            if (slack_row >= 0 && slack_row < m)
-                B[slack_row * m + j] = basis->diag_coeff[slack_row];
-        }
-        /* No artificial variable case — implicit Phase I has no artificials */
-    }
-
-    /* Count nonzeros and compute column maxima */
-    for (int j = 0; j < m; j++) {
+    for (int j = 0; j < n; j++) {
+        if (celim[j]) continue;
         double cmax = 0.0;
-        for (int i = 0; i < m; i++) {
-            double val = fabs(B[i * m + j]);
-            if (val > MIN_PIVOT) {
-                row_count[i]++;
-                col_count[j]++;
-                if (val > cmax) cmax = val;
-            }
+        int col_cnt = 0;
+        for (int i = 0; i < n; i++) {
+            if (relim[i]) continue;
+            double av = fabs(D[i * n + j]);
+            if (av >= MIN_PIVOT) { col_cnt++; if (av > cmax) cmax = av; }
         }
-        col_max[j] = cmax;
-    }
-    return 0;
-}
-
-/**
- * @brief Recompute column maximum for a single column after elimination.
- */
-static double recompute_col_max(const double *B, int m, int col,
-                                const int *row_elim) {
-    double cmax = 0.0;
-    for (int i = 0; i < m; i++) {
-        if (row_elim[i]) continue;
-        double val = fabs(B[i * m + col]);
-        if (val > cmax) cmax = val;
-    }
-    return cmax;
-}
-
-/**
- * @brief Find Markowitz pivot using pre-computed column maxima.
- *
- * This is the key optimization: col_max[j] is read directly instead
- * of scanning all rows per column. Reduces pivot search from O(m^2)
- * to O(active_cols * active_rows_with_nonzero_in_col).
- */
-static int find_pivot(const double *B, int m,
-                      const int *row_count, const int *col_count,
-                      const double *col_max,
-                      const int *row_elim, const int *col_elim,
-                      int *out_row, int *out_col, double *out_pivot) {
-    int best_row = -1, best_col = -1;
-    int64_t best_score = (int64_t)(m + 1) * (int64_t)(m + 1);
-    double best_pivot = 0.0;
-
-    for (int j = 0; j < m; j++) {
-        if (col_elim[j]) continue;
-        if (col_max[j] < MIN_PIVOT) continue;
-
-        double threshold = MARKOWITZ_THRESHOLD * col_max[j];
-
-        for (int i = 0; i < m; i++) {
-            if (row_elim[i]) continue;
-            double val = fabs(B[i * m + j]);
-            if (val < threshold) continue;
-
-            int64_t score = (int64_t)(row_count[i] - 1) *
-                            (int64_t)(col_count[j] - 1);
-
-            if (score < best_score ||
-                (score == best_score && val > fabs(best_pivot))) {
-                best_score = score;
-                best_row = i;
-                best_col = j;
-                best_pivot = B[i * m + j];
+        if (col_cnt == 0) continue;
+        double thr = MARKOWITZ_THRESHOLD * cmax;
+        for (int i = 0; i < n; i++) {
+            if (relim[i]) continue;
+            double av = fabs(D[i * n + j]);
+            if (av < thr) continue;
+            int r_cnt = 0;
+            for (int jj = 0; jj < n; jj++)
+                if (!celim[jj] && fabs(D[i * n + jj]) >= MIN_PIVOT) r_cnt++;
+            int64_t sc = (int64_t)(r_cnt - 1) * (int64_t)(col_cnt - 1);
+            if (sc < best_score || (sc == best_score && av > best_abs)) {
+                best_score = sc; best_r = i; best_c = j; best_abs = av;
             }
         }
     }
-
-    *out_row = best_row;
-    *out_col = best_col;
-    *out_pivot = best_pivot;
-    return (best_row >= 0 && fabs(best_pivot) >= MIN_PIVOT) ? 0 : -1;
+    *out_r = best_r; *out_c = best_c;
+    *out_v = (best_r >= 0) ? D[best_r * n + best_c] : 0.0;
+    return (best_r >= 0 && best_abs >= MIN_PIVOT) ? 0 : -1;
 }
 
-/**
- * @brief Perform one elimination step, updating B, counts, and col_max.
- */
-static int eliminate_step(double *B, int m,
-                          int *row_count, int *col_count, double *col_max,
-                          int *row_elim, int *col_elim,
-                          int piv_row, int piv_col, double piv_val,
-                          int **L_i, int **L_j, double **L_v,
-                          int *L_count, int *L_cap, int step) {
-    row_elim[piv_row] = 1;
-    col_elim[piv_col] = 1;
-    col_max[piv_col] = 0.0;
-    col_count[piv_col] = 0;
-
-    /* Track which columns are modified (pivot row has nonzero there) */
-    for (int i = 0; i < m; i++) {
-        if (row_elim[i] || i == piv_row) continue;
-        double val = B[i * m + piv_col];
+static int dense_eliminate(double *D, int n, int piv_r, int piv_c,
+                           double piv_val, int *relim, int *celim,
+                           int **L_i, int **L_j, double **L_v,
+                           int *Lc, int *Lcap, int step) {
+    relim[piv_r] = 1;
+    celim[piv_c] = 1;
+    for (int i = 0; i < n; i++) {
+        if (relim[i] || i == piv_r) continue;
+        double val = D[i * n + piv_c];
         if (fabs(val) < MIN_PIVOT) continue;
-
         double mult = val / piv_val;
-
-        /* Store L entry */
-        if (*L_count >= *L_cap) {
-            *L_cap *= 2;
-            int *ni = realloc(*L_i, (size_t)*L_cap * sizeof(int));
-            if (ni) *L_i = ni;
-            int *nj = realloc(*L_j, (size_t)*L_cap * sizeof(int));
-            if (nj) *L_j = nj;
-            double *nv = realloc(*L_v, (size_t)*L_cap * sizeof(double));
-            if (nv) *L_v = nv;
+        if (*Lc >= *Lcap) {
+            int nc = *Lcap * 2;
+            int *ni = realloc(*L_i, (size_t)nc * sizeof(int));
+            int *nj = realloc(*L_j, (size_t)nc * sizeof(int));
+            double *nv = realloc(*L_v, (size_t)nc * sizeof(double));
             if (!ni || !nj || !nv) return 1001;
+            *L_i = ni; *L_j = nj; *L_v = nv; *Lcap = nc;
         }
-        (*L_i)[*L_count] = i;
-        (*L_j)[*L_count] = step;
-        (*L_v)[*L_count] = mult;
-        (*L_count)++;
-
-        /* Update row i */
-        B[i * m + piv_col] = 0.0;
-        row_count[i]--;
-        for (int jj = 0; jj < m; jj++) {
-            if (col_elim[jj]) continue;
-            double pv = B[piv_row * m + jj];
-            if (fabs(pv) < MIN_PIVOT) continue;
-
-            double old_val = B[i * m + jj];
-            double new_val = old_val - mult * pv;
-
-            if (fabs(old_val) < MIN_PIVOT && fabs(new_val) >= MIN_PIVOT) {
-                row_count[i]++;
-                col_count[jj]++;
-            } else if (fabs(old_val) >= MIN_PIVOT && fabs(new_val) < MIN_PIVOT) {
-                row_count[i]--;
-                col_count[jj]--;
-            }
-            B[i * m + jj] = new_val;
+        (*L_i)[*Lc] = i; (*L_j)[*Lc] = step; (*L_v)[*Lc] = mult;
+        (*Lc)++;
+        D[i * n + piv_c] = 0.0;
+        for (int jj = 0; jj < n; jj++) {
+            if (celim[jj] || jj == piv_c) continue;
+            D[i * n + jj] -= mult * D[piv_r * n + jj];
         }
     }
-
-    /* Update column maxima for modified columns.
-     * Only columns where the pivot row had a nonzero are affected. */
-    for (int jj = 0; jj < m; jj++) {
-        if (col_elim[jj]) continue;
-        if (fabs(B[piv_row * m + jj]) < MIN_PIVOT) continue;
-        col_max[jj] = recompute_col_max(B, m, jj, row_elim);
-    }
-
     return 0;
 }
 
-/**
- * @brief Build sparse L and U output from elimination results.
- */
-static int build_lu_output(LUFactors *lu, const double *B, int m,
-                           const int *L_i_arr, const int *L_j_arr,
-                           const double *L_v_arr, int L_count) {
-    /* Build U: off-diagonal entries from pivot rows */
-    lu->U_nnz = 0;
-    for (int step = 0; step < m; step++) {
-        int piv_row = lu->perm_row[step];
-        lu->U_col_ptr[step] = lu->U_nnz;
-        for (int j_step = step + 1; j_step < m; j_step++) {
-            int col = lu->perm_col[j_step];
-            if (fabs(B[piv_row * m + col]) >= MIN_PIVOT)
-                lu->U_nnz++;
-        }
-    }
-    lu->U_col_ptr[m] = lu->U_nnz;
+/* --- CSC assembly from COO arrays --- */
 
-    if (lu->U_nnz > 0) {
-        int *ur = realloc(lu->U_row_idx, (size_t)lu->U_nnz * sizeof(int));
-        if (ur) lu->U_row_idx = ur;
-        double *uv = realloc(lu->U_values, (size_t)lu->U_nnz * sizeof(double));
-        if (uv) lu->U_values = uv;
-        if (!ur || !uv) return 1001;
-
-        int64_t idx = 0;
-        for (int step = 0; step < m; step++) {
-            int piv_row = lu->perm_row[step];
-            for (int j_step = step + 1; j_step < m; j_step++) {
-                int col = lu->perm_col[j_step];
-                double val = B[piv_row * m + col];
-                if (fabs(val) >= MIN_PIVOT) {
-                    lu->U_row_idx[idx] = j_step;
-                    lu->U_values[idx] = val;
-                    idx++;
-                }
-            }
-        }
+static int build_lu_output(LUFactors *lu, int m,
+                           const int *Li, const int *Lj, const double *Lv,
+                           int Lc,
+                           const int *Ui, const int *Uj, const double *Uv,
+                           int Uc) {
+    /* Build inverse permutations */
+    int *inv_row = malloc((size_t)m * sizeof(int));
+    int *inv_col = malloc((size_t)m * sizeof(int));
+    if (!inv_row || !inv_col) { free(inv_row); free(inv_col); return 1001; }
+    for (int k = 0; k < m; k++) {
+        inv_row[lu->perm_row[k]] = k;
+        inv_col[lu->perm_col[k]] = k;
     }
 
-    /* Build L in column-wise format */
-    lu->L_nnz = (int64_t)L_count;
-    if (L_count > 0) {
-        int *lr = realloc(lu->L_row_idx, (size_t)L_count * sizeof(int));
-        if (lr) lu->L_row_idx = lr;
-        double *lv = realloc(lu->L_values, (size_t)L_count * sizeof(double));
-        if (lv) lu->L_values = lv;
-        if (!lr || !lv) return 1001;
-    }
-
+    /* --- Build L in CSC --- */
+    lu->L_nnz = (int64_t)Lc;
     memset(lu->L_col_ptr, 0, (size_t)(m + 1) * sizeof(int64_t));
-    for (int k = 0; k < L_count; k++)
-        lu->L_col_ptr[L_j_arr[k] + 1]++;
-    for (int j = 1; j <= m; j++)
-        lu->L_col_ptr[j] += lu->L_col_ptr[j - 1];
-
+    if (Lc > 0) {
+        int *lr = realloc(lu->L_row_idx, (size_t)Lc * sizeof(int));
+        double *lv = realloc(lu->L_values, (size_t)Lc * sizeof(double));
+        if (!lr || !lv) { free(inv_row); free(inv_col); return 1001; }
+        lu->L_row_idx = lr; lu->L_values = lv;
+    }
+    for (int k = 0; k < Lc; k++) lu->L_col_ptr[Lj[k] + 1]++;
+    for (int j = 1; j <= m; j++) lu->L_col_ptr[j] += lu->L_col_ptr[j - 1];
     int64_t *wp = calloc((size_t)m, sizeof(int64_t));
-    if (!wp) return 1001;
-    for (int k = 0; k < L_count; k++) {
-        int col = L_j_arr[k];
+    if (!wp) { free(inv_row); free(inv_col); return 1001; }
+    for (int k = 0; k < Lc; k++) {
+        int col = Lj[k];
         int64_t pos = lu->L_col_ptr[col] + wp[col];
-        lu->L_row_idx[pos] = L_i_arr[k];
-        lu->L_values[pos] = L_v_arr[k];
+        lu->L_row_idx[pos] = inv_row[Li[k]];  /* Convert to step space */
+        lu->L_values[pos] = Lv[k];
         wp[col]++;
     }
     free(wp);
 
-    /* Convert L row indices from original to step positions */
-    int *inv_perm = malloc((size_t)m * sizeof(int));
-    if (!inv_perm) return 1001;
-    for (int k = 0; k < m; k++)
-        inv_perm[lu->perm_row[k]] = k;
-    for (int64_t p = 0; p < lu->L_nnz; p++)
-        lu->L_row_idx[p] = inv_perm[lu->L_row_idx[p]];
-    free(inv_perm);
-
+    /* --- Build U in CSC (indexed by step-row, entries are step-cols) --- */
+    lu->U_nnz = (int64_t)Uc;
+    memset(lu->U_col_ptr, 0, (size_t)(m + 1) * sizeof(int64_t));
+    if (Uc > 0) {
+        int *ur = realloc(lu->U_row_idx, (size_t)Uc * sizeof(int));
+        double *uv = realloc(lu->U_values, (size_t)Uc * sizeof(double));
+        if (!ur || !uv) { free(inv_row); free(inv_col); return 1001; }
+        lu->U_row_idx = ur; lu->U_values = uv;
+    }
+    /* Ui[k] = step (row in step space), Uj[k] = original col */
+    for (int k = 0; k < Uc; k++) lu->U_col_ptr[Ui[k] + 1]++;
+    for (int j = 1; j <= m; j++) lu->U_col_ptr[j] += lu->U_col_ptr[j - 1];
+    wp = calloc((size_t)m, sizeof(int64_t));
+    if (!wp) { free(inv_row); free(inv_col); return 1001; }
+    for (int k = 0; k < Uc; k++) {
+        int row_step = Ui[k];
+        int64_t pos = lu->U_col_ptr[row_step] + wp[row_step];
+        lu->U_row_idx[pos] = inv_col[Uj[k]];  /* Convert col to step space */
+        lu->U_values[pos] = Uv[k];
+        wp[row_step]++;
+    }
+    free(wp);
+    free(inv_row);
+    free(inv_col);
     return 0;
 }
 
-/**
- * @brief Compute LU factorization of basis matrix.
- *
- * Uses dense working matrix with Markowitz pivot selection and
- * maintained column maxima for O(m^2 * avg_nnz) complexity.
- */
+/* --- Main entry point --- */
+
 int cxf_lu_factorize(LUFactors *lu, SolverState *ctx) {
     if (!lu || !ctx || !ctx->basis) return CXF_ERROR_NULL_ARGUMENT;
-
     BasisState *basis = ctx->basis;
     int m = basis->m;
     if (m == 0) { lu->valid = 1; return 0; }
-
     if (!ctx->csc_col_ptr) return CXF_ERROR_NULL_ARGUMENT;
 
-    /* Allocate working storage */
-    double *B = calloc((size_t)m * (size_t)m, sizeof(double));
-    int *row_count = calloc((size_t)m, sizeof(int));
-    int *col_count = calloc((size_t)m, sizeof(int));
-    double *col_max = calloc((size_t)m, sizeof(double));
-    int *row_elim = calloc((size_t)m, sizeof(int));
-    int *col_elim = calloc((size_t)m, sizeof(int));
+    SparseWork *sw = sparse_work_create(m);
+    if (!sw) return 1001;
+    int rc = sparse_work_extract(sw, ctx);
+    if (rc) { sparse_work_free(sw); return rc; }
 
-    if (!B || !row_count || !col_count || !col_max || !row_elim || !col_elim) {
-        free(B); free(row_count); free(col_count);
-        free(col_max); free(row_elim); free(col_elim);
-        return 1001;
+    /* COO arrays for L and U entries */
+    int Lcap = m * 2, Lc = 0;
+    int *Li = malloc((size_t)Lcap * sizeof(int));
+    int *Lj = malloc((size_t)Lcap * sizeof(int));
+    double *Lv = malloc((size_t)Lcap * sizeof(double));
+    int Ucap = m * 2, Uc = 0;
+    int *Ui = malloc((size_t)Ucap * sizeof(int));
+    int *Uj = malloc((size_t)Ucap * sizeof(int));
+    double *Uv = malloc((size_t)Ucap * sizeof(double));
+    int *pr_cols = malloc((size_t)m * sizeof(int));
+    double *pr_vals = malloc((size_t)m * sizeof(double));
+
+    if (!Li || !Lj || !Lv || !Ui || !Uj || !Uv || !pr_cols || !pr_vals) {
+        rc = 1001; goto cleanup;
     }
 
-    extract_basis_matrix(B, row_count, col_count, col_max, ctx);
+    /* Track growth factor: max |A_ij| from initial matrix */
+    double max_initial = 0.0;
+    for (int j = 0; j < m; j++)
+        if (sw->col_max[j] > max_initial) max_initial = sw->col_max[j];
+    double max_u = 0.0;
 
-    /* L entries stored in COO for assembly later */
-    int L_cap = m * 2;
-    int *L_i = malloc((size_t)L_cap * sizeof(int));
-    int *L_j = malloc((size_t)L_cap * sizeof(int));
-    double *L_v = malloc((size_t)L_cap * sizeof(double));
-    int L_count = 0;
-    int rc = 0;
+    int step = 0;
+    /* === Sparse phase === */
+    for (; step < m; step++) {
+        if (sparse_work_density(sw) > DENSE_THRESHOLD && sw->active_count > 1)
+            break;
 
-    if (!L_i || !L_j || !L_v) { rc = 1001; goto cleanup; }
-
-    /* Main factorization loop */
-    for (int step = 0; step < m; step++) {
-        int piv_row, piv_col;
-        double piv_val;
-
-        if (find_pivot(B, m, row_count, col_count, col_max,
-                       row_elim, col_elim, &piv_row, &piv_col, &piv_val)) {
-            rc = 3;  /* Singular */
-            goto cleanup;
+        int piv_row, piv_col; double piv_val;
+        if (sparse_find_pivot(sw, &piv_row, &piv_col, &piv_val)) {
+            rc = 3; goto cleanup;  /* Singular */
         }
-
         lu->perm_row[step] = piv_row;
         lu->perm_col[step] = piv_col;
         lu->U_diag[step] = piv_val;
+        if (fabs(piv_val) > max_u) max_u = fabs(piv_val);
 
-        rc = eliminate_step(B, m, row_count, col_count, col_max,
-                           row_elim, col_elim, piv_row, piv_col, piv_val,
-                           &L_i, &L_j, &L_v, &L_count, &L_cap, step);
+        int pr_len = sparse_extract_pivot_row(sw, piv_row, pr_cols, pr_vals);
+
+        /* Collect U entries from pivot row (excluding pivot column) */
+        for (int p = 0; p < pr_len; p++) {
+            if (pr_cols[p] == piv_col) continue;
+            if (Uc >= Ucap) {
+                int nc = Ucap * 2;
+                int *ni = realloc(Ui, (size_t)nc * sizeof(int));
+                int *nj = realloc(Uj, (size_t)nc * sizeof(int));
+                double *nv = realloc(Uv, (size_t)nc * sizeof(double));
+                if (!ni || !nj || !nv) { rc = 1001; goto cleanup; }
+                Ui = ni; Uj = nj; Uv = nv; Ucap = nc;
+            }
+            Ui[Uc] = step;
+            Uj[Uc] = pr_cols[p];  /* Original column, converted later */
+            Uv[Uc] = pr_vals[p];
+            Uc++;
+        }
+
+        rc = sparse_eliminate(sw, piv_row, piv_col, piv_val,
+                              pr_cols, pr_vals, pr_len,
+                              &Li, &Lj, &Lv, &Lc, &Lcap, step);
         if (rc) goto cleanup;
     }
 
-    rc = build_lu_output(lu, B, m, L_i, L_j, L_v, L_count);
+    /* === Dense phase (if triggered) === */
+    if (step < m && sw->active_count > 0) {
+        int dn = sw->active_count;
+        double *D = calloc((size_t)dn * (size_t)dn, sizeof(double));
+        int *map_r = malloc((size_t)dn * sizeof(int));
+        int *map_c = malloc((size_t)dn * sizeof(int));
+        int *d_relim = calloc((size_t)dn, sizeof(int));
+        int *d_celim = calloc((size_t)dn, sizeof(int));
+        if (!D || !map_r || !map_c || !d_relim || !d_celim) {
+            free(D); free(map_r); free(map_c);
+            free(d_relim); free(d_celim);
+            rc = 1001; goto cleanup;
+        }
+        sparse_to_dense(sw, D, map_r, map_c);
+
+        for (int ds = 0; step < m; step++, ds++) {
+            int dr, dc; double dv;
+            if (dense_find_pivot(D, dn, d_relim, d_celim, &dr, &dc, &dv)) {
+                free(D); free(map_r); free(map_c);
+                free(d_relim); free(d_celim);
+                rc = 3; goto cleanup;
+            }
+            lu->perm_row[step] = map_r[dr];
+            lu->perm_col[step] = map_c[dc];
+            lu->U_diag[step] = dv;
+            if (fabs(dv) > max_u) max_u = fabs(dv);
+
+            /* Collect dense U entries */
+            for (int jj = 0; jj < dn; jj++) {
+                if (d_celim[jj] || jj == dc) continue;
+                double uval = D[dr * dn + jj];
+                if (fabs(uval) < MIN_PIVOT) continue;
+                if (Uc >= Ucap) {
+                    int nc = Ucap * 2;
+                    int *ni = realloc(Ui, (size_t)nc * sizeof(int));
+                    int *nj = realloc(Uj, (size_t)nc * sizeof(int));
+                    double *nv = realloc(Uv, (size_t)nc * sizeof(double));
+                    if (!ni || !nj || !nv) {
+                        free(D); free(map_r); free(map_c);
+                        free(d_relim); free(d_celim);
+                        rc = 1001; goto cleanup;
+                    }
+                    Ui = ni; Uj = nj; Uv = nv; Ucap = nc;
+                }
+                Ui[Uc] = step;
+                Uj[Uc] = map_c[jj];  /* Original column */
+                Uv[Uc] = uval;
+                Uc++;
+            }
+
+            rc = dense_eliminate(D, dn, dr, dc, dv, d_relim, d_celim,
+                                &Li, &Lj, &Lv, &Lc, &Lcap, step);
+            if (rc) {
+                free(D); free(map_r); free(map_c);
+                free(d_relim); free(d_celim);
+                goto cleanup;
+            }
+
+            /* Fix L entries: dense_eliminate stored dense row indices,
+             * but we need original row indices. Patch the last batch. */
+            for (int k = Lc - 1; k >= 0 && Lj[k] == step; k--)
+                Li[k] = map_r[Li[k]];
+        }
+        free(D); free(map_r); free(map_c);
+        free(d_relim); free(d_celim);
+    }
+
+    rc = build_lu_output(lu, m, Li, Lj, Lv, Lc, Ui, Uj, Uv, Uc);
     if (rc == 0) lu->valid = 1;
 
+    /* Growth factor monitoring (numerical_stability.md §D) */
+    if (max_initial > 0.0 && max_u / max_initial > GROWTH_LIMIT)
+        basis->numerical_flag = 1;
+
 cleanup:
-    free(B); free(row_count); free(col_count);
-    free(col_max); free(row_elim); free(col_elim);
-    free(L_i); free(L_j); free(L_v);
+    sparse_work_free(sw);
+    free(Li); free(Lj); free(Lv);
+    free(Ui); free(Uj); free(Uv);
+    free(pr_cols); free(pr_vals);
     return rc;
 }

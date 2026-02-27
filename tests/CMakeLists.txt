@@ -56,6 +56,10 @@ target_link_libraries(test_basis PRIVATE m)  # For math functions
 # LU Factors lifecycle tests
 add_cxf_test(test_lu_factors unit/test_lu_factors.c)
 
+# Sparse LU factorization tests
+add_cxf_test(test_sparse_lu unit/test_sparse_lu.c)
+target_link_libraries(test_sparse_lu PRIVATE m)
+
 # M6.1.1: Pricing operations tests
 add_cxf_test(test_pricing unit/test_pricing.c)
 target_link_libraries(test_pricing PRIVATE m)  # For math functions

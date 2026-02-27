@@ -1238,3 +1238,37 @@ invalidates the LU factorization state that hasn't been computed yet.
 that activates dead code, verify the dead code against the spec BEFORE
 assuming it's correct. Removing non-spec dead code is better than debugging it.
 
+### Dense Phase Single-Elim-Array Bug (Sparse LU, 2026-02-27)
+
+**FAILURE:** Dense phase of sparse LU used one `elim[]` array for both rows
+AND columns. Setting `elim[piv_row]=1` also blocked column `piv_row`. This
+only manifests when piv_row != piv_col (non-diagonal pivots), so identity-like
+bases passed but real problems failed silently.
+
+**Symptom:** test_constraint_satisfaction mixed_senses: obj=6.0 instead of -15.0.
+No memory errors (valgrind clean). Diagnosis took significant effort because the
+factorization roundtrip tests all passed (they only tested small matrices where
+piv_row == piv_col).
+
+**Fix:** Separate `d_relim[]` and `d_celim[]` arrays.
+
+**Lesson:** In Gaussian elimination, row elimination and column elimination are
+INDEPENDENT operations. Never conflate them in a single array. The old dense
+code (before the sparse rewrite) correctly used separate `row_elim`/`col_elim`.
+
+### Sparse Elimination Count Maintenance (2026-02-27)
+
+**FAILURE:** `sparse_eliminate` decremented `row_count`/`total_nnz` on
+cancellation without checking if the old value was already dead (below
+MIN_PIVOT). Also didn't increment counts when a dead entry was "revived"
+by fill-in from a different elimination step.
+
+**Fix:** Check `fabs(old_val) >= MIN_PIVOT` before updating counts, matching
+the dense code's `if (fabs(old_val) < MIN_PIVOT && fabs(new_val) >= MIN_PIVOT)`
+pattern.
+
+**Lesson:** When converting dense algorithms to sparse, every count update
+must handle the four transitions: live→live, live→dead, dead→live, dead→dead.
+The dense code handles all four implicitly; the sparse code must handle them
+explicitly.
+
