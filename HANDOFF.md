@@ -1,47 +1,32 @@
 # Agent Handoff
 
-*Last updated: 2026-02-27*
+*Last updated: 2026-03-02*
 
 ---
 
-## STATUS: 46/46 tests pass. Sparse LU factorization implemented.
+## STATUS: 47/47 tests pass. Core algorithm unit tests added.
 
-### Session Summary (2026-02-27) — Sparse LU implementation
+### Session Summary (2026-03-02) — Core algorithm unit tests (convexfeld-sxgk)
 
-Implemented sparse Markowitz-ordered LU factorization per Suhl & Suhl (1990)
-and Maros (2003) Chapter 5. The dense `calloc(m*m)` working matrix is replaced
-with column-oriented sparse storage. Dense phase transition at 40% density
-handles the tail of elimination. Growth factor monitoring per spec.
+Closed P1 issue: added unit tests for previously-untested core algorithm functions.
 
 **Files created:**
-- `src/basis/sparse_work.c` (132 LOC) — Sparse working matrix lifecycle + basis extraction
-- `src/basis/sparse_elim.c` (239 LOC) — Markowitz pivot search + Gaussian elimination
-- `tests/unit/test_sparse_lu.c` (326 LOC) — 11 unit tests
+- `tests/unit/test_recompute.c` (226 LOC) — 10 tests for cxf_recompute_xB, cxf_recompute_objective, cxf_ftran_residual
 
 **Files modified:**
-- `src/basis/lu_factorize.c` (315 LOC, was 349) — Rewritten with sparse main loop + dense fallback
-- `src/basis/basis_internal.h` — Added SparseCol/SparseWork struct definitions
-- `CMakeLists.txt` — Added 2 source files
-- `tests/CMakeLists.txt` — Added test registration
+- `tests/unit/test_ratio_test.c` (+45 LOC) — Added 2 tests: degenerate pivot, Bland's rule tie-breaking
+- `tests/CMakeLists.txt` — Registered test_recompute
 
-**Output contract UNCHANGED:** LUFactors struct, FTRAN, BTRAN, refactor.c — all untouched.
+**Test coverage added:**
+- `cxf_recompute_xB`: identity basis, structural 2x2 basis, nonbasic snap-to-bound, null guard
+- `cxf_recompute_objective`: Phase II c^T x, Phase I single violation, Phase I dual violation + w-coefficients
+- `cxf_ftran_residual`: exact (residual=0), perturbed (known nonzero residual), null guard
+- `cxf_ratio_test`: degenerate pivot (ratio=0), Bland vs largest-pivot tie-breaking
 
-### Results
+### Previous Session (2026-02-27) — Sparse LU implementation
 
-- **46/46 tests pass** (45 existing + 1 new test_sparse_lu)
-- **19/22 Netlib pass** (all with correct reference objectives)
-- **3 regressions:** brandy (ITER_LIMIT), kb2 (ITER_LIMIT — pre-existing issue per MEMORY.md), stair (timeout)
-- **bandm (m=305):** No longer O(m²) memory timeout. Runs through iterations but hits solver ITER_LIMIT (Phase I cycling — pre-existing solver issue, not LU-related)
-
-### Regression Root Cause
-
-Sparse LU picks different pivots than dense LU (same Markowitz criterion, different column scan order in sparse vs dense storage). This produces a mathematically equivalent but numerically different factorization, changing the simplex trajectory. For brandy/stair, the new trajectory needs more iterations than the 200-iteration inner loop limit.
-
-### Bug Found and Fixed During Implementation
-
-**Dense phase single-elim-array bug:** Initial dense phase code used one `elim[]` array for both rows and columns. Setting `elim[piv_row]=1` also prevented column `piv_row` from being considered (and vice versa). Fixed by splitting into separate `d_relim[]` and `d_celim[]` arrays. This caused the `test_constraint_satisfaction` integration test to fail with obj=6.0 instead of -15.0.
-
-**Count maintenance bug:** `sparse_eliminate` didn't handle the dead-entry ↔ live-entry transition correctly (cancellation decrementing counts when old value was already dead, fill-in from dead entry not incrementing counts). Fixed to check `fabs(old_val) >= MIN_PIVOT` before updating counts, matching the dense code's logic.
+Sparse Markowitz-ordered LU factorization. Dense phase transition at 40% density.
+19/22 Netlib pass. 3 regressions from different pivot ordering (brandy, stair, kb2).
 
 ---
 

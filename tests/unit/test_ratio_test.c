@@ -194,6 +194,50 @@ void test_ratio_test_at_upper_bound(void) {
     TEST_ASSERT_DOUBLE_WITHIN(1e-12, 2.0, pe);
 }
 
+/* --- Degenerate pivot (basic variable exactly at bound) --- */
+
+void test_ratio_test_degenerate(void) {
+    /* slack0 at lower bound (x=0): ratio = 0 (degenerate).
+     * slack1 at 5: ratio = 5/1 = 5. Row 0 still leaves. */
+    work_x[2] = 0.0;
+    work_x[3] = 5.0;
+    double pivotCol[2] = {2.0, 1.0};
+    int lr = -1; double pe = 0.0;
+
+    int rc = cxf_ratio_test(&test_state, &test_env, 0, pivotCol, 2, &lr, &pe);
+    TEST_ASSERT_EQUAL_INT(CXF_OK, rc);
+    TEST_ASSERT_EQUAL_INT(0, lr);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-12, 2.0, pe);
+}
+
+/* --- Bland's rule: smallest variable index among tied candidates --- */
+
+void test_ratio_test_bland_smallest_index(void) {
+    /* Both slacks at lower bound (degenerate, ratio=0 for both).
+     * Row 0 has var 3 (larger index, larger pivot |d|=8).
+     * Row 1 has var 2 (smaller index, smaller pivot |d|=2).
+     * Without Bland: picks largest pivot (row 0).
+     * With Bland: picks smallest variable index (row 1). */
+    basic_vars[0] = 3;  basic_vars[1] = 2;
+    var_status[2] = 1;  var_status[3] = 0;
+    work_x[2] = 0.0;    work_x[3] = 0.0;
+
+    double pivotCol[2] = {8.0, 2.0};
+    int lr; double pe;
+
+    test_state.use_bland = 0;
+    lr = -1; pe = 0.0;
+    cxf_ratio_test(&test_state, &test_env, 0, pivotCol, 2, &lr, &pe);
+    TEST_ASSERT_EQUAL_INT(0, lr);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-12, 8.0, pe);
+
+    test_state.use_bland = 1;
+    lr = -1; pe = 0.0;
+    cxf_ratio_test(&test_state, &test_env, 0, pivotCol, 2, &lr, &pe);
+    TEST_ASSERT_EQUAL_INT(1, lr);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-12, 2.0, pe);
+}
+
 /* --- Unbounded detection --- */
 
 void test_ratio_test_unbounded(void) {
@@ -214,6 +258,8 @@ int main(void) {
     RUN_TEST(test_ratio_test_free_var_negative_dj);
     RUN_TEST(test_ratio_test_free_var_positive_dj);
     RUN_TEST(test_ratio_test_free_var_direction_affects_leaving);
+    RUN_TEST(test_ratio_test_degenerate);
+    RUN_TEST(test_ratio_test_bland_smallest_index);
     RUN_TEST(test_ratio_test_at_upper_bound);
     RUN_TEST(test_ratio_test_unbounded);
     return UNITY_END();

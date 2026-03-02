@@ -192,6 +192,10 @@ target_compile_definitions(test_mps_solve PRIVATE SOURCE_DIR="${CMAKE_SOURCE_DIR
 add_cxf_test(test_phase_end unit/test_phase_end.c)
 target_link_libraries(test_phase_end PRIVATE m)
 
+# Core algorithm: recompute tests (xB, objective, FTRAN residual)
+add_cxf_test(test_recompute unit/test_recompute.c)
+target_link_libraries(test_recompute PRIVATE m)
+
 ################################################################################
 # Integration Tests
 ################################################################################
