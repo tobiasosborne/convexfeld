@@ -220,6 +220,9 @@ int cxf_solve_lp(CxfModel *model) {
                         if (state->basis->var_status[j] == CXF_VAR_AT_UPPER
                             && dj > env->optimality_tol)
                             { verified = 0; break; }
+                        if (state->basis->var_status[j] == CXF_VAR_SUPERBASIC
+                            && fabs(dj) > env->optimality_tol)
+                            { verified = 0; break; }
                     }
                     if (!verified) continue;  /* False optimal — keep iterating */
                 }
