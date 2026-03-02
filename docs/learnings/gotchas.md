@@ -1272,3 +1272,37 @@ must handle the four transitions: live→live, live→dead, dead→live, dead→
 The dense code handles all four implicitly; the sparse code must handle them
 explicitly.
 
+---
+
+### ITERATE_CONTINUE == CXF_OK == 0
+
+**FAILURE:** `pricing_and_ftran` returned `ITERATE_CONTINUE` (0) from Phase I
+UNBOUNDED recovery, but `ITERATE_CONTINUE == CXF_OK == 0`. The caller
+(`cxf_simplex_step`) checked `if (rc != CXF_OK) return rc;` — this passed,
+and the code proceeded to pivot with `leavingRow = -1` (never set by ratio
+test which returned UNBOUNDED). Result: `CXF_ERROR_INVALID_ARGUMENT` crash.
+
+**Fix:** After `pricing_and_ftran`, validate `leavingRow >= 0` before pivoting.
+
+**Lesson:** When a helper function has both "success with output" and "handled
+internally, skip this iteration" return paths, they MUST use distinct return
+codes. `ITERATE_CONTINUE = 0 = CXF_OK` is a design flaw — always validate
+output parameters after calls that can return CXF_OK from multiple paths.
+
+---
+
+### FTRAN errors should trigger refactorization, not propagate
+
+**FAILURE:** FTRAN encountered a degraded eta (non-finite pivot element after
+87 degenerate Phase I pivots). Original code: `if (rc != CXF_OK) return rc;`
+propagated the error immediately. But the existing NaN/Inf recovery path (which
+refactorizes and retries) was only 20 lines below — the FTRAN error returned
+*before reaching it*.
+
+**Fix:** Fold FTRAN error into `need_refactor` flag, reusing the existing
+recovery infrastructure.
+
+**Lesson:** When adding error recovery, make sure ALL error paths feed into it.
+The "early return on error" pattern can bypass recovery code that handles the
+same class of problems.
+

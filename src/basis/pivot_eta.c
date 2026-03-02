@@ -12,7 +12,7 @@
 #include "convexfeld/cxf_basis.h"
 #include "convexfeld/cxf_types.h"
 #include <stdlib.h>
-#include <math.h>
+#include <math.h>  /* fabs, isfinite */
 
 #include "basis_internal.h"
 
@@ -58,10 +58,10 @@ int cxf_pivot_with_eta(BasisState *basis, int pivotRow, const double *pivotCol,
         return CXF_ERROR_INVALID_ARGUMENT;
     }
 
-    /* Step 1: Validate pivot element magnitude */
+    /* Step 1: Validate pivot element magnitude and finiteness */
     double pivot = pivotCol[pivotRow];
-    if (fabs(pivot) < CXF_PIVOT_TOL) {
-        return -1;  /* Pivot too small - caller should refactorize */
+    if (!isfinite(pivot) || fabs(pivot) < CXF_PIVOT_TOL) {
+        return -1;  /* Pivot non-finite or too small — caller should refactorize */
     }
 
     /* Step 2: Store pivot directly (not reciprocal) for correct FTRAN/BTRAN */

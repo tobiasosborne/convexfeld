@@ -392,13 +392,16 @@ static int pricing_and_ftran(SolverState *state, CxfEnv *env,
 
         extract_column_ext(state, entering, column);
         rc = cxf_ftran(basis, column, pivotCol);
-        if (rc != CXF_OK) return rc;
 
-        /* FTRAN quality: NaN/Inf + residual monitoring */
+        /* FTRAN quality: error recovery, NaN/Inf, residual monitoring.
+         * A degraded eta chain can cause FTRAN to fail (e.g. non-finite
+         * pivot element after many degenerate pivots). Treat any FTRAN
+         * error the same as NaN detection: refactorize and retry. */
         {
-            int need_refactor = 0;
-            for (int ri = 0; ri < m; ri++)
-                if (!isfinite(pivotCol[ri])) { need_refactor = 1; break; }
+            int need_refactor = (rc != CXF_OK);
+            if (!need_refactor)
+                for (int ri = 0; ri < m; ri++)
+                    if (!isfinite(pivotCol[ri])) { need_refactor = 1; break; }
 
             if (!need_refactor && state->eta_count > 10 &&
                 state->iteration % 20 == 0) {
@@ -566,6 +569,14 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env) {
     int rc = pricing_and_ftran(state, env, &entering, &entering_sign,
                                &leavingRow, &pivotElement, &stepSize);
     if (rc != CXF_OK) return rc;
+
+    /* Validate: pricing_and_ftran may return CXF_OK after handling
+     * Phase I UNBOUNDED internally (refactorize + continue) without
+     * selecting a leaving variable.  Skip pivot, advance iteration. */
+    if (leavingRow < 0 || entering < 0) {
+        state->iteration++;
+        return ITERATE_CONTINUE;
+    }
 
     double *pivotCol = basis->work;
 
