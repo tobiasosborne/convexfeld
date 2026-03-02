@@ -4,9 +4,9 @@
 
 ---
 
-## STATUS: 47/47 tests pass. scsd1 INVALID_ARGUMENT crash fixed. 19/22 Netlib pass (no regressions).
+## STATUS: 47/47 tests pass. Three fixes + two spec improvements. 19/22 Netlib pass (no regressions).
 
-### Session Summary (2026-03-02, Session 2)
+### Session Summary (2026-03-02, Session 3)
 
 **Fixed convexfeld-v03z: solve_lp iteration loop errors on scsd1/kb2**
 
@@ -18,7 +18,16 @@ Root cause analysis of scsd1 CXF_ERROR_INVALID_ARGUMENT (10003) at iteration 87:
 
 3. **Defense in depth** (`src/basis/pivot_eta.c`): Added `!isfinite(pivot)` check to prevent creating etas with NaN/Inf pivot elements in the first place.
 
-Result: scsd1 now reaches ITERATION_LIMIT (status=7) instead of crashing (status=10003). kb2 unchanged (ITER_LIMIT, pre-existing). 10 spot-checked passing instances confirmed no regressions.
+Result: scsd1 now reaches ITERATION_LIMIT (status=7) instead of crashing (status=10003). kb2 unchanged (ITER_LIMIT, pre-existing). 20 spot-checked passing instances confirmed no regressions.
+
+**2. Spec-mandated numerical improvements**
+
+- Step length clamping (step.c Phase 9): Force refactorization when step > 1e15 (numerical_stability.md Section C)
+- Optimality verification (solve_lp.c): Refactorize + recheck reduced costs before accepting OPTIMAL (Section F.6)
+
+**3. Investigation of convexfeld-n9ok (Phase II primal accuracy)**
+
+Investigated bore3d/grow7 failures. Finding: NOT Phase II primal accuracy — they are Phase I cycling on all-equality problems (same class as scsd1/kb2). bore3d: 486 degenerate Phase I pivots at iter 500. Original blocker (sparse LU, M2) is resolved; issue reclassified. boeing1 has RANGES (RC4, TODO).
 
 ### Previous Session (2026-03-02, Session 1) — Unit tests + ratio test refactoring
 
