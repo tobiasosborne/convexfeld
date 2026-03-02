@@ -311,6 +311,12 @@ int cxf_simplex_perturbation(SolverState *state, CxfEnv *env) {
             state->perturb_expand_active = 1;
             perturbed += widened;
 
+            /* Spec step 3: flag is set above.
+             * Spec step 4: "Update constraint activities. Recompute
+             * constraint activity bounds to reflect the modified working
+             * bounds (via cxf_simplex_setup)." — perturbation.md */
+            cxf_simplex_setup(state, env, 0, NULL);
+
             /* Recompute Phase I objective with widened bounds */
             if (state->phase == 1) {
                 state->obj_value = 0.0;
