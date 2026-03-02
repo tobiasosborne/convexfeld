@@ -198,6 +198,31 @@ int cxf_solve_lp(CxfModel *model) {
                     model->status = CXF_INFEASIBLE;
                     terminated = 1; break;
                 }
+                /* P6.3b: Verify optimality with fresh data before accepting.
+                 * Numerical drift can make all RCs appear non-negative when
+                 * improving directions still exist (numerical_stability.md
+                 * Section F.6). Refactorize, recompute, re-check. */
+                cxf_solver_refactor(state, env);
+                cxf_recompute_xB(state);
+                cxf_recompute_objective(state);
+                cxf_compute_reduced_costs(state);
+                {
+                    int verified = 1;
+                    int total_v = state->num_vars + state->num_constrs;
+                    for (int j = 0; j < total_v; j++) {
+                        if (state->basis->var_status[j] >= 0) continue;
+                        double range = state->work_ub[j] - state->work_lb[j];
+                        if (range < CXF_FEASIBILITY_TOL) continue;
+                        double dj = state->work_dj[j];
+                        if (state->basis->var_status[j] == CXF_VAR_AT_LOWER
+                            && dj < -env->optimality_tol)
+                            { verified = 0; break; }
+                        if (state->basis->var_status[j] == CXF_VAR_AT_UPPER
+                            && dj > env->optimality_tol)
+                            { verified = 0; break; }
+                    }
+                    if (!verified) continue;  /* False optimal — keep iterating */
+                }
                 model->status = CXF_OPTIMAL;
                 terminated = 1; break;
             }

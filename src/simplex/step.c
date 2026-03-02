@@ -538,12 +538,21 @@ static void post_pivot_updates(SolverState *state, CxfEnv *env,
         }
     }
 
-    /* Phase 9: Refactorization check */
-    if (cxf_refactor_check(state, env) > 0) {
+    /* Phase 9: Refactorization check.
+     * Force immediate refactorization on large steps to prevent
+     * catastrophic precision loss (numerical_stability.md Section C). */
+    int force_refactor = (stepSize > 1e15);
+    if (force_refactor || cxf_refactor_check(state, env) > 0) {
         cxf_solver_refactor(state, env);
         cxf_recompute_xB(state);
         cxf_recompute_objective(state);
         cxf_compute_reduced_costs(state);
+        if (force_refactor) {
+            /* Tighten adaptive threshold: future refactorizations sooner */
+            int limit = state->eta_count > 25 ? state->eta_count : 25;
+            if (state->thresholds[5] <= 0 || limit < state->thresholds[5])
+                state->thresholds[5] = limit;
+        }
     }
 }
 
