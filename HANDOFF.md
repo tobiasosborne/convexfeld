@@ -4,30 +4,23 @@
 
 ---
 
-## STATUS: 47/47 tests pass. Three fixes + two spec improvements. 19/22 Netlib pass (no regressions).
+## STATUS: 47/47 tests pass. 20/22 Netlib pass (bore3d newly solved). No regressions.
 
-### Session Summary (2026-03-02, Session 3)
+### Session Summary (2026-03-02, Session 4)
 
-**Fixed convexfeld-v03z: solve_lp iteration loop errors on scsd1/kb2**
+**Fixed convexfeld-pr0h: EXPAND Mechanism B activation + eps_base scaling**
 
-Root cause analysis of scsd1 CXF_ERROR_INVALID_ARGUMENT (10003) at iteration 87:
+Root cause analysis of Phase I cycling on bore3d (486/500 degenerate pivots):
 
-1. **FTRAN error recovery** (`src/simplex/step.c`): After 87 degenerate Phase I pivots, the eta chain degrades (reduced costs blow up to 1e14). FTRAN encounters an eta with non-finite pivot element and returns INVALID_ARGUMENT. Old code returned immediately; new code folds FTRAN errors into the existing `need_refactor` path (refactorize + recompute + retry FTRAN).
+1. **EXPAND activation unreachable** (`src/simplex/perturbation.c`): The threshold `degenerate_count > 100` was unreachable because `degenerate_count` resets on ANY non-degenerate pivot. bore3d has 486 degenerate out of 500 pivots, but the 14 non-degenerate ones are scattered, preventing the counter from reaching 100. Added a fallback: `iteration > 3*m && degenerate_count > 0` — fires when Phase I has run for many iterations without reaching feasibility AND is currently in a degenerate streak.
 
-2. **Output validation** (`src/simplex/step.c`): `pricing_and_ftran` returns `ITERATE_CONTINUE` (= `CXF_OK` = 0) from Phase I UNBOUNDED recovery, but with `leavingRow = -1` (unset). Old code proceeded to pivot with invalid row → crash. New code validates `leavingRow >= 0` before pivoting.
+2. **eps_base scaling** (`src/simplex/perturbation.c`): The spec says "epsilon_base is typically 1e-6 to 1e-8" but this assumes feas_tol in the 1e-8 to 1e-10 range. For our feas_tol = 1e-6, the perturbation needs to be ~100x feas_tol to produce nonzero step lengths. Changed from `feas_tol * 1000` (clamped to 1e-4) to `100 * feas_tol` (clamped to [1e-8, 1e-4]). Functionally equivalent for our tolerance but properly scaled.
 
-3. **Defense in depth** (`src/basis/pivot_eta.c`): Added `!isfinite(pivot)` check to prevent creating etas with NaN/Inf pivot elements in the first place.
+Result: bore3d now solves (0.013s). 47/47 tests pass. 20/22 Netlib pass (was 19/22). Zero regressions.
 
-Result: scsd1 now reaches ITERATION_LIMIT (status=7) instead of crashing (status=10003). kb2 unchanged (ITER_LIMIT, pre-existing). 20 spot-checked passing instances confirmed no regressions.
+### Previous Session (2026-03-02, Session 3) — FTRAN error recovery + optimality verification
 
-**2. Spec-mandated numerical improvements**
-
-- Step length clamping (step.c Phase 9): Force refactorization when step > 1e15 (numerical_stability.md Section C)
-- Optimality verification (solve_lp.c): Refactorize + recheck reduced costs before accepting OPTIMAL (Section F.6)
-
-**3. Investigation of convexfeld-n9ok (Phase II primal accuracy)**
-
-Investigated bore3d/grow7 failures. Finding: NOT Phase II primal accuracy — they are Phase I cycling on all-equality problems (same class as scsd1/kb2). bore3d: 486 degenerate Phase I pivots at iter 500. Original blocker (sparse LU, M2) is resolved; issue reclassified. boeing1 has RANGES (RC4, TODO).
+Fixed scsd1/kb2 crash on FTRAN errors. Added step clamping and optimality verification. 19/22 Netlib pass.
 
 ### Previous Session (2026-03-02, Session 1) — Unit tests + ratio test refactoring
 
@@ -36,7 +29,6 @@ Added unit tests for recompute and ratio test functions. Extracted `row_ratio()`
 ### Previous Session (2026-02-27) — Sparse LU implementation
 
 Sparse Markowitz-ordered LU factorization. Dense phase transition at 40% density.
-19/22 Netlib pass. 3 regressions from different pivot ordering (brandy, stair, kb2).
 
 ---
 
@@ -45,26 +37,30 @@ Sparse Markowitz-ordered LU factorization. Dense phase transition at 40% density
 | Issue | Priority | Notes |
 |-------|----------|-------|
 | convexfeld-3kvi | P2 | Investigate brandy/stair regressions with sparse LU |
-| convexfeld-n9ok | P2 | Phase II primal accuracy (boeing1/e226/bore3d/grow7) — was blocked on sparse LU, now unblocked |
-| convexfeld-pr0h | P2 | Phase I pricing convergence near feasibility boundary |
+| convexfeld-n9ok | P2 | Phase I cycling on bore3d/grow7 — bore3d SOLVED, grow7 still fails |
 | convexfeld-nt3i | P3 | Refactor sparse_elim.c to < 200 LOC |
 | convexfeld-0x54 | P3 | Refactor lu_factorize.c to < 200 LOC |
-| convexfeld-udn3 | IN_PROGRESS | Matrix scaling — blocked on solver robustness (blockers may be resolved) |
+| convexfeld-udn3 | IN_PROGRESS | Matrix scaling — blocked on solver robustness |
 
 ---
 
-## Key Finding: ITERATE_CONTINUE == CXF_OK Design Flaw
+## Key Findings
 
-`ITERATE_CONTINUE = 0 = CXF_OK` is a naming collision. When `pricing_and_ftran` returns 0, the caller can't distinguish "success with valid output" from "handled internally, skip this iteration". Current fix: validate output parameters. Future fix: assign distinct constants.
+### EXPAND activation needs dual conditions
+- `degenerate_count > 100` catches pure degenerate streaks (scfxm1)
+- `iteration > 3*m && degenerate_count > 0` catches scattered degeneracy (bore3d)
+- Both are needed because degenerate_count resets on non-degenerate pivots
+
+### eps_base must be proportional to feas_tol
+- Spec's "1e-6 to 1e-8" assumes feas_tol of 1e-8 to 1e-10
+- For our feas_tol = 1e-6, eps_base = 100*feas_tol = 1e-4
+- Too small → perturbation at noise level → ratio test still produces θ=0
 
 ---
 
 ## DO NOT
-- Add structural variable insertion to Phase I setup (violates V2 crash spec line 176)
+- Set eps_base = feas_tol directly (too small, breaks scfxm1)
+- Use struct layout changes to SolverState without verifying ALL 19 Netlib instances
 - Change diag_coeff based on RHS sign (causes regressions on israel/stair/e226)
 - Re-add RC-based status reassignment in refine.c (corrupts obj)
-- Hack refactorization parameters to fix primal accuracy
-- Use row negation for BFRT (corrupts LU/eta factorization)
-- Use a single elim array for rows AND columns in dense elimination
-- Change `LUFactors` struct or FTRAN/BTRAN interfaces
-- Reference GLPK or other solver implementations (cleanroom project — cite only Maros 2003, Suhl & Suhl 1990, Markowitz 1957)
+- Reference GLPK or other solver implementations (cleanroom project)

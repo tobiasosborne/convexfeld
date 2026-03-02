@@ -1332,3 +1332,38 @@ and fix them with MORE spec-compliant work, not by bending the spec. Previous
 learnings about "butterfly regressions" may reflect bugs in the OLD non-compliant
 code, not fundamental limitations of the spec's approach.
 
+---
+
+### EXPAND eps_base Must Be ~100x Feasibility Tolerance
+**FAILURE:** Set eps_base = feas_tol (1e-6), matching spec text "1e-6 to 1e-8".
+scfxm1 regressed from 0.09s to TIMEOUT because perturbation was too small to
+produce nonzero step lengths in the ratio test.
+
+**Root cause:** The spec's recommended "1e-6 to 1e-8" assumes feas_tol in the
+1e-8 to 1e-10 range (standard in production solvers). For our feas_tol = 1e-6,
+eps_base must be proportionally larger. The effective scaling is ~100*feas_tol.
+
+**Fix:** `eps_base = 100 * feas_tol`, clamped to [1e-8, 1e-4]. At feas_tol=1e-8,
+this gives 1e-6 (within spec range). At feas_tol=1e-6, this gives 1e-4 (effective).
+
+**Lesson:** Spec absolute values may assume a specific tolerance regime. When our
+tolerances differ, scale proportionally rather than using the spec's absolute range.
+
+---
+
+### EXPAND Activation: degenerate_count Resets, Use Iteration Fallback
+**FAILURE:** EXPAND threshold `degenerate_count > 100` was unreachable for
+bore3d (486/500 pivots degenerate) because the counter resets on ANY non-degenerate
+pivot. 14 scattered non-degenerate pivots kept resetting the counter.
+
+**Root cause:** `degenerate_count` tracks CONSECUTIVE degenerate pivots.
+For severe degeneracy with occasional non-degenerate pivots interspersed,
+the counter never reaches high thresholds even though degeneracy is extreme.
+
+**Fix:** Keep primary threshold (degenerate_count > 100) for problems with pure
+degenerate streaks. Add fallback: `iteration > 3*m && degenerate_count > 0` for
+Phase I stalling where non-degenerate pivots intersperse.
+
+**Lesson:** Resetting counters are poor proxies for cumulative behavior.
+Use complementary conditions: one for streaks, one for duration.
+

@@ -1,6 +1,7 @@
 /**
  * @file perturbation.c
  * @brief EXPAND anti-cycling perturbation (v2 P2.6, P5.1)
+ * @note EXPAND activation uses iteration-based threshold
  *
  * Spec-compliant 5-phase EXPAND perturbation:
  *   Phase 1: Save bounds
@@ -253,23 +254,32 @@ int cxf_simplex_perturbation(SolverState *state, CxfEnv *env) {
      * - Mechanism A has been tried (perturb_count > 0)
      * - Many consecutive degenerate pivots despite A being active
      * - EXPAND not yet activated */
-    /* EXPAND Mechanism B: Phase I only, with moderate threshold.
-     * Disabled in Phase II — EXPAND leads to suboptimal vertices (scagr25). */
+    /* EXPAND Mechanism B (Gill et al., 1989): Phase I only.
+     * Spec: "Stalling persists after pricing restriction → A + B".
+     * Primary: degenerate_count > 100 (consecutive zero-step pivots).
+     * Fallback: iteration > 3*m in Phase I (severe stalling where
+     * non-degenerate pivots intersperse and reset degenerate_count).
+     * Phase II disabled — EXPAND leads to suboptimal vertices. */
     int need_expand = state->phase == 1 &&
         !state->perturb_expand_active &&
         state->perturb_count > 0 &&
-        state->degenerate_count > 2 * 50 &&
+        state->degenerate_count > 100 &&
         state->saved_lb && state->saved_ub;
-    /* Also escalate proactively in Phase I with SEVERE degeneracy.
-     * Use 3*m threshold (same as Bland's activation). */
     if (!need_expand && state->phase == 1 &&
         !state->perturb_expand_active &&
-        state->degenerate_count > 3 * m &&
+        state->perturb_count > 0 &&
+        state->iteration > 3 * m &&
+        state->degenerate_count > 0 &&
         state->saved_lb && state->saved_ub)
         need_expand = 1;
     if (need_expand) {
         int widened = 0;
-        double eps_base = feas_tol * 1000.0;  /* ~1e-4 */
+        /* Spec: "epsilon_base is typically on the order of 1e-6 to 1e-8
+         * (scaled from the feasibility tolerance)."
+         * Scale as 100*feas_tol: at feas_tol=1e-8 → eps_base=1e-6 (spec range).
+         * Must be large enough relative to feas_tol to produce step > 0
+         * in the ratio test, otherwise perturbation is ineffective. */
+        double eps_base = 100.0 * feas_tol;
         if (eps_base < 1e-8) eps_base = 1e-8;
         if (eps_base > 1e-4) eps_base = 1e-4;
 
