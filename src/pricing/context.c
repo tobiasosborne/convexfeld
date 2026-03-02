@@ -38,7 +38,7 @@ PricingState *cxf_pricing_create(int num_vars, int max_levels) {
     }
 
     ctx->max_levels = max_levels;
-    ctx->current_level = 1;
+    ctx->current_level = 0;  /* Spec: "current level set to 0" (partial_pricing.md) */
 
     /* Allocate level arrays */
     ctx->candidate_counts = (int *)calloc((size_t)max_levels, sizeof(int));

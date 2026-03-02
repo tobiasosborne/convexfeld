@@ -90,7 +90,7 @@ void test_pricing_init_basic(void) {
 
     int result = cxf_pricing_init(ctx, 100, 1);  /* Strategy 1 = partial */
     TEST_ASSERT_EQUAL_INT(CXF_OK, result);
-    TEST_ASSERT_EQUAL_INT(1, ctx->current_level);
+    TEST_ASSERT_EQUAL_INT(0, ctx->current_level);  /* Spec: level 0 (partial_pricing.md) */
     TEST_ASSERT_NOT_NULL(ctx->candidate_counts);
     TEST_ASSERT_NOT_NULL(ctx->candidate_arrays);
 

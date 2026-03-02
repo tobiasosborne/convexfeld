@@ -113,7 +113,7 @@ int cxf_pricing_init(PricingState *ctx, int num_vars, int strategy) {
     ctx->strategy = effective_strategy;
 
     /* Reset to initial state */
-    ctx->current_level = 1;
+    ctx->current_level = 0;  /* Spec: "current level set to 0" (partial_pricing.md) */
 
     /* Reset statistics */
     ctx->total_candidates_scanned = 0;
