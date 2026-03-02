@@ -4,24 +4,23 @@
 
 ---
 
-## STATUS: 47/47 tests pass. Core algorithm unit tests added.
+## STATUS: 47/47 tests pass. Two issues closed this session.
 
-### Session Summary (2026-03-02) — Core algorithm unit tests (convexfeld-sxgk)
+### Session Summary (2026-03-02)
 
-Closed P1 issue: added unit tests for previously-untested core algorithm functions.
+**1. Core algorithm unit tests (convexfeld-sxgk, P1)**
 
-**Files created:**
-- `tests/unit/test_recompute.c` (226 LOC) — 10 tests for cxf_recompute_xB, cxf_recompute_objective, cxf_ftran_residual
+Added unit tests for previously-untested core functions:
+- `tests/unit/test_recompute.c` (226 LOC, 10 tests): cxf_recompute_xB (identity + structural basis), cxf_recompute_objective (Phase I/II), cxf_ftran_residual
+- `tests/unit/test_ratio_test.c` (+2 tests): degenerate pivot, Bland's rule
 
-**Files modified:**
-- `tests/unit/test_ratio_test.c` (+45 LOC) — Added 2 tests: degenerate pivot, Bland's rule tie-breaking
-- `tests/CMakeLists.txt` — Registered test_recompute
+**2. Ratio test refactoring (convexfeld-gx1f, P2)**
 
-**Test coverage added:**
-- `cxf_recompute_xB`: identity basis, structural 2x2 basis, nonbasic snap-to-bound, null guard
-- `cxf_recompute_objective`: Phase II c^T x, Phase I single violation, Phase I dual violation + w-coefficients
-- `cxf_ftran_residual`: exact (residual=0), perturbed (known nonzero residual), null guard
-- `cxf_ratio_test`: degenerate pivot (ratio=0), Bland vs largest-pivot tie-breaking
+Extracted `row_ratio()` helper from duplicated Pass 1/Pass 2 logic:
+- `src/simplex/ratio_test.c`: 239 LOC → 151 LOC (37% reduction)
+- Two-pass Harris structure preserved (correct per Maros 2003 Ch. 8)
+- Band parameter: `band > 0` = Harris relaxation (Pass 1), `band = 0` = strict (Pass 2)
+- Cached local pointers for readability: `bv`, `wx`, `wlb`, `wub`
 
 ### Previous Session (2026-02-27) — Sparse LU implementation
 
