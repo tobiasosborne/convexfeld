@@ -230,6 +230,16 @@ int cxf_solve_lp(CxfModel *model) {
                 terminated = 1; break;
             }
             if (status == ITERATE_UNBOUNDED) {
+                if (state->phase == 1) {
+                    /* Phase I unbounded: refactorize and continue.
+                     * Unboundedness of auxiliary problem does not imply
+                     * unboundedness of original (two_phase_method.md). */
+                    cxf_solver_refactor(state, env);
+                    cxf_recompute_xB(state);
+                    cxf_recompute_objective(state);
+                    cxf_compute_reduced_costs(state);
+                    continue;
+                }
                 model->status = CXF_UNBOUNDED; terminated = 1; break;
             }
             if (status == ITERATE_INFEASIBLE) {

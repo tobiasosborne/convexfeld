@@ -25,6 +25,7 @@
 #define REFACTOR_INTERVAL  100
 #define MAX_BFRT_FLIPS     10
 #define MAX_CANDIDATES     10
+#define STEP_CLAMP         1e15   /* numerical_stability.md Section C */
 
 /* External declarations */
 
@@ -445,14 +446,6 @@ static int pricing_and_ftran(SolverState *state, CxfEnv *env,
                 state->iteration++;
                 return ITERATE_CONTINUE;
             }
-            if (state->phase == 1) {
-                cxf_solver_refactor(state, env);
-                cxf_recompute_xB(state);
-                cxf_recompute_objective(state);
-                cxf_compute_reduced_costs(state);
-                state->iteration++;
-                return ITERATE_CONTINUE;
-            }
             return ITERATE_UNBOUNDED;
         }
         if (rc != CXF_OK) return rc;
@@ -579,14 +572,6 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env) {
                                &leavingRow, &pivotElement, &stepSize);
     if (rc != CXF_OK) return rc;
 
-    /* Validate: pricing_and_ftran may return CXF_OK after handling
-     * Phase I UNBOUNDED internally (refactorize + continue) without
-     * selecting a leaving variable.  Skip pivot, advance iteration. */
-    if (leavingRow < 0 || entering < 0) {
-        state->iteration++;
-        return ITERATE_CONTINUE;
-    }
-
     double *pivotCol = basis->work;
 
     /* Phase 3: BFRT — extend step via bound flips (Koberstein 2005) */
@@ -626,6 +611,10 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env) {
         state->degenerate_count = 0;
     }
 
+    /* Step length clamping (numerical_stability.md Section C) */
+    if (stepSize > STEP_CLAMP)
+        stepSize = STEP_CLAMP;
+
     /* Phase 4: BTRAN (before pivot modifies basis) */
     int leaving = basis->basic_vars[leavingRow];
     double d_entering = state->work_dj[entering];
@@ -664,6 +653,21 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env) {
     } else {
         rc = cxf_apply_pivot(state, entering, leavingRow, pivotCol, stepSize);
         if (rc != CXF_OK) return rc;
+    }
+
+    /* Post-pivot bound projection (numerical_stability.md Section C):
+     * "basic variable values should be checked against their bounds
+     *  and projected back to the nearest bound if they have overshot."
+     * Phase II only — Phase I basic vars are legitimately outside bounds
+     * (the Phase I objective tracks violations; projecting defeats it). */
+    if (state->phase == 2) {
+        for (int i = 0; i < m; i++) {
+            int bv = basis->basic_vars[i];
+            if (bv < 0 || bv >= total) continue;
+            double x = state->work_x[bv];
+            if (x < state->work_lb[bv]) state->work_x[bv] = state->work_lb[bv];
+            if (x > state->work_ub[bv]) state->work_x[bv] = state->work_ub[bv];
+        }
     }
 
     /* Phases 6-9: Objective, RC, weights, pricing cascade, refactor */
