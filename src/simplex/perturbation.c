@@ -275,13 +275,10 @@ int cxf_simplex_perturbation(SolverState *state, CxfEnv *env) {
     if (need_expand) {
         int widened = 0;
         /* Spec: "epsilon_base is typically on the order of 1e-6 to 1e-8
-         * (scaled from the feasibility tolerance)."
-         * Scale as 100*feas_tol: at feas_tol=1e-8 → eps_base=1e-6 (spec range).
-         * Must be large enough relative to feas_tol to produce step > 0
-         * in the ratio test, otherwise perturbation is ineffective. */
-        double eps_base = 100.0 * feas_tol;
+         * (scaled from the feasibility tolerance)." */
+        double eps_base = feas_tol;
         if (eps_base < 1e-8) eps_base = 1e-8;
-        if (eps_base > 1e-4) eps_base = 1e-4;
+        if (eps_base > 1e-6) eps_base = 1e-6;
 
         for (int i = 0; i < m; i++) {
             int bv = basis->basic_vars[i];
