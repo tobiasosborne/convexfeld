@@ -4,30 +4,29 @@
 
 ---
 
-## STATUS: 47/47 tests pass. 18/22 Netlib pass. Spec V2 fully compliant.
+## STATUS: 47/47 tests pass. 18/22 Netlib (scfxm1+bore3d regressed from spec compliance). V2 solver algorithm code substantially compliant.
 
 ### Session Summary (2026-03-02, Session 5)
 
-**Spec V2 compliance fixes to EXPAND Mechanism B (perturbation.c)**
+**Spec V2 compliance audit + fixes:**
 
-Three changes, all spec-mandated:
+1. **EXPAND Mechanism B activation** (perturbation.c): Added `iteration > 3*m` fallback for Phase I stalling. Old threshold `degenerate_count > 100` was unreachable for scattered degeneracy.
 
-1. **EXPAND activation fallback** (perturbation.c): Added `iteration > 3*m` fallback alongside the existing `degenerate_count > 100` threshold. The old fallback (`degenerate_count > 3*m`) was unreachable because `degenerate_count` resets on any non-degenerate pivot. The new fallback fires when Phase I has stalled for many iterations with current degeneracy. Spec: perturbation.md "Phase I with many basic variables at bounds → Mechanism A + Mechanism B".
+2. **EXPAND eps_base** (perturbation.c): Fixed to spec range [1e-8, 1e-6] per perturbation.md line 200. Known regressions: scfxm1 + bore3d (perturbation too small with feas_tol = 1e-6).
 
-2. **eps_base spec compliance** (perturbation.c): Changed from `feas_tol * 1000` (= 1e-3, clamped to 1e-4) to `feas_tol` (= 1e-6, clamped to [1e-8, 1e-6]). Spec: "epsilon_base is typically on the order of 1e-6 to 1e-8."
+3. **EXPAND activity recomputation** (perturbation.c): Added `cxf_simplex_setup(state, env, 0, NULL)` after EXPAND bound widening per spec step 4.
 
-3. **Activity recomputation after EXPAND** (perturbation.c): Added `cxf_simplex_setup(state, env, 0, NULL)` after EXPAND bound widening. Spec step 4: "Update constraint activities. Recompute constraint activity bounds."
+4. **Pricing level init** (init.c, context.c): Fixed `current_level = 1` to `current_level = 0` per partial_pricing.md precondition.
 
-**Known regressions (spec compliance):**
-- scfxm1: TIMEOUT (was PASS at 0.09s). EXPAND perturbation too small with eps_base = 1e-6 = feas_tol.
-- bore3d: TIMEOUT (was PASS at 0.013s with non-compliant eps_base). Same root cause.
-- **Fix path:** Tighten feas_tol to 1e-8 (within spec range [1e-9, 1e-2]). This gives eps_base = 1e-6 = 100*feas_tol, making EXPAND effective while staying spec-compliant.
+5. **Audit cross-check**: Verified all 14 audit items against current code. Most are fixed since the Feb 22 audit: C1+C3 (pivot_update API), C4 (Phase I UNBOUNDED suppression), H2 (two-stage infeasibility), H3 (convergence formula), H4 (Phase I w-coefficients), M2 (sparse LU), M6 (refine eta records).
 
-### Previous Sessions
-- Session 4: EXPAND activation fallback (bore3d solved — then reverted by eps_base compliance)
-- Session 3: FTRAN error recovery, step clamping, optimality verification
-- Session 1: Unit tests, ratio test refactoring
-- Feb 27: Sparse LU implementation
+### Remaining spec deviations (known)
+
+| Item | Location | Nature | Impact |
+|------|----------|--------|--------|
+| pivot_bound Phase 7 | pivot_special.c | Missing CSC/CSR column invalidation for fixed vars | Low — fixed vars stay in matrix, processed as zero-slack |
+| simplex_refine Pass 2 | refine.c | Basic recovery via pivot_primal disabled | Low — CS fix in solve_lp.c covers the behavior |
+| EXPAND eps_base | perturbation.c | eps_base = feas_tol = 1e-6 (spec compliant but ineffective) | Medium — scfxm1+bore3d TIMEOUT. Fix: tighten feas_tol |
 
 ---
 
@@ -35,25 +34,12 @@ Three changes, all spec-mandated:
 
 | Issue | Priority | Notes |
 |-------|----------|-------|
-| convexfeld-3kvi | P2 | Investigate brandy/stair regressions with sparse LU |
-| convexfeld-n9ok | P2 | Phase I cycling: grow7 still fails |
-| convexfeld-nt3i | P3 | Refactor sparse_elim.c to < 200 LOC |
-| convexfeld-0x54 | P3 | Refactor lu_factorize.c to < 200 LOC |
-
----
-
-## Audit Items Still Open (implementation_audit.md)
-
-| Priority | Item | Description | Effort |
-|----------|------|-------------|--------|
-| 1 | C1+C3 | Redesign cxf_pivot_update API + Kahan-stable addition | Medium |
-| 2 | C2 | Implement full cxf_pivot_bound (eta, activity, matrix cleanup) | Medium |
-| 3 | C4 | Phase I UNBOUNDED suppression in cxf_pivot_special | Low |
-| 4 | H2 | Two-stage infeasibility confirmation in step2/step3 | Low |
+| convexfeld-3kvi | P2 | brandy/stair regressions (sparse LU trajectory) |
+| convexfeld-n9ok | P2 | grow7 Phase I cycling |
 
 ---
 
 ## DO NOT
-- Set eps_base outside spec range [1e-8, 1e-6] — SPEC IS THE LAW
-- Change Harris band epsilon to 10*feas_tol — spec says use feas_tol directly
-- Reference GLPK or other solver implementations (cleanroom project)
+- Set eps_base outside [1e-8, 1e-6] — SPEC IS THE LAW
+- Change Harris band epsilon — spec says use feas_tol directly
+- Reference GLPK or other solver implementations (cleanroom)
