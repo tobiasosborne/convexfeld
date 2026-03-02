@@ -50,6 +50,34 @@ bd sync               # Sync with git
 
 ---
 
+## ⚠️ THE LAW: Spec V2 Compliance ⚠️
+
+**`docs/specs-v2/` is the single source of truth for all solver behavior.**
+
+Every line of solver code MUST comply with the V2 spec. There are NO exceptions.
+
+### What this means in practice
+
+1. **Before writing ANY solver code**, read the relevant V2 spec module. Not skim — READ.
+2. **If your implementation deviates from the spec**, that is a BUG. Fix the code, not the spec.
+3. **If the spec is unclear**, read it again. If still unclear, ask the user. Do NOT guess.
+4. **If the spec conflicts with existing code**, the spec wins. Change the code.
+5. **If spec compliance causes Netlib regressions**, the regressions are ACCEPTABLE. Spec compliance is more important than benchmark pass rates. Regressions will be fixed by later spec-compliant improvements — never by violating the spec.
+
+### Why this rule exists
+
+A previous agent made "pragmatic" choices that deviated from the spec to avoid regressions. This created three deviations that required emergency remediation. Each deviation was defended as "the right engineering tradeoff." Every single one was wrong. The spec exists because it encodes the correct algorithm. Deviating from it produces code that is subtly broken in ways that surface later as hard-to-diagnose failures.
+
+### The hierarchy
+
+```
+Spec V2  >  Netlib pass rate  >  Test pass rate  >  Code elegance  >  Everything else
+```
+
+Netlib regressions from spec-compliant code are not bugs — they are symptoms of OTHER spec gaps that should be filed as issues and fixed properly.
+
+---
+
 ## Project Rules
 
 ### Rule 1: 200 LOC Limit

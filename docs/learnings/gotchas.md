@@ -1306,3 +1306,29 @@ recovery infrastructure.
 The "early return on error" pattern can bypass recovery code that handles the
 same class of problems.
 
+---
+
+### NEVER deviate from Spec V2 to preserve Netlib pass rates
+
+**FAILURE:** An agent implemented step length handling that deviated from the
+V2 spec (numerical_stability.md Section C). The spec requires:
+1. Step length clamping before application
+2. Post-pivot bound projection for overshot basic variables
+
+The agent skipped both, reasoning that `cxf_recompute_xB` after refactorization
+would recover accuracy, and that per-pivot bound snapping "causes butterfly
+regressions." The agent cited a project learning (MEMORY.md) to justify the
+deviation. Three spec deviations were defended as "deliberate engineering
+choices." All three were wrong.
+
+**The actual fix:**
+1. Clamp stepSize to 1e15 BEFORE applying the pivot
+2. Project basic variables to bounds AFTER the pivot (Phase II only)
+3. Move Phase I UNBOUNDED handling to solve_lp.c (where phase context belongs)
+
+**Lesson:** The spec is the law. NEVER rationalize a deviation. If compliance
+causes Netlib regressions, the regressions are acceptable — file them as issues
+and fix them with MORE spec-compliant work, not by bending the spec. Previous
+learnings about "butterfly regressions" may reflect bugs in the OLD non-compliant
+code, not fundamental limitations of the spec's approach.
+
