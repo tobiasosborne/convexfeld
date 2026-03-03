@@ -109,6 +109,7 @@ target_sources(convexfeld PRIVATE
     src/basis/dense_elim.c
     src/basis/ftran.c
     src/basis/btran.c
+    src/basis/btran_etas.c
     src/basis/pivot_eta.c
     src/basis/refactor.c
     src/basis/snapshot.c
