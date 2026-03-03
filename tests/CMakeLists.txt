@@ -45,9 +45,15 @@ add_cxf_test(test_smoke unit/test_smoke.c)
 # M2.1.1: Memory management tests
 add_cxf_test(test_memory unit/test_memory.c)
 
-# M4.1.1: Matrix operations tests
-add_cxf_test(test_matrix unit/test_matrix.c)
-target_link_libraries(test_matrix PRIVATE m)  # For math functions
+# M4.1.1: Matrix operations tests (split from test_matrix.c for 200 LOC limit)
+add_cxf_test(test_matrix_create unit/test_matrix_create.c)
+target_link_libraries(test_matrix_create PRIVATE m)
+
+add_cxf_test(test_matrix_math unit/test_matrix_math.c)
+target_link_libraries(test_matrix_math PRIVATE m)
+
+add_cxf_test(test_matrix_convert unit/test_matrix_convert.c)
+target_link_libraries(test_matrix_convert PRIVATE m)
 
 # M5.1.1: Basis operations tests (split from test_basis.c for 200 LOC limit)
 add_cxf_test(test_basis_lifecycle unit/test_basis_lifecycle.c)
