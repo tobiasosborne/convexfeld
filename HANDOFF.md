@@ -4,7 +4,7 @@
 
 ---
 
-## STATUS: 47/47 tests pass. 18/22 Netlib. Fused RC+weight loop, Markowitz, EXPAND.
+## STATUS: 47/47 tests pass. 18/22 Netlib. 3 issues closed this session.
 
 ### Session Summary (2026-03-03, Session 7)
 
@@ -14,6 +14,9 @@
 - Phase II + BTRAN + weights active → fused path. Otherwise separate paths.
 - Zero new allocations, zero new data structures.
 - Spec basis: revised_simplex.md Step 6 — both formulas share tau_j.
+
+**5. Reentrancy fix** (iterate.c, cxf_solver.h, convexfeld-xvxj CLOSED):
+- Moved static `last_log_time` into SolverState. Thread-safe, no stale timing.
 
 ### Session Summary (2026-03-03, Session 6)
 
@@ -54,8 +57,8 @@
 |-------|-------------|
 | convexfeld-3kvi | brandy/stair/kb2 cycling — needs cumulative stall detector or BFRT |
 | convexfeld-n9ok | grow7 Phase I cycling |
-| convexfeld-xz20 | Fuse RC + weight update loops (tau_j computed twice) |
-| convexfeld-xvxj | static last_log_time in iterate.c breaks reentrancy |
+| ~~convexfeld-xz20~~ | ~~Fuse RC + weight update loops~~ **CLOSED** |
+| ~~convexfeld-xvxj~~ | ~~static last_log_time breaks reentrancy~~ **CLOSED** |
 
 ## Priority P2 Tasks (quality/testing)
 
@@ -73,6 +76,7 @@
 
 | Item | Location | Nature |
 |------|----------|--------|
+| C4 pivot_special | pivot_special.c | ALREADY FIXED: Phase I suppression + equality scan present |
 | pivot_bound Phase 7 | pivot_special.c | Missing CSC/CSR column invalidation for fixed vars |
 | simplex_refine Pass 2 | refine.c | Basic recovery via pivot_primal disabled |
 | EXPAND eps_base | perturbation.c | eps_base = feas_tol (spec compliant but ineffective at 1e-6) |
