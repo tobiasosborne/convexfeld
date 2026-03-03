@@ -23,6 +23,16 @@ project(convexfeld
 )
 
 ################################################################################
+# Sanitizer Support
+################################################################################
+
+set(SANITIZER "" CACHE STRING "Enable sanitizer (address, undefined, thread, memory)")
+if(SANITIZER)
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=${SANITIZER} -fno-omit-frame-pointer")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=${SANITIZER}")
+endif()
+
+################################################################################
 # C Standard Configuration
 ################################################################################
 
