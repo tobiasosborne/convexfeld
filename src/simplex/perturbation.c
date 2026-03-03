@@ -245,27 +245,18 @@ int cxf_simplex_perturbation(SolverState *state, CxfEnv *env) {
     }
 
     /*--- Phase 4b: EXPAND bound widening (Mechanism B) ---
-     * If Mechanism A (candidate removal) didn't mark any new candidates,
-     * escalate to bound widening for leaving-side degeneracy.
-     * Widens bounds of basic variables at their bounds so ratio test
-     * produces nonzero ratios, breaking degenerate zero-step pivots.
-     * Spec: P2.6 Mechanism B (Gill et al., 1989). */
-    /* Escalate to Mechanism B when leaving-side degeneracy persists:
-     * - Mechanism A has been tried (perturb_count > 0)
-     * - Many consecutive degenerate pivots despite A being active
-     * - EXPAND not yet activated */
-    /* EXPAND Mechanism B (Gill et al., 1989): Phase I only.
-     * Spec: "Stalling persists after pricing restriction → A + B".
-     * Primary: degenerate_count > 100 (consecutive zero-step pivots).
-     * Fallback: iteration > 3*m in Phase I (severe stalling where
-     * non-degenerate pivots intersperse and reset degenerate_count).
-     * Phase II disabled — EXPAND leads to suboptimal vertices. */
-    int need_expand = state->phase == 1 &&
+     * Spec: "Stalling persists after pricing restriction → A + B"
+     * (perturbation.md §Phase 5, Gill et al., 1989).
+     * Applies to both Phase I and Phase II; unperturb + refine at
+     * optimality recovers the true optimum.
+     * Primary: 100 consecutive degenerate pivots despite Mechanism A.
+     * Fallback: iteration > 3*m with any recent degeneracy. */
+    int need_expand =
         !state->perturb_expand_active &&
         state->perturb_count > 0 &&
         state->degenerate_count > 100 &&
         state->saved_lb && state->saved_ub;
-    if (!need_expand && state->phase == 1 &&
+    if (!need_expand &&
         !state->perturb_expand_active &&
         state->perturb_count > 0 &&
         state->iteration > 3 * m &&

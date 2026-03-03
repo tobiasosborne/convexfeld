@@ -21,12 +21,14 @@ int sparse_find_pivot(const SparseWork *sw,
                       int *out_row, int *out_col, double *out_val) {
     int best_row = -1, best_col = -1;
     int64_t best_score = (int64_t)(sw->m + 1) * (int64_t)(sw->m + 1);
+    double best_rel = 0.0;   /* |a_ij| / col_max[j]: scale-independent */
     double best_abs = 0.0;
 
     for (int j = 0; j < sw->m; j++) {
         if (!sw->col_active[j]) continue;
-        if (sw->col_max[j] < MIN_PIVOT) continue;
-        double threshold = MARKOWITZ_TOL * sw->col_max[j];
+        double cmax = sw->col_max[j];
+        if (cmax < MIN_PIVOT) continue;
+        double threshold = MARKOWITZ_TOL * cmax;
 
         /* Count active entries in this column for Markowitz score */
         const SparseCol *col = &sw->cols[j];
@@ -46,11 +48,13 @@ int sparse_find_pivot(const SparseWork *sw,
 
             int64_t score = (int64_t)(sw->row_count[i] - 1) *
                             (int64_t)(col_active_len - 1);
+            double rel = av / cmax;
             if (score < best_score ||
-                (score == best_score && av > best_abs)) {
+                (score == best_score && rel > best_rel)) {
                 best_score = score;
                 best_row = i;
                 best_col = j;
+                best_rel = rel;
                 best_abs = av;
             }
         }

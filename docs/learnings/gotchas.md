@@ -1367,3 +1367,37 @@ Phase I stalling where non-degenerate pivots intersperse.
 **Lesson:** Resetting counters are poor proxies for cumulative behavior.
 Use complementary conditions: one for streaks, one for duration.
 
+---
+
+### EXPAND Threshold Sensitivity (Session 6)
+**FAILURE:** Lowering EXPAND threshold from `degenerate_count > 100` to `> 50`
+and removing the one-shot `perturb_expand_active` guard caused 10+ Netlib
+regressions (sc50b, sc105, share2b, adlittle, blend, lotfi, beaconfd, ship04l,
+scagr7, scorpion). EXPAND was firing too aggressively, distorting bounds in
+Phase II before the solver had a chance to converge naturally.
+
+**Root cause:** The proactive perturbation at `iteration <= 2` sets
+`perturb_count > 0`. With no degenerate_count guard, EXPAND fires on the
+very next perturbation call, widening bounds before any degeneracy occurs.
+
+**Fix:** Restored conservative thresholds (100 consecutive / iteration > 3*m
+fallback). Kept Phase II enablement (spec-compliant) but with one-shot guard.
+
+**Lesson:** EXPAND threshold changes must be tested against ALL passing Netlib
+instances, not just the failing ones. Aggressive EXPAND is worse than no EXPAND.
+
+---
+
+### Markowitz Tie-Breaking: Absolute vs. Relative (Session 6)
+**FINDING:** The original Markowitz tie-breaking used absolute magnitude
+(`av > best_abs`), comparing raw element values across columns of different
+scales. A 0.01 pivot in a column with max 0.01 (ratio 1.0, perfectly stable)
+lost to 100.0 in a column with max 100000 (ratio 0.001, barely acceptable).
+
+**Fix:** Changed to relative stability: `av/col_max[j] > best_rel`. This is
+scale-independent and matches Suhl & Suhl (1990) recommendations.
+
+**Impact:** No regressions on any Netlib instance. The change is orthogonal
+to cycling behavior — it improves factorization quality but doesn't address
+the anti-cycling mechanism.
+

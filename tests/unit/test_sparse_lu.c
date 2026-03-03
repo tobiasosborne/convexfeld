@@ -124,8 +124,10 @@ void test_sparse_find_pivot_singleton(void) {
 
 void test_sparse_find_pivot_markowitz(void) {
     /* 3x3: [[2,1,0],[1,3,1],[0,1,4]]
-     * Scores: (0,0)=(2-1)*(2-1)=1 |2|, (2,2)=(2-1)*(2-1)=1 |4|
-     * Tie-break by largest |value|: should pick (2,2) with val=4 */
+     * Scores: (0,0)=(2-1)*(2-1)=1 rel=2/2=1.0
+     *         (2,2)=(2-1)*(2-1)=1 rel=4/4=1.0
+     * Equal Markowitz score and relative stability; first encountered wins.
+     * Col 0 searched before col 2, so (0,0) selected. */
     SparseWork *sw = sparse_work_create(3);
     /* Col 0: rows 0,1 */
     sparse_col_append(&sw->cols[0], 0, 2.0);
@@ -143,9 +145,9 @@ void test_sparse_find_pivot_markowitz(void) {
 
     int r, c; double v;
     TEST_ASSERT_EQUAL_INT(0, sparse_find_pivot(sw, &r, &c, &v));
-    TEST_ASSERT_EQUAL_INT(2, r);
-    TEST_ASSERT_EQUAL_INT(2, c);
-    TEST_ASSERT_DOUBLE_WITHIN(1e-15, 4.0, v);
+    TEST_ASSERT_EQUAL_INT(0, r);
+    TEST_ASSERT_EQUAL_INT(0, c);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-15, 2.0, v);
     sparse_work_free(sw);
 }
 

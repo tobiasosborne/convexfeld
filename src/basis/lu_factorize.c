@@ -30,6 +30,7 @@ static int dense_find_pivot(const double *D, int n,
                             int *out_r, int *out_c, double *out_v) {
     int best_r = -1, best_c = -1;
     int64_t best_score = (int64_t)(n + 1) * (int64_t)(n + 1);
+    double best_rel = 0.0;   /* |a_ij| / col_max: scale-independent */
     double best_abs = 0.0;
 
     for (int j = 0; j < n; j++) {
@@ -41,7 +42,7 @@ static int dense_find_pivot(const double *D, int n,
             double av = fabs(D[i * n + j]);
             if (av >= MIN_PIVOT) { col_cnt++; if (av > cmax) cmax = av; }
         }
-        if (col_cnt == 0) continue;
+        if (col_cnt == 0 || cmax < MIN_PIVOT) continue;
         double thr = MARKOWITZ_THRESHOLD * cmax;
         for (int i = 0; i < n; i++) {
             if (relim[i]) continue;
@@ -51,8 +52,10 @@ static int dense_find_pivot(const double *D, int n,
             for (int jj = 0; jj < n; jj++)
                 if (!celim[jj] && fabs(D[i * n + jj]) >= MIN_PIVOT) r_cnt++;
             int64_t sc = (int64_t)(r_cnt - 1) * (int64_t)(col_cnt - 1);
-            if (sc < best_score || (sc == best_score && av > best_abs)) {
-                best_score = sc; best_r = i; best_c = j; best_abs = av;
+            double rel = av / cmax;
+            if (sc < best_score || (sc == best_score && rel > best_rel)) {
+                best_score = sc; best_r = i; best_c = j;
+                best_rel = rel; best_abs = av;
             }
         }
     }
