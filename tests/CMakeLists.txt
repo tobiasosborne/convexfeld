@@ -76,9 +76,14 @@ add_cxf_test(test_api_vars unit/test_api_vars.c)
 # M2.1.3: Vector memory management tests
 add_cxf_test(test_memory_vectors unit/test_memory_vectors.c)
 
-# M3.1.1: Error handling tests
-add_cxf_test(test_error unit/test_error.c)
-target_link_libraries(test_error PRIVATE m)  # For math functions (NAN, INFINITY)
+# M3.1.1: Error handling tests (split into 3 files for < 200 LOC each)
+add_cxf_test(test_error_core unit/test_error_core.c)
+target_link_libraries(test_error_core PRIVATE m)  # For math functions (NAN)
+
+add_cxf_test(test_error_numeric unit/test_error_numeric.c)
+target_link_libraries(test_error_numeric PRIVATE m)  # For math functions (NAN, INFINITY)
+
+add_cxf_test(test_error_reporting unit/test_error_reporting.c)
 
 # M4.2.1: Timing tests
 add_cxf_test(test_timing unit/test_timing.c)
