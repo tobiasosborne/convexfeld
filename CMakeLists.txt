@@ -93,8 +93,10 @@ target_sources(convexfeld PRIVATE
     src/basis/eta_factors.c
     src/basis/lu_factors.c
     src/basis/lu_factorize.c
+    src/basis/lu_output.c
     src/basis/sparse_work.c
     src/basis/sparse_elim.c
+    src/basis/dense_elim.c
     src/basis/ftran.c
     src/basis/btran.c
     src/basis/pivot_eta.c

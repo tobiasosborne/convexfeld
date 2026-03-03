@@ -6,7 +6,7 @@
  * Suhl & Suhl (1990) and Maros (2003) Chapter 5. Dense phase
  * transition when active submatrix density exceeds 40%.
  *
- * Spec: product_form_inverse.md Step 1, numerical_stability.md §D
+ * Spec: product_form_inverse.md Step 1, numerical_stability.md Section D
  */
 
 #include "basis_internal.h"
@@ -18,148 +18,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-#define MARKOWITZ_THRESHOLD CXF_MARKOWITZ_TOL  /* 1/128 */
-#define MIN_PIVOT           CXF_MIN_PIVOT      /* 1e-13 */
-#define DENSE_THRESHOLD     0.4
-#define GROWTH_LIMIT        1e8
 
-/* --- Dense phase helpers (for small remaining submatrix) --- */
-
-static int dense_find_pivot(const double *D, int n,
-                            const int *relim, const int *celim,
-                            int *out_r, int *out_c, double *out_v) {
-    int best_r = -1, best_c = -1;
-    int64_t best_score = (int64_t)(n + 1) * (int64_t)(n + 1);
-    double best_rel = 0.0;   /* |a_ij| / col_max: scale-independent */
-    double best_abs = 0.0;
-
-    for (int j = 0; j < n; j++) {
-        if (celim[j]) continue;
-        double cmax = 0.0;
-        int col_cnt = 0;
-        for (int i = 0; i < n; i++) {
-            if (relim[i]) continue;
-            double av = fabs(D[i * n + j]);
-            if (av >= MIN_PIVOT) { col_cnt++; if (av > cmax) cmax = av; }
-        }
-        if (col_cnt == 0 || cmax < MIN_PIVOT) continue;
-        double thr = MARKOWITZ_THRESHOLD * cmax;
-        for (int i = 0; i < n; i++) {
-            if (relim[i]) continue;
-            double av = fabs(D[i * n + j]);
-            if (av < thr) continue;
-            int r_cnt = 0;
-            for (int jj = 0; jj < n; jj++)
-                if (!celim[jj] && fabs(D[i * n + jj]) >= MIN_PIVOT) r_cnt++;
-            int64_t sc = (int64_t)(r_cnt - 1) * (int64_t)(col_cnt - 1);
-            double rel = av / cmax;
-            if (sc < best_score || (sc == best_score && rel > best_rel)) {
-                best_score = sc; best_r = i; best_c = j;
-                best_rel = rel; best_abs = av;
-            }
-        }
-    }
-    *out_r = best_r; *out_c = best_c;
-    *out_v = (best_r >= 0) ? D[best_r * n + best_c] : 0.0;
-    return (best_r >= 0 && best_abs >= MIN_PIVOT) ? 0 : -1;
-}
-
-static int dense_eliminate(double *D, int n, int piv_r, int piv_c,
-                           double piv_val, int *relim, int *celim,
-                           int **L_i, int **L_j, double **L_v,
-                           int *Lc, int *Lcap, int step) {
-    relim[piv_r] = 1;
-    celim[piv_c] = 1;
-    for (int i = 0; i < n; i++) {
-        if (relim[i] || i == piv_r) continue;
-        double val = D[i * n + piv_c];
-        if (fabs(val) < MIN_PIVOT) continue;
-        double mult = val / piv_val;
-        if (*Lc >= *Lcap) {
-            int nc = *Lcap * 2;
-            int *ni = realloc(*L_i, (size_t)nc * sizeof(int));
-            int *nj = realloc(*L_j, (size_t)nc * sizeof(int));
-            double *nv = realloc(*L_v, (size_t)nc * sizeof(double));
-            if (!ni || !nj || !nv) return 1001;
-            *L_i = ni; *L_j = nj; *L_v = nv; *Lcap = nc;
-        }
-        (*L_i)[*Lc] = i; (*L_j)[*Lc] = step; (*L_v)[*Lc] = mult;
-        (*Lc)++;
-        D[i * n + piv_c] = 0.0;
-        for (int jj = 0; jj < n; jj++) {
-            if (celim[jj] || jj == piv_c) continue;
-            D[i * n + jj] -= mult * D[piv_r * n + jj];
-        }
-    }
-    return 0;
-}
-
-/* --- CSC assembly from COO arrays --- */
-
-static int build_lu_output(LUFactors *lu, int m,
-                           const int *Li, const int *Lj, const double *Lv,
-                           int Lc,
-                           const int *Ui, const int *Uj, const double *Uv,
-                           int Uc) {
-    /* Build inverse permutations */
-    int *inv_row = malloc((size_t)m * sizeof(int));
-    int *inv_col = malloc((size_t)m * sizeof(int));
-    if (!inv_row || !inv_col) { free(inv_row); free(inv_col); return 1001; }
-    for (int k = 0; k < m; k++) {
-        inv_row[lu->perm_row[k]] = k;
-        inv_col[lu->perm_col[k]] = k;
-    }
-
-    /* --- Build L in CSC --- */
-    lu->L_nnz = (int64_t)Lc;
-    memset(lu->L_col_ptr, 0, (size_t)(m + 1) * sizeof(int64_t));
-    if (Lc > 0) {
-        int *lr = realloc(lu->L_row_idx, (size_t)Lc * sizeof(int));
-        double *lv = realloc(lu->L_values, (size_t)Lc * sizeof(double));
-        if (!lr || !lv) { free(inv_row); free(inv_col); return 1001; }
-        lu->L_row_idx = lr; lu->L_values = lv;
-    }
-    for (int k = 0; k < Lc; k++) lu->L_col_ptr[Lj[k] + 1]++;
-    for (int j = 1; j <= m; j++) lu->L_col_ptr[j] += lu->L_col_ptr[j - 1];
-    int64_t *wp = calloc((size_t)m, sizeof(int64_t));
-    if (!wp) { free(inv_row); free(inv_col); return 1001; }
-    for (int k = 0; k < Lc; k++) {
-        int col = Lj[k];
-        int64_t pos = lu->L_col_ptr[col] + wp[col];
-        lu->L_row_idx[pos] = inv_row[Li[k]];  /* Convert to step space */
-        lu->L_values[pos] = Lv[k];
-        wp[col]++;
-    }
-    free(wp);
-
-    /* --- Build U in CSC (indexed by step-row, entries are step-cols) --- */
-    lu->U_nnz = (int64_t)Uc;
-    memset(lu->U_col_ptr, 0, (size_t)(m + 1) * sizeof(int64_t));
-    if (Uc > 0) {
-        int *ur = realloc(lu->U_row_idx, (size_t)Uc * sizeof(int));
-        double *uv = realloc(lu->U_values, (size_t)Uc * sizeof(double));
-        if (!ur || !uv) { free(inv_row); free(inv_col); return 1001; }
-        lu->U_row_idx = ur; lu->U_values = uv;
-    }
-    /* Ui[k] = step (row in step space), Uj[k] = original col */
-    for (int k = 0; k < Uc; k++) lu->U_col_ptr[Ui[k] + 1]++;
-    for (int j = 1; j <= m; j++) lu->U_col_ptr[j] += lu->U_col_ptr[j - 1];
-    wp = calloc((size_t)m, sizeof(int64_t));
-    if (!wp) { free(inv_row); free(inv_col); return 1001; }
-    for (int k = 0; k < Uc; k++) {
-        int row_step = Ui[k];
-        int64_t pos = lu->U_col_ptr[row_step] + wp[row_step];
-        lu->U_row_idx[pos] = inv_col[Uj[k]];  /* Convert col to step space */
-        lu->U_values[pos] = Uv[k];
-        wp[row_step]++;
-    }
-    free(wp);
-    free(inv_row);
-    free(inv_col);
-    return 0;
-}
-
-/* --- Main entry point --- */
+#define MIN_PIVOT       CXF_MIN_PIVOT      /* 1e-13 */
+#define DENSE_THRESHOLD 0.4
+#define GROWTH_LIMIT    1e8
 
 int cxf_lu_factorize(LUFactors *lu, SolverState *ctx) {
     if (!lu || !ctx || !ctx->basis) return CXF_ERROR_NULL_ARGUMENT;
@@ -305,7 +167,7 @@ int cxf_lu_factorize(LUFactors *lu, SolverState *ctx) {
     rc = build_lu_output(lu, m, Li, Lj, Lv, Lc, Ui, Uj, Uv, Uc);
     if (rc == 0) lu->valid = 1;
 
-    /* Growth factor monitoring (numerical_stability.md §D) */
+    /* Growth factor monitoring (numerical_stability.md Section D) */
     if (max_initial > 0.0 && max_u / max_initial > GROWTH_LIMIT)
         basis->numerical_flag = 1;
 
