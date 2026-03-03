@@ -232,14 +232,42 @@ static double compute_step(SolverState *state, int leavingRow,
 /*---------------------------------------------------------------------------*/
 
 /**
+ * @brief Compute tau_j = rho^T a_j for a single nonbasic variable.
+ *
+ * Common kernel for RC and weight updates — factors the CSC dot product
+ * so it appears exactly once in the codebase (revised_simplex.md Step 6).
+ */
+static double compute_tau(const SolverState *state, int j,
+                          const double *rho) {
+    int n = state->num_vars;
+    int m = state->num_constrs;
+    BasisState *basis = state->basis;
+
+    if (j < n && state->csc_col_ptr != NULL) {
+        int64_t s = state->csc_col_ptr[j];
+        int64_t e = state->csc_col_ptr[j + 1];
+        double t = 0.0;
+        for (int64_t k = s; k < e; k++)
+            t += rho[state->csc_row_idx[k]] * state->csc_values[k];
+        return t;
+    }
+    if (j >= n && j < n + m) {
+        int row = j - n;
+        double coeff = (basis->diag_coeff) ?
+            basis->diag_coeff[row] :
+            get_auxiliary_coeff_fallback(state, row);
+        return rho[row] * coeff;
+    }
+    return 0.0;
+}
+
+/**
  * @brief Incremental reduced cost update via BTRAN result.
  */
 static void update_reduced_costs(SolverState *state, int entering,
                                  int leaving, double d_entering,
                                  double pivotElement, const double *rho) {
-    int n = state->num_vars;
-    int m = state->num_constrs;
-    int total = n + m;
+    int total = state->num_vars + state->num_constrs;
     BasisState *basis = state->basis;
     double step_dual = d_entering / pivotElement;
 
@@ -249,23 +277,66 @@ static void update_reduced_costs(SolverState *state, int entering,
     for (int j = 0; j < total; j++) {
         if (j == entering || j == leaving) continue;
         if (basis->var_status[j] >= 0) continue;
+        state->work_dj[j] -= step_dual * compute_tau(state, j, rho);
+    }
+}
 
-        double rho_aj = 0.0;
-        if (j < n && state->csc_col_ptr != NULL) {
-            int64_t s = state->csc_col_ptr[j];
-            int64_t e = state->csc_col_ptr[j + 1];
-            for (int64_t k = s; k < e; k++)
-                rho_aj += rho[state->csc_row_idx[k]]
-                        * state->csc_values[k];
-        } else if (j >= n && j < n + m) {
-            /* Slack/surplus: use diag_coeff */
-            int row = j - n;
-            double coeff = (basis->diag_coeff) ?
-                basis->diag_coeff[row] :
-                get_auxiliary_coeff_fallback(state, row);
-            rho_aj = rho[row] * coeff;
+/**
+ * @brief Fused reduced cost + steepest edge weight update.
+ *
+ * Both formulas use tau_j = rho^T a_j (revised_simplex.md Step 6).
+ * Computing it once per nonbasic variable eliminates a full CSC traversal.
+ *
+ * RC:  d_j' = d_j - (d_q / alpha_{q,r}) * tau_j
+ * DSE: gamma_j' = gamma_j + (tau_j / alpha_{q,r})^2 * (gamma_q - 2*alpha_{q,r} + 1)
+ * Devex: gamma_j' = max(0.99 * gamma_j, (tau_j / alpha_{q,r})^2 + 1)
+ */
+static void update_rc_and_weights(SolverState *state,
+                                   int entering, int leaving, int leavingRow,
+                                   double d_entering, double pivotElement,
+                                   const double *rho) {
+    int total = state->num_vars + state->num_constrs;
+    BasisState *basis = state->basis;
+    PricingState *pricing = state->pricing;
+    double step_dual = d_entering / pivotElement;
+    double inv_pivot = 1.0 / pivotElement;
+
+    double gamma_q = pricing->weights[entering];
+    if (gamma_q < 1e-10) gamma_q = 1.0;
+    double dse_factor = gamma_q - 2.0 * pivotElement + 1.0;
+    int is_devex = (pricing->strategy == 3);
+
+    state->work_dj[entering] = 0.0;
+    state->work_dj[leaving] = -step_dual;
+
+    for (int j = 0; j < total; j++) {
+        if (j == entering || j == leaving) continue;
+        if (basis->var_status[j] >= 0) continue;
+
+        double tau_j = compute_tau(state, j, rho);
+
+        /* RC update */
+        state->work_dj[j] -= step_dual * tau_j;
+
+        /* Weight update */
+        if (j < pricing->num_vars) {
+            double ratio = tau_j * inv_pivot;
+            double r2 = ratio * ratio;
+            if (is_devex) {
+                double dv = r2 + 1.0;
+                double dc = 0.99 * pricing->weights[j];
+                pricing->weights[j] = (dv > dc) ? dv : dc;
+            } else {
+                double nw = pricing->weights[j] + r2 * dse_factor;
+                pricing->weights[j] = (nw > 1e-10) ? nw : 1e-10;
+            }
         }
-        state->work_dj[j] -= step_dual * rho_aj;
+    }
+
+    /* Leaving variable weight: gamma_p' = gamma_q / alpha_{q,r}^2 */
+    if (leaving >= 0 && leaving < pricing->num_vars) {
+        double nw = gamma_q / (pivotElement * pivotElement);
+        pricing->weights[leaving] = (nw > 1e-10) ? nw : 1e-10;
     }
 }
 
@@ -504,21 +575,34 @@ static void post_pivot_updates(SolverState *state, CxfEnv *env,
         state->obj_value += entering_sign * d_entering * stepSize;
     }
 
-    /* Phase 7: Reduced cost update */
-    if (state->phase == 1) {
-        cxf_compute_reduced_costs(state);
-    } else if (btran_ok) {
-        update_reduced_costs(state, entering, leaving,
-                             d_entering, pivotElement, rho);
-    } else {
-        cxf_compute_reduced_costs(state);
-    }
+    /* Phase 7+7b: Reduced cost + weight update.
+     * Both use tau_j = rho^T a_j (revised_simplex.md Step 6).
+     * When BTRAN succeeded and weights are active, fuse into one pass
+     * to avoid traversing CSC columns twice per nonbasic variable. */
+    {
+        int have_weights = (state->pricing != NULL &&
+                            state->pricing->weights != NULL &&
+                            (state->pricing->strategy == 2 ||
+                             state->pricing->strategy == 3));
+        if (state->phase != 1 && btran_ok && have_weights) {
+            update_rc_and_weights(state, entering, leaving, leavingRow,
+                                  d_entering, pivotElement, rho);
+        } else {
+            /* Separate paths */
+            if (state->phase == 1)
+                cxf_compute_reduced_costs(state);
+            else if (btran_ok)
+                update_reduced_costs(state, entering, leaving,
+                                     d_entering, pivotElement, rho);
+            else
+                cxf_compute_reduced_costs(state);
 
-    /* Phase 7b: Steepest edge / Devex weight update */
-    if (state->pricing && state->pricing->weights != NULL)
-        cxf_pricing_update_weights(state->pricing, state, entering,
-                                   leavingRow, pivotCol,
-                                   btran_ok ? rho : NULL);
+            if (state->pricing && state->pricing->weights != NULL)
+                cxf_pricing_update_weights(state->pricing, state, entering,
+                                           leavingRow, pivotCol,
+                                           btran_ok ? rho : NULL);
+        }
+    }
 
     /* Phase 8: V2 pricing notification */
     if (state->pricing) {

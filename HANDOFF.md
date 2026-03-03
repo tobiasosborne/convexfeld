@@ -4,7 +4,16 @@
 
 ---
 
-## STATUS: 47/47 tests pass. 18/22 Netlib. Two Markowitz + EXPAND improvements landed.
+## STATUS: 47/47 tests pass. 18/22 Netlib. Fused RC+weight loop, Markowitz, EXPAND.
+
+### Session Summary (2026-03-03, Session 7)
+
+**4. Fused RC + weight update** (step.c, convexfeld-xz20 CLOSED):
+- Factored `compute_tau(state, j, rho)` — CSC dot product appears once.
+- `update_rc_and_weights()` fuses both loops into single pass over nonbasic vars.
+- Phase II + BTRAN + weights active → fused path. Otherwise separate paths.
+- Zero new allocations, zero new data structures.
+- Spec basis: revised_simplex.md Step 6 — both formulas share tau_j.
 
 ### Session Summary (2026-03-03, Session 6)
 
