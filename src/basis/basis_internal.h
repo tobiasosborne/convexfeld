@@ -73,19 +73,19 @@ int sparse_work_extract(SparseWork *sw, struct SolverState *ctx);
 void sparse_work_free(SparseWork *sw);
 int sparse_col_append(SparseCol *col, int row, double val);
 double sparse_work_density(const SparseWork *sw);
+int sparse_extract_pivot_row(const SparseWork *sw, int piv_row,
+                             int *cols, double *vals);
+int sparse_to_dense(const SparseWork *sw,
+                    double *D, int *map_row, int *map_col);
 
 /* sparse_elim.c */
 int sparse_find_pivot(const SparseWork *sw,
                       int *out_row, int *out_col, double *out_val);
-int sparse_extract_pivot_row(const SparseWork *sw, int piv_row,
-                             int *cols, double *vals);
 int sparse_eliminate(SparseWork *sw, int piv_row, int piv_col,
                      double piv_val,
                      const int *pr_cols, const double *pr_vals, int pr_len,
                      int **L_i, int **L_j, double **L_v,
                      int *L_count, int *L_cap, int step);
-int sparse_to_dense(const SparseWork *sw,
-                    double *D, int *map_row, int *map_col);
 
 /* dense_elim.c */
 int dense_find_pivot(const double *D, int n,

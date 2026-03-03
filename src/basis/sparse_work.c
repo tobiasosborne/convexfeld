@@ -130,3 +130,54 @@ int sparse_work_extract(SparseWork *sw, SolverState *ctx) {
     }
     return 0;
 }
+
+int sparse_extract_pivot_row(const SparseWork *sw, int piv_row,
+                             int *cols, double *vals) {
+    int len = 0;
+    for (int j = 0; j < sw->m; j++) {
+        if (!sw->col_active[j]) continue;
+        const SparseCol *col = &sw->cols[j];
+        for (int k = 0; k < col->len; k++) {
+            if (col->row_idx[k] == piv_row &&
+                fabs(col->values[k]) >= MIN_PIVOT) {
+                cols[len] = j;
+                vals[len] = col->values[k];
+                len++;
+                break;
+            }
+        }
+    }
+    return len;
+}
+
+int sparse_to_dense(const SparseWork *sw,
+                    double *D, int *map_row, int *map_col) {
+    int active = sw->active_count;
+    int ri = 0, ci = 0;
+
+    /* Build mappings: dense index -> original index */
+    for (int i = 0; i < sw->m; i++)
+        if (sw->row_active[i]) map_row[ri++] = i;
+    for (int j = 0; j < sw->m; j++)
+        if (sw->col_active[j]) map_col[ci++] = j;
+
+    /* Build inverse row map for fast lookup */
+    int *inv_row = calloc((size_t)sw->m, sizeof(int));
+    if (!inv_row) return -1;
+    for (int r = 0; r < ri; r++) inv_row[map_row[r]] = r;
+
+    /* Zero the dense array, then populate */
+    for (int i = 0; i < active * active; i++) D[i] = 0.0;
+    for (int dc = 0; dc < ci; dc++) {
+        const SparseCol *col = &sw->cols[map_col[dc]];
+        for (int k = 0; k < col->len; k++) {
+            int orig_row = col->row_idx[k];
+            if (!sw->row_active[orig_row]) continue;
+            if (fabs(col->values[k]) < MIN_PIVOT) continue;
+            int dr = inv_row[orig_row];
+            D[dr * active + dc] = col->values[k];
+        }
+    }
+    free(inv_row);
+    return active;
+}
