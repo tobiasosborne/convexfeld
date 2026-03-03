@@ -4,7 +4,7 @@
 
 ---
 
-## STATUS: 56/56 tests pass. 18/22 Netlib. 12 issues closed this session.
+## STATUS: 58/58 tests pass. 18/22 Netlib. 17 issues closed this session.
 
 ### Session Summary (2026-03-03, Session 7)
 
@@ -31,6 +31,13 @@
 - convexfeld-p3sl CLOSED: candidates.c 323→171 + candidates_v1.c(163)
 - convexfeld-ccrf CLOSED: lock naming fix (4 functions renamed to consistent pairs)
 - convexfeld-yyo6 CLOSED: CMake sanitizer support (-DSANITIZER=address|undefined|thread|memory)
+
+**16-20. Wave 3 parallel** (5 subagents, worktree isolation):
+- convexfeld-hqo CLOSED: test_matrix.c 442→3 files (170+151+190)
+- convexfeld-6js6 CLOSED: update.c 212→164 + invalidate.c(62)
+- convexfeld-447 CLOSED: model.c 281→187 + model_copy.c(107)
+- convexfeld-20e CLOSED: btran.c 311→121 + btran_etas.c(163) (eta traversal dedup)
+- convexfeld-hlb1 CLOSED: introsort replaces insertion sort — O(n log n) worst case
 
 ### Session Summary (2026-03-03, Session 6)
 
