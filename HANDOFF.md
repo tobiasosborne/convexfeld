@@ -6,69 +6,31 @@
 
 ## STATUS: 58/58 tests pass. 18/22 Netlib. 17 issues closed this session.
 
-### Session Summary (2026-03-03, Session 7)
+### Session Summary (2026-03-03, Sessions 6-7)
 
-**4. Fused RC + weight update** (step.c, convexfeld-xz20 CLOSED):
-- Factored `compute_tau(state, j, rho)` — CSC dot product appears once.
-- `update_rc_and_weights()` fuses both loops into single pass over nonbasic vars.
-- Phase II + BTRAN + weights active → fused path. Otherwise separate paths.
-- Zero new allocations, zero new data structures.
-- Spec basis: revised_simplex.md Step 6 — both formulas share tau_j.
+**Solver improvements (3 issues):**
+1. Relative Markowitz tie-breaking (sparse_elim.c, lu_factorize.c, dense_elim.c) — `av/col_max` per Suhl & Suhl 1990
+2. Phase II EXPAND enablement (perturbation.c → expand.c) — removed Phase I guard per spec
+3. Fused RC + weight update (step.c) — `compute_tau()` kernel, single-pass loop
 
-**5. Reentrancy fix** (iterate.c, cxf_solver.h, convexfeld-xvxj CLOSED):
-- Moved static `last_log_time` into SolverState. Thread-safe, no stale timing.
+**Bug fixes (2 issues):**
+4. Reentrancy fix — moved static `last_log_time` into SolverState
+5. Introsort — replaced O(n²) insertion sort with O(n log n) introsort in sort.c
 
-**6-10. Five parallel refactors** (5 subagents, worktree isolation, zero conflicts):
-- convexfeld-4vl9 CLOSED: test_basis.c 1053→7 files (90-198 LOC each)
-- convexfeld-5w6 CLOSED: test_logging.c 300→2 files (154+180)
-- convexfeld-afb CLOSED: test_error.c 547→3 files (191+185+157)
-- convexfeld-0x54 CLOSED: lu_factorize.c 318→180 + dense_elim.c(95) + lu_output.c(78)
-- convexfeld-rlll CLOSED: phase_steps.c 327→step2.c(191) + step3.c(183)
+**Refactors via 3 parallel waves (12 issues, 15 subagents, worktree isolation):**
 
-**11-15. Five more parallel refactors** (5 subagents, worktree isolation):
-- convexfeld-nt3i CLOSED: sparse_elim.c 243→192 (moved sparse_to_dense to sparse_work.c)
-- convexfeld-h343 CLOSED: perturbation.c 370→190 + expand.c(180)
-- convexfeld-p3sl CLOSED: candidates.c 323→171 + candidates_v1.c(163)
-- convexfeld-ccrf CLOSED: lock naming fix (4 functions renamed to consistent pairs)
-- convexfeld-yyo6 CLOSED: CMake sanitizer support (-DSANITIZER=address|undefined|thread|memory)
-
-**16-20. Wave 3 parallel** (5 subagents, worktree isolation):
-- convexfeld-hqo CLOSED: test_matrix.c 442→3 files (170+151+190)
-- convexfeld-6js6 CLOSED: update.c 212→164 + invalidate.c(62)
-- convexfeld-447 CLOSED: model.c 281→187 + model_copy.c(107)
-- convexfeld-20e CLOSED: btran.c 311→121 + btran_etas.c(163) (eta traversal dedup)
-- convexfeld-hlb1 CLOSED: introsort replaces insertion sort — O(n log n) worst case
-
-### Session Summary (2026-03-03, Session 6)
-
-**1. Relative Markowitz tie-breaking** (sparse_elim.c, lu_factorize.c):
-- Changed tie-breaking from absolute magnitude (`av > best_abs`) to relative
-  stability (`av/col_max > best_rel`), per Suhl & Suhl (1990).
-- Scale-independent: a 0.01 pivot in a col with max 0.01 (ratio 1.0) now beats
-  a 100.0 pivot in a col with max 100000 (ratio 0.001).
-- Same change in both sparse-phase and dense-phase pivot selection.
-- Updated test_sparse_lu.c test expectations accordingly.
-
-**2. Phase II EXPAND enablement** (perturbation.c):
-- Removed `state->phase == 1` guard from EXPAND activation.
-- Spec (perturbation.md §Phase 5) says "stalling persists → A + B" without
-  phase restriction. Phase II uses existing unperturb + refine at optimality.
-- Kept original conservative thresholds (degenerate_count > 100 primary,
-  iteration > 3*m fallback) — lower thresholds caused regressions.
-
-**3. Investigation: brandy/stair/kb2 cycling root cause:**
-- Cycling is NOT caused by Markowitz tie-breaking.
-- Root cause: Bland's rule (activated at degenerate_count > 50) produces
-  occasional non-degenerate steps that reset the consecutive counter,
-  preventing it from reaching EXPAND's threshold (100).
-- The fallback (iteration > 3*m) also fails when the most recent step is
-  non-degenerate (degenerate_count = 0).
-- Fix requires: cumulative stalling detector that doesn't reset on
-  individual non-degenerate steps, or BFRT implementation.
+| Wave | Files Refactored |
+|------|-----------------|
+| 1 | test_basis.c(1053→7), test_logging.c(300→2), test_error.c(547→3), lu_factorize.c(318→180+95+78), phase_steps.c(327→191+183) |
+| 2 | sparse_elim.c(243→192), perturbation.c(370→190+180), candidates.c(323→171+163), lock naming(4 renames), CMake sanitizers |
+| 3 | test_matrix.c(442→3), update.c(212→164+62), model.c(281→187+107), btran.c(311→121+163), sort.c(80→167 introsort) |
 
 ### Known regressions (pre-existing)
 - scfxm1 + bore3d TIMEOUT: eps_base = feas_tol = 1e-6 too small for degeneracy
 - brandy/stair/kb2: sparse LU trajectory + insufficient anti-cycling
+
+### brandy/stair/kb2 root cause (investigated):
+- NOT Markowitz tie-breaking. Root cause: Bland's rule (at degenerate_count > 50) resets consecutive counter, preventing EXPAND threshold (100). Fix needs cumulative stalling detector or BFRT.
 
 ---
 
@@ -78,30 +40,26 @@
 |-------|-------------|
 | convexfeld-3kvi | brandy/stair/kb2 cycling — needs cumulative stall detector or BFRT |
 | convexfeld-n9ok | grow7 Phase I cycling |
-| ~~convexfeld-xz20~~ | ~~Fuse RC + weight update loops~~ **CLOSED** |
-| ~~convexfeld-xvxj~~ | ~~static last_log_time breaks reentrancy~~ **CLOSED** |
 
-## Priority P2 Tasks (quality/testing)
+## Priority P2 Tasks (remaining)
 
 | Issue | Description |
 |-------|-------------|
 | convexfeld-xa3o | Mixed allocator (raw malloc in matrix/, callbacks/) |
 | convexfeld-yzop | API modification stubs silently succeed |
 | convexfeld-uqok | Query API stubs return fabricated data |
-| convexfeld-yyo6 | CMake sanitizer support (ASan/UBSan/TSan) |
 | convexfeld-ysof | Test infeasibility on 29 Netlib infeasible instances |
-| convexfeld-4vl9 | Refactor test_basis.c (947 LOC) |
 | convexfeld-86h | Numerical stability edge case testing |
 
 ## Remaining spec deviations (minor)
 
 | Item | Location | Nature |
 |------|----------|--------|
-| C4 pivot_special | pivot_special.c | ALREADY FIXED: Phase I suppression + equality scan present |
+| C4 pivot_special | pivot_special.c | ALREADY FIXED |
 | pivot_bound Phase 7 | pivot_special.c | Missing CSC/CSR column invalidation for fixed vars |
 | simplex_refine Pass 2 | refine.c | Basic recovery via pivot_primal disabled |
-| EXPAND eps_base | perturbation.c | eps_base = feas_tol (spec compliant but ineffective at 1e-6) |
-| Stalling detector | step.c / perturbation.c | Consecutive count resets on non-degenerate steps; needs cumulative |
+| EXPAND eps_base | expand.c | eps_base = feas_tol (spec compliant but ineffective at 1e-6) |
+| Stalling detector | step.c / expand.c | Consecutive count resets; needs cumulative |
 
 ---
 
