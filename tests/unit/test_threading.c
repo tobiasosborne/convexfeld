@@ -12,8 +12,8 @@ int cxf_get_logical_processors(void);
 int cxf_get_physical_cores(void);
 int cxf_validate_thread_count(CxfEnv *env, int thread_count);
 int cxf_get_threads(CxfEnv *env);
-void cxf_env_acquire_lock(CxfEnv *env);
-void cxf_leave_critical_section(CxfEnv *env);
+void cxf_env_lock(CxfEnv *env);
+void cxf_env_unlock(CxfEnv *env);
 int cxf_generate_seed(void);
 
 /* API functions */
@@ -101,26 +101,26 @@ void test_get_threads_default(void) {
 }
 
 /*============================================================================
- * cxf_env_acquire_lock / cxf_leave_critical_section Tests
+ * cxf_env_lock / cxf_env_unlock Tests
  *===========================================================================*/
 
 void test_env_lock_null_safe(void) {
-    cxf_env_acquire_lock(NULL);
-    cxf_leave_critical_section(NULL);
+    cxf_env_lock(NULL);
+    cxf_env_unlock(NULL);
     TEST_PASS();
 }
 
 void test_env_lock_acquire_release(void) {
-    cxf_env_acquire_lock(env);
-    cxf_leave_critical_section(env);
+    cxf_env_lock(env);
+    cxf_env_unlock(env);
     TEST_PASS();
 }
 
 void test_env_lock_recursive(void) {
-    cxf_env_acquire_lock(env);
-    cxf_env_acquire_lock(env);
-    cxf_leave_critical_section(env);
-    cxf_leave_critical_section(env);
+    cxf_env_lock(env);
+    cxf_env_lock(env);
+    cxf_env_unlock(env);
+    cxf_env_unlock(env);
     TEST_PASS();
 }
 
@@ -167,7 +167,7 @@ int main(void) {
     RUN_TEST(test_get_threads_null_env_returns_zero);
     RUN_TEST(test_get_threads_default);
 
-    /* cxf_env_acquire_lock / cxf_leave_critical_section tests */
+    /* cxf_env_lock / cxf_env_unlock tests */
     RUN_TEST(test_env_lock_null_safe);
     RUN_TEST(test_env_lock_acquire_release);
     RUN_TEST(test_env_lock_recursive);

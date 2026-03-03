@@ -15,14 +15,14 @@
 #include <stddef.h>
 
 /**
- * @brief Acquire the environment-level lock
+ * @brief Lock the environment
  *
  * In multi-threaded mode, this will acquire a mutex to protect
  * environment-level operations. In single-threaded mode, this is a no-op.
  *
  * @param env Environment to lock (NULL-safe)
  */
-void cxf_env_acquire_lock(CxfEnv *env) {
+void cxf_env_lock(CxfEnv *env) {
     if (env == NULL) {
         return;  /* NULL-safe: no lock to acquire */
     }
@@ -32,14 +32,14 @@ void cxf_env_acquire_lock(CxfEnv *env) {
 }
 
 /**
- * @brief Release the environment-level lock
+ * @brief Unlock the environment
  *
  * In multi-threaded mode, this will release the environment mutex.
  * In single-threaded mode, this is a no-op.
  *
  * @param env Environment to unlock (NULL-safe)
  */
-void cxf_leave_critical_section(CxfEnv *env) {
+void cxf_env_unlock(CxfEnv *env) {
     if (env == NULL) {
         return;  /* NULL-safe: no lock to release */
     }
@@ -49,7 +49,7 @@ void cxf_leave_critical_section(CxfEnv *env) {
 }
 
 /**
- * @brief Acquire the solve-level lock
+ * @brief Lock the solver state
  *
  * In multi-threaded mode, this will acquire a mutex to protect
  * solver state operations. In single-threaded mode, this is a no-op.
@@ -59,7 +59,7 @@ void cxf_leave_critical_section(CxfEnv *env) {
  *
  * @param state Solver state to lock (NULL-safe)
  */
-void cxf_save_locale_state(void *state) {
+void cxf_solver_lock(void *state) {
     if (state == NULL) {
         return;  /* NULL-safe: no lock to acquire */
     }
@@ -70,7 +70,7 @@ void cxf_save_locale_state(void *state) {
 }
 
 /**
- * @brief Release the solve-level lock
+ * @brief Unlock the solver state
  *
  * In multi-threaded mode, this will release the solver state mutex.
  * In single-threaded mode, this is a no-op.
@@ -80,7 +80,7 @@ void cxf_save_locale_state(void *state) {
  *
  * @param state Solver state to unlock (NULL-safe)
  */
-void cxf_release_solve_lock(void *state) {
+void cxf_solver_unlock(void *state) {
     if (state == NULL) {
         return;  /* NULL-safe: no lock to release */
     }
