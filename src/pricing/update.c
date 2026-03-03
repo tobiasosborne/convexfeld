@@ -1,12 +1,12 @@
 /**
  * @file update.c
- * @brief Pricing invalidation and V2 queue processing (M6.1.6 + P4.4)
+ * @brief V2 queue processing (P4.4)
  *
- * cxf_pricing_invalidate: reset cached candidates/weights on demand.
  * cxf_pricing_update_queues: process V2 queues at current level —
- *     filter invalid entries, promote pending→committed, invalidate
+ *     filter invalid entries, promote pending->committed, invalidate
  *     caches. Spec: pricing_core.md (P4.4)
  *
+ * Cache invalidation (cxf_pricing_invalidate) is in invalidate.c.
  * Weight updates after pivot are in weight_update.c (P4.9).
  * Beads: pt31
  */
@@ -18,59 +18,11 @@
 #include "convexfeld/cxf_basis.h"
 #include "pricing_internal.h"
 
-/**
- * @brief Invalidate cached pricing information.
- *
- * Sets flags indicating what pricing data needs recomputation.
- * The next pricing operation checks these flags and recomputes as needed.
- *
- * @param ctx Pricing context
- * @param flags Bitmask of CXF_INVALID_* flags
- */
-void cxf_pricing_invalidate(PricingState *ctx, int flags) {
-    if (ctx == NULL) {
-        return;
-    }
-
-    /* Invalidate candidate lists */
-    if (flags & CXF_INVALID_CANDIDATES) {
-        for (int i = 0; i < ctx->max_levels; i++) {
-            ctx->cached_counts[i] = -1;
-            ctx->candidate_counts[i] = 0;
-        }
-    }
-
-    /* Invalidate weights - mark for full recomputation */
-    if (flags & CXF_INVALID_WEIGHTS) {
-        /* Full weight recomputation will happen on next SE pricing call.
-         * For now, weights array remains allocated but values are stale. */
-        if (ctx->weights != NULL && ctx->num_vars > 0) {
-            /* Reset to 1.0 as safe default */
-            for (int i = 0; i < ctx->num_vars; i++) {
-                ctx->weights[i] = 1.0;
-            }
-        }
-    }
-
-    /* Handle CXF_INVALID_ALL - invalidate everything */
-    if (flags == CXF_INVALID_ALL) {
-        for (int i = 0; i < ctx->max_levels; i++) {
-            ctx->cached_counts[i] = -1;
-            ctx->candidate_counts[i] = 0;
-        }
-        if (ctx->weights != NULL && ctx->num_vars > 0) {
-            for (int i = 0; i < ctx->num_vars; i++) {
-                ctx->weights[i] = 1.0;
-            }
-        }
-    }
-}
-
 /*===========================================================================
  * V2 Queue Consumer (P4.4) — cxf_pricing_update_queues
  *
  * Processes both V2 queues at current level per pricing_core.md Phase 3.
- * Phase activation guard → status filter → flag promote/demote → cache
+ * Phase activation guard -> status filter -> flag promote/demote -> cache
  * invalidation.
  *===========================================================================*/
 
@@ -125,11 +77,11 @@ static int filter_queue_lx(int *queue, int total, uint8_t *flags,
         }
 
         if (flags[idx] & pend_bit) {
-            /* Pending → promote: set committed, clear pending */
+            /* Pending -> promote: set committed, clear pending */
             flags[idx] = (uint8_t)((flags[idx] | commit_bit) & ~pend_bit);
             queue[write++] = idx;
         } else {
-            /* Stale → demote: clear all bits for this level */
+            /* Stale -> demote: clear all bits for this level */
             flags[idx] &= (uint8_t)~level_mask;
         }
     }
