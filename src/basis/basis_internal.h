@@ -14,6 +14,7 @@
 struct BasisState;
 struct SolverState;
 struct EtaBuffer;
+struct LUFactors;
 
 /* --- Basis lifecycle (basis_state.c) --- */
 struct BasisState *cxf_basis_create(int m, int n);
@@ -85,5 +86,21 @@ int sparse_eliminate(SparseWork *sw, int piv_row, int piv_col,
                      int *L_count, int *L_cap, int step);
 int sparse_to_dense(const SparseWork *sw,
                     double *D, int *map_row, int *map_col);
+
+/* dense_elim.c */
+int dense_find_pivot(const double *D, int n,
+                     const int *relim, const int *celim,
+                     int *out_r, int *out_c, double *out_v);
+int dense_eliminate(double *D, int n, int piv_r, int piv_c,
+                    double piv_val, int *relim, int *celim,
+                    int **L_i, int **L_j, double **L_v,
+                    int *Lc, int *Lcap, int step);
+
+/* lu_output.c */
+int build_lu_output(struct LUFactors *lu, int m,
+                    const int *Li, const int *Lj, const double *Lv,
+                    int Lc,
+                    const int *Ui, const int *Uj, const double *Uv,
+                    int Uc);
 
 #endif /* BASIS_INTERNAL_H */
