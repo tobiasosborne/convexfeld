@@ -49,9 +49,27 @@ add_cxf_test(test_memory unit/test_memory.c)
 add_cxf_test(test_matrix unit/test_matrix.c)
 target_link_libraries(test_matrix PRIVATE m)  # For math functions
 
-# M5.1.1: Basis operations tests
-add_cxf_test(test_basis unit/test_basis.c)
-target_link_libraries(test_basis PRIVATE m)  # For math functions
+# M5.1.1: Basis operations tests (split from test_basis.c for 200 LOC limit)
+add_cxf_test(test_basis_lifecycle unit/test_basis_lifecycle.c)
+target_link_libraries(test_basis_lifecycle PRIVATE m)
+
+add_cxf_test(test_basis_ftran unit/test_basis_ftran.c)
+target_link_libraries(test_basis_ftran PRIVATE m)
+
+add_cxf_test(test_basis_btran unit/test_basis_btran.c)
+target_link_libraries(test_basis_btran PRIVATE m)
+
+add_cxf_test(test_basis_progress unit/test_basis_progress.c)
+target_link_libraries(test_basis_progress PRIVATE m)
+
+add_cxf_test(test_basis_snapshot unit/test_basis_snapshot.c)
+target_link_libraries(test_basis_snapshot PRIVATE m)
+
+add_cxf_test(test_basis_validate unit/test_basis_validate.c)
+target_link_libraries(test_basis_validate PRIVATE m)
+
+add_cxf_test(test_basis_warm unit/test_basis_warm.c)
+target_link_libraries(test_basis_warm PRIVATE m)
 
 # LU Factors lifecycle tests
 add_cxf_test(test_lu_factors unit/test_lu_factors.c)
