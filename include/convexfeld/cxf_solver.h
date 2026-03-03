@@ -87,6 +87,7 @@ struct SolverState {
     double baseline_ftran;    /**< Baseline FTRAN time (after refactor) */
     int iteration;            /**< Current iteration number */
     int last_refactor_iter;   /**< Iteration of last refactorization */
+    double last_log_time;     /**< Timestamp of last log message (throttling) */
 
     /* Preallocated iteration work arrays (size num_constrs)
      * Allocated once in init, reused across iterations to avoid malloc/free */

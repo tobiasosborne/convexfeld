@@ -39,10 +39,9 @@ void cxf_log_iteration_progress(CxfModel *model, SolverState *state) {
     /* Steps 1-3: Logging (if enabled and time-throttled) */
     if (env != NULL && env->output_flag && env->verbosity >= 1) {
         double now = cxf_get_timestamp();
-        static double last_log_time = 0.0;
 
-        if (iter == 0 || (now - last_log_time) >= LOG_INTERVAL_SEC) {
-            last_log_time = now;
+        if (iter == 0 || (now - state->last_log_time) >= LOG_INTERVAL_SEC) {
+            state->last_log_time = now;
 
             if (env->log_callback) {
                 char buf[128];
