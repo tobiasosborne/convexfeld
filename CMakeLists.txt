@@ -167,6 +167,7 @@ target_sources(convexfeld PRIVATE
     # M8.1.17 io_api + M8.1.18 info_api
     src/api/env.c
     src/api/model.c
+    src/api/model_copy.c
     src/api/model_stub.c
     src/api/constr_stub.c
     src/api/api_stub.c
