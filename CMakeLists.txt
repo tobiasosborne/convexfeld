@@ -107,7 +107,8 @@ target_sources(convexfeld PRIVATE
     src/simplex/solve_lp.c
     src/simplex/iterate.c
     src/simplex/step.c
-    src/simplex/phase_steps.c
+    src/simplex/step2.c
+    src/simplex/step3.c
     src/simplex/post.c
     src/simplex/refine.c
     src/simplex/ratio_test.c

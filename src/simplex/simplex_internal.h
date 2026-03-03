@@ -44,7 +44,7 @@ int cxf_check_phase_one_end(SolverState *state, CxfModel *model,
 /* --- Reduced costs (reduced_costs.c) --- */
 int cxf_compute_reduced_costs(SolverState *state);
 
-/* --- Step2/Step3 bound propagation (phase_steps.c) --- */
+/* --- Step2/Step3 bound propagation (step2.c, step3.c) --- */
 int cxf_simplex_step2(SolverState *state, CxfEnv *env);
 int cxf_simplex_step3(SolverState *state, CxfEnv *env);
 
