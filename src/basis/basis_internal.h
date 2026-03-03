@@ -20,9 +20,15 @@ struct LUFactors;
 struct BasisState *cxf_basis_create(int m, int n);
 void cxf_basis_free(struct BasisState *basis);
 
-/* --- FTRAN/BTRAN (ftran.c, btran.c) --- */
+/* --- FTRAN/BTRAN (ftran.c, btran.c, btran_etas.c) --- */
 int cxf_ftran(struct BasisState *basis, const double *column, double *result);
 int cxf_btran(struct BasisState *basis, int row, double *result);
+
+/* Shared BTRAN helpers (btran_etas.c) */
+int btran_apply_lu(const struct LUFactors *lu, int m, double *result,
+                   double *temp);
+void btran_apply_diag(const double *diag_coeff, int m, double *result);
+int btran_apply_etas(struct BasisState *basis, int m, double *result);
 
 /* --- Pivot (pivot_eta.c) --- */
 int cxf_pivot_with_eta(struct BasisState *basis, int pivotRow,
