@@ -96,9 +96,13 @@ add_cxf_test(test_api_optimize unit/test_api_optimize.c)
 # M8.1.6: API Tests - Queries
 add_cxf_test(test_api_query unit/test_api_query.c)
 
-# M3.2.1: Logging tests
+# M3.2.1: Logging tests (wrapper functions)
 add_cxf_test(test_logging unit/test_logging.c)
 target_link_libraries(test_logging PRIVATE m)  # For math functions
+
+# M3.2.1: Logging tests (callbacks and system)
+add_cxf_test(test_logging_callback unit/test_logging_callback.c)
+target_link_libraries(test_logging_callback PRIVATE m)  # For math functions
 
 # M3.1.7: Pivot validation tests
 add_cxf_test(test_pivot_check unit/test_pivot_check.c)
