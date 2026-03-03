@@ -79,6 +79,13 @@ int cxf_simplex_refine(SolverState *state, CxfEnv *env);
 void cxf_scale_problem(SolverState *state, double *rowScale,
                        double *colScale);
 
+/* --- EXPAND analysis (expand.c) --- */
+int cxf_expand_analyze_basic(SolverState *state, int row, int bvar,
+                             double feas_tol);
+int cxf_expand_widen_bounds(SolverState *state, CxfEnv *env,
+                            double feas_tol, BasisState *basis,
+                            int m, int total);
+
 /* --- Solve driver (solve_lp.c) --- */
 int cxf_solve_lp(CxfModel *model);
 
