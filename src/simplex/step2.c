@@ -1,9 +1,10 @@
 /**
- * @file phase_steps.c
- * @brief Bidirectional bound propagation — step2 + step3 (v2 P3.20)
+ * @file step2.c
+ * @brief Variable-side bound propagation — cxf_simplex_step2 (v2 P3.20)
  *
- * cxf_simplex_step2: Variable-side — tighten bounds via CSC column scan
- * cxf_simplex_step3: Constraint-side — implied bounds (Savelsbergh 1994)
+ * For each dirty variable, scan its CSC column to compute implied bounds
+ * from all constraints it appears in. Tighten where the implication is
+ * stronger than the current bound.
  *
  * Spec: docs/specs-v2/specs/modules/simplex_iteration.md
  */
@@ -153,16 +154,7 @@ int cxf_simplex_step2(SolverState *state, CxfEnv *env) {
 
             char sense = (state->work_sense) ? state->work_sense[row] : '<';
 
-            /* Implied bounds from constraint activity (Savelsbergh 1994):
-             *
-             * For <= constraint: sum a_ij x_j <= rhs
-             *   a > 0: implied_ub = lb_j - min_activity[i] / a
-             *   a < 0: implied_lb = lb_j - max_activity[i] / a
-             *
-             * For >= constraint: sum a_ij x_j >= rhs
-             *   a > 0: implied_lb = ub_j - max_activity[i] / a
-             *   a < 0: implied_ub = ub_j - min_activity[i] / a
-             */
+            /* Implied bounds from constraint activity (Savelsbergh 1994) */
             if (sense == '<' || sense == 'L' || sense == '=' || sense == 'E') {
                 if (a > 0) {
                     double impl_ub = lb - min_act / a;
@@ -195,133 +187,5 @@ int cxf_simplex_step2(SolverState *state, CxfEnv *env) {
     }
 
     state->flip_count += tightened;
-    return 0;
-}
-
-/*---------------------------------------------------------------------------
- * cxf_simplex_step3 — Constraint-side bound propagation (v2 P3.20, LP only)
- *
- * For each dirty constraint, scan its CSR row and compute implied bounds
- * on each variable from the constraint's activity bounds. Tighten where
- * the implied bound is stronger than the current bound.
- *
- * This is the standard implied-bound technique from LP presolve
- * (Savelsbergh, 1994), applied iteratively during the simplex solve.
- *---------------------------------------------------------------------------*/
-
-int cxf_simplex_step3(SolverState *state, CxfEnv *env) {
-    if (!state || !env) return 0;
-    if (!state->pricing) return 0;
-    if (!state->min_activity || !state->max_activity) return 0;
-
-    if (!state->csr_row_ptr || !state->csr_col_idx || !state->csr_values)
-        return 0;
-
-    double tol = env->feasibility_tol;
-    int m = state->num_constrs;
-    int n = state->num_vars;
-    int tightened = 0;
-
-    /* Get dirty constraint candidates */
-    int cand_buf[256];
-    int *candidates = cand_buf;
-    int num_cand = cxf_pricing_get_constr_candidates(
-        state->pricing, candidates, 256);
-    if (num_cand == 0) return 0;
-
-    for (int ci = 0; ci < num_cand; ci++) {
-        int row = candidates[ci];
-        if (row < 0 || row >= m) continue;
-
-        double min_act = state->min_activity[row];
-        double max_act = state->max_activity[row];
-        if (min_act <= -CXF_INFINITY || max_act >= CXF_INFINITY) continue;
-
-        char sense = (state->work_sense) ? state->work_sense[row] : '<';
-
-        /* Two-stage infeasibility check (simplex_iteration.md).
-         * Stage 1: preliminary — activity bounds indicate violation.
-         * Stage 2: confirmation — recompute activity from scratch.
-         * Prevents false infeasibility from accumulated numerical noise
-         * in incrementally-maintained min/max activity. */
-        {
-            int stage1 = 0;
-            if ((sense == '<' || sense == 'L') && min_act > tol)
-                stage1 = 1;
-            if ((sense == '>' || sense == 'G') && max_act < -tol)
-                stage1 = 1;
-            if ((sense == '=' || sense == 'E') &&
-                (min_act > tol || max_act < -tol))
-                stage1 = 1;
-            if (stage1) {
-                /* Stage 2: recompute activity from scratch */
-                cxf_compute_activity_bounds(state, 1, &row);
-                double fresh_min = state->min_activity[row];
-                double fresh_max = state->max_activity[row];
-                int confirmed = 0;
-                if ((sense == '<' || sense == 'L') && fresh_min > tol)
-                    confirmed = 1;
-                if ((sense == '>' || sense == 'G') && fresh_max < -tol)
-                    confirmed = 1;
-                if ((sense == '=' || sense == 'E') &&
-                    (fresh_min > tol || fresh_max < -tol))
-                    confirmed = 1;
-                if (confirmed)
-                    return CXF_INFEASIBLE;
-                /* Confirmation failed — continue processing */
-                min_act = fresh_min;
-                max_act = fresh_max;
-            }
-        }
-
-        /* Scan CSR row for implied bounds */
-        int64_t rs = state->csr_row_ptr[row];
-        int64_t re = state->csr_row_ptr[row + 1];
-
-        for (int64_t k = rs; k < re; k++) {
-            int j = state->csr_col_idx[k];
-            if (j < 0 || j >= n) continue;
-
-            /* Skip basic or fixed variables */
-            if (state->basis && state->basis->var_status[j] >= 0) continue;
-            double lb = state->work_lb[j];
-            double ub = state->work_ub[j];
-            if (ub - lb < tol) continue;
-
-            double a = state->csr_values[k];
-            if (fabs(a) < CXF_PIVOT_TOL) continue;
-
-            /* Implied bounds from constraint activity:
-             *
-             * For <= : a>0 → implied_ub = lb - min_act/a
-             *          a<0 → implied_lb = lb - max_act/a
-             * For >= : a>0 → implied_lb = ub - max_act/a
-             *          a<0 → implied_ub = ub - min_act/a
-             * For =  : both <= and >= rules apply
-             */
-            if (sense == '<' || sense == 'L' ||
-                sense == '=' || sense == 'E') {
-                if (a > 0) {
-                    double impl = lb - min_act / a;
-                    tightened += tighten_bound(state, j, impl, 0, tol);
-                } else {
-                    double impl = lb - max_act / a;
-                    tightened += tighten_bound(state, j, impl, 1, tol);
-                }
-            }
-            if (sense == '>' || sense == 'G' ||
-                sense == '=' || sense == 'E') {
-                if (a > 0) {
-                    double impl = ub - max_act / a;
-                    tightened += tighten_bound(state, j, impl, 1, tol);
-                } else {
-                    double impl = ub - min_act / a;
-                    tightened += tighten_bound(state, j, impl, 0, tol);
-                }
-            }
-        }
-    }
-
-    state->bounds_propagated += tightened;
     return 0;
 }
