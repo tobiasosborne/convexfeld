@@ -174,6 +174,7 @@ target_sources(convexfeld PRIVATE
     src/pricing/context.c
     src/pricing/init.c
     src/pricing/candidates.c
+    src/pricing/candidates_v1.c
     src/pricing/steepest.c
     src/pricing/update.c
     src/pricing/phase.c
