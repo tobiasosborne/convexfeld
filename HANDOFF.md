@@ -4,7 +4,7 @@
 
 ---
 
-## STATUS: 56/56 tests pass. 18/22 Netlib. 7 issues closed this session.
+## STATUS: 56/56 tests pass. 18/22 Netlib. 12 issues closed this session.
 
 ### Session Summary (2026-03-03, Session 7)
 
@@ -24,6 +24,13 @@
 - convexfeld-afb CLOSED: test_error.c 547→3 files (191+185+157)
 - convexfeld-0x54 CLOSED: lu_factorize.c 318→180 + dense_elim.c(95) + lu_output.c(78)
 - convexfeld-rlll CLOSED: phase_steps.c 327→step2.c(191) + step3.c(183)
+
+**11-15. Five more parallel refactors** (5 subagents, worktree isolation):
+- convexfeld-nt3i CLOSED: sparse_elim.c 243→192 (moved sparse_to_dense to sparse_work.c)
+- convexfeld-h343 CLOSED: perturbation.c 370→190 + expand.c(180)
+- convexfeld-p3sl CLOSED: candidates.c 323→171 + candidates_v1.c(163)
+- convexfeld-ccrf CLOSED: lock naming fix (4 functions renamed to consistent pairs)
+- convexfeld-yyo6 CLOSED: CMake sanitizer support (-DSANITIZER=address|undefined|thread|memory)
 
 ### Session Summary (2026-03-03, Session 6)
 
