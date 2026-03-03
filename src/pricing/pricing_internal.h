@@ -21,7 +21,7 @@ int cxf_pricing_candidates(struct PricingState *ctx, const double *rc,
                            const int *vs, int nv, double tol,
                            int *out, int max_out);
 
-/* --- Invalidation (update.c) --- */
+/* --- Invalidation (invalidate.c) --- */
 void cxf_pricing_invalidate(struct PricingState *ctx, int flags);
 
 /* --- Queue insertion (queue_insert.c) --- */
