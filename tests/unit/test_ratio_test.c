@@ -18,7 +18,9 @@
 int cxf_ratio_test(SolverState *state, CxfEnv *env, int enteringVar,
                    const double *pivotColumn, int columnNZ,
                    int *leavingRow_out, double *pivotElement_out,
-                   int *status_out, double *theta_out);
+                   int *status_out, double *theta_out,
+                   int *flip_rows_out, int max_flips,
+                   int *num_flips_out);
 
 /*
  * Test fixture: 2 constraints, 4 variables (2 structural + 2 slacks).
@@ -91,14 +93,14 @@ void test_ratio_test_null_state(void) {
     double pivotCol[2] = {1.0, 1.0};
     int lr; double pe;
     TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT,
-        cxf_ratio_test(NULL, &test_env, 0, pivotCol, 2, &lr, &pe, NULL, NULL));
+        cxf_ratio_test(NULL, &test_env, 0, pivotCol, 2, &lr, &pe, NULL, NULL, NULL, 0, NULL));
 }
 
 void test_ratio_test_null_env(void) {
     double pivotCol[2] = {1.0, 1.0};
     int lr; double pe;
     TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT,
-        cxf_ratio_test(&test_state, NULL, 0, pivotCol, 2, &lr, &pe, NULL, NULL));
+        cxf_ratio_test(&test_state, NULL, 0, pivotCol, 2, &lr, &pe, NULL, NULL, NULL, 0, NULL));
 }
 
 /* --- Standard variable at lower bound (s=+1 baseline) --- */
@@ -111,7 +113,7 @@ void test_ratio_test_at_lower_bound(void) {
     double pivotCol[2] = {1.0, 2.0};
     int lr = -1; double pe = 0.0;
 
-    int rc = cxf_ratio_test(&test_state, &test_env, 0, pivotCol, 2, &lr, &pe, NULL, NULL);
+    int rc = cxf_ratio_test(&test_state, &test_env, 0, pivotCol, 2, &lr, &pe, NULL, NULL, NULL, 0, NULL);
     TEST_ASSERT_EQUAL_INT(CXF_OK, rc);
     TEST_ASSERT_EQUAL_INT(1, lr);
     TEST_ASSERT_DOUBLE_WITHIN(1e-12, 2.0, pe);
@@ -127,7 +129,7 @@ void test_ratio_test_free_var_negative_dj(void) {
     double pivotCol[2] = {1.0, 2.0};
     int lr = -1; double pe = 0.0;
 
-    int rc = cxf_ratio_test(&test_state, &test_env, 1, pivotCol, 2, &lr, &pe, NULL, NULL);
+    int rc = cxf_ratio_test(&test_state, &test_env, 1, pivotCol, 2, &lr, &pe, NULL, NULL, NULL, 0, NULL);
     TEST_ASSERT_EQUAL_INT(CXF_OK, rc);
     TEST_ASSERT_EQUAL_INT(1, lr);
     TEST_ASSERT_DOUBLE_WITHIN(1e-12, 2.0, pe);
@@ -144,7 +146,7 @@ void test_ratio_test_free_var_positive_dj(void) {
     double pivotCol[2] = {1.0, 2.0};
     int lr = -1; double pe = 0.0;
 
-    int rc = cxf_ratio_test(&test_state, &test_env, 1, pivotCol, 2, &lr, &pe, NULL, NULL);
+    int rc = cxf_ratio_test(&test_state, &test_env, 1, pivotCol, 2, &lr, &pe, NULL, NULL, NULL, 0, NULL);
     TEST_ASSERT_EQUAL_INT(CXF_OK, rc);
     TEST_ASSERT_EQUAL_INT(1, lr);
     TEST_ASSERT_DOUBLE_WITHIN(1e-12, 2.0, pe);
@@ -165,14 +167,14 @@ void test_ratio_test_free_var_direction_affects_leaving(void) {
     /* dj < 0 → s=+1 → basics decrease → slack0 hits lb first */
     work_dj[1] = -2.0;
     lr = -1; pe = 0.0;
-    int rc1 = cxf_ratio_test(&test_state, &test_env, 1, pivotCol, 2, &lr, &pe, NULL, NULL);
+    int rc1 = cxf_ratio_test(&test_state, &test_env, 1, pivotCol, 2, &lr, &pe, NULL, NULL, NULL, 0, NULL);
     TEST_ASSERT_EQUAL_INT(CXF_OK, rc1);
     TEST_ASSERT_EQUAL_INT(0, lr);  /* row 0 (slack0) leaves */
 
     /* dj > 0 → s=-1 → basics increase → slack1 hits ub first */
     work_dj[1] = 2.0;
     lr = -1; pe = 0.0;
-    int rc2 = cxf_ratio_test(&test_state, &test_env, 1, pivotCol, 2, &lr, &pe, NULL, NULL);
+    int rc2 = cxf_ratio_test(&test_state, &test_env, 1, pivotCol, 2, &lr, &pe, NULL, NULL, NULL, 0, NULL);
     TEST_ASSERT_EQUAL_INT(CXF_OK, rc2);
     TEST_ASSERT_EQUAL_INT(1, lr);  /* row 1 (slack1) leaves */
 }
@@ -189,7 +191,7 @@ void test_ratio_test_at_upper_bound(void) {
     double pivotCol[2] = {1.0, 2.0};
     int lr = -1; double pe = 0.0;
 
-    int rc = cxf_ratio_test(&test_state, &test_env, 0, pivotCol, 2, &lr, &pe, NULL, NULL);
+    int rc = cxf_ratio_test(&test_state, &test_env, 0, pivotCol, 2, &lr, &pe, NULL, NULL, NULL, 0, NULL);
     TEST_ASSERT_EQUAL_INT(CXF_OK, rc);
     TEST_ASSERT_EQUAL_INT(1, lr);
     TEST_ASSERT_DOUBLE_WITHIN(1e-12, 2.0, pe);
@@ -205,7 +207,7 @@ void test_ratio_test_degenerate(void) {
     double pivotCol[2] = {2.0, 1.0};
     int lr = -1; double pe = 0.0;
 
-    int rc = cxf_ratio_test(&test_state, &test_env, 0, pivotCol, 2, &lr, &pe, NULL, NULL);
+    int rc = cxf_ratio_test(&test_state, &test_env, 0, pivotCol, 2, &lr, &pe, NULL, NULL, NULL, 0, NULL);
     TEST_ASSERT_EQUAL_INT(CXF_OK, rc);
     TEST_ASSERT_EQUAL_INT(0, lr);
     TEST_ASSERT_DOUBLE_WITHIN(1e-12, 2.0, pe);
@@ -228,13 +230,13 @@ void test_ratio_test_bland_smallest_index(void) {
 
     test_state.use_bland = 0;
     lr = -1; pe = 0.0;
-    cxf_ratio_test(&test_state, &test_env, 0, pivotCol, 2, &lr, &pe, NULL, NULL);
+    cxf_ratio_test(&test_state, &test_env, 0, pivotCol, 2, &lr, &pe, NULL, NULL, NULL, 0, NULL);
     TEST_ASSERT_EQUAL_INT(0, lr);
     TEST_ASSERT_DOUBLE_WITHIN(1e-12, 8.0, pe);
 
     test_state.use_bland = 1;
     lr = -1; pe = 0.0;
-    cxf_ratio_test(&test_state, &test_env, 0, pivotCol, 2, &lr, &pe, NULL, NULL);
+    cxf_ratio_test(&test_state, &test_env, 0, pivotCol, 2, &lr, &pe, NULL, NULL, NULL, 0, NULL);
     TEST_ASSERT_EQUAL_INT(1, lr);
     TEST_ASSERT_DOUBLE_WITHIN(1e-12, 2.0, pe);
 }
@@ -247,7 +249,7 @@ void test_ratio_test_unbounded(void) {
     double pivotCol[2] = {0.0, 0.0};
     int lr = -1; double pe = 0.0;
 
-    int rc = cxf_ratio_test(&test_state, &test_env, 1, pivotCol, 2, &lr, &pe, NULL, NULL);
+    int rc = cxf_ratio_test(&test_state, &test_env, 1, pivotCol, 2, &lr, &pe, NULL, NULL, NULL, 0, NULL);
     TEST_ASSERT_EQUAL_INT(CXF_UNBOUNDED, rc);
 }
 
@@ -263,7 +265,7 @@ void test_ratio_test_infeasible_bounds(void) {
     int lr = -1; double pe = 0.0;
 
     int rc = cxf_ratio_test(&test_state, &test_env, 0, pivotCol, 2,
-                            &lr, &pe, NULL, NULL);
+                            &lr, &pe, NULL, NULL, NULL, 0, NULL);
     TEST_ASSERT_EQUAL_INT(CXF_INFEASIBLE, rc);
 }
 
@@ -276,7 +278,7 @@ void test_ratio_test_status_normal(void) {
     int status = -1;
 
     int rc = cxf_ratio_test(&test_state, &test_env, 0, pivotCol, 2,
-                            &lr, &pe, &status, NULL);
+                            &lr, &pe, &status, NULL, NULL, 0, NULL);
     TEST_ASSERT_EQUAL_INT(CXF_OK, rc);
     TEST_ASSERT_EQUAL_INT(CXF_RT_NORMAL_PIVOT, status);
 }
@@ -289,7 +291,7 @@ void test_ratio_test_status_degenerate(void) {
     int status = -1;
 
     int rc = cxf_ratio_test(&test_state, &test_env, 0, pivotCol, 2,
-                            &lr, &pe, &status, NULL);
+                            &lr, &pe, &status, NULL, NULL, 0, NULL);
     TEST_ASSERT_EQUAL_INT(CXF_OK, rc);
     TEST_ASSERT_EQUAL_INT(CXF_RT_DEGENERATE_PIVOT, status);
 }
@@ -302,7 +304,7 @@ void test_ratio_test_status_unbounded(void) {
     int status = -1;
 
     int rc = cxf_ratio_test(&test_state, &test_env, 1, pivotCol, 2,
-                            &lr, &pe, &status, NULL);
+                            &lr, &pe, &status, NULL, NULL, 0, NULL);
     TEST_ASSERT_EQUAL_INT(CXF_UNBOUNDED, rc);
     TEST_ASSERT_EQUAL_INT(CXF_RT_UNBOUNDED, status);
 }
@@ -317,7 +319,7 @@ void test_ratio_test_theta_output(void) {
     double theta = -1.0;
 
     int rc = cxf_ratio_test(&test_state, &test_env, 0, pivotCol, 2,
-                            &lr, &pe, NULL, &theta);
+                            &lr, &pe, NULL, &theta, NULL, 0, NULL);
     TEST_ASSERT_EQUAL_INT(CXF_OK, rc);
     TEST_ASSERT_EQUAL_INT(1, lr);
     TEST_ASSERT_DOUBLE_WITHIN(1e-9, 2.5, theta);
@@ -331,9 +333,68 @@ void test_ratio_test_theta_degenerate(void) {
     double theta = -1.0;
 
     int rc = cxf_ratio_test(&test_state, &test_env, 0, pivotCol, 2,
-                            &lr, &pe, NULL, &theta);
+                            &lr, &pe, NULL, &theta, NULL, 0, NULL);
     TEST_ASSERT_EQUAL_INT(CXF_OK, rc);
     TEST_ASSERT_DOUBLE_WITHIN(1e-12, 0.0, theta);
+}
+
+/* --- BFRT: bound flips returned from ratio_test (V2 Stage 3) --- */
+
+void test_ratio_test_bfrt_flip(void) {
+    /* Both slacks doubly-bounded [0,10]. slack0 at x=0 (at lb), slack1 at x=5.
+     * Entering var0 from lb, pivotCol = [2.0, 1.0], s=+1.
+     * Stage 2: row 0, theta = 0 (degenerate).
+     * BFRT iter 1: row 0 flips (gap=10, delta=10/2=5, theta=5).
+     *   Next blocker: row 1, ratio=5. theta=min(5,5)=5.
+     * BFRT iter 2: row 1 flips (gap=10, delta=10/1=10, theta=15).
+     *   No more blockers. All flipped → BOUND_FLIP_ONLY. */
+    work_x[2] = 0.0;  /* slack0 at lower bound */
+    work_x[3] = 5.0;  /* slack1 at midpoint */
+    double pivotCol[2] = {2.0, 1.0};
+    int lr = -1; double pe = 0.0;
+    int status = -1; double theta = -1.0;
+    int flip_rows[10]; int nflips = 0;
+
+    int rc = cxf_ratio_test(&test_state, &test_env, 0, pivotCol, 2,
+                            &lr, &pe, &status, &theta,
+                            flip_rows, 10, &nflips);
+    TEST_ASSERT_EQUAL_INT(CXF_OK, rc);
+    TEST_ASSERT_EQUAL_INT(2, nflips);        /* both rows flip */
+    TEST_ASSERT_EQUAL_INT(0, flip_rows[0]);  /* row 0 flipped first */
+    TEST_ASSERT_EQUAL_INT(1, flip_rows[1]);  /* row 1 flipped second */
+    TEST_ASSERT_DOUBLE_WITHIN(1e-9, 15.0, theta);
+    TEST_ASSERT_EQUAL_INT(CXF_RT_BOUND_FLIP_ONLY, status);
+}
+
+void test_ratio_test_bfrt_no_flip_infinite_bound(void) {
+    /* With pivotCol=[1,2], Stage 2 leaving = row 1 (slack1, largest pivot).
+     * Set slack1 (var3) ub infinite → cannot flip. No BFRT. */
+    work_ub[3] = 1e20;  /* slack1 has infinite ub */
+    double pivotCol[2] = {1.0, 2.0};
+    int lr = -1; double pe = 0.0;
+    int flip_rows[10]; int nflips = 99;
+
+    int rc = cxf_ratio_test(&test_state, &test_env, 0, pivotCol, 2,
+                            &lr, &pe, NULL, NULL,
+                            flip_rows, 10, &nflips);
+    TEST_ASSERT_EQUAL_INT(CXF_OK, rc);
+    TEST_ASSERT_EQUAL_INT(1, lr);      /* row 1 is leaving */
+    TEST_ASSERT_EQUAL_INT(0, nflips);  /* no flips (blocker has infinite ub) */
+}
+
+void test_ratio_test_bfrt_disabled_bland(void) {
+    /* BFRT disabled under Bland's rule */
+    test_state.use_bland = 1;
+    work_x[2] = 0.0;
+    double pivotCol[2] = {2.0, 1.0};
+    int lr = -1; double pe = 0.0;
+    int flip_rows[10]; int nflips = 99;
+
+    int rc = cxf_ratio_test(&test_state, &test_env, 0, pivotCol, 2,
+                            &lr, &pe, NULL, NULL,
+                            flip_rows, 10, &nflips);
+    TEST_ASSERT_EQUAL_INT(CXF_OK, rc);
+    TEST_ASSERT_EQUAL_INT(0, nflips);  /* Bland disables BFRT */
 }
 
 int main(void) {
@@ -354,5 +415,8 @@ int main(void) {
     RUN_TEST(test_ratio_test_status_unbounded);
     RUN_TEST(test_ratio_test_theta_output);
     RUN_TEST(test_ratio_test_theta_degenerate);
+    RUN_TEST(test_ratio_test_bfrt_flip);
+    RUN_TEST(test_ratio_test_bfrt_no_flip_infinite_bound);
+    RUN_TEST(test_ratio_test_bfrt_disabled_bland);
     return UNITY_END();
 }

@@ -115,123 +115,6 @@ int cxf_apply_pivot(SolverState *state, int entering, int leavingRow,
 /*---------------------------------------------------------------------------*/
 
 /**
- * @brief BFRT: find minimum-ratio non-flipped row.
- *
- * Scans ALL non-flipped basic variables for the minimum non-negative
- * ratio. This is the next variable that would block the entering
- * variable from moving further. Ties broken by largest |pivot element|.
- *
- * Unlike the previous version, this does NOT skip ratios below cur_step.
- * The caller decides whether the blocker falls before or after the flip
- * extension point.
- *
- * @return Row index of next blocker, or -1 if none.
- */
-static int find_next_blocker(SolverState *state, const double *pivotCol,
-                             const int *flipped, int num_flipped,
-                             int entering_sign,
-                             double *out_ratio, double *out_pivot) {
-    int best_row = -1;
-    double best_ratio = CXF_INFINITY;
-    double best_pivot = 0.0;
-    int m = state->num_constrs;
-    BasisState *basis = state->basis;
-
-    for (int i = 0; i < m; i++) {
-        /* Skip flipped rows */
-        int skip = 0;
-        for (int f = 0; f < num_flipped; f++) {
-            if (flipped[f] == i) { skip = 1; break; }
-        }
-        if (skip) continue;
-
-        double d_i = pivotCol[i];
-        double sd_i = entering_sign * d_i;
-        if (fabs(sd_i) < CXF_PIVOT_TOL) continue;
-
-        int bv = basis->basic_vars[i];
-        if (bv < 0) continue;
-
-        double x = state->work_x[bv];
-        double ratio;
-        if (sd_i > 0)
-            ratio = (x - state->work_lb[bv]) / sd_i;
-        else
-            ratio = (x - state->work_ub[bv]) / sd_i;
-
-        if (ratio < -CXF_FEASIBILITY_TOL) continue;
-
-        /* Standard minimum-ratio selection with pivot tie-breaking */
-        if (ratio < best_ratio - CXF_FEASIBILITY_TOL) {
-            best_ratio = ratio;
-            best_row = i;
-            best_pivot = d_i;
-        } else if (ratio <= best_ratio + CXF_FEASIBILITY_TOL) {
-            if (fabs(d_i) > fabs(best_pivot)) {
-                best_row = i;
-                best_pivot = d_i;
-            }
-        }
-    }
-
-    if (out_ratio) *out_ratio = best_ratio;
-    if (out_pivot) *out_pivot = best_pivot;
-    return best_row;
-}
-
-/*---------------------------------------------------------------------------*/
-
-/**
- * @brief Compute step size from ratio test result.
- */
-static double compute_step(SolverState *state, int leavingRow,
-                           double pivotElement, int entering,
-                           int entering_sign) {
-    BasisState *basis = state->basis;
-    int leaving = basis->basic_vars[leavingRow];
-    double x_l = state->work_x[leaving];
-    double step;
-
-    /* Use effective pivot direction s * pivotElement to determine
-     * which bound the leaving variable hits.
-     * Phase I: basic vars can be outside [lb, ub], check both bounds. */
-    double sp = entering_sign * pivotElement;
-    double lb_l = state->work_lb[leaving];
-    double ub_l = state->work_ub[leaving];
-    step = CXF_INFINITY;
-    if (sp > 0 && lb_l > -CXF_INFINITY) {
-        double r = (x_l - lb_l) / sp;
-        if (r >= 0 && r < step) step = r;
-    }
-    if (sp > 0 && ub_l < CXF_INFINITY && x_l > ub_l + CXF_FEASIBILITY_TOL) {
-        double r = (x_l - ub_l) / sp;
-        if (r >= 0 && r < step) step = r;
-    }
-    if (sp < 0 && ub_l < CXF_INFINITY) {
-        double r = (x_l - ub_l) / sp;
-        if (r >= 0 && r < step) step = r;
-    }
-    if (sp < 0 && lb_l > -CXF_INFINITY && x_l < lb_l - CXF_FEASIBILITY_TOL) {
-        double r = (x_l - lb_l) / sp;
-        if (r >= 0 && r < step) step = r;
-    }
-    if (step >= CXF_INFINITY) step = 0;
-
-    /* Limit by entering variable's bound range */
-    if (basis->var_status[entering] == CXF_VAR_AT_LOWER) {
-        double max_s = state->work_ub[entering] - state->work_x[entering];
-        if (max_s < step) step = max_s;
-    } else if (basis->var_status[entering] == CXF_VAR_AT_UPPER) {
-        double max_s = state->work_x[entering] - state->work_lb[entering];
-        if (max_s < step) step = max_s;
-    }
-    if (step < 0) step = 0;
-    return step;
-}
-
-/*---------------------------------------------------------------------------*/
-
-/**
  * @brief Compute tau_j = rho^T a_j for a single nonbasic variable.
  *
  * Common kernel for RC and weight updates — factors the CSC dot product
@@ -354,7 +237,8 @@ static void update_rc_and_weights(SolverState *state,
 static int pricing_and_ftran(SolverState *state, CxfEnv *env,
                              int *out_entering, int *out_entering_sign,
                              int *out_leavingRow, double *out_pivotElement,
-                             double *out_stepSize) {
+                             double *out_stepSize,
+                             int *out_flip_rows, int *out_num_flips) {
     BasisState *basis = state->basis;
     int m = state->num_constrs;
     int n = state->num_vars;
@@ -499,8 +383,12 @@ static int pricing_and_ftran(SolverState *state, CxfEnv *env,
         }
 
         int rt_status = CXF_RT_NORMAL_PIVOT;
+        double rt_theta = 0.0;
+        int rt_nflips = 0;
         rc = cxf_ratio_test(state, env, entering, pivotCol, m,
-                            &leavingRow, &pivotElement, &rt_status, NULL);
+                            &leavingRow, &pivotElement, &rt_status,
+                            &rt_theta,
+                            out_flip_rows, MAX_BFRT_FLIPS, &rt_nflips);
         if (rc == CXF_UNBOUNDED) {
             if (ci + 1 < num_cand) continue;
             double lb_e = state->work_lb[entering];
@@ -526,10 +414,19 @@ static int pricing_and_ftran(SolverState *state, CxfEnv *env,
             return CXF_NUMERIC;
         }
 
-        stepSize = compute_step(state, leavingRow, pivotElement, entering,
-                                entering_sign);
+        /* Use theta from ratio_test (includes BFRT), cap by entering bound */
+        stepSize = rt_theta;
+        if (basis->var_status[entering] == CXF_VAR_AT_LOWER) {
+            double max_s = state->work_ub[entering] - state->work_x[entering];
+            if (max_s < stepSize) stepSize = max_s;
+        } else if (basis->var_status[entering] == CXF_VAR_AT_UPPER) {
+            double max_s = state->work_x[entering] - state->work_lb[entering];
+            if (max_s < stepSize) stepSize = max_s;
+        }
+        if (stepSize < 0) stepSize = 0;
         if (state->use_bland && stepSize < 1e-8 && ci + 1 < num_cand)
             continue;
+        if (out_num_flips) *out_num_flips = rt_nflips;
         break;
     }
 
@@ -650,41 +547,17 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env) {
     if (state->csc_col_ptr == NULL) return CXF_ERROR_NULL_ARGUMENT;
     if (!basis->work || !state->work_column) return CXF_ERROR_OUT_OF_MEMORY;
 
-    /* Phase 1+2: Select entering variable, FTRAN, ratio test, step size */
+    /* Phase 1+2+3: Pricing, FTRAN, ratio test with BFRT (harris_ratio_test.md) */
     int entering = -1, entering_sign = 1, leavingRow = -1;
     double pivotElement = 0.0, stepSize = 0.0;
+    int flipped_rows[MAX_BFRT_FLIPS];
+    int num_flips = 0;
     int rc = pricing_and_ftran(state, env, &entering, &entering_sign,
-                               &leavingRow, &pivotElement, &stepSize);
+                               &leavingRow, &pivotElement, &stepSize,
+                               flipped_rows, &num_flips);
     if (rc != CXF_OK) return rc;
 
     double *pivotCol = basis->work;
-
-    /* Phase 3: BFRT — extend step via bound flips (Koberstein 2005) */
-    int flipped_rows[MAX_BFRT_FLIPS];
-    int num_flips = 0;
-    if (!state->use_bland) {
-        int blocker_row = leavingRow;
-        while (num_flips < MAX_BFRT_FLIPS) {
-            int bv = basis->basic_vars[blocker_row];
-            if (state->work_lb[bv] <= -CXF_INFINITY ||
-                state->work_ub[bv] >= CXF_INFINITY ||
-                (state->work_ub[bv] - state->work_lb[bv]) < CXF_FEASIBILITY_TOL)
-                break;
-            flipped_rows[num_flips++] = blocker_row;
-            double sd = fabs(entering_sign * pivotCol[blocker_row]);
-            if (sd < CXF_PIVOT_TOL) break;
-            stepSize += (state->work_ub[bv] - state->work_lb[bv]) / sd;
-            double next_ratio, next_pivot;
-            int next_row = find_next_blocker(state, pivotCol, flipped_rows,
-                                             num_flips, entering_sign,
-                                             &next_ratio, &next_pivot);
-            if (next_row < 0) break;
-            if (next_ratio < stepSize) stepSize = next_ratio;
-            blocker_row = next_row;
-            leavingRow = next_row;
-            pivotElement = next_pivot;
-        }
-    }
     state->flip_count += num_flips;
 
     /* Cycling detection */

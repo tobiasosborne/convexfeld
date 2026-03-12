@@ -52,7 +52,9 @@ int cxf_simplex_step3(SolverState *state, CxfEnv *env);
 int cxf_ratio_test(SolverState *state, CxfEnv *env, int enteringVar,
                    const double *pivotColumn, int columnNZ,
                    int *leavingRow_out, double *pivotElement_out,
-                   int *status_out, double *theta_out);
+                   int *status_out, double *theta_out,
+                   int *flip_rows_out, int max_flips,
+                   int *num_flips_out);
 
 /* --- Recomputation (recompute.c) --- */
 int cxf_recompute_xB(SolverState *state);

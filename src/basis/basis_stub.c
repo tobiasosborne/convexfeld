@@ -92,6 +92,8 @@ double cxf_basis_diff(SolverState *state) {
     int d_cols  = state->cols_eliminated  - state->progress_snapshot[4];
     int d_props = state->bounds_propagated - state->progress_snapshot[5];
     int d_flips = state->flip_count       - state->progress_snapshot[6];
+    int d_degen = state->degenerate_count - state->progress_snapshot[8];
+    int d_perturb = state->perturb_count  - state->progress_snapshot[9];
 
     if (d_iter  < 0) d_iter  = 0;
     if (d_piv   < 0) d_piv   = 0;
@@ -100,6 +102,8 @@ double cxf_basis_diff(SolverState *state) {
     if (d_cols  < 0) d_cols  = 0;
     if (d_props < 0) d_props = 0;
     if (d_flips < 0) d_flips = 0;
+    if (d_degen < 0) d_degen = 0;
+    if (d_perturb < 0) d_perturb = 0;
 
     /* Normalization denominators (spec: basis_operations.md)
      * colDenom = working columns at snapshot time
@@ -123,6 +127,12 @@ double cxf_basis_diff(SolverState *state) {
 
     /* Term 4: Computational effort (moderate — FTRAN work proxy) */
     score += 0.5 * (double)d_ftran / rowDenom;
+
+    /* Term 5: Perturbation activity (structural intervention) */
+    score += 2.0 * (double)d_perturb / colDenom;
+
+    /* Term 6: Degenerate pivots (light — activity without progress) */
+    score += 0.1 * (double)d_degen / colDenom;
 
     return score;
 }
