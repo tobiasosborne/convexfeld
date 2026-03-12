@@ -253,3 +253,6 @@ add_cxf_test(test_constrained_lp integration/test_constrained_lp.c)
 
 # Constraint satisfaction verification (mixed senses, multi-constraint)
 add_cxf_test(test_constraint_satisfaction integration/test_constraint_satisfaction.c)
+
+# End-to-end LP solving: optimal, equality, infeasible, unbounded
+add_cxf_test(test_e2e_solve integration/test_e2e_solve.c)

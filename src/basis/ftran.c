@@ -11,185 +11,120 @@
 
 #include "convexfeld/cxf_basis.h"
 #include "convexfeld/cxf_types.h"
-#include <stdlib.h>
+#include "basis_internal.h"
 #include <string.h>
 #include <math.h>
-
-/** Maximum stack-allocated eta pointers before heap allocation */
-#define MAX_STACK_ETAS 64
 
 /**
  * @brief Apply LU forward/backward substitution.
  *
  * Solves B * x = b where B = P^T * L * U * Q (with permutations).
  * Steps: temp = P * b, L * w = temp, U * y = w, x = Q^T * y
- *
- * @param lu LUFactors structure with factorization.
- * @param m Dimension.
- * @param result Vector (modified in place).
  */
 static int apply_lu_solve(const LUFactors *lu, int m, double *result,
                           double *temp) {
-    /* Step 1: Permute input by row permutation: temp = P * result
-     * perm_row[k] = original row that becomes position k */
-
+    /* Step 1: Permute input: temp = P * result */
     for (int k = 0; k < m; k++) {
         temp[k] = result[lu->perm_row[k]];
     }
 
-    /* Step 2: Forward substitution L * w = temp
-     * L is unit lower triangular, stored column-wise.
-     * For each column k, update rows below k. */
+    /* Step 2: Forward substitution L * w = temp */
     for (int k = 0; k < m; k++) {
-        if (fabs(temp[k]) < CXF_MIN_PIVOT) continue;  /* Skip zeros */
+        if (fabs(temp[k]) < CXF_MIN_PIVOT) continue;
         for (int64_t p = lu->L_col_ptr[k]; p < lu->L_col_ptr[k + 1]; p++) {
-            int j = lu->L_row_idx[p];  /* Row index > k (below diagonal) */
+            int j = lu->L_row_idx[p];
             temp[j] -= lu->L_values[p] * temp[k];
         }
     }
 
-    /* Step 3: Backward substitution U * y = temp
-     * U is upper triangular with explicit diagonal. */
+    /* Step 3: Backward substitution U * y = temp */
     for (int k = m - 1; k >= 0; k--) {
-        /* Subtract off-diagonal contributions */
         for (int64_t p = lu->U_col_ptr[k]; p < lu->U_col_ptr[k + 1]; p++) {
-            int j = lu->U_row_idx[p];  /* Step index > k (right of diagonal) */
+            int j = lu->U_row_idx[p];
             temp[k] -= lu->U_values[p] * temp[j];
         }
-        /* Divide by diagonal */
         if (fabs(lu->U_diag[k]) > CXF_MIN_PIVOT) {
             temp[k] /= lu->U_diag[k];
         }
     }
 
-    /* Step 4: Permute output by column permutation: result = Q^T * temp
-     * perm_col[k] = original col that becomes position k
-     * Q^T: result[perm_col[k]] = temp[k] */
+    /* Step 4: Permute output: result = Q^T * temp */
     for (int k = 0; k < m; k++) {
         result[lu->perm_col[k]] = temp[k];
     }
-
     return 0;
 }
 
 /**
- * @brief Forward transformation: solve Bx = b using LU + eta representation.
+ * @brief Apply eta vectors in chronological order (oldest to newest).
  *
- * Computes x = B^(-1) * column where B is the current basis matrix.
- * Uses LU factorization when available, followed by eta vector application.
- *
- * Algorithm:
- * 1. Copy input column to result
- * 2. If LU factors valid: apply LU solve (forward + backward substitution)
- * 3. Apply eta vectors in chronological order (oldest to newest)
- *
- * @param basis BasisState containing the factorization.
- * @param column Input column vector to transform (length = basis->m).
- * @param result Output array for transformed vector (length = basis->m).
- * @return CXF_OK on success, error code on failure.
+ * Uses shared eta_collect / eta_validate / eta_collect_free helpers
+ * from btran_etas.c.
  */
-int cxf_ftran(BasisState *basis, const double *column, double *result) {
-    /* Validate arguments */
-    if (basis == NULL || column == NULL || result == NULL) {
-        return CXF_ERROR_NULL_ARGUMENT;
-    }
+static int ftran_apply_etas(BasisState *basis, int m, double *result) {
+    if (basis->eta_count <= 0) return CXF_OK;
 
-    int m = basis->m;
+    EtaVector *stack_buf[ETA_MAX_STACK];
+    EtaVector **etas;
+    int count;
+    int rc = eta_collect(basis, stack_buf, &etas, &count);
+    if (rc != CXF_OK) return rc;
 
-    /* Handle empty basis */
-    if (m == 0) {
-        return CXF_OK;
-    }
-
-    /* Step 1: Copy input column to result */
-    memcpy(result, column, (size_t)m * sizeof(double));
-
-    /* Step 2: Apply LU solve if factors are available */
-    if (basis->lu != NULL && basis->lu->valid) {
-        int rc = apply_lu_solve(basis->lu, m, result, basis->work2);
-        if (rc != 0) return rc;
-    } else if (basis->diag_coeff != NULL) {
-        /* Fall back to diagonal B_0^{-1}: result = diag(1/d) * result.
-         * Division handles both ±1 and scaled diag_coeff values. */
-        for (int i = 0; i < m; i++) {
-            result[i] /= basis->diag_coeff[i];
-        }
-    }
-
-    /* Step 3: Apply eta vectors in chronological order (oldest to newest) */
-    int eta_count = basis->eta_count;
-    if (eta_count == 0) {
-        return CXF_OK;
-    }
-
-    /* Use stack allocation for small eta counts, heap for large */
-    EtaVector *stack_etas[MAX_STACK_ETAS];
-    EtaVector **etas = stack_etas;
-
-    if (eta_count > MAX_STACK_ETAS) {
-        etas = (EtaVector **)malloc((size_t)eta_count * sizeof(EtaVector *));
-        if (etas == NULL) {
-            return CXF_ERROR_OUT_OF_MEMORY;
-        }
-    }
-
-    /* Traverse linked list to collect eta pointers
-     * Head is newest, tail (last in list) is oldest */
-    EtaVector *eta = basis->eta_head;
-    int count = 0;
-    while (eta != NULL && count < eta_count) {
-        etas[count++] = eta;
-        eta = eta->next;
-    }
-
-    /* Apply eta vectors in chronological order (oldest to newest)
-     * etas[0] = newest (head), etas[count-1] = oldest
-     * So iterate from count-1 down to 0 */
+    /* Oldest to newest: etas[0] = newest (head), iterate count-1 down to 0 */
     for (int i = count - 1; i >= 0; i--) {
-        eta = etas[i];
-        int pivot_row = eta->pivot_row;
-        double pivot_elem = eta->pivot_elem;
+        EtaVector *eta = etas[i];
+        rc = eta_validate(eta, m);
+        if (rc != CXF_OK) { eta_collect_free(etas, stack_buf); return rc; }
 
-        /* Bounds check pivot row */
-        if (pivot_row < 0 || pivot_row >= m) {
-            if (etas != stack_etas) {
-                free(etas);
-            }
-            return CXF_ERROR_INVALID_ARGUMENT;
-        }
+        /* P2.5: Hyper-sparse skip (Hall 2005) */
+        if (result[eta->pivot_row] == 0.0) continue;
 
-        /* Numerical stability check */
-        if (pivot_elem == 0.0 || !isfinite(pivot_elem)) {
-            if (etas != stack_etas) {
-                free(etas);
-            }
-            return CXF_ERROR_INVALID_ARGUMENT;
-        }
-
-        /* P2.5: Hyper-sparse skip — if result at pivot position is zero,
-         * the entire eta application is a no-op. PFI Step 3.3 (Hall 2005). */
-        if (result[pivot_row] == 0.0) continue;
-
-        /* Apply eta transformation for E^(-1):
+        /* E^(-1) application:
          *   factor = result[r] / pivot_elem
          *   result[r] = factor
-         *   result[j] = result[j] - col[j] * factor  for j != r
-         */
-        double factor = result[pivot_row] / pivot_elem;
-        result[pivot_row] = factor;
+         *   result[j] -= col[j] * factor  for j != r */
+        double factor = result[eta->pivot_row] / eta->pivot_elem;
+        result[eta->pivot_row] = factor;
 
-        /* Apply off-diagonal entries.
-         * Invariant: indices are in [0,m) and != pivot_row
-         * (guaranteed by cxf_pivot_with_eta construction). */
         for (int k = 0; k < eta->nnz; k++) {
             result[eta->indices[k]] -= eta->values[k] * factor;
         }
     }
 
-    /* Cleanup heap allocation if used */
-    if (etas != stack_etas) {
-        free(etas);
+    eta_collect_free(etas, stack_buf);
+    return CXF_OK;
+}
+
+/**
+ * @brief Forward transformation: solve Bx = b using LU + eta.
+ *
+ * Computes x = B^(-1) * column where B is the current basis matrix.
+ *
+ * @param basis  BasisState containing the factorization.
+ * @param column Input column vector (length = basis->m).
+ * @param result Output vector (length = basis->m).
+ * @return CXF_OK on success, error code on failure.
+ */
+int cxf_ftran(BasisState *basis, const double *column, double *result) {
+    if (basis == NULL || column == NULL || result == NULL)
+        return CXF_ERROR_NULL_ARGUMENT;
+
+    int m = basis->m;
+    if (m == 0) return CXF_OK;
+
+    /* Step 1: Copy input to result */
+    memcpy(result, column, (size_t)m * sizeof(double));
+
+    /* Step 2: Apply LU solve or diagonal fallback */
+    if (basis->lu != NULL && basis->lu->valid) {
+        int rc = apply_lu_solve(basis->lu, m, result, basis->work2);
+        if (rc != 0) return rc;
+    } else if (basis->diag_coeff != NULL) {
+        for (int i = 0; i < m; i++) {
+            result[i] /= basis->diag_coeff[i];
+        }
     }
 
-    return CXF_OK;
+    /* Step 3: Apply eta vectors (oldest to newest) */
+    return ftran_apply_etas(basis, m, result);
 }

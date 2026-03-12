@@ -18,162 +18,66 @@
 #include "convexfeld/cxf_model.h"
 #include "convexfeld/cxf_env.h"
 
-/*============================================================================
- * Pre-Optimization Callback Invocation
- *===========================================================================*/
-
 /**
- * @brief Invoke user callback before optimization begins.
+ * @brief Invoke a user callback at a given optimization phase.
  *
- * Called immediately before optimization starts. Allows user to inspect
- * initial model state, modify parameters, perform validation, or abort
- * optimization by returning non-zero.
+ * Shared implementation for pre- and post-optimization hooks.
+ * Performs guard checks, timing, invocation counting, and optionally
+ * sets the termination flag on non-zero return.
  *
- * Guard-check pattern ensures safety when callback infrastructure is
- * missing or disabled. Tracks timing and invocation statistics. Sets
- * termination flag if callback requests abort.
- *
- * @param model Model being optimized
- * @return 0 to continue optimization, non-zero to abort
- *
- * @note Returns 0 (success) if callback infrastructure is missing/disabled
- * @note Environment lock must be held by caller
+ * @param model      Model being optimized.
+ * @param where      CXF_CB_PRE_SOLVE or CXF_CB_POST_SOLVE.
+ * @param set_terminate  If true, set terminate_requested on non-zero return.
+ * @return 0 to continue, non-zero if callback requests abort.
  */
-int cxf_pre_optimize_hook(CxfModel *model) {
-    /* Guard: Check model exists */
-    if (model == NULL) {
-        return 0;
-    }
+static int invoke_callback_hook(CxfModel *model, int where,
+                                int set_terminate) {
+    if (model == NULL) return 0;
 
-    /* Guard: Get environment from model */
     CxfEnv *env = model->env;
-    if (env == NULL) {
-        return 0;
-    }
+    if (env == NULL) return 0;
 
-    /* Guard: Get callback context from environment */
     CallbackContext *ctx = env->callback_state;
-    if (ctx == NULL) {
-        return 0;
-    }
+    if (ctx == NULL) return 0;
 
-    /* Guard: Check if callback is enabled */
-    if (ctx->enabled == 0) {
-        return 0;
-    }
+    if (ctx->enabled == 0) return 0;
 
-    /* Guard: Get callback function pointer */
     CxfCallbackFunc callback_func = ctx->callback_func;
-    if (callback_func == NULL) {
-        return 0;
-    }
+    if (callback_func == NULL) return 0;
 
-    /* Retrieve user data */
     void *user_data = ctx->user_data;
-
-    /* Set WHERE code to indicate pre-optimization phase */
-    int where = CXF_CB_PRE_SOLVE;
-
-    /* Prepare callback data pointer (CallbackContext itself) */
     void *cbdata = (void *)ctx;
 
-    /* Increment invocation counter */
     ctx->callback_calls += 1.0;
 
-    /* Capture start timestamp */
     double start_time = cxf_get_timestamp();
-
-    /* Invoke user callback with 4 parameters: model, cbdata, where, usrdata */
     int result = callback_func(model, cbdata, where, user_data);
-
-    /* Capture end timestamp and update cumulative time */
     double end_time = cxf_get_timestamp();
-    double elapsed = end_time - start_time;
-    ctx->callback_time += elapsed;
+    ctx->callback_time += end_time - start_time;
 
-    /* If callback returned non-zero, set termination flag */
-    if (result != 0) {
+    if (result != 0 && set_terminate) {
         ctx->terminate_requested = 1;
     }
 
     return result;
 }
 
-/*============================================================================
- * Post-Optimization Callback Invocation
- *===========================================================================*/
+/**
+ * @brief Invoke user callback before optimization begins.
+ *
+ * @param model Model being optimized
+ * @return 0 to continue optimization, non-zero to abort
+ */
+int cxf_pre_optimize_hook(CxfModel *model) {
+    return invoke_callback_hook(model, CXF_CB_PRE_SOLVE, 1);
+}
 
 /**
  * @brief Invoke user callback after optimization completes.
  *
- * Called immediately after optimization finishes. Allows user to inspect
- * final solution and statistics, log results, perform post-processing, or
- * trigger follow-up actions.
- *
- * Nearly identical to pre-optimization callback but differs in semantic
- * context: model now contains final solution data. Return value does not
- * affect optimization (already complete) but may be logged for diagnostics.
- *
  * @param model Model that was optimized
  * @return 0 on success, non-zero if callback encountered error
- *
- * @note Returns 0 (success) if callback infrastructure is missing/disabled
- * @note Environment lock must be held by caller
- * @note Does NOT set termination flag (optimization already complete)
  */
 int cxf_post_optimize_hook(CxfModel *model) {
-    /* Guard: Check model exists */
-    if (model == NULL) {
-        return 0;
-    }
-
-    /* Guard: Get environment from model */
-    CxfEnv *env = model->env;
-    if (env == NULL) {
-        return 0;
-    }
-
-    /* Guard: Get callback context from environment */
-    CallbackContext *ctx = env->callback_state;
-    if (ctx == NULL) {
-        return 0;
-    }
-
-    /* Guard: Check if callback is enabled */
-    if (ctx->enabled == 0) {
-        return 0;
-    }
-
-    /* Guard: Get callback function pointer */
-    CxfCallbackFunc callback_func = ctx->callback_func;
-    if (callback_func == NULL) {
-        return 0;
-    }
-
-    /* Retrieve user data */
-    void *user_data = ctx->user_data;
-
-    /* Set WHERE code to indicate post-optimization phase */
-    int where = CXF_CB_POST_SOLVE;
-
-    /* Prepare callback data pointer (CallbackContext itself) */
-    void *cbdata = (void *)ctx;
-
-    /* Increment invocation counter */
-    ctx->callback_calls += 1.0;
-
-    /* Capture start timestamp */
-    double start_time = cxf_get_timestamp();
-
-    /* Invoke user callback with 4 parameters: model, cbdata, where, usrdata */
-    int result = callback_func(model, cbdata, where, user_data);
-
-    /* Capture end timestamp and update cumulative time */
-    double end_time = cxf_get_timestamp();
-    double elapsed = end_time - start_time;
-    ctx->callback_time += elapsed;
-
-    /* Note: Do NOT set termination flag - optimization is complete */
-
-    return result;
+    return invoke_callback_hook(model, CXF_CB_POST_SOLVE, 0);
 }

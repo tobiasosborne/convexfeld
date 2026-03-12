@@ -30,6 +30,35 @@ int btran_apply_lu(const struct LUFactors *lu, int m, double *result,
 void btran_apply_diag(const double *diag_coeff, int m, double *result);
 int btran_apply_etas(struct BasisState *basis, int m, double *result);
 
+/* Shared eta collection (btran_etas.c) — used by FTRAN and BTRAN */
+
+/** Maximum stack-allocated eta pointers before heap allocation */
+#define ETA_MAX_STACK 64
+
+/**
+ * @brief Collect eta pointers from linked list into an array.
+ *
+ * Uses stack buffer for small counts, heap for large.  Caller must
+ * call eta_collect_free() with the same stack_buf when done.
+ *
+ * @param basis     BasisState with eta linked list.
+ * @param stack_buf Caller-provided stack buffer of size ETA_MAX_STACK.
+ * @param out_etas  Set to array of eta pointers (stack or heap).
+ * @param out_count Set to number of etas collected.
+ * @return CXF_OK or CXF_ERROR_OUT_OF_MEMORY.
+ */
+int eta_collect(struct BasisState *basis,
+                struct EtaVector **stack_buf,
+                struct EtaVector ***out_etas,
+                int *out_count);
+
+/** @brief Validate a single eta vector (bounds + stability). */
+int eta_validate(const struct EtaVector *eta, int m);
+
+/** @brief Free heap-allocated eta array (no-op if stack). */
+void eta_collect_free(struct EtaVector **etas,
+                      struct EtaVector **stack_buf);
+
 /* --- Pivot (pivot_eta.c) --- */
 int cxf_pivot_with_eta(struct BasisState *basis, int pivotRow,
                        const double *pivotCol, int enteringVar,

@@ -50,7 +50,12 @@ static double row_ratio(double x, double lb, double ub, double sd,
     return ratio;
 }
 
-/** @brief Compute initial step length theta for the Stage 2 blocker. */
+/** @brief Compute initial step length theta for the Stage 2 blocker.
+ *
+ * Similar to row_ratio but uses strict non-negative check (r >= 0)
+ * instead of row_ratio's relaxed check (r >= -feasTol), because theta
+ * must be non-negative for step computation.
+ */
 static double compute_theta(int lv, int total, int s, double feasTol,
                              double inf, const double *pivotColumn,
                              int finalRow, const double *wx,

@@ -37,55 +37,67 @@ int cxf_perturb_validate_candidates(int *cand_list, int cand_count,
     return valid;
 }
 
+/**
+ * @brief Process a single perturbation candidate (Case A or Case B).
+ *
+ * @return  1 = perturbed, 0 = skipped,
+ *         -1 = infeasibility detected (problem_row_index set).
+ */
+static int process_one_candidate(SolverState *state, int j, int status,
+                                 double feas_tol, int n, int m) {
+    if (status == CXF_VAR_AT_LOWER && state->work_dj) {
+        /* Case A: Nonbasic at lower bound */
+        double lb = state->work_lb[j];
+        double ub = state->work_ub[j];
+        if (ub - lb < feas_tol) return 0;
+
+        double rc = state->work_dj[j];
+        if (fabs(rc) > feas_tol && rc >= -feas_tol) return 0;
+
+        if (rc < -feas_tol && j >= n && (j - n) < m &&
+            state->work_sense) {
+            char sense = state->work_sense[j - n];
+            if (sense == '=' || sense == 'E') {
+                state->problem_row_index = j - n;
+                return -1;
+            }
+        }
+        if (state->pricing)
+            cxf_pricing_mark_dirty(state->pricing, j);
+        return 1;
+    }
+
+    if (status >= 0) {
+        /* Case B: Basic variable -- implied bound analysis */
+        int row = status;
+        if (row < 0 || row >= m) return 0;
+        if (j >= n) return 0;  /* skip auxiliaries */
+
+        int result = cxf_expand_analyze_basic(state, row, j, feas_tol);
+        if (result == -1) {
+            state->problem_row_index = row;
+            return -1;
+        }
+        if (result == 1) {
+            if (state->pricing)
+                cxf_pricing_mark_dirty(state->pricing, j);
+            return 1;
+        }
+    }
+    return 0;
+}
+
 /** @brief Process V2 pricing candidates (Phase 4, V2 path). */
 static int process_v2_candidates(SolverState *state, BasisState *basis,
                                  int *cand_list, int cand_count,
                                  double feas_tol, int n, int m) {
-    double *dj = state->work_dj;
     int perturbed = 0;
-
     for (int ci = 0; ci < cand_count; ci++) {
         int j = cand_list[ci];
-        int status = basis->var_status[j];
-
-        if (status == CXF_VAR_AT_LOWER && dj) {
-            /* Case A: Nonbasic at lower bound */
-            double lb = state->work_lb[j];
-            double ub = state->work_ub[j];
-            if (ub - lb < feas_tol) continue;
-
-            double rc = dj[j];
-            if (fabs(rc) <= feas_tol || rc < -feas_tol) {
-                if (rc < -feas_tol && j >= n && (j - n) < m &&
-                    state->work_sense) {
-                    char sense = state->work_sense[j - n];
-                    if (sense == '=' || sense == 'E') {
-                        state->problem_row_index = j - n;
-                        return -(perturbed + 1);
-                    }
-                }
-                if (state->pricing)
-                    cxf_pricing_mark_dirty(state->pricing, j);
-                perturbed++;
-            }
-        } else if (status >= 0) {
-            /* Case B: Basic variable — implied bound analysis */
-            int row = status;
-            if (row < 0 || row >= m) continue;
-            if (j >= n) continue;  /* skip auxiliaries */
-
-            int result = cxf_expand_analyze_basic(state, row, j,
-                                                  feas_tol);
-            if (result == -1) {
-                state->problem_row_index = row;
-                return -(perturbed + 1);
-            }
-            if (result == 1) {
-                if (state->pricing)
-                    cxf_pricing_mark_dirty(state->pricing, j);
-                perturbed++;
-            }
-        }
+        int rc = process_one_candidate(state, j, basis->var_status[j],
+                                       feas_tol, n, m);
+        if (rc == -1) return -(perturbed + 1);
+        perturbed += rc;
     }
     return perturbed;
 }
@@ -94,43 +106,14 @@ static int process_v2_candidates(SolverState *state, BasisState *basis,
 static int process_fallback_scan(SolverState *state, BasisState *basis,
                                  double feas_tol, int n, int m,
                                  int total) {
-    double *dj = state->work_dj;
-    if (!dj) return 0;
+    if (!state->work_dj) return 0;
     int perturbed = 0;
-
     for (int j = 0; j < total; j++) {
         int s = basis->var_status[j];
         if (s != CXF_VAR_AT_LOWER && !(s >= 0 && j < n)) continue;
-        if (s == CXF_VAR_AT_LOWER) {
-            if (state->work_ub[j] - state->work_lb[j] < feas_tol)
-                continue;
-            double rc = dj[j];
-            if (fabs(rc) > feas_tol && rc >= -feas_tol) continue;
-            if (rc < -feas_tol && j >= n && (j - n) < m &&
-                state->work_sense) {
-                char se = state->work_sense[j - n];
-                if (se == '=' || se == 'E') {
-                    state->problem_row_index = j - n;
-                    return -(perturbed + 1);
-                }
-            }
-            if (state->pricing)
-                cxf_pricing_mark_dirty(state->pricing, j);
-            perturbed++;
-        } else {
-            int row = s;
-            if (row < 0 || row >= m) continue;
-            int r = cxf_expand_analyze_basic(state, row, j, feas_tol);
-            if (r == -1) {
-                state->problem_row_index = row;
-                return -(perturbed + 1);
-            }
-            if (r == 1) {
-                if (state->pricing)
-                    cxf_pricing_mark_dirty(state->pricing, j);
-                perturbed++;
-            }
-        }
+        int rc = process_one_candidate(state, j, s, feas_tol, n, m);
+        if (rc == -1) return -(perturbed + 1);
+        perturbed += rc;
     }
     return perturbed;
 }
