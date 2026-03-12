@@ -176,6 +176,21 @@ int cxf_pricing_init(PricingState *ctx, int num_vars, int strategy) {
         }
     }
 
+    /* Devex reference framework (revised_simplex.md Step 6) */
+    free(ctx->ref_framework);
+    ctx->ref_framework = NULL;
+    ctx->ref_framework_count = 0;
+    ctx->ref_framework_initial = 0;
+    if (effective_strategy == STRATEGY_DEVEX && num_vars > 0) {
+        ctx->ref_framework = (uint8_t *)calloc((size_t)num_vars,
+                                                sizeof(uint8_t));
+        if (ctx->ref_framework == NULL) return CXF_ERROR_OUT_OF_MEMORY;
+        /* All vars initially in R; refined at first recompute */
+        memset(ctx->ref_framework, 1, (size_t)num_vars);
+        ctx->ref_framework_count = num_vars;
+        ctx->ref_framework_initial = num_vars;
+    }
+
     /* V1: Allocate dirty flags (F1) */
     free(ctx->var_dirty);
     ctx->var_dirty = NULL;

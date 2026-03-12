@@ -110,22 +110,23 @@ int cxf_simplex_step2(SolverState *state, CxfEnv *env) {
                 double fmin = state->min_activity[r2];
                 double fmax = state->max_activity[r2];
                 if (fmin <= -CXF_INFINITY || fmax >= CXF_INFINITY) continue;
+                double rhs2 = (state->work_rhs) ? state->work_rhs[r2] : 0.0;
                 char s2 = state->work_sense ? state->work_sense[r2] : '<';
                 if (s2 == '<' || s2 == 'L' || s2 == '=' || s2 == 'E') {
                     if (a2 > 0) {
-                        double iu = safe_lb - fmin / a2;
+                        double iu = safe_lb + (rhs2 - fmin) / a2;
                         if (iu < safe_ub) safe_ub = iu;
                     } else {
-                        double il = safe_lb - fmax / a2;
+                        double il = safe_ub + (rhs2 - fmax) / a2;
                         if (il > safe_lb) safe_lb = il;
                     }
                 }
                 if (s2 == '>' || s2 == 'G' || s2 == '=' || s2 == 'E') {
                     if (a2 > 0) {
-                        double il = safe_ub - fmax / a2;
+                        double il = safe_ub + (rhs2 - fmax) / a2;
                         if (il > safe_lb) safe_lb = il;
                     } else {
-                        double iu = safe_ub - fmin / a2;
+                        double iu = safe_lb + (rhs2 - fmin) / a2;
                         if (iu < safe_ub) safe_ub = iu;
                     }
                 }
@@ -154,22 +155,25 @@ int cxf_simplex_step2(SolverState *state, CxfEnv *env) {
 
             char sense = (state->work_sense) ? state->work_sense[row] : '<';
 
-            /* Implied bounds from constraint activity (Savelsbergh 1994) */
+            /* Implied bounds from constraint activity (Savelsbergh 1994).
+             * x_k <= l_k + (b_i - L_act_i) / a_ik  (for <= with a > 0)
+             * where L_act_i includes variable k's contribution. */
+            double rhs_i = (state->work_rhs) ? state->work_rhs[row] : 0.0;
             if (sense == '<' || sense == 'L' || sense == '=' || sense == 'E') {
                 if (a > 0) {
-                    double impl_ub = lb - min_act / a;
+                    double impl_ub = lb + (rhs_i - min_act) / a;
                     tightened += tighten_bound(state, j, impl_ub, 0, tol);
                 } else {
-                    double impl_lb = lb - max_act / a;
+                    double impl_lb = ub + (rhs_i - max_act) / a;
                     tightened += tighten_bound(state, j, impl_lb, 1, tol);
                 }
             }
             if (sense == '>' || sense == 'G' || sense == '=' || sense == 'E') {
                 if (a > 0) {
-                    double impl_lb = ub - max_act / a;
+                    double impl_lb = ub + (rhs_i - max_act) / a;
                     tightened += tighten_bound(state, j, impl_lb, 1, tol);
                 } else {
-                    double impl_ub = ub - min_act / a;
+                    double impl_ub = lb + (rhs_i - min_act) / a;
                     tightened += tighten_bound(state, j, impl_ub, 0, tol);
                 }
             }

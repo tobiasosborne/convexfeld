@@ -81,6 +81,11 @@ struct PricingState {
     int cached_constr_count2[CXF_MAX_PRICING_LEVELS]; /**< Secondary cache slot */
     int cached_constr_count3[CXF_MAX_PRICING_LEVELS]; /**< Tertiary cache slot */
     int *constr_output_buf[CXF_MAX_PRICING_LEVELS];   /**< Output buffers */
+
+    /* Devex reference framework (revised_simplex.md Step 6) */
+    uint8_t *ref_framework;       /**< Per-variable: 1 = in R, 0 = not [num_vars] */
+    int ref_framework_count;      /**< Vars still in R */
+    int ref_framework_initial;    /**< Original R size (staleness check) */
 };
 
 /*******************************************************************************
@@ -141,6 +146,10 @@ void cxf_pricing_get_constr_stats(PricingState *ctx, int *count_out,
 void cxf_pricing_constr_candidates_v2(PricingState *ctx,
                                       struct SolverState *state,
                                       int *count_out, int **candidates_out);
+
+/** Recompute SE/Devex weights from scratch (at refactorization). */
+void cxf_pricing_recompute_weights(PricingState *ctx,
+                                    struct SolverState *state);
 
 /** P4.9: Update steepest edge / Devex weights after pivot. */
 void cxf_pricing_update_weights(PricingState *ctx,

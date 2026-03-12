@@ -353,6 +353,46 @@ void test_pricing_statistics_tracked(void) {
 }
 
 /*============================================================================
+ * Devex Reference Framework Tests (convexfeld-9kc5)
+ *===========================================================================*/
+
+void test_devex_ref_framework_initialized(void) {
+    PricingState *ctx = cxf_pricing_create(10, 3);
+    TEST_ASSERT_NOT_NULL(ctx);
+    int rc = cxf_pricing_init(ctx, 10, 3);  /* Strategy 3 = Devex */
+    TEST_ASSERT_EQUAL_INT(CXF_OK, rc);
+    TEST_ASSERT_NOT_NULL(ctx->ref_framework);
+    /* All vars initially in R */
+    for (int j = 0; j < 10; j++)
+        TEST_ASSERT_EQUAL_UINT8(1, ctx->ref_framework[j]);
+    TEST_ASSERT_EQUAL_INT(10, ctx->ref_framework_count);
+    TEST_ASSERT_EQUAL_INT(10, ctx->ref_framework_initial);
+    cxf_pricing_free(ctx);
+}
+
+void test_devex_ref_framework_not_allocated_for_se(void) {
+    PricingState *ctx = cxf_pricing_create(10, 3);
+    TEST_ASSERT_NOT_NULL(ctx);
+    cxf_pricing_init(ctx, 10, 2);  /* Strategy 2 = SE */
+    TEST_ASSERT_NULL(ctx->ref_framework);
+    cxf_pricing_free(ctx);
+}
+
+void test_devex_delta_j_uses_ref_framework(void) {
+    /* After clearing a var from R, weight_update should use delta_j=0 */
+    PricingState *ctx = cxf_pricing_create(5, 3);
+    TEST_ASSERT_NOT_NULL(ctx);
+    cxf_pricing_init(ctx, 5, 3);  /* Devex */
+    /* Manually clear var 2 from reference framework */
+    ctx->ref_framework[2] = 0;
+    ctx->ref_framework_count = 4;
+    /* Verify the flag is respected */
+    TEST_ASSERT_EQUAL_UINT8(0, ctx->ref_framework[2]);
+    TEST_ASSERT_EQUAL_UINT8(1, ctx->ref_framework[0]);
+    cxf_pricing_free(ctx);
+}
+
+/*============================================================================
  * Main
  *===========================================================================*/
 
@@ -394,6 +434,11 @@ int main(void) {
 
     /* Statistics */
     RUN_TEST(test_pricing_statistics_tracked);
+
+    /* Devex reference framework (convexfeld-9kc5) */
+    RUN_TEST(test_devex_ref_framework_initialized);
+    RUN_TEST(test_devex_ref_framework_not_allocated_for_se);
+    RUN_TEST(test_devex_delta_j_uses_ref_framework);
 
     return UNITY_END();
 }

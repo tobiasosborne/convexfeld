@@ -1,12 +1,29 @@
 # Agent Handoff
 
-*Last updated: 2026-03-12*
+*Last updated: 2026-03-13*
 
 ---
 
-## STATUS: 61/61 tests pass. 13 V2 deviation issues closed across sessions (29 total closed).
+## STATUS: 61/61 tests pass. 16 V2 deviation issues closed across sessions (32 total closed).
 
 ### Session Summary (2026-03-13, continued)
+
+**V2 Deviation Fixes (3 issues closed this sub-session):**
+1. **convexfeld-9kc5 CLOSED** (H5, P2): Devex reference framework R implemented.
+   Added `ref_framework` uint8 array + count/initial fields to PricingState.
+   `delta_j` now correctly 1 if in R, 0 otherwise (was hardcoded 1). R updated
+   on each pivot (entering var removed). Fixed in both `weight_update.c` and
+   fused path in `step.c`. 3 new tests.
+2. **convexfeld-8p3j CLOSED** (H6, P2): Periodic weight recomputation at
+   refactorization via new `cxf_pricing_recompute_weights`. DSE: exact
+   `gamma_j = ||B^{-1} a_j||^2` via FTRAN for all nonbasic j. Devex: reset
+   R to current nonbasic set, all weights to 1. Hooked at both refactorization
+   sites in step.c (Phase 9 + mid-iteration).
+3. **convexfeld-2l8i CLOSED** (M2, P2): Fixed step2.c implied bounds formula.
+   Was `lb - min_act / a` (missing RHS). Now `lb + (rhs - min_act) / a` per
+   Savelsbergh 1994. Fixed both main propagation and stage-2 infeasibility check.
+
+**Previous sub-session:**
 
 **V2 Deviation Fixes (2 issues closed this sub-session):**
 1. **convexfeld-ro2u CLOSED** (C6, P1): Constraint-side V2 pricing implemented. New file
@@ -68,10 +85,11 @@
 
 ### Next Steps (priority order)
 
-1. **convexfeld-9kc5** (H5, P2): Devex delta_j hardcoded to 1 (ignores ref framework).
-2. **convexfeld-8p3j** (H6, P2): No periodic steepest edge weight recomputation.
-3. **convexfeld-2l8i** (M2, P2): step2.c implied bounds formula — needs investigation
-   of activity bounds representation before fixing.
+1. **convexfeld-g8p8** (M3, P3): Diagnostic mode bound restoration.
+2. **convexfeld-xa3o** (P2): Mixed allocator — raw malloc/free in matrix/, callbacks/, helpers/.
+3. **convexfeld-yzop** (P2): API modification stubs silently succeed without modifying.
+4. **convexfeld-uqok** (P2): Query API stubs return SUCCESS with fabricated data.
+5. **convexfeld-n9ok** (P2): Phase I cycling: grow7 still fails.
 
 ### All V2 Deviation Issues
 
@@ -87,11 +105,11 @@
 | convexfeld-mjtu | H2 | pivot_primal.c stale V1 | CLOSED |
 | convexfeld-exch | H3 | tight-bound processing skipped | CLOSED |
 | convexfeld-rr04 | H4 | pre-perturbation consistency check | CLOSED |
-| convexfeld-9kc5 | H5 | Devex delta_j ignores ref framework | OPEN |
-| convexfeld-8p3j | H6 | no periodic SE weight recomputation | OPEN |
+| convexfeld-9kc5 | H5 | Devex delta_j ignores ref framework | CLOSED |
+| convexfeld-8p3j | H6 | no periodic SE weight recomputation | CLOSED |
 | convexfeld-x9r0 | H7 | pricing level lifecycle ordering | CLOSED |
 | convexfeld-dm3g | M1 | refactor threshold mismatch | CLOSED |
-| convexfeld-2l8i | M2 | step2.c implied bounds formula | OPEN |
+| convexfeld-2l8i | M2 | step2.c implied bounds formula | CLOSED |
 | convexfeld-g8p8 | M3 | diagnostic mode bound restoration | OPEN |
 | convexfeld-7jh3 | M4 | ratio_test missing theta return | CLOSED |
 

@@ -97,9 +97,10 @@ void cxf_pricing_update_weights(PricingState *ctx, SolverState *state,
         } else {
             /* Devex update (Harris 1973):
              * gamma_j' = max(decay * gamma_j, ratio^2 + delta_j)
-             * delta_j = 1 if in reference framework, 0 otherwise.
-             * For simplicity, assume all nonbasic in reference (delta=1). */
-            double devex_val = ratio * ratio + 1.0;
+             * delta_j = 1 if in reference framework R, 0 otherwise. */
+            double delta_j = (ctx->ref_framework && ctx->ref_framework[j])
+                             ? 1.0 : 0.0;
+            double devex_val = ratio * ratio + delta_j;
             double decayed = DEVEX_DECAY * ctx->weights[j];
             ctx->weights[j] = (devex_val > decayed) ? devex_val : decayed;
             if (ctx->weights[j] < CXF_MIN_WEIGHT)
@@ -117,4 +118,78 @@ void cxf_pricing_update_weights(PricingState *ctx, SolverState *state,
 
     /* Entering variable is now basic — its weight is irrelevant until
      * it leaves the basis, at which point it gets the leaving formula. */
+
+    /* Update Devex reference framework: entering var left nonbasic set */
+    if (ctx->ref_framework && entering < ctx->num_vars &&
+        ctx->ref_framework[entering]) {
+        ctx->ref_framework[entering] = 0;
+        ctx->ref_framework_count--;
+    }
+}
+
+/**
+ * @brief Recompute SE/Devex weights from scratch (revised_simplex.md Step 6).
+ *
+ * Called at refactorization to correct drift.
+ * - Devex: reset reference framework R, all weights = 1.
+ * - DSE: gamma_j = ||B^{-1} a_j||^2 for all nonbasic j.
+ */
+void cxf_pricing_recompute_weights(PricingState *ctx, SolverState *state) {
+    if (!ctx || !state || !ctx->weights) return;
+    int n = state->num_vars;
+    int m = state->num_constrs;
+    int total = n + m;
+    BasisState *basis = state->basis;
+    if (!basis) return;
+
+    if (ctx->strategy == STRATEGY_DEVEX) {
+        /* Reset all weights to 1 and rebuild R from current nonbasic set */
+        int count = 0;
+        for (int j = 0; j < ctx->num_vars && j < total; j++) {
+            ctx->weights[j] = 1.0;
+            if (ctx->ref_framework) {
+                if (basis->var_status[j] < 0) {
+                    ctx->ref_framework[j] = 1;
+                    count++;
+                } else {
+                    ctx->ref_framework[j] = 0;
+                }
+            }
+        }
+        if (ctx->ref_framework) {
+            ctx->ref_framework_count = count;
+            ctx->ref_framework_initial = count;
+        }
+    } else if (ctx->strategy == STRATEGY_SE) {
+        /* DSE: recompute gamma_j = ||B^{-1} a_j||^2 for all nonbasic j */
+        double *work = basis->work;
+        double *col = state->work_column;
+        if (!work || !col) return;
+
+        for (int j = 0; j < total && j < ctx->num_vars; j++) {
+            if (basis->var_status[j] >= 0) continue;
+
+            memset(col, 0, (size_t)m * sizeof(double));
+            if (j < n && state->csc_col_ptr) {
+                int64_t cs = state->csc_col_ptr[j];
+                int64_t ce = state->csc_col_ptr[j + 1];
+                for (int64_t k = cs; k < ce; k++)
+                    col[state->csc_row_idx[k]] = state->csc_values[k];
+            } else if (j >= n && j < n + m) {
+                int row = j - n;
+                col[row] = basis->diag_coeff ? basis->diag_coeff[row] : 1.0;
+            }
+
+            if (cxf_ftran(basis, col, work) != CXF_OK) {
+                ctx->weights[j] = 1.0;
+                continue;
+            }
+
+            double norm_sq = 0.0;
+            for (int i = 0; i < m; i++)
+                norm_sq += work[i] * work[i];
+            ctx->weights[j] = (norm_sq > CXF_MIN_WEIGHT) ? norm_sq
+                                                          : CXF_MIN_WEIGHT;
+        }
+    }
 }

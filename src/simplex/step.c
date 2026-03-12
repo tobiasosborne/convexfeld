@@ -206,7 +206,9 @@ static void update_rc_and_weights(SolverState *state,
             double ratio = tau_j * inv_pivot;
             double r2 = ratio * ratio;
             if (is_devex) {
-                double dv = r2 + 1.0;
+                double dj = (pricing->ref_framework &&
+                             pricing->ref_framework[j]) ? 1.0 : 0.0;
+                double dv = r2 + dj;
                 double dc = 0.99 * pricing->weights[j];
                 pricing->weights[j] = (dv > dc) ? dv : dc;
             } else {
@@ -220,6 +222,13 @@ static void update_rc_and_weights(SolverState *state,
     if (leaving >= 0 && leaving < pricing->num_vars) {
         double nw = gamma_q / (pivotElement * pivotElement);
         pricing->weights[leaving] = (nw > 1e-10) ? nw : 1e-10;
+    }
+
+    /* Update Devex reference framework: entering var left nonbasic set */
+    if (pricing->ref_framework && entering < pricing->num_vars &&
+        pricing->ref_framework[entering]) {
+        pricing->ref_framework[entering] = 0;
+        pricing->ref_framework_count--;
     }
 }
 
@@ -391,6 +400,8 @@ static int pricing_and_ftran(SolverState *state, CxfEnv *env,
                 cxf_recompute_xB(state);
                 cxf_recompute_objective(state);
                 cxf_compute_reduced_costs(state);
+                if (state->pricing)
+                    cxf_pricing_recompute_weights(state->pricing, state);
                 extract_column_ext(state, entering, column);
                 rc = cxf_ftran(basis, column, pivotCol);
                 if (rc != CXF_OK) return rc;
@@ -537,6 +548,9 @@ static void post_pivot_updates(SolverState *state, CxfEnv *env,
         cxf_recompute_xB(state);
         cxf_recompute_objective(state);
         cxf_compute_reduced_costs(state);
+        /* Recompute SE/Devex weights from scratch (revised_simplex.md Step 6) */
+        if (state->pricing)
+            cxf_pricing_recompute_weights(state->pricing, state);
         if (force_refactor) {
             /* Tighten adaptive threshold: future refactorizations sooner */
             int limit = state->eta_count > 25 ? state->eta_count : 25;

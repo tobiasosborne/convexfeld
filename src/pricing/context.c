@@ -109,6 +109,7 @@ void cxf_pricing_free(PricingState *ctx) {
 
     /* Free steepest edge weights */
     free(ctx->weights);
+    free(ctx->ref_framework);
 
     /* Free candidate arrays per level */
     if (ctx->candidate_arrays != NULL) {
