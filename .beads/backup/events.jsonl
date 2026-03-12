@@ -712,3 +712,21 @@
 {"actor":"tobiasosborne","comment":null,"created_at":"2026-03-03T22:36:55Z","event_type":"closed","id":712,"issue_id":"convexfeld-447","new_value":"Closed","old_value":""}
 {"actor":"tobiasosborne","comment":null,"created_at":"2026-03-03T22:36:55Z","event_type":"closed","id":713,"issue_id":"convexfeld-20e","new_value":"Closed","old_value":""}
 {"actor":"tobiasosborne","comment":null,"created_at":"2026-03-03T22:36:55Z","event_type":"closed","id":714,"issue_id":"convexfeld-hlb1","new_value":"Closed","old_value":""}
+{"actor":"tobiasosborne","comment":null,"created_at":"2026-03-12T18:54:35Z","event_type":"created","id":715,"issue_id":"convexfeld-hvbu","new_value":"","old_value":""}
+{"actor":"tobiasosborne","comment":null,"created_at":"2026-03-12T18:54:41Z","event_type":"created","id":716,"issue_id":"convexfeld-4zq8","new_value":"","old_value":""}
+{"actor":"tobiasosborne","comment":null,"created_at":"2026-03-12T18:54:46Z","event_type":"created","id":717,"issue_id":"convexfeld-4r3e","new_value":"","old_value":""}
+{"actor":"tobiasosborne","comment":null,"created_at":"2026-03-12T18:54:51Z","event_type":"created","id":718,"issue_id":"convexfeld-ilr6","new_value":"","old_value":""}
+{"actor":"tobiasosborne","comment":null,"created_at":"2026-03-12T18:54:56Z","event_type":"created","id":719,"issue_id":"convexfeld-mjtu","new_value":"","old_value":""}
+{"actor":"tobiasosborne","comment":null,"created_at":"2026-03-12T18:54:58Z","event_type":"created","id":720,"issue_id":"convexfeld-cp29","new_value":"","old_value":""}
+{"actor":"tobiasosborne","comment":null,"created_at":"2026-03-12T18:55:02Z","event_type":"created","id":721,"issue_id":"convexfeld-exch","new_value":"","old_value":""}
+{"actor":"tobiasosborne","comment":null,"created_at":"2026-03-12T18:55:04Z","event_type":"created","id":722,"issue_id":"convexfeld-dm3g","new_value":"","old_value":""}
+{"actor":"tobiasosborne","comment":null,"created_at":"2026-03-12T18:55:04Z","event_type":"created","id":723,"issue_id":"convexfeld-k0rk","new_value":"","old_value":""}
+{"actor":"tobiasosborne","comment":null,"created_at":"2026-03-12T18:55:06Z","event_type":"created","id":724,"issue_id":"convexfeld-rr04","new_value":"","old_value":""}
+{"actor":"tobiasosborne","comment":null,"created_at":"2026-03-12T18:55:07Z","event_type":"created","id":725,"issue_id":"convexfeld-2l8i","new_value":"","old_value":""}
+{"actor":"tobiasosborne","comment":null,"created_at":"2026-03-12T18:55:10Z","event_type":"created","id":726,"issue_id":"convexfeld-ro2u","new_value":"","old_value":""}
+{"actor":"tobiasosborne","comment":null,"created_at":"2026-03-12T18:55:12Z","event_type":"created","id":727,"issue_id":"convexfeld-g8p8","new_value":"","old_value":""}
+{"actor":"tobiasosborne","comment":null,"created_at":"2026-03-12T18:55:12Z","event_type":"created","id":728,"issue_id":"convexfeld-9kc5","new_value":"","old_value":""}
+{"actor":"tobiasosborne","comment":null,"created_at":"2026-03-12T18:55:16Z","event_type":"created","id":729,"issue_id":"convexfeld-7jh3","new_value":"","old_value":""}
+{"actor":"tobiasosborne","comment":null,"created_at":"2026-03-12T18:55:17Z","event_type":"created","id":730,"issue_id":"convexfeld-8p3j","new_value":"","old_value":""}
+{"actor":"tobiasosborne","comment":null,"created_at":"2026-03-12T18:55:22Z","event_type":"created","id":731,"issue_id":"convexfeld-x9r0","new_value":"","old_value":""}
+{"actor":"tobiasosborne","comment":null,"created_at":"2026-03-12T19:05:42Z","event_type":"status_changed","id":732,"issue_id":"convexfeld-hvbu","new_value":"{\"status\":\"in_progress\"}","old_value":"{\"id\":\"convexfeld-hvbu\",\"title\":\"V2 DEVIATION: Harris band = 10x feasTol instead of feasTol\",\"description\":\"ratio_test.c:85 sets band = 10.0 * feasTol. V2 spec (harris_ratio_test.md line 188) says: use the same epsilon as the solver's primal feasibility tolerance. This 10x multiplier widens the tolerance band, allowing more variables into tie-breaking and affecting pivot selection quality. Fix: change to band = feasTol.\",\"status\":\"open\",\"priority\":1,\"issue_type\":\"bug\",\"owner\":\"tobias.osborne@itp.uni-hannover.de\",\"created_at\":\"2026-03-12T17:54:35Z\",\"created_by\":\"tobiasosborne\",\"updated_at\":\"2026-03-12T17:54:35Z\"}"}
