@@ -3,7 +3,7 @@
  * @brief Primal simplex pivot operation implementation.
  *
  * Implements cxf_pivot_primal as specified in:
- * docs/specs/functions/pivot/cxf_pivot_primal.md
+ * docs/specs-v2/specs/modules/pivot_operations.md
  *
  * Current implementation includes:
  * - Bound feasibility checking
@@ -54,7 +54,7 @@
  * @param state Solver context pointer (cast from void*)
  * @param var Index of variable to pivot
  * @param tolerance Numerical tolerance for feasibility checks
- * @return 0 on success, 3 if infeasible, 1001 if out of memory
+ * @return 0 on success, CXF_INFEASIBLE if bounds too tight, CXF_ERROR_OUT_OF_MEMORY on alloc failure
  */
 int cxf_pivot_primal(void *env, void *state, int var, double tolerance) {
     CxfEnv *e;
@@ -100,7 +100,7 @@ int cxf_pivot_primal(void *env, void *state, int var, double tolerance) {
 
     if (fabs(boundRange) < 2.0 * tolerance) {
         /* Bounds too tight - infeasible */
-        return 3;  /* CXF_INFEASIBLE in primal pivot context */
+        return CXF_INFEASIBLE;
     }
 
     /*

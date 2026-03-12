@@ -125,6 +125,7 @@ target_sources(convexfeld PRIVATE
     src/simplex/post.c
     src/simplex/refine.c
     src/simplex/ratio_test.c
+    src/simplex/bfrt.c
     src/simplex/crash.c
     src/simplex/context.c
     src/simplex/setup.c

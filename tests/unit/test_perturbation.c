@@ -203,6 +203,61 @@ void test_unperturb_noop(void) {
 }
 
 /*******************************************************************************
+ * Mechanism B blocked until Mechanism A applied (cp29)
+ * V2 perturbation.md lines 224-225: first stalling → A only;
+ * stalling persists after A → A + B.
+ ******************************************************************************/
+void test_mechanism_b_requires_a_first(void) {
+    CxfModel *model = make_model(2, 10.0, '<');
+    SolverState *state = NULL;
+    cxf_simplex_init(model, &state);
+
+    int n = state->num_vars;
+    int m = state->num_constrs;
+    int total = n + m;
+    BasisState *basis = state->basis;
+
+    /* Setup: basic variables at lower bounds (leaving-side degeneracy) */
+    basis->var_status[0] = CXF_VAR_AT_LOWER;
+    basis->var_status[1] = CXF_VAR_AT_LOWER;
+    basis->var_status[n] = 0;
+    basis->basic_vars[0] = n;
+    state->work_dj[0] = 1e-8;
+    state->work_dj[1] = 5.0;
+    state->work_dj[n] = 0.0;
+    state->iteration = 1;
+
+    /* Pre-condition: Mechanism B activation conditions met EXCEPT mechanism_a */
+    state->degenerate_count = 200;
+    state->perturb_count = 1;
+    state->mechanism_a_applied = 0;  /* A not yet applied */
+
+    /* Save bounds so EXPAND can reference them */
+    if (state->saved_lb && state->saved_ub) {
+        memcpy(state->saved_lb, state->work_lb, (size_t)total * sizeof(double));
+        memcpy(state->saved_ub, state->work_ub, (size_t)total * sizeof(double));
+    }
+
+    /* Record lb before perturbation for comparison */
+    double lb_before = state->work_lb[n];
+
+    /* First call: Mechanism A runs but B should NOT (mechanism_a_applied was 0) */
+    int rc = cxf_simplex_perturbation(state, env);
+    TEST_ASSERT_EQUAL_INT(CXF_OK, rc);
+    TEST_ASSERT_EQUAL_INT(1, state->mechanism_a_applied);
+    /* B did NOT fire: work_lb unchanged for basic var */
+    TEST_ASSERT_DOUBLE_WITHIN(1e-15, lb_before, state->work_lb[n]);
+
+    /* Second call: Now mechanism_a_applied=1, B should fire */
+    rc = cxf_simplex_perturbation(state, env);
+    TEST_ASSERT_EQUAL_INT(CXF_OK, rc);
+    TEST_ASSERT_EQUAL_INT(1, state->perturb_expand_active);
+
+    cxf_simplex_final(state);
+    cxf_freemodel(model);
+}
+
+/*******************************************************************************
  * Runner
  ******************************************************************************/
 int main(void) {
@@ -216,5 +271,6 @@ int main(void) {
     RUN_TEST(test_perturb_infeasible_equality);
     RUN_TEST(test_unperturb_restores_bounds);
     RUN_TEST(test_unperturb_noop);
+    RUN_TEST(test_mechanism_b_requires_a_first);
     return UNITY_END();
 }

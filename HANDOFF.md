@@ -1,12 +1,29 @@
 # Agent Handoff
 
-*Last updated: 2026-03-13*
+*Last updated: 2026-03-12*
 
 ---
 
-## STATUS: 58/58 tests pass (19 ratio_test, 11 basis_progress). 7 V2 deviation issues closed this session (23 total closed).
+## STATUS: 59/59 tests pass. 11 V2 deviation issues closed across sessions (27 total closed).
 
-### Session Summary (2026-03-13, continued)
+### Session Summary (2026-03-12, continued)
+
+**V2 Deviation Fixes (5 issues closed this sub-session):**
+1. **convexfeld-cp29 CLOSED** (C4, P1): Mechanism B (EXPAND) now requires Mechanism A
+   (pricing restriction) to have been applied first, per perturbation.md lines 224-225.
+   Added `mechanism_a_applied` field to SolverState. Reset on non-degenerate pivot and
+   unperturb. 1 new test (test_mechanism_b_requires_a_first).
+2. **convexfeld-rr04 CLOSED** (H4, P2): Added pre-perturbation consistency check per
+   perturbation.md Phase 2. Validates candidate list against solver state before processing.
+3. **convexfeld-x9r0 CLOSED** (H7, P2): Reordered cxf_pricing_end_level: lazy activation
+   check first, queue filtering second, cache invalidation last per pricing_support.md.
+   1 new test. Unblocks convexfeld-ro2u (C6).
+4. **convexfeld-mjtu CLOSED** (H2, P2): Replaced hardcoded return 3 with CXF_INFEASIBLE
+   per pivot_operations.md V2 spec. 1 new test. Unblocks convexfeld-exch (H3).
+5. **convexfeld-sjio CLOSED** (P3): Split ratio_test.c (305 LOC) into ratio_test.c
+   (177 LOC) + bfrt.c (166 LOC). Both under 200 LOC limit.
+
+**Previous sub-session (2026-03-13):**
 
 **V2 Deviation Fixes (2 issues closed this sub-session):**
 1. **convexfeld-k0rk CLOSED** (C5, P1): Basis diff upgraded from 4-term to 6-term weighted
@@ -40,23 +57,22 @@
 ### Dependency Graph (unblocked → blocked)
 
 ```
-READY                                    BLOCKED
-─────                                    ───────
-convexfeld-cp29  Mechanism A/B seq       (was blocked by k0rk+dm3g, NOW READY)
-convexfeld-x9r0  level lifecycle ──────→ convexfeld-ro2u  constraint-side pricing
-convexfeld-mjtu  pivot_primal V2 ──────→ convexfeld-exch  tight-bound processing
+READY (newly unblocked)                  BLOCKED
+───────────────────                      ───────
+convexfeld-ro2u  constraint-side V2      (was blocked by x9r0, NOW READY)
+convexfeld-exch  tight-bound processing  (was blocked by mjtu, NOW READY)
 ```
 
 ### Next Steps (priority order)
 
-1. **convexfeld-cp29** (P1): EXPAND Mechanism B fires without confirming Mechanism A
-   failed. NOW UNBLOCKED by basis diff fix (k0rk) and threshold sync (dm3g).
-2. **convexfeld-x9r0** (P2): Fix pricing level lifecycle ordering in queue.c. Unblocks
-   C6 (constraint-side V2 pricing).
-3. **convexfeld-mjtu** (P2): Rewrite pivot_primal.c to V2 spec. Unblocks H3.
-4. **convexfeld-2l8i** (P2): step2.c implied bounds formula — needs investigation of
-   activity bounds representation before fixing.
-5. **convexfeld-sjio** (P3): Refactor ratio_test.c from 305 LOC to < 200.
+1. **convexfeld-ro2u** (C6, P1): Constraint-side V2 pricing functions missing. NOW
+   UNBLOCKED by x9r0 (level lifecycle fix).
+2. **convexfeld-exch** (H3, P2): Tight-bound variable processing skipped in step.c.
+   NOW UNBLOCKED by mjtu (pivot_primal V2).
+3. **convexfeld-2l8i** (M2, P2): step2.c implied bounds formula — needs investigation
+   of activity bounds representation before fixing.
+4. **convexfeld-9kc5** (H5, P2): Devex delta_j hardcoded to 1 (ignores ref framework).
+5. **convexfeld-8p3j** (H6, P2): No periodic steepest edge weight recomputation.
 
 ### All V2 Deviation Issues
 
@@ -65,16 +81,16 @@ convexfeld-mjtu  pivot_primal V2 ──────→ convexfeld-exch  tight-bo
 | convexfeld-hvbu | C1 | Harris band = 10x feasTol | CLOSED |
 | convexfeld-4zq8 | C2 | BFRT split out of ratio_test | CLOSED |
 | convexfeld-4r3e | C3 | ratio_test missing status enum | CLOSED |
-| convexfeld-cp29 | C4 | Mechanism B fires without A confirmation | READY (was blocked by C5+M1) |
+| convexfeld-cp29 | C4 | Mechanism B fires without A confirmation | CLOSED |
 | convexfeld-k0rk | C5 | basis diff simple count vs weighted | CLOSED |
-| convexfeld-ro2u | C6 | constraint-side V2 pricing missing | BLOCKED by H7 |
+| convexfeld-ro2u | C6 | constraint-side V2 pricing missing | READY (was blocked by H7) |
 | convexfeld-ilr6 | H1 | ratio_test infeasibility pre-check | CLOSED |
-| convexfeld-mjtu | H2 | pivot_primal.c stale V1 | OPEN |
-| convexfeld-exch | H3 | tight-bound processing skipped | BLOCKED by H2 |
-| convexfeld-rr04 | H4 | pre-perturbation consistency check | OPEN |
+| convexfeld-mjtu | H2 | pivot_primal.c stale V1 | CLOSED |
+| convexfeld-exch | H3 | tight-bound processing skipped | READY (was blocked by H2) |
+| convexfeld-rr04 | H4 | pre-perturbation consistency check | CLOSED |
 | convexfeld-9kc5 | H5 | Devex delta_j ignores ref framework | OPEN |
 | convexfeld-8p3j | H6 | no periodic SE weight recomputation | OPEN |
-| convexfeld-x9r0 | H7 | pricing level lifecycle ordering | OPEN |
+| convexfeld-x9r0 | H7 | pricing level lifecycle ordering | CLOSED |
 | convexfeld-dm3g | M1 | refactor threshold mismatch | CLOSED |
 | convexfeld-2l8i | M2 | step2.c implied bounds formula | OPEN |
 | convexfeld-g8p8 | M3 | diagnostic mode bound restoration | OPEN |

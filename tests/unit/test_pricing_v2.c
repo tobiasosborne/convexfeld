@@ -296,6 +296,83 @@ void test_candidates_v2_null_safety(void) {
     TEST_ASSERT_NULL(cands);
 }
 
+/*--- cxf_pricing_end_level lifecycle tests (H7/convexfeld-x9r0) ---*/
+
+void test_end_level_lazy_activation(void) {
+    /* V2 spec: first call at an inactive level should just mark it active
+     * and return without invalidating caches or clearing dirty flags. */
+    PricingState *ctx = cxf_pricing_create(5, 3);
+    cxf_pricing_init(ctx, 5, 1);
+    cxf_pricing_init_constrs(ctx, 3);
+
+    /* Set up: level 1 inactive, seed a valid V2 cache value */
+    ctx->current_level = 1;
+    TEST_ASSERT_EQUAL_INT(0, ctx->level_active[1]);
+    ctx->cached_var_count[1] = 42;  /* Sentinel: should NOT be cleared */
+    ctx->cached_constr_count[1] = 7;
+
+    /* Mark some vars dirty (V1) */
+    ctx->var_dirty[0] = 1;
+    ctx->var_dirty[2] = 1;
+    ctx->num_dirty = 2;
+
+    cxf_pricing_end_level(ctx);
+
+    /* Level should now be active */
+    TEST_ASSERT_EQUAL_INT(1, ctx->level_active[1]);
+    /* V2 caches should NOT have been invalidated (lazy activation) */
+    TEST_ASSERT_EQUAL_INT(42, ctx->cached_var_count[1]);
+    TEST_ASSERT_EQUAL_INT(7, ctx->cached_constr_count[1]);
+    /* V1 dirty flags should NOT have been cleared */
+    TEST_ASSERT_EQUAL_INT(1, ctx->var_dirty[0]);
+    TEST_ASSERT_EQUAL_INT(2, ctx->num_dirty);
+
+    cxf_pricing_free(ctx);
+}
+
+void test_end_level_caches_invalidated_after_active(void) {
+    /* V2 spec: subsequent calls (level already active) should invalidate
+     * all 6 cache slots at the current level AFTER queue filtering. */
+    PricingState *ctx = cxf_pricing_create(5, 3);
+    cxf_pricing_init(ctx, 5, 1);
+    cxf_pricing_init_constrs(ctx, 3);
+
+    ctx->current_level = 1;
+    ctx->level_active[1] = 1;  /* Already active */
+
+    /* Seed all 6 V2 cache slots with valid values */
+    ctx->cached_var_count[1] = 10;
+    ctx->cached_var_count2[1] = 20;
+    ctx->cached_var_count3[1] = 30;
+    ctx->cached_constr_count[1] = 40;
+    ctx->cached_constr_count2[1] = 50;
+    ctx->cached_constr_count3[1] = 60;
+
+    /* Mark some vars dirty (V1) */
+    ctx->var_dirty[1] = 1;
+    ctx->num_dirty = 1;
+
+    cxf_pricing_end_level(ctx);
+
+    /* All 6 V2 cache slots at level 1 should be invalidated */
+    TEST_ASSERT_EQUAL_INT(-1, ctx->cached_var_count[1]);
+    TEST_ASSERT_EQUAL_INT(-1, ctx->cached_var_count2[1]);
+    TEST_ASSERT_EQUAL_INT(-1, ctx->cached_var_count3[1]);
+    TEST_ASSERT_EQUAL_INT(-1, ctx->cached_constr_count[1]);
+    TEST_ASSERT_EQUAL_INT(-1, ctx->cached_constr_count2[1]);
+    TEST_ASSERT_EQUAL_INT(-1, ctx->cached_constr_count3[1]);
+
+    /* V1 dirty flags should be cleared */
+    TEST_ASSERT_EQUAL_INT(0, ctx->var_dirty[1]);
+    TEST_ASSERT_EQUAL_INT(0, ctx->num_dirty);
+
+    /* Level 2 caches should be untouched */
+    ctx->cached_var_count[2] = 99;
+    TEST_ASSERT_EQUAL_INT(99, ctx->cached_var_count[2]);
+
+    cxf_pricing_free(ctx);
+}
+
 int main(void) {
     UNITY_BEGIN();
 
@@ -319,6 +396,10 @@ int main(void) {
     RUN_TEST(test_candidates_v2_level0_fast_path);
     RUN_TEST(test_candidates_v2_cache_hit);
     RUN_TEST(test_candidates_v2_null_safety);
+
+    /* H7: end_level lifecycle ordering (convexfeld-x9r0) */
+    RUN_TEST(test_end_level_lazy_activation);
+    RUN_TEST(test_end_level_caches_invalidated_after_active);
 
     return UNITY_END();
 }

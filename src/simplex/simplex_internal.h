@@ -56,6 +56,18 @@ int cxf_ratio_test(SolverState *state, CxfEnv *env, int enteringVar,
                    int *flip_rows_out, int max_flips,
                    int *num_flips_out);
 
+/* --- BFRT Stage 3 (bfrt.c) --- */
+void cxf_bfrt_extend_step(SolverState *state, const double *pivotColumn,
+                           int s, int use_bland, double feasTol,
+                           double inf,
+                           int *finalRow, double *theta,
+                           int *leavingRow_out, double *pivotElement_out,
+                           int *flip_rows_out, int max_flips,
+                           int *num_flips_out);
+void cxf_bfrt_set_status(int nflips, const int *flip_rows,
+                          int finalRow, double theta, double feasTol,
+                          int *status_out);
+
 /* --- Recomputation (recompute.c) --- */
 int cxf_recompute_xB(SolverState *state);
 void cxf_recompute_objective(SolverState *state);

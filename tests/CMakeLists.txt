@@ -212,6 +212,10 @@ target_link_libraries(test_pivot_special PRIVATE m)
 add_cxf_test(test_pivot_update unit/test_pivot_update.c)
 target_link_libraries(test_pivot_update PRIVATE m)
 
+# Pivot primal (V2 spec compliance: CXF_INFEASIBLE, primal criterion) tests
+add_cxf_test(test_pivot_primal unit/test_pivot_primal.c)
+target_link_libraries(test_pivot_primal PRIVATE m)
+
 # Ratio test (free variable direction) tests
 add_cxf_test(test_ratio_test unit/test_ratio_test.c)
 target_link_libraries(test_ratio_test PRIVATE m)

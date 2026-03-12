@@ -567,6 +567,7 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env) {
             state->use_bland = 1;
     } else {
         state->degenerate_count = 0;
+        state->mechanism_a_applied = 0;  /* Reset: stalling episode ended */
     }
 
     /* Step length clamping (numerical_stability.md Section C) */

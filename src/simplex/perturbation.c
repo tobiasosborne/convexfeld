@@ -52,6 +52,24 @@ int cxf_simplex_perturbation(SolverState *state, CxfEnv *env) {
         cxf_pricing_candidates_v2(state->pricing, state,
                                   &cand_count, &cand_list);
 
+    /* Phase 2b: Pre-perturbation consistency check (perturbation.md Phase 2).
+     * Validate candidate list against current solver state before processing.
+     * Discard invalid candidates up-front to avoid stale data issues. */
+    if (cand_count > 0 && cand_list != NULL) {
+        int valid = 0;
+        for (int ci = 0; ci < cand_count; ci++) {
+            int j = cand_list[ci];
+            if (j < 0 || j >= total) continue;
+            if (!basis->var_status) continue;
+            int s = basis->var_status[j];
+            /* Keep only: nonbasic at lower, or basic with valid row */
+            if (s == CXF_VAR_AT_LOWER ||
+                (s >= 0 && s < m && j < n))
+                cand_list[valid++] = j;
+        }
+        cand_count = valid;
+    }
+
     /* Phase 3: drift prevention — analyze_basic reads saved bounds (P5.2).
      * Phase 4: candidate processing (nonbasic Case A + basic Case B). */
     double *dj = state->work_dj;
@@ -60,7 +78,6 @@ int cxf_simplex_perturbation(SolverState *state, CxfEnv *env) {
         /* V2 path: process only pricing candidates */
         for (int ci = 0; ci < cand_count; ci++) {
             int j = cand_list[ci];
-            if (j < 0 || j >= total) continue;
 
             int status = basis->var_status[j];
 
@@ -145,10 +162,17 @@ int cxf_simplex_perturbation(SolverState *state, CxfEnv *env) {
         }
     }
 
-    /*--- Phase 4b: EXPAND bound widening (Mechanism B, expand.c) ---*/
-    int widened = cxf_expand_widen_bounds(state, env, feas_tol,
+    /* V2 perturbation.md lines 224-225: first stalling → A only.
+     * Mechanism B fires only when A was already applied (stalling persists). */
+    int widened = 0;
+    if (state->mechanism_a_applied) {
+        widened = cxf_expand_widen_bounds(state, env, feas_tol,
                                           basis, m, total);
-    perturbed += widened;
+        perturbed += widened;
+    }
+
+    /* Mark that Mechanism A has been applied in this stalling episode */
+    state->mechanism_a_applied = 1;
 
     /*--- Phase 5: Counter update + pricing notification ---*/
     if (state->pricing && perturbed > 0)
@@ -186,5 +210,6 @@ int cxf_simplex_unperturb(SolverState *state, CxfEnv *env) {
 
     state->perturb_count = 0;
     state->perturb_expand_active = 0;
+    state->mechanism_a_applied = 0;
     return CXF_OK;
 }

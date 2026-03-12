@@ -82,6 +82,17 @@ void cxf_pricing_cascade_update(PricingState *ctx, SolverState *state,
 void cxf_pricing_end_level(PricingState *ctx) {
     if (ctx == NULL) return;
 
+    int level = ctx->current_level;
+    if (level < 0 || level >= CXF_MAX_PRICING_LEVELS) return;
+
+    /* V2 spec: Lazy activation guard (pricing_support.md).
+     * First call at this level just marks it active and returns.
+     * This ensures the first batch of dirty entries is treated correctly. */
+    if (!ctx->level_active[level]) {
+        ctx->level_active[level] = 1;
+        return;
+    }
+
     /* V1: Invalidate V1 caches */
     if (ctx->cached_counts != NULL) {
         for (int i = 0; i < ctx->max_levels; i++)
@@ -94,25 +105,16 @@ void cxf_pricing_end_level(PricingState *ctx) {
         ctx->num_dirty = 0;
     }
 
-    /* V2 (P4.6): Process queues at current level — promotes pending
-     * entries, demotes stale ones, invalidates V2 caches.
-     * Note: cxf_pricing_update_queues needs SolverState which we don't
-     * have here. The V2 processing is done by the caller (step.c) via
-     * cxf_pricing_update_queues() before pricing. This function handles
-     * the V1 cleanup and V2 level activation only. */
-    int level = ctx->current_level;
-    if (level >= 0 && level < CXF_MAX_PRICING_LEVELS) {
-        /* Mark level as active for future insertions */
-        ctx->level_active[level] = 1;
-
-        /* Invalidate V2 caches at this level */
-        ctx->cached_var_count[level] = -1;
-        ctx->cached_var_count2[level] = -1;
-        ctx->cached_var_count3[level] = -1;
-        ctx->cached_constr_count[level] = -1;
-        ctx->cached_constr_count2[level] = -1;
-        ctx->cached_constr_count3[level] = -1;
-    }
+    /* V2 (P4.6): Queue filtering is handled by cxf_pricing_update_queues
+     * (update.c) which has access to SolverState for status-based filtering.
+     * That function is called by step.c before pricing. Here we invalidate
+     * V2 caches AFTER filtering, per pricing_support.md Phase 3. */
+    ctx->cached_var_count[level] = -1;
+    ctx->cached_var_count2[level] = -1;
+    ctx->cached_var_count3[level] = -1;
+    ctx->cached_constr_count[level] = -1;
+    ctx->cached_constr_count2[level] = -1;
+    ctx->cached_constr_count3[level] = -1;
 }
 
 /**

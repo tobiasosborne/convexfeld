@@ -113,6 +113,9 @@ struct SolverState {
     /* Perturbation state (v2 — P2.6 EXPAND) */
     int perturb_count;        /**< Cumulative count of variables perturbed/removed */
     int perturb_expand_active; /**< Nonzero if EXPAND bound widening (Mechanism B) is active */
+    int mechanism_a_applied;  /**< Nonzero if Mechanism A (pricing restriction) was applied
+                                   in this stalling episode. Mechanism B only fires after A
+                                   has been tried (perturbation.md lines 224-225). */
 
     /* B2: Activity bounds (v2 — P3.21 cxf_simplex_setup) */
     double *min_activity;     /**< Per-constraint min activity [num_constrs] */
