@@ -85,12 +85,12 @@ int cxf_simplex_step3(SolverState *state, CxfEnv *env) {
     int n = state->num_vars;
     int tightened = 0;
 
-    /* Get dirty constraint candidates */
-    int cand_buf[256];
-    int *candidates = cand_buf;
-    int num_cand = cxf_pricing_get_constr_candidates(
-        state->pricing, candidates, 256);
-    if (num_cand == 0) return 0;
+    /* Get dirty constraint candidates (V2 adaptive) */
+    int num_cand = 0;
+    int *candidates = NULL;
+    cxf_pricing_constr_candidates_v2(state->pricing, state,
+                                     &num_cand, &candidates);
+    if (num_cand == 0 || candidates == NULL) return 0;
 
     for (int ci = 0; ci < num_cand; ci++) {
         int row = candidates[ci];

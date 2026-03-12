@@ -133,6 +133,15 @@ void cxf_pricing_candidates_v2(PricingState *ctx,
                                struct SolverState *state,
                                int *count_out, int **candidates_out);
 
+/** P3.18: Get committed constraint stats at current level. */
+void cxf_pricing_get_constr_stats(PricingState *ctx, int *count_out,
+                                  int **queue_out);
+
+/** P3.18: V2 adaptive constraint candidate retrieval. */
+void cxf_pricing_constr_candidates_v2(PricingState *ctx,
+                                      struct SolverState *state,
+                                      int *count_out, int **candidates_out);
+
 /** P4.9: Update steepest edge / Devex weights after pivot. */
 void cxf_pricing_update_weights(PricingState *ctx,
                                 struct SolverState *state,

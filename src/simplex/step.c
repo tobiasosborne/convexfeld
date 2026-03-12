@@ -249,6 +249,7 @@ static int pricing_and_ftran(SolverState *state, CxfEnv *env,
     /* Multi-level pricing (v2 P2.3 + P3.20 + P4.4/P4.5) */
     int candidates[MAX_CANDIDATES];
     int num_cand = 0;
+    double pricing_tol = env->optimality_tol;  /* Updated per level */
 
     if (state->pricing)
         cxf_pricing_update_queues(state->pricing, state);
@@ -257,7 +258,6 @@ static int pricing_and_ftran(SolverState *state, CxfEnv *env,
         if (state->pricing)
             cxf_pricing_set_level(state->pricing, level);
 
-        double pricing_tol;
         if (level == 0)      pricing_tol = env->optimality_tol * 10.0;
         else if (level == 1) pricing_tol = env->optimality_tol;
         else                 pricing_tol = env->optimality_tol * 0.1;
@@ -345,6 +345,21 @@ static int pricing_and_ftran(SolverState *state, CxfEnv *env,
         if (state->work_lb[entering] >
             state->work_ub[entering] + env->feasibility_tol)
             return ITERATE_INFEASIBLE;
+
+        /* Phase 3.2: Tight-bound handling (simplex_iteration.md).
+         * Variables with bound range at or below pricing tolerance
+         * are routed to cxf_pivot_primal for safe elimination.
+         * Only structural variables — slacks are handled by constraint logic. */
+        if (entering < n) {
+            double bound_range = state->work_ub[entering] - state->work_lb[entering];
+            if (bound_range >= 0 && bound_range <= pricing_tol) {
+                int pp_rc = cxf_pivot_primal(env, state, entering, pricing_tol);
+                if (pp_rc == CXF_INFEASIBLE) return ITERATE_INFEASIBLE;
+                if (pp_rc != CXF_OK && pp_rc != 0) return pp_rc;
+                state->iteration++;
+                return ITERATE_CONTINUE;
+            }
+        }
 
         extract_column_ext(state, entering, column);
         rc = cxf_ftran(basis, column, pivotCol);
