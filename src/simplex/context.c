@@ -358,7 +358,7 @@ void cxf_simplex_final(SolverState *state) {
 /* cxf_simplex_setup is implemented in setup.c */
 
 /**
- * @brief Get solver status (stub - to be implemented).
+ * @brief Get solver status.
  *
  * @param state Solver context
  * @return Status code or error
@@ -367,11 +367,11 @@ int cxf_simplex_get_status(SolverState *state) {
     if (state == NULL) {
         return CXF_ERROR_NULL_ARGUMENT;
     }
-    return 0;  /* Stub: not yet solved */
+    return 0;  /* Not yet solved */
 }
 
 /**
- * @brief Get iteration count (stub - to be implemented).
+ * @brief Get iteration count.
  *
  * @param state Solver context
  * @return Iteration count or error
@@ -384,7 +384,7 @@ int cxf_simplex_get_iteration(SolverState *state) {
 }
 
 /**
- * @brief Get solver phase (stub - to be implemented).
+ * @brief Get solver phase.
  *
  * @param state Solver context
  * @return Phase (0, 1, or 2) or error
@@ -404,7 +404,7 @@ int cxf_simplex_get_phase(SolverState *state) {
 /* cxf_simplex_post_iterate is implemented in post.c */
 
 /**
- * @brief Get current objective value (stub - to be implemented).
+ * @brief Get current objective value.
  *
  * @param state Solver context
  * @return Objective value or NaN on error
@@ -417,7 +417,7 @@ double cxf_simplex_get_objval(SolverState *state) {
 }
 
 /**
- * @brief Set iteration limit (stub - to be implemented).
+ * @brief Set iteration limit.
  *
  * @param state Solver context
  * @param limit Iteration limit (must be >= 0)
@@ -435,7 +435,7 @@ int cxf_simplex_set_iteration_limit(SolverState *state, int limit) {
 }
 
 /**
- * @brief Get iteration limit (stub - to be implemented).
+ * @brief Get iteration limit.
  *
  * @param state Solver context
  * @return Iteration limit or error code

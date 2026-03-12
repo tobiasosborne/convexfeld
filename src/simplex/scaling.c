@@ -28,7 +28,11 @@
 #define SCALE_MIN       1e-6
 #define SCALE_MAX       1e6
 #define CONVERGE_TOL    0.01
-#define RANGE_THRESHOLD 1e30  /* Disabled: needs multi-candidate pricing first */
+/* NOTE: Scaling is effectively DISABLED. RANGE_THRESHOLD=1e30 means
+ * needs_scaling() almost never triggers. This is intentional — scaling
+ * requires multi-candidate pricing support before it can be enabled.
+ * Do NOT lower this threshold without testing all Netlib instances. */
+#define RANGE_THRESHOLD 1e30
 
 /**
  * @brief Check if matrix needs scaling (Phase 1 validation).

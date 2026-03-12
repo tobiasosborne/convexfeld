@@ -241,6 +241,22 @@ target_link_libraries(test_phase_end PRIVATE m)
 add_cxf_test(test_recompute unit/test_recompute.c)
 target_link_libraries(test_recompute PRIVATE m)
 
+# Numerical stability: near-singular and ill-conditioned matrices
+add_cxf_test(test_numerical_singular unit/test_numerical_singular.c)
+target_link_libraries(test_numerical_singular PRIVATE m)
+
+# Numerical stability: extreme coefficient ranges and tiny values
+add_cxf_test(test_numerical_range unit/test_numerical_range.c)
+target_link_libraries(test_numerical_range PRIVATE m)
+
+# FTRAN with eta factors (beyond identity basis)
+add_cxf_test(test_ftran_eta unit/test_ftran_eta.c)
+target_link_libraries(test_ftran_eta PRIVATE m)
+
+# BTRAN with eta factors (beyond identity basis)
+add_cxf_test(test_btran_eta unit/test_btran_eta.c)
+target_link_libraries(test_btran_eta PRIVATE m)
+
 ################################################################################
 # Integration Tests
 ################################################################################
