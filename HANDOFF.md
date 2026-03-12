@@ -4,11 +4,23 @@
 
 ---
 
-## STATUS: 59/59 tests pass. 11 V2 deviation issues closed across sessions (27 total closed).
+## STATUS: 61/61 tests pass. 13 V2 deviation issues closed across sessions (29 total closed).
 
-### Session Summary (2026-03-12, continued)
+### Session Summary (2026-03-13, continued)
 
-**V2 Deviation Fixes (5 issues closed this sub-session):**
+**V2 Deviation Fixes (2 issues closed this sub-session):**
+1. **convexfeld-ro2u CLOSED** (C6, P1): Constraint-side V2 pricing implemented. New file
+   `src/pricing/constr_candidates.c` with `cxf_pricing_constr_candidates_v2` (adaptive
+   strategy: 3 threshold checks, partial expansion via CSC columns, caching) and
+   `cxf_pricing_get_constr_stats` accessor. Updated step3.c to use V2. 6 new tests.
+2. **convexfeld-exch CLOSED** (H3, P2): Tight-bound variable check added in
+   `pricing_and_ftran` per simplex_iteration.md Phase 3.2. Variables with bound range
+   <= pricing_tol routed to `cxf_pivot_primal` for safe elimination. Carried pricing_tol
+   out of level loop scope. 8 new tests.
+
+**Previous sub-session (2026-03-12):**
+
+**V2 Deviation Fixes (5 issues closed):**
 1. **convexfeld-cp29 CLOSED** (C4, P1): Mechanism B (EXPAND) now requires Mechanism A
    (pricing restriction) to have been applied first, per perturbation.md lines 224-225.
    Added `mechanism_a_applied` field to SolverState. Reset on non-degenerate pivot and
@@ -54,25 +66,12 @@
 - V2 spec audit: 17 deviation issues filed
 - C1 (convexfeld-hvbu CLOSED): Harris band = feasTol
 
-### Dependency Graph (unblocked → blocked)
-
-```
-READY (newly unblocked)                  BLOCKED
-───────────────────                      ───────
-convexfeld-ro2u  constraint-side V2      (was blocked by x9r0, NOW READY)
-convexfeld-exch  tight-bound processing  (was blocked by mjtu, NOW READY)
-```
-
 ### Next Steps (priority order)
 
-1. **convexfeld-ro2u** (C6, P1): Constraint-side V2 pricing functions missing. NOW
-   UNBLOCKED by x9r0 (level lifecycle fix).
-2. **convexfeld-exch** (H3, P2): Tight-bound variable processing skipped in step.c.
-   NOW UNBLOCKED by mjtu (pivot_primal V2).
+1. **convexfeld-9kc5** (H5, P2): Devex delta_j hardcoded to 1 (ignores ref framework).
+2. **convexfeld-8p3j** (H6, P2): No periodic steepest edge weight recomputation.
 3. **convexfeld-2l8i** (M2, P2): step2.c implied bounds formula — needs investigation
    of activity bounds representation before fixing.
-4. **convexfeld-9kc5** (H5, P2): Devex delta_j hardcoded to 1 (ignores ref framework).
-5. **convexfeld-8p3j** (H6, P2): No periodic steepest edge weight recomputation.
 
 ### All V2 Deviation Issues
 
@@ -83,10 +82,10 @@ convexfeld-exch  tight-bound processing  (was blocked by mjtu, NOW READY)
 | convexfeld-4r3e | C3 | ratio_test missing status enum | CLOSED |
 | convexfeld-cp29 | C4 | Mechanism B fires without A confirmation | CLOSED |
 | convexfeld-k0rk | C5 | basis diff simple count vs weighted | CLOSED |
-| convexfeld-ro2u | C6 | constraint-side V2 pricing missing | READY (was blocked by H7) |
+| convexfeld-ro2u | C6 | constraint-side V2 pricing missing | CLOSED |
 | convexfeld-ilr6 | H1 | ratio_test infeasibility pre-check | CLOSED |
 | convexfeld-mjtu | H2 | pivot_primal.c stale V1 | CLOSED |
-| convexfeld-exch | H3 | tight-bound processing skipped | READY (was blocked by H2) |
+| convexfeld-exch | H3 | tight-bound processing skipped | CLOSED |
 | convexfeld-rr04 | H4 | pre-perturbation consistency check | CLOSED |
 | convexfeld-9kc5 | H5 | Devex delta_j ignores ref framework | OPEN |
 | convexfeld-8p3j | H6 | no periodic SE weight recomputation | OPEN |
