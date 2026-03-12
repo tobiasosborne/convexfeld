@@ -160,14 +160,13 @@ void test_getconstrs_null_numnz_fails(void) {
     cxf_freemodel(model);
 }
 
-void test_getconstrs_empty_model(void) {
+void test_getconstrs_not_supported(void) {
     CxfModel *model = NULL;
     cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
 
     int numnz;
     int status = cxf_getconstrs(model, &numnz, NULL, NULL, NULL, 0, 0);
-    TEST_ASSERT_EQUAL_INT(CXF_OK, status);
-    TEST_ASSERT_EQUAL_INT(0, numnz);
+    TEST_ASSERT_EQUAL_INT(CXF_ERROR_NOT_SUPPORTED, status);
 
     cxf_freemodel(model);
 }
@@ -193,17 +192,14 @@ void test_getcoeff_null_valP_fails(void) {
     cxf_freemodel(model);
 }
 
-void test_getcoeff_no_constraints(void) {
+void test_getcoeff_not_supported(void) {
     CxfModel *model = NULL;
     cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
     cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x");
 
     double val;
-    /* With no constraints, any constraint index is invalid */
     int status = cxf_getcoeff(model, 0, 0, &val);
-    /* Should return error for out-of-range constraint */
-    TEST_ASSERT_TRUE(status == CXF_ERROR_INVALID_ARGUMENT ||
-                     status == CXF_OK);  /* Stub may return 0 */
+    TEST_ASSERT_EQUAL_INT(CXF_ERROR_NOT_SUPPORTED, status);
 
     cxf_freemodel(model);
 }
@@ -232,12 +228,12 @@ int main(void) {
     /* cxf_getconstrs tests */
     RUN_TEST(test_getconstrs_null_model_fails);
     RUN_TEST(test_getconstrs_null_numnz_fails);
-    RUN_TEST(test_getconstrs_empty_model);
+    RUN_TEST(test_getconstrs_not_supported);
 
     /* cxf_getcoeff tests */
     RUN_TEST(test_getcoeff_null_model_fails);
     RUN_TEST(test_getcoeff_null_valP_fails);
-    RUN_TEST(test_getcoeff_no_constraints);
+    RUN_TEST(test_getcoeff_not_supported);
 
     return UNITY_END();
 }

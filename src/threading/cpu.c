@@ -5,6 +5,7 @@
 
 #define _POSIX_C_SOURCE 199309L
 #include "convexfeld/cxf_types.h"
+#include "../memory/memory_internal.h"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -38,13 +39,13 @@ int cxf_get_physical_cores(void) {
         goto fallback;
     }
 
-    buffer = (PSYSTEM_LOGICAL_PROCESSOR_INFORMATION)malloc(length);
+    buffer = (PSYSTEM_LOGICAL_PROCESSOR_INFORMATION)cxf_malloc(length);
     if (buffer == NULL) {
         goto fallback;
     }
 
     if (!GetLogicalProcessorInformation(buffer, &length)) {
-        free(buffer);
+        cxf_free(buffer);
         goto fallback;
     }
 
@@ -56,7 +57,7 @@ int cxf_get_physical_cores(void) {
         }
     }
 
-    free(buffer);
+    cxf_free(buffer);
 
     if (physical_cores > 0) {
         return physical_cores;

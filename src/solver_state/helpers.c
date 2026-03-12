@@ -10,6 +10,7 @@
 #include "convexfeld/cxf_types.h"
 #include <stdlib.h>
 #include <math.h>
+#include "../memory/memory_internal.h"
 
 #define MAX_PASSES 10
 #define BOUND_TOL 1e-10
@@ -65,12 +66,12 @@ int cxf_propagate_bounds(
 
     if (num_vars == 0) return CXF_OK;
 
-    int *worklist = (int *)malloc((size_t)num_vars * sizeof(int));
-    uint8_t *inWorklist = (uint8_t *)calloc((size_t)num_vars, sizeof(uint8_t));
+    int *worklist = (int *)cxf_malloc((size_t)num_vars * sizeof(int));
+    uint8_t *inWorklist = (uint8_t *)cxf_calloc((size_t)num_vars, sizeof(uint8_t));
 
     if (!worklist || !inWorklist) {
-        free(worklist);
-        free(inWorklist);
+        cxf_free(worklist);
+        cxf_free(inWorklist);
         return CXF_ERROR_OUT_OF_MEMORY;
     }
 
@@ -84,8 +85,8 @@ int cxf_propagate_bounds(
     }
 
     if (worklistCount == 0) {
-        free(worklist);
-        free(inWorklist);
+        cxf_free(worklist);
+        cxf_free(inWorklist);
         return CXF_OK;
     }
 
@@ -108,15 +109,15 @@ int cxf_propagate_bounds(
 
         if ((sense == CXF_LESS_EQUAL || sense == CXF_EQUAL) &&
             ub_count[varIdx] == 0 && ub_delta[varIdx] > ub_threshold) {
-            free(worklist);
-            free(inWorklist);
+            cxf_free(worklist);
+            cxf_free(inWorklist);
             return CXF_INFEASIBLE;
         }
 
         if ((sense == CXF_GREATER_EQUAL || sense == CXF_EQUAL) &&
             lb_count[varIdx] == 0 && lb_delta[varIdx] < -lb_threshold) {
-            free(worklist);
-            free(inWorklist);
+            cxf_free(worklist);
+            cxf_free(inWorklist);
             return CXF_INFEASIBLE;
         }
 
@@ -165,8 +166,8 @@ int cxf_propagate_bounds(
 
             if (newLB > lb_working[colIdx] + BOUND_TOL) {
                 if (newLB > ub_working[colIdx] + BOUND_TOL) {
-                    free(worklist);
-                    free(inWorklist);
+                    cxf_free(worklist);
+                    cxf_free(inWorklist);
                     return CXF_INFEASIBLE;
                 }
                 double old_lb = lb_working[colIdx];
@@ -178,8 +179,8 @@ int cxf_propagate_bounds(
 
             if (newUB < ub_working[colIdx] - BOUND_TOL) {
                 if (newUB < lb_working[colIdx] - BOUND_TOL) {
-                    free(worklist);
-                    free(inWorklist);
+                    cxf_free(worklist);
+                    cxf_free(inWorklist);
                     return CXF_INFEASIBLE;
                 }
                 double old_ub = ub_working[colIdx];
@@ -193,7 +194,7 @@ int cxf_propagate_bounds(
         inWorklist[varIdx] = 0;
     }
 
-    free(worklist);
-    free(inWorklist);
+    cxf_free(worklist);
+    cxf_free(inWorklist);
     return CXF_OK;
 }

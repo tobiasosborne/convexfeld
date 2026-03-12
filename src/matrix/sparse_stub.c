@@ -10,6 +10,7 @@
 #include "convexfeld/cxf_types.h"
 #include <stdlib.h>
 #include <string.h>
+#include "../memory/memory_internal.h"
 
 /**
  * @brief Allocate and initialize an empty MatrixData.
@@ -20,7 +21,7 @@
  * @return Pointer to new MatrixData, or NULL on allocation failure.
  */
 MatrixData *cxf_sparse_create(void) {
-    MatrixData *mat = (MatrixData *)calloc(1, sizeof(MatrixData));
+    MatrixData *mat = (MatrixData *)cxf_calloc(1, sizeof(MatrixData));
     if (mat == NULL) {
         return NULL;
     }
@@ -43,22 +44,22 @@ void cxf_sparse_free(MatrixData *mat) {
     }
 
     /* Free CSC format arrays */
-    free(mat->col_ptr);
-    free(mat->row_idx);
-    free(mat->values);
+    cxf_free(mat->col_ptr);
+    cxf_free(mat->row_idx);
+    cxf_free(mat->values);
 
     /* Free CSR format arrays (if built) */
-    free(mat->row_ptr);
-    free(mat->col_idx);
-    free(mat->row_values);
+    cxf_free(mat->row_ptr);
+    cxf_free(mat->col_idx);
+    cxf_free(mat->row_values);
 
     /* Free constraint data */
-    free(mat->rhs);
-    free(mat->sense);
-    free(mat->range_values);
+    cxf_free(mat->rhs);
+    cxf_free(mat->sense);
+    cxf_free(mat->range_values);
 
     /* Free the structure itself */
-    free(mat);
+    cxf_free(mat);
 }
 
 /**
@@ -87,20 +88,20 @@ int cxf_sparse_init_csc(MatrixData *mat, int num_rows, int num_cols,
     mat->nnz = nnz;
 
     /* Allocate column pointers (num_cols + 1) */
-    mat->col_ptr = (int64_t *)calloc((size_t)(num_cols + 1), sizeof(int64_t));
+    mat->col_ptr = (int64_t *)cxf_calloc((size_t)(num_cols + 1), sizeof(int64_t));
     if (mat->col_ptr == NULL && num_cols >= 0) {
         return CXF_ERROR_OUT_OF_MEMORY;
     }
 
     /* Allocate row indices and values (nnz each) */
     if (nnz > 0) {
-        mat->row_idx = (int *)calloc((size_t)nnz, sizeof(int));
-        mat->values = (double *)calloc((size_t)nnz, sizeof(double));
+        mat->row_idx = (int *)cxf_calloc((size_t)nnz, sizeof(int));
+        mat->values = (double *)cxf_calloc((size_t)nnz, sizeof(double));
 
         if (mat->row_idx == NULL || mat->values == NULL) {
-            free(mat->col_ptr);
-            free(mat->row_idx);
-            free(mat->values);
+            cxf_free(mat->col_ptr);
+            cxf_free(mat->row_idx);
+            cxf_free(mat->values);
             mat->col_ptr = NULL;
             mat->row_idx = NULL;
             mat->values = NULL;

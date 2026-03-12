@@ -156,18 +156,18 @@ void test_getdblattr_objboundc(void) {
     TEST_ASSERT_EQUAL_DOUBLE(200.0, value);
 }
 
-void test_getdblattr_maxcoeff(void) {
+void test_getdblattr_maxcoeff_empty_model(void) {
     double value;
     int status = cxf_getdblattr(model, "MaxCoeff", &value);
     TEST_ASSERT_EQUAL_INT(CXF_OK, status);
-    TEST_ASSERT_EQUAL_DOUBLE(1.0, value); /* Stub value */
+    TEST_ASSERT_EQUAL_DOUBLE(0.0, value); /* No matrix data */
 }
 
-void test_getdblattr_mincoeff(void) {
+void test_getdblattr_mincoeff_empty_model(void) {
     double value;
     int status = cxf_getdblattr(model, "MinCoeff", &value);
     TEST_ASSERT_EQUAL_INT(CXF_OK, status);
-    TEST_ASSERT_EQUAL_DOUBLE(1.0, value); /* Stub value */
+    TEST_ASSERT_EQUAL_DOUBLE(0.0, value); /* No matrix data */
 }
 
 /*******************************************************************************
@@ -197,8 +197,8 @@ int main(void) {
     RUN_TEST(test_getdblattr_runtime);
     RUN_TEST(test_getdblattr_objbound);
     RUN_TEST(test_getdblattr_objboundc);
-    RUN_TEST(test_getdblattr_maxcoeff);
-    RUN_TEST(test_getdblattr_mincoeff);
+    RUN_TEST(test_getdblattr_maxcoeff_empty_model);
+    RUN_TEST(test_getdblattr_mincoeff_empty_model);
 
     return UNITY_END();
 }

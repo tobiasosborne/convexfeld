@@ -224,7 +224,7 @@ void test_addvar_grows_capacity(void) {
  * cxf_delvars Tests - Variable Deletion
  ******************************************************************************/
 
-void test_delvars_basic(void) {
+void test_delvars_returns_not_supported(void) {
     CxfModel *model = NULL;
     cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
 
@@ -234,10 +234,10 @@ void test_delvars_basic(void) {
     cxf_addvar(model, 0, NULL, NULL, 3.0, 0.0, 3.0, 'C', "x3");
     TEST_ASSERT_EQUAL_INT(3, model->num_vars);
 
-    /* Delete variable 1 */
+    /* delvars is not yet implemented — must return NOT_SUPPORTED */
     int ind[] = {1};
     int status = cxf_delvars(model, 1, ind);
-    TEST_ASSERT_EQUAL_INT(CXF_OK, status);
+    TEST_ASSERT_EQUAL_INT(CXF_ERROR_NOT_SUPPORTED, status);
 
     cxf_freemodel(model);
 }
@@ -283,7 +283,7 @@ void test_delvars_invalid_index_fails(void) {
     cxf_freemodel(model);
 }
 
-void test_delvars_multiple_vars(void) {
+void test_delvars_multiple_returns_not_supported(void) {
     CxfModel *model = NULL;
     cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
 
@@ -293,10 +293,10 @@ void test_delvars_multiple_vars(void) {
     }
     TEST_ASSERT_EQUAL_INT(5, model->num_vars);
 
-    /* Delete variables 0, 2, 4 */
+    /* delvars is not yet implemented — must return NOT_SUPPORTED */
     int ind[] = {0, 2, 4};
     int status = cxf_delvars(model, 3, ind);
-    TEST_ASSERT_EQUAL_INT(CXF_OK, status);
+    TEST_ASSERT_EQUAL_INT(CXF_ERROR_NOT_SUPPORTED, status);
 
     cxf_freemodel(model);
 }
@@ -327,12 +327,12 @@ int main(void) {
     RUN_TEST(test_addvar_grows_capacity);
 
     /* cxf_delvars tests */
-    RUN_TEST(test_delvars_basic);
+    RUN_TEST(test_delvars_returns_not_supported);
     RUN_TEST(test_delvars_null_model_returns_error);
     RUN_TEST(test_delvars_zero_count_succeeds);
     RUN_TEST(test_delvars_null_ind_with_nonzero_count_fails);
     RUN_TEST(test_delvars_invalid_index_fails);
-    RUN_TEST(test_delvars_multiple_vars);
+    RUN_TEST(test_delvars_multiple_returns_not_supported);
 
     return UNITY_END();
 }

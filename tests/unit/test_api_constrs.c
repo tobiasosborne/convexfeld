@@ -277,7 +277,7 @@ void test_chgcoeffs_empty_is_ok(void) {
     cxf_freemodel(model);
 }
 
-void test_chgcoeffs_basic(void) {
+void test_chgcoeffs_returns_not_supported(void) {
     CxfModel *model = NULL;
     cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
     cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x0");
@@ -287,12 +287,12 @@ void test_chgcoeffs_basic(void) {
     int vind_add[] = {0, 1};
     cxf_addconstr(model, 2, vind_add, cval, '<', 20.0, "c1");
 
-    /* Change coefficient (0,0) to 3.0 */
+    /* chgcoeffs is not yet implemented — must return NOT_SUPPORTED */
     int cind_chg[] = {0};
     int vind_chg[] = {0};
     double val[] = {3.0};
     int status = cxf_chgcoeffs(model, 1, cind_chg, vind_chg, val);
-    TEST_ASSERT_EQUAL_INT(CXF_OK, status);
+    TEST_ASSERT_EQUAL_INT(CXF_ERROR_NOT_SUPPORTED, status);
 
     cxf_freemodel(model);
 }
@@ -349,7 +349,7 @@ int main(void) {
     /* cxf_chgcoeffs tests */
     RUN_TEST(test_chgcoeffs_null_model_fails);
     RUN_TEST(test_chgcoeffs_empty_is_ok);
-    RUN_TEST(test_chgcoeffs_basic);
+    RUN_TEST(test_chgcoeffs_returns_not_supported);
     RUN_TEST(test_chgcoeffs_validates_indices);
 
     return UNITY_END();

@@ -15,6 +15,7 @@
 #include "convexfeld/cxf_pricing.h"
 #include "convexfeld/cxf_callback.h"
 #include <stdlib.h>
+#include "memory_internal.h"
 
 #include "../basis/basis_internal.h"
 #include "../pricing/pricing_internal.h"
@@ -48,43 +49,43 @@ void cxf_free_attribute_table(SolverState *ctx) {
     }
 
     /* Free working arrays */
-    free(ctx->work_lb);
-    free(ctx->work_ub);
-    free(ctx->work_obj);
-    free(ctx->work_x);
-    free(ctx->work_pi);
-    free(ctx->work_dj);
-    free(ctx->work_counter);
-    free(ctx->work_column);
-    free(ctx->work_cB);
+    cxf_free(ctx->work_lb);
+    cxf_free(ctx->work_ub);
+    cxf_free(ctx->work_obj);
+    cxf_free(ctx->work_x);
+    cxf_free(ctx->work_pi);
+    cxf_free(ctx->work_dj);
+    cxf_free(ctx->work_counter);
+    cxf_free(ctx->work_column);
+    cxf_free(ctx->work_cB);
 
     /* Free saved bounds (B1: EXPAND perturbation) */
-    free(ctx->saved_lb);
-    free(ctx->saved_ub);
+    cxf_free(ctx->saved_lb);
+    cxf_free(ctx->saved_ub);
 
     /* Free activity bounds (B2) */
-    free(ctx->min_activity);
-    free(ctx->max_activity);
-    free(ctx->negUnbdCount);
-    free(ctx->posUnbdCount);
+    cxf_free(ctx->min_activity);
+    cxf_free(ctx->max_activity);
+    cxf_free(ctx->negUnbdCount);
+    cxf_free(ctx->posUnbdCount);
 
     /* Free crash basis arrays */
-    free(ctx->row_status);
-    free(ctx->col_nz_count);
+    cxf_free(ctx->row_status);
+    cxf_free(ctx->col_nz_count);
 
     /* Free matrix working copies (P3.1) */
-    free(ctx->csc_col_ptr);
-    free(ctx->csc_row_idx);
-    free(ctx->csc_values);
-    free(ctx->csr_row_ptr);
-    free(ctx->csr_col_idx);
-    free(ctx->csr_values);
-    free(ctx->work_rhs);
-    free(ctx->work_sense);
+    cxf_free(ctx->csc_col_ptr);
+    cxf_free(ctx->csc_row_idx);
+    cxf_free(ctx->csc_values);
+    cxf_free(ctx->csr_row_ptr);
+    cxf_free(ctx->csr_col_idx);
+    cxf_free(ctx->csr_values);
+    cxf_free(ctx->work_rhs);
+    cxf_free(ctx->work_sense);
 
     /* Free scaling factors */
-    free(ctx->row_scale);
-    free(ctx->col_scale);
+    cxf_free(ctx->row_scale);
+    cxf_free(ctx->col_scale);
 
     /* Free subcomponents */
     cxf_basis_free(ctx->basis);
@@ -92,9 +93,9 @@ void cxf_free_attribute_table(SolverState *ctx) {
         cxf_pricing_free(ctx->pricing);
 
     /* Free timing */
-    free(ctx->timing);
+    cxf_free(ctx->timing);
 
-    free(ctx);
+    cxf_free(ctx);
 }
 
 /*============================================================================
@@ -138,5 +139,5 @@ void cxf_free_callback_state(CallbackContext *ctx) {
     ctx->callback_func = NULL;
     ctx->user_data = NULL;
 
-    free(ctx);
+    cxf_free(ctx);
 }

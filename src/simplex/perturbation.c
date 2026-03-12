@@ -70,8 +70,21 @@ int cxf_simplex_perturbation(SolverState *state, CxfEnv *env) {
         cand_count = valid;
     }
 
-    /* Phase 3: drift prevention — analyze_basic reads saved bounds (P5.2).
-     * Phase 4: candidate processing (nonbasic Case A + basic Case B). */
+    /*--- Phase 3: Bound restoration (diagnostic mode, perturbation.md Phase 3).
+     * In detailed diagnostic mode (verbosity >= 2), copy saved bounds into
+     * working arrays so perturbation analysis runs against unperturbed data.
+     * After copying, recompute constraint activities. In standard mode,
+     * perturbation operates on current working bounds directly. ---*/
+    if (env->verbosity >= 2 && state->perturb_count > 0 &&
+        state->saved_lb && state->saved_ub) {
+        memcpy(state->work_lb, state->saved_lb,
+               (size_t)total * sizeof(double));
+        memcpy(state->work_ub, state->saved_ub,
+               (size_t)total * sizeof(double));
+        cxf_compute_activity_bounds(state, 0, NULL);
+    }
+
+    /* Phase 4: candidate processing (nonbasic Case A + basic Case B). */
     double *dj = state->work_dj;
 
     if (cand_count > 0 && cand_list != NULL) {

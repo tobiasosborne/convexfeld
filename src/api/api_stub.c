@@ -35,7 +35,7 @@ int cxf_optimize(CxfModel *model) {
 /* cxf_getintattr and cxf_getdblattr moved to attrs_api.c (M8.1.15) */
 
 /**
- * @brief Get constraint data in CSR format (stub).
+ * @brief Get constraint data in CSR format (not yet implemented).
  *
  * @param model Model to query
  * @param numnzP Output: total nonzero count
@@ -44,7 +44,7 @@ int cxf_optimize(CxfModel *model) {
  * @param cval Output: coefficient values (may be NULL)
  * @param start First constraint index
  * @param len Number of constraints
- * @return CXF_OK on success, error code otherwise
+ * @return CXF_ERROR_NOT_SUPPORTED (not yet implemented)
  */
 int cxf_getconstrs(CxfModel *model, int *numnzP, int *cbeg,
                    int *cind, double *cval, int start, int len) {
@@ -58,19 +58,17 @@ int cxf_getconstrs(CxfModel *model, int *numnzP, int *cbeg,
         return CXF_ERROR_NULL_ARGUMENT;
     }
 
-    /* Stub: return 0 nonzeros */
-    *numnzP = 0;
-    return CXF_OK;
+    return CXF_ERROR_NOT_SUPPORTED;
 }
 
 /**
- * @brief Get a single coefficient from constraint matrix (stub).
+ * @brief Get a single coefficient from constraint matrix (not yet implemented).
  *
  * @param model Model to query
  * @param constr Constraint index (row)
  * @param var Variable index (column)
  * @param valP Output: coefficient value
- * @return CXF_OK on success, error code otherwise
+ * @return CXF_ERROR_NOT_SUPPORTED (not yet implemented)
  */
 int cxf_getcoeff(CxfModel *model, int constr, int var, double *valP) {
     (void)constr;
@@ -80,7 +78,5 @@ int cxf_getcoeff(CxfModel *model, int constr, int var, double *valP) {
         return CXF_ERROR_NULL_ARGUMENT;
     }
 
-    /* Stub: return 0.0 (sparse matrix convention) */
-    *valP = 0.0;
-    return CXF_OK;
+    return CXF_ERROR_NOT_SUPPORTED;
 }

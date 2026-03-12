@@ -13,6 +13,7 @@
 #include "convexfeld/cxf_types.h"
 #include <stdlib.h>
 #include <string.h>
+#include "../memory/memory_internal.h"
 
 /* Forward declaration */
 int cxf_sparse_validate(const MatrixData *mat);
@@ -42,28 +43,28 @@ int cxf_prepare_row_data(MatrixData *mat) {
     }
 
     /* Free existing CSR if any */
-    free(mat->row_ptr);
-    free(mat->col_idx);
-    free(mat->row_values);
+    cxf_free(mat->row_ptr);
+    cxf_free(mat->col_idx);
+    cxf_free(mat->row_values);
     mat->row_ptr = NULL;
     mat->col_idx = NULL;
     mat->row_values = NULL;
 
     /* Allocate row_ptr (always needed, even for empty matrix) */
-    mat->row_ptr = (int64_t *)calloc((size_t)(mat->num_rows + 1), sizeof(int64_t));
+    mat->row_ptr = (int64_t *)cxf_calloc((size_t)(mat->num_rows + 1), sizeof(int64_t));
     if (mat->row_ptr == NULL && mat->num_rows >= 0) {
         return CXF_ERROR_OUT_OF_MEMORY;
     }
 
     /* Allocate col_idx and row_values if nnz > 0 */
     if (mat->nnz > 0) {
-        mat->col_idx = (int *)calloc((size_t)mat->nnz, sizeof(int));
-        mat->row_values = (double *)calloc((size_t)mat->nnz, sizeof(double));
+        mat->col_idx = (int *)cxf_calloc((size_t)mat->nnz, sizeof(int));
+        mat->row_values = (double *)cxf_calloc((size_t)mat->nnz, sizeof(double));
 
         if (mat->col_idx == NULL || mat->row_values == NULL) {
-            free(mat->row_ptr);
-            free(mat->col_idx);
-            free(mat->row_values);
+            cxf_free(mat->row_ptr);
+            cxf_free(mat->col_idx);
+            cxf_free(mat->row_values);
             mat->row_ptr = NULL;
             mat->col_idx = NULL;
             mat->row_values = NULL;
@@ -115,7 +116,7 @@ int cxf_build_row_major(MatrixData *mat) {
     }
 
     /* Allocate working copy of row_ptr */
-    int64_t *work = (int64_t *)malloc((size_t)mat->num_rows * sizeof(int64_t));
+    int64_t *work = (int64_t *)cxf_malloc((size_t)mat->num_rows * sizeof(int64_t));
     if (work == NULL && mat->num_rows > 0) {
         return CXF_ERROR_OUT_OF_MEMORY;
     }
@@ -134,7 +135,7 @@ int cxf_build_row_major(MatrixData *mat) {
         }
     }
 
-    free(work);
+    cxf_free(work);
     return CXF_OK;
 }
 

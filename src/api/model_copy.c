@@ -85,23 +85,6 @@ int cxf_updatemodel(CxfModel *model) {
         return status;
     }
 
-    /* Process pending buffer if it exists
-     * For now, this is a minimal implementation that marks the model as updated.
-     * Full implementation would process queued modifications from pending_buffer.
-     */
-    if (model->pending_buffer != NULL) {
-        /* TODO: Process pending modifications when buffer implementation is ready
-         * This would include:
-         * - Processing variable/constraint additions
-         * - Processing deletions
-         * - Processing coefficient changes
-         * - Rebuilding CSC matrix structure
-         * - Clearing the pending buffer
-         */
-    }
-
-    /* Mark model as initialized/updated */
-    model->initialized = 1;
-
-    return CXF_OK;
+    /* Not yet implemented — return error so callers don't assume success */
+    return CXF_ERROR_NOT_SUPPORTED;
 }

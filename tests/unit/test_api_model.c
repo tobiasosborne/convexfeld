@@ -386,25 +386,13 @@ void test_updatemodel_null_returns_error(void) {
     TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT, status);
 }
 
-void test_updatemodel_valid_model_returns_ok(void) {
+void test_updatemodel_returns_not_supported(void) {
     CxfModel *model = NULL;
     cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
 
+    /* updatemodel is not yet implemented — must return NOT_SUPPORTED */
     int status = cxf_updatemodel(model);
-    TEST_ASSERT_EQUAL_INT(CXF_OK, status);
-
-    cxf_freemodel(model);
-}
-
-void test_updatemodel_idempotent(void) {
-    CxfModel *model = NULL;
-    cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
-
-    int status1 = cxf_updatemodel(model);
-    int status2 = cxf_updatemodel(model);
-
-    TEST_ASSERT_EQUAL_INT(CXF_OK, status1);
-    TEST_ASSERT_EQUAL_INT(CXF_OK, status2);
+    TEST_ASSERT_EQUAL_INT(CXF_ERROR_NOT_SUPPORTED, status);
 
     cxf_freemodel(model);
 }
@@ -464,8 +452,7 @@ int main(void) {
 
     /* cxf_updatemodel tests */
     RUN_TEST(test_updatemodel_null_returns_error);
-    RUN_TEST(test_updatemodel_valid_model_returns_ok);
-    RUN_TEST(test_updatemodel_idempotent);
+    RUN_TEST(test_updatemodel_returns_not_supported);
 
     return UNITY_END();
 }

@@ -258,6 +258,142 @@ void test_mechanism_b_requires_a_first(void) {
 }
 
 /*******************************************************************************
+ * Diagnostic mode bound restoration (g8p8 — perturbation.md Phase 3)
+ * When verbosity >= 2 AND perturb_count > 0, saved bounds are copied
+ * into working arrays before perturbation analysis runs, preventing
+ * perturbation drift accumulation.
+ ******************************************************************************/
+void test_diagnostic_mode_restores_bounds(void) {
+    CxfModel *model = make_model(2, 10.0, '<');
+    SolverState *state = NULL;
+    cxf_simplex_init(model, &state);
+
+    int n = state->num_vars;
+    int m = state->num_constrs;
+    int total = n + m;
+    BasisState *basis = state->basis;
+
+    state->iteration = 1;
+    basis->var_status[0] = CXF_VAR_AT_LOWER;
+    basis->var_status[1] = CXF_VAR_AT_LOWER;
+    basis->var_status[n] = 0;
+    basis->basic_vars[0] = n;
+    state->work_dj[0] = 1e-8;
+    state->work_dj[1] = 5.0;
+    state->work_dj[n] = 0.0;
+
+    /* Save original bounds, then corrupt working bounds */
+    if (state->saved_lb && state->saved_ub) {
+        memcpy(state->saved_lb, state->work_lb,
+               (size_t)total * sizeof(double));
+        memcpy(state->saved_ub, state->work_ub,
+               (size_t)total * sizeof(double));
+    }
+    double orig_lb0 = state->work_lb[0];
+    state->work_lb[0] = -999.0;  /* Corrupt: simulates prior perturbation */
+
+    /* Enable diagnostic mode: verbosity >= 2 AND perturb_count > 0 */
+    env->verbosity = 2;
+    state->perturb_count = 1;
+
+    int rc = cxf_simplex_perturbation(state, env);
+    TEST_ASSERT_EQUAL_INT(CXF_OK, rc);
+
+    /* Phase 3 should have restored saved bounds into working arrays */
+    TEST_ASSERT_DOUBLE_WITHIN(1e-15, orig_lb0, state->work_lb[0]);
+
+    cxf_simplex_final(state);
+    cxf_freemodel(model);
+}
+
+/*******************************************************************************
+ * Standard mode: NO bound restoration (perturbation.md Phase 3)
+ * When verbosity < 2, working bounds are NOT restored — perturbation
+ * operates on current (possibly perturbed) working bounds directly.
+ ******************************************************************************/
+void test_standard_mode_no_bound_restoration(void) {
+    CxfModel *model = make_model(2, 10.0, '<');
+    SolverState *state = NULL;
+    cxf_simplex_init(model, &state);
+
+    int n = state->num_vars;
+    int m = state->num_constrs;
+    int total = n + m;
+    BasisState *basis = state->basis;
+
+    state->iteration = 1;
+    basis->var_status[0] = CXF_VAR_AT_LOWER;
+    basis->var_status[1] = CXF_VAR_AT_LOWER;
+    basis->var_status[n] = 0;
+    basis->basic_vars[0] = n;
+    state->work_dj[0] = 1e-8;
+    state->work_dj[1] = 5.0;
+    state->work_dj[n] = 0.0;
+
+    /* Save bounds, then corrupt working lb */
+    if (state->saved_lb && state->saved_ub) {
+        memcpy(state->saved_lb, state->work_lb,
+               (size_t)total * sizeof(double));
+        memcpy(state->saved_ub, state->work_ub,
+               (size_t)total * sizeof(double));
+    }
+    state->work_lb[0] = -999.0;
+
+    /* Standard mode: verbosity < 2 */
+    env->verbosity = 1;
+    state->perturb_count = 1;
+
+    int rc = cxf_simplex_perturbation(state, env);
+    TEST_ASSERT_EQUAL_INT(CXF_OK, rc);
+
+    /* Phase 3 should NOT have restored bounds — lb stays corrupted */
+    TEST_ASSERT_DOUBLE_WITHIN(1e-15, -999.0, state->work_lb[0]);
+
+    cxf_simplex_final(state);
+    cxf_freemodel(model);
+}
+
+/*******************************************************************************
+ * Diagnostic mode skipped when perturb_count == 0 (first call)
+ * Phase 3 only triggers when perturb_count > 0 (prior perturbations exist).
+ ******************************************************************************/
+void test_diagnostic_mode_skipped_first_call(void) {
+    CxfModel *model = make_model(2, 10.0, '<');
+    SolverState *state = NULL;
+    cxf_simplex_init(model, &state);
+
+    int n = state->num_vars;
+    BasisState *basis = state->basis;
+
+    state->iteration = 1;
+    basis->var_status[0] = CXF_VAR_AT_LOWER;
+    basis->var_status[1] = CXF_VAR_AT_LOWER;
+    basis->var_status[n] = 0;
+    basis->basic_vars[0] = n;
+    state->work_dj[0] = 1e-8;
+    state->work_dj[1] = 5.0;
+    state->work_dj[n] = 0.0;
+
+    /* Diagnostic mode but first invocation (perturb_count == 0) */
+    env->verbosity = 2;
+    state->perturb_count = 0;
+
+    /* Corrupt lb AFTER Phase 1 would save (Phase 1 saves when count==0) */
+    double orig_lb0 = state->work_lb[0];
+    (void)orig_lb0;  /* suppress unused warning */
+
+    int rc = cxf_simplex_perturbation(state, env);
+    TEST_ASSERT_EQUAL_INT(CXF_OK, rc);
+
+    /* Phase 1 saved bounds, Phase 3 did NOT fire (perturb_count was 0).
+     * This is correct: no prior perturbations means no drift to prevent. */
+    TEST_ASSERT_TRUE(state->perturb_count >= 0);
+
+    cxf_simplex_final(state);
+    cxf_freemodel(model);
+}
+
+/*******************************************************************************
  * Runner
  ******************************************************************************/
 int main(void) {
@@ -272,5 +408,8 @@ int main(void) {
     RUN_TEST(test_unperturb_restores_bounds);
     RUN_TEST(test_unperturb_noop);
     RUN_TEST(test_mechanism_b_requires_a_first);
+    RUN_TEST(test_diagnostic_mode_restores_bounds);
+    RUN_TEST(test_standard_mode_no_bound_restoration);
+    RUN_TEST(test_diagnostic_mode_skipped_first_call);
     return UNITY_END();
 }

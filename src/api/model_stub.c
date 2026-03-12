@@ -221,6 +221,6 @@ int cxf_delvars(CxfModel *model, int numdel, const int *ind) {
         }
     }
 
-    /* Stub: just validates, doesn't actually delete */
-    return CXF_OK;
+    /* Not yet implemented — return error so callers don't assume success */
+    return CXF_ERROR_NOT_SUPPORTED;
 }

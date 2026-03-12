@@ -10,6 +10,12 @@
 #include "convexfeld/cxf_model.h"
 #include "convexfeld/cxf_env.h"
 
+/* Forward declaration - implemented in src/analysis/coef_stats.c */
+int cxf_compute_coef_stats(CxfModel *model,
+                           double *obj_min, double *obj_max,
+                           double *bounds_min, double *bounds_max,
+                           double *matrix_min, double *matrix_max);
+
 /**
  * @brief Get an integer attribute value.
  *
@@ -68,8 +74,8 @@ int cxf_getintattr(CxfModel *model, const char *attrname, int *valueP) {
  *   - "Runtime": model->update_time
  *   - "ObjBound": Same as ObjVal for LP
  *   - "ObjBoundC": Same as ObjVal for LP
- *   - "MaxCoeff": 1.0 (stub)
- *   - "MinCoeff": 1.0 (stub)
+ *   - "MaxCoeff": max |a_ij| from constraint matrix
+ *   - "MinCoeff": min |a_ij| (nonzero) from constraint matrix
  *
  * @param model Model to query
  * @param attrname Attribute name
@@ -104,14 +110,22 @@ int cxf_getdblattr(CxfModel *model, const char *attrname, double *valueP) {
     }
 
     if (strcmp(attrname, "MaxCoeff") == 0) {
-        /* Stub: return 1.0 */
-        *valueP = 1.0;
+        double matrix_min, matrix_max;
+        int rc = cxf_compute_coef_stats(model, NULL, NULL,
+                                        NULL, NULL,
+                                        &matrix_min, &matrix_max);
+        if (rc != CXF_OK) return rc;
+        *valueP = matrix_max;
         return CXF_OK;
     }
 
     if (strcmp(attrname, "MinCoeff") == 0) {
-        /* Stub: return 1.0 */
-        *valueP = 1.0;
+        double matrix_min, matrix_max;
+        int rc = cxf_compute_coef_stats(model, NULL, NULL,
+                                        NULL, NULL,
+                                        &matrix_min, &matrix_max);
+        if (rc != CXF_OK) return rc;
+        *valueP = matrix_min;
         return CXF_OK;
     }
 

@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include "../memory/memory_internal.h"
 
 /*============================================================================
  * CallbackContext Creation
@@ -28,7 +29,7 @@
  * @return Pointer to new CallbackContext, or NULL on allocation failure.
  */
 CallbackContext *cxf_callback_create(void) {
-    CallbackContext *ctx = (CallbackContext *)calloc(1, sizeof(CallbackContext));
+    CallbackContext *ctx = (CallbackContext *)cxf_calloc(1, sizeof(CallbackContext));
     if (ctx == NULL) {
         return NULL;
     }
@@ -77,7 +78,7 @@ void cxf_callback_free(CallbackContext *ctx) {
     ctx->magic = 0;
     ctx->safety_magic = 0;
 
-    free(ctx);
+    cxf_free(ctx);
 }
 
 /*============================================================================
