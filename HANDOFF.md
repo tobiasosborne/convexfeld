@@ -1,10 +1,53 @@
 # Agent Handoff
 
-*Last updated: 2026-03-13*
+*Last updated: 2026-03-13 (recovery session)*
 
 ---
 
-## STATUS: 61/61 tests pass. 16 V2 deviation issues closed across sessions (32 total closed).
+## STATUS: 66/66 tests pass on master. 16 V2 deviation issues closed. Master clean and pushed.
+
+### Recovery Session (2026-03-13)
+
+**Previous session terminated prematurely** while two subagent worktrees were writing
+test files. The main V2 spec deviation work was fully committed and pushed. Three test
+files are stranded in orphaned worktrees and need to be salvaged.
+
+#### Orphaned Worktree Work to Salvage
+
+**Worktree 1 — Threading tests** (issue `convexfeld-90m`, status IN_PROGRESS):
+- Branch: `worktree-agent-a966c56e`
+- Path prefix: `.claude/worktrees/agent-a2cc7698/.claude/worktrees/agent-a00ce994/.claude/worktrees/agent-a30fe658/.claude/worktrees/agent-a127e0ed/.claude/worktrees/agent-a966c56e/`
+- Files:
+  - `tests/unit/test_threading_concurrent.c` (190 lines) — pthread-based concurrency tests
+  - `tests/unit/test_threading_sequential.c` (146 lines) — sequential stress tests
+  - `tests/CMakeLists.txt` — 10 lines added wiring both test targets
+
+**Worktree 2 — OOM tests** (issue `convexfeld-ba5`, status OPEN):
+- Branch: `worktree-agent-ae6ddab6`
+- Path prefix: `.claude/worktrees/agent-a2cc7698/.claude/worktrees/agent-a00ce994/.claude/worktrees/agent-a30fe658/.claude/worktrees/agent-a127e0ed/.claude/worktrees/agent-ae6ddab6/`
+- Files:
+  - `tests/unit/test_memory_oom.c` (240 lines) — malloc failure handling tests (**exceeds 200 LOC limit, needs split**)
+  - `tests/CMakeLists.txt` — 3 lines added wiring test_memory_oom
+
+#### Next Agent TODO for Salvage
+
+1. Copy the three test .c files from the worktree paths above into `tests/unit/` on master
+2. Apply the CMakeLists.txt wiring changes (merge both sets of additions)
+3. `test_memory_oom.c` is 240 LOC — split it to stay under 200 LOC limit
+4. Build and run tests — fix any compilation issues (the files were written but never compiled)
+5. Commit, close `convexfeld-90m` and `convexfeld-ba5`
+6. Clean up orphaned worktrees: `rm -rf .claude/worktrees/`
+
+**WARNING:** The test files were never compiled or run. They may have issues. Treat them
+as a strong starting draft, not finished code.
+
+#### In-Progress Issues
+
+- **convexfeld-3kvi** (P2, bug): "Investigate brandy/stair Netlib regressions with sparse LU"
+  — Root cause understood (cycling from Bland's rule resetting degenerate counter before
+  EXPAND threshold). Needs cumulative stalling detector or BFRT to resolve. Keep in_progress.
+- **convexfeld-90m** (P2, task): "Add threading/concurrency testing" — stranded in worktree,
+  see salvage instructions above.
 
 ### Session Summary (2026-03-13, continued)
 
