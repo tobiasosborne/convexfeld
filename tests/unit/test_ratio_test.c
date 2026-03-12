@@ -17,7 +17,8 @@
 /* Function under test */
 int cxf_ratio_test(SolverState *state, CxfEnv *env, int enteringVar,
                    const double *pivotColumn, int columnNZ,
-                   int *leavingRow_out, double *pivotElement_out);
+                   int *leavingRow_out, double *pivotElement_out,
+                   int *status_out, double *theta_out);
 
 /*
  * Test fixture: 2 constraints, 4 variables (2 structural + 2 slacks).
@@ -90,14 +91,14 @@ void test_ratio_test_null_state(void) {
     double pivotCol[2] = {1.0, 1.0};
     int lr; double pe;
     TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT,
-        cxf_ratio_test(NULL, &test_env, 0, pivotCol, 2, &lr, &pe));
+        cxf_ratio_test(NULL, &test_env, 0, pivotCol, 2, &lr, &pe, NULL, NULL));
 }
 
 void test_ratio_test_null_env(void) {
     double pivotCol[2] = {1.0, 1.0};
     int lr; double pe;
     TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT,
-        cxf_ratio_test(&test_state, NULL, 0, pivotCol, 2, &lr, &pe));
+        cxf_ratio_test(&test_state, NULL, 0, pivotCol, 2, &lr, &pe, NULL, NULL));
 }
 
 /* --- Standard variable at lower bound (s=+1 baseline) --- */
@@ -110,7 +111,7 @@ void test_ratio_test_at_lower_bound(void) {
     double pivotCol[2] = {1.0, 2.0};
     int lr = -1; double pe = 0.0;
 
-    int rc = cxf_ratio_test(&test_state, &test_env, 0, pivotCol, 2, &lr, &pe);
+    int rc = cxf_ratio_test(&test_state, &test_env, 0, pivotCol, 2, &lr, &pe, NULL, NULL);
     TEST_ASSERT_EQUAL_INT(CXF_OK, rc);
     TEST_ASSERT_EQUAL_INT(1, lr);
     TEST_ASSERT_DOUBLE_WITHIN(1e-12, 2.0, pe);
@@ -126,7 +127,7 @@ void test_ratio_test_free_var_negative_dj(void) {
     double pivotCol[2] = {1.0, 2.0};
     int lr = -1; double pe = 0.0;
 
-    int rc = cxf_ratio_test(&test_state, &test_env, 1, pivotCol, 2, &lr, &pe);
+    int rc = cxf_ratio_test(&test_state, &test_env, 1, pivotCol, 2, &lr, &pe, NULL, NULL);
     TEST_ASSERT_EQUAL_INT(CXF_OK, rc);
     TEST_ASSERT_EQUAL_INT(1, lr);
     TEST_ASSERT_DOUBLE_WITHIN(1e-12, 2.0, pe);
@@ -143,7 +144,7 @@ void test_ratio_test_free_var_positive_dj(void) {
     double pivotCol[2] = {1.0, 2.0};
     int lr = -1; double pe = 0.0;
 
-    int rc = cxf_ratio_test(&test_state, &test_env, 1, pivotCol, 2, &lr, &pe);
+    int rc = cxf_ratio_test(&test_state, &test_env, 1, pivotCol, 2, &lr, &pe, NULL, NULL);
     TEST_ASSERT_EQUAL_INT(CXF_OK, rc);
     TEST_ASSERT_EQUAL_INT(1, lr);
     TEST_ASSERT_DOUBLE_WITHIN(1e-12, 2.0, pe);
@@ -164,14 +165,14 @@ void test_ratio_test_free_var_direction_affects_leaving(void) {
     /* dj < 0 → s=+1 → basics decrease → slack0 hits lb first */
     work_dj[1] = -2.0;
     lr = -1; pe = 0.0;
-    int rc1 = cxf_ratio_test(&test_state, &test_env, 1, pivotCol, 2, &lr, &pe);
+    int rc1 = cxf_ratio_test(&test_state, &test_env, 1, pivotCol, 2, &lr, &pe, NULL, NULL);
     TEST_ASSERT_EQUAL_INT(CXF_OK, rc1);
     TEST_ASSERT_EQUAL_INT(0, lr);  /* row 0 (slack0) leaves */
 
     /* dj > 0 → s=-1 → basics increase → slack1 hits ub first */
     work_dj[1] = 2.0;
     lr = -1; pe = 0.0;
-    int rc2 = cxf_ratio_test(&test_state, &test_env, 1, pivotCol, 2, &lr, &pe);
+    int rc2 = cxf_ratio_test(&test_state, &test_env, 1, pivotCol, 2, &lr, &pe, NULL, NULL);
     TEST_ASSERT_EQUAL_INT(CXF_OK, rc2);
     TEST_ASSERT_EQUAL_INT(1, lr);  /* row 1 (slack1) leaves */
 }
@@ -188,7 +189,7 @@ void test_ratio_test_at_upper_bound(void) {
     double pivotCol[2] = {1.0, 2.0};
     int lr = -1; double pe = 0.0;
 
-    int rc = cxf_ratio_test(&test_state, &test_env, 0, pivotCol, 2, &lr, &pe);
+    int rc = cxf_ratio_test(&test_state, &test_env, 0, pivotCol, 2, &lr, &pe, NULL, NULL);
     TEST_ASSERT_EQUAL_INT(CXF_OK, rc);
     TEST_ASSERT_EQUAL_INT(1, lr);
     TEST_ASSERT_DOUBLE_WITHIN(1e-12, 2.0, pe);
@@ -204,7 +205,7 @@ void test_ratio_test_degenerate(void) {
     double pivotCol[2] = {2.0, 1.0};
     int lr = -1; double pe = 0.0;
 
-    int rc = cxf_ratio_test(&test_state, &test_env, 0, pivotCol, 2, &lr, &pe);
+    int rc = cxf_ratio_test(&test_state, &test_env, 0, pivotCol, 2, &lr, &pe, NULL, NULL);
     TEST_ASSERT_EQUAL_INT(CXF_OK, rc);
     TEST_ASSERT_EQUAL_INT(0, lr);
     TEST_ASSERT_DOUBLE_WITHIN(1e-12, 2.0, pe);
@@ -227,13 +228,13 @@ void test_ratio_test_bland_smallest_index(void) {
 
     test_state.use_bland = 0;
     lr = -1; pe = 0.0;
-    cxf_ratio_test(&test_state, &test_env, 0, pivotCol, 2, &lr, &pe);
+    cxf_ratio_test(&test_state, &test_env, 0, pivotCol, 2, &lr, &pe, NULL, NULL);
     TEST_ASSERT_EQUAL_INT(0, lr);
     TEST_ASSERT_DOUBLE_WITHIN(1e-12, 8.0, pe);
 
     test_state.use_bland = 1;
     lr = -1; pe = 0.0;
-    cxf_ratio_test(&test_state, &test_env, 0, pivotCol, 2, &lr, &pe);
+    cxf_ratio_test(&test_state, &test_env, 0, pivotCol, 2, &lr, &pe, NULL, NULL);
     TEST_ASSERT_EQUAL_INT(1, lr);
     TEST_ASSERT_DOUBLE_WITHIN(1e-12, 2.0, pe);
 }
@@ -246,8 +247,93 @@ void test_ratio_test_unbounded(void) {
     double pivotCol[2] = {0.0, 0.0};
     int lr = -1; double pe = 0.0;
 
-    int rc = cxf_ratio_test(&test_state, &test_env, 1, pivotCol, 2, &lr, &pe);
+    int rc = cxf_ratio_test(&test_state, &test_env, 1, pivotCol, 2, &lr, &pe, NULL, NULL);
     TEST_ASSERT_EQUAL_INT(CXF_UNBOUNDED, rc);
+}
+
+/* --- Status enum: normal vs degenerate --- */
+
+/* --- Infeasibility pre-check (harris_ratio_test.md Edge Cases) --- */
+
+void test_ratio_test_infeasible_bounds(void) {
+    /* Set slack0 bounds to lb > ub → should detect infeasibility */
+    work_lb[2] = 10.0;
+    work_ub[2] = 0.0;  /* lb > ub */
+    double pivotCol[2] = {1.0, 2.0};
+    int lr = -1; double pe = 0.0;
+
+    int rc = cxf_ratio_test(&test_state, &test_env, 0, pivotCol, 2,
+                            &lr, &pe, NULL, NULL);
+    TEST_ASSERT_EQUAL_INT(CXF_INFEASIBLE, rc);
+}
+
+/* --- Status enum: normal vs degenerate --- */
+
+void test_ratio_test_status_normal(void) {
+    /* Basic vars at x=5, bounds [0,10] → step > 0 → NORMAL_PIVOT */
+    double pivotCol[2] = {1.0, 2.0};
+    int lr = -1; double pe = 0.0;
+    int status = -1;
+
+    int rc = cxf_ratio_test(&test_state, &test_env, 0, pivotCol, 2,
+                            &lr, &pe, &status, NULL);
+    TEST_ASSERT_EQUAL_INT(CXF_OK, rc);
+    TEST_ASSERT_EQUAL_INT(CXF_RT_NORMAL_PIVOT, status);
+}
+
+void test_ratio_test_status_degenerate(void) {
+    /* slack0 exactly at lower bound → step = 0 → DEGENERATE_PIVOT */
+    work_x[2] = 0.0;
+    double pivotCol[2] = {2.0, 1.0};
+    int lr = -1; double pe = 0.0;
+    int status = -1;
+
+    int rc = cxf_ratio_test(&test_state, &test_env, 0, pivotCol, 2,
+                            &lr, &pe, &status, NULL);
+    TEST_ASSERT_EQUAL_INT(CXF_OK, rc);
+    TEST_ASSERT_EQUAL_INT(CXF_RT_DEGENERATE_PIVOT, status);
+}
+
+void test_ratio_test_status_unbounded(void) {
+    /* All zero pivot col → UNBOUNDED status */
+    work_dj[1] = -1.0;
+    double pivotCol[2] = {0.0, 0.0};
+    int lr = -1; double pe = 0.0;
+    int status = -1;
+
+    int rc = cxf_ratio_test(&test_state, &test_env, 1, pivotCol, 2,
+                            &lr, &pe, &status, NULL);
+    TEST_ASSERT_EQUAL_INT(CXF_UNBOUNDED, rc);
+    TEST_ASSERT_EQUAL_INT(CXF_RT_UNBOUNDED, status);
+}
+
+/* --- Theta output (V2 harris_ratio_test.md) --- */
+
+void test_ratio_test_theta_output(void) {
+    /* Basic vars at x=5, bounds [0,10], pivotCol=[1,2], entering from lb.
+     * Leaving row 1 (smallest ratio). theta = (5-0)/2 = 2.5. */
+    double pivotCol[2] = {1.0, 2.0};
+    int lr = -1; double pe = 0.0;
+    double theta = -1.0;
+
+    int rc = cxf_ratio_test(&test_state, &test_env, 0, pivotCol, 2,
+                            &lr, &pe, NULL, &theta);
+    TEST_ASSERT_EQUAL_INT(CXF_OK, rc);
+    TEST_ASSERT_EQUAL_INT(1, lr);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-9, 2.5, theta);
+}
+
+void test_ratio_test_theta_degenerate(void) {
+    /* slack0 at lower bound → theta = 0. */
+    work_x[2] = 0.0;
+    double pivotCol[2] = {2.0, 1.0};
+    int lr = -1; double pe = 0.0;
+    double theta = -1.0;
+
+    int rc = cxf_ratio_test(&test_state, &test_env, 0, pivotCol, 2,
+                            &lr, &pe, NULL, &theta);
+    TEST_ASSERT_EQUAL_INT(CXF_OK, rc);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-12, 0.0, theta);
 }
 
 int main(void) {
@@ -262,5 +348,11 @@ int main(void) {
     RUN_TEST(test_ratio_test_bland_smallest_index);
     RUN_TEST(test_ratio_test_at_upper_bound);
     RUN_TEST(test_ratio_test_unbounded);
+    RUN_TEST(test_ratio_test_infeasible_bounds);
+    RUN_TEST(test_ratio_test_status_normal);
+    RUN_TEST(test_ratio_test_status_degenerate);
+    RUN_TEST(test_ratio_test_status_unbounded);
+    RUN_TEST(test_ratio_test_theta_output);
+    RUN_TEST(test_ratio_test_theta_degenerate);
     return UNITY_END();
 }

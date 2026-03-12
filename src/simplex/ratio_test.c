@@ -74,7 +74,8 @@ static double row_ratio(double x, double lb, double ub, double sd,
  */
 int cxf_ratio_test(SolverState *state, CxfEnv *env, int enteringVar,
                    const double *pivotColumn, int columnNZ,
-                   int *leavingRow_out, double *pivotElement_out) {
+                   int *leavingRow_out, double *pivotElement_out,
+                   int *status_out, double *theta_out) {
     (void)columnNZ;
 
     if (!state || !env || !pivotColumn || !leavingRow_out || !pivotElement_out)
@@ -102,6 +103,16 @@ int cxf_ratio_test(SolverState *state, CxfEnv *env, int enteringVar,
             s = -1;
     }
 
+    /* V2 harris_ratio_test.md (Edge Cases: Infeasible Bounds Detected):
+     * Pre-check each candidate's bound validity before ratio computation. */
+    for (int i = 0; i < m; i++) {
+        if (fabs(pivotColumn[i]) <= CXF_PIVOT_TOL) continue;
+        int j = bv[i];
+        if (j < 0 || j >= total) continue;
+        if (wlb[j] > wub[j] + feasTol)
+            return CXF_INFEASIBLE;
+    }
+
     /* --- Pass 1: theta_max = min relaxed ratio (harris_ratio_test.md) --- */
     double minRatio = inf;
     int minRow = -1;
@@ -120,8 +131,10 @@ int cxf_ratio_test(SolverState *state, CxfEnv *env, int enteringVar,
         }
     }
 
-    if (minRow == -1)
+    if (minRow == -1) {
+        if (status_out) *status_out = CXF_RT_UNBOUNDED;
         return CXF_UNBOUNDED;
+    }
 
     /* --- Pass 2: best pivot among strict ratios <= theta_max --- */
     double maxPivot = fabs(pivotColumn[minRow]);
@@ -147,5 +160,24 @@ int cxf_ratio_test(SolverState *state, CxfEnv *env, int enteringVar,
 
     *leavingRow_out  = finalRow;
     *pivotElement_out = pivotColumn[finalRow];
+
+    /* V2 harris_ratio_test.md: compute step length theta and classify
+     * pivot as normal or degenerate. */
+    {
+        int lv = bv[finalRow];
+        double sd = s * pivotColumn[finalRow];
+        double theta = inf;
+        if (lv >= 0 && lv < total) {
+            if (sd > 0 && wlb[lv] > -inf)
+                theta = (wx[lv] - wlb[lv]) / sd;
+            else if (sd < 0 && wub[lv] < inf)
+                theta = (wx[lv] - wub[lv]) / sd;
+        }
+        if (theta < 0) theta = 0;
+        if (theta_out) *theta_out = theta;
+        if (status_out)
+            *status_out = (theta <= feasTol) ? CXF_RT_DEGENERATE_PIVOT
+                                             : CXF_RT_NORMAL_PIVOT;
+    }
     return CXF_OK;
 }

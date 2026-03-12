@@ -227,6 +227,18 @@ typedef enum {
 /** @brief Effectively infinite bound threshold for heuristic decisions */
 #define CXF_LARGE_BOUND_MARKER  1e20
 
+/*******************************************************************************
+ * Ratio Test Status (V2 harris_ratio_test.md — Outputs)
+ ******************************************************************************/
+
+/** @brief Ratio test outcome classification */
+typedef enum {
+    CXF_RT_NORMAL_PIVOT    = 0,  /**< Normal pivot with positive step */
+    CXF_RT_DEGENERATE_PIVOT = 1, /**< Pivot with zero/negligible step */
+    CXF_RT_UNBOUNDED       = 2,  /**< No blocking variable found */
+    CXF_RT_BOUND_FLIP_ONLY = 3   /**< All blockers flipped, no basis exchange */
+} CxfRatioStatus;
+
 /** @brief Maximum length of names (variables, constraints, model) */
 #define CXF_MAX_NAME_LEN    255
 

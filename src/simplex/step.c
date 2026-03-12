@@ -498,8 +498,9 @@ static int pricing_and_ftran(SolverState *state, CxfEnv *env,
             }
         }
 
+        int rt_status = CXF_RT_NORMAL_PIVOT;
         rc = cxf_ratio_test(state, env, entering, pivotCol, m,
-                            &leavingRow, &pivotElement);
+                            &leavingRow, &pivotElement, &rt_status, NULL);
         if (rc == CXF_UNBOUNDED) {
             if (ci + 1 < num_cand) continue;
             double lb_e = state->work_lb[entering];

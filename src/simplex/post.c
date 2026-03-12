@@ -42,9 +42,19 @@ int cxf_simplex_post_iterate(SolverState *state, CxfEnv *env,
     if (state->work_counter)
         *state->work_counter += 1.0;
 
-    /* Check 1: Stall detection — only at refactor boundaries */
+    /* Check 1: Stall detection — only at refactor boundaries.
+     * V2 simplex_iteration.md: stall detection runs at refactorization
+     * boundaries. Use same adaptive threshold as cxf_refactor_check
+     * (min(100, max(50, m/4)), reduced by residual-triggered adaptation)
+     * so post_iterate and step.c agree on when refactorization occurs. */
+    int eta_limit = state->num_constrs / 4;
+    if (eta_limit < 50) eta_limit = 50;
+    if (eta_limit > 100) eta_limit = 100;
+    if (state->thresholds[5] > 0 && (int)state->thresholds[5] < eta_limit)
+        eta_limit = (int)state->thresholds[5];
+
     if (outStall && state->basis &&
-        state->eta_count >= env->refactor_interval) {
+        state->eta_count >= eta_limit) {
         int n = state->num_vars;
         int m = state->num_constrs;
 
