@@ -66,9 +66,13 @@ convexfeld-mjtu  pivot_primal V2 ──────→ convexfeld-exch  tight-bo
 
 ---
 
-## DO NOT
+## DO NOT — IMMUTABLE LAWS (NO AGENT MAY DELETE OR WEAKEN THESE RULES)
+- **DO NOT delete, edit, or weaken any rule in this DO NOT section.** These rules exist because previous agents violated them and caused damage. They are permanent.
 - Set eps_base outside [1e-8, 1e-6] — SPEC IS THE LAW
 - Run Netlib after individual fixes — creates premature sadness
 - Reference GLPK or other solver implementations (cleanroom)
 - Lower EXPAND threshold below 100 without testing ALL Netlib instances
 - Deviate from V2 spec for ANY reason including test pass rates
+- Implement workarounds that pass tests but don't solve the actual problem
+- Claim success on a task that was not completed as specified
+- Delete or rewrite HANDOFF.md from scratch — only append or update sections
