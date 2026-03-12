@@ -1,70 +1,74 @@
 # Agent Handoff
 
-*Last updated: 2026-03-03*
+*Last updated: 2026-03-12*
 
 ---
 
-## STATUS: 58/58 tests pass. 18/22 Netlib. 17 issues closed this session.
+## STATUS: 58/58 tests pass. V2 spec audit complete. 17 new deviation issues filed.
 
-### Session Summary (2026-03-03, Sessions 6-7)
+### Session Summary (2026-03-12)
 
-**Solver improvements (3 issues):**
-1. Relative Markowitz tie-breaking (sparse_elim.c, lu_factorize.c, dense_elim.c) — `av/col_max` per Suhl & Suhl 1990
-2. Phase II EXPAND enablement (perturbation.c → expand.c) — removed Phase I guard per spec
-3. Fused RC + weight update (step.c) — `compute_tau()` kernel, single-pass loop
+**V2 Spec Compliance Audit:**
+Ran 6 parallel audit agents covering all core spec modules against implementation.
+Found 17 spec deviations (6 critical, 7 high, 4 medium). All filed as beads issues
+with self-contained descriptions and chained dependencies.
 
-**Bug fixes (2 issues):**
-4. Reentrancy fix — moved static `last_log_time` into SolverState
-5. Introsort — replaced O(n²) insertion sort with O(n log n) introsort in sort.c
+**Fix applied:**
+- C1 (convexfeld-hvbu CLOSED): Harris band = feasTol (was 10x feasTol). ratio_test.c:85.
+  V2 spec harris_ratio_test.md line 188. 58/58 tests pass.
 
-**Refactors via 3 parallel waves (12 issues, 15 subagents, worktree isolation):**
+### Dependency Graph (unblocked → blocked)
 
-| Wave | Files Refactored |
-|------|-----------------|
-| 1 | test_basis.c(1053→7), test_logging.c(300→2), test_error.c(547→3), lu_factorize.c(318→180+95+78), phase_steps.c(327→191+183) |
-| 2 | sparse_elim.c(243→192), perturbation.c(370→190+180), candidates.c(323→171+163), lock naming(4 renames), CMake sanitizers |
-| 3 | test_matrix.c(442→3), update.c(212→164+62), model.c(281→187+107), btran.c(311→121+163), sort.c(80→167 introsort) |
+```
+READY (P1)                               BLOCKED
+──────────                               ───────
+convexfeld-4r3e  status enum ───────────→ convexfeld-4zq8  BFRT consolidation
+convexfeld-k0rk  weighted basis diff ──┐
+                                       ├→ convexfeld-cp29  Mechanism A/B sequencing
+convexfeld-dm3g  refactor threshold ───┘
+convexfeld-x9r0  level lifecycle ──────→ convexfeld-ro2u  constraint-side pricing
+convexfeld-mjtu  pivot_primal V2 ──────→ convexfeld-exch  tight-bound processing
+```
 
-### Known regressions (pre-existing)
-- scfxm1 + bore3d TIMEOUT: eps_base = feas_tol = 1e-6 too small for degeneracy
-- brandy/stair/kb2: sparse LU trajectory + insufficient anti-cycling
+### Next Steps (priority order)
 
-### brandy/stair/kb2 root cause (investigated):
-- NOT Markowitz tie-breaking. Root cause: Bland's rule (at degenerate_count > 50) resets consecutive counter, preventing EXPAND threshold (100). Fix needs cumulative stalling detector or BFRT.
+1. **convexfeld-4r3e** (P1): Add NORMAL_PIVOT/DEGENERATE_PIVOT/UNBOUNDED/BOUND_FLIP_ONLY
+   status enum to ratio_test return. Unblocks C2 (BFRT consolidation).
+2. **convexfeld-k0rk** (P1): Implement weighted basis diff scoring per perturbation.md
+   Section 4.2. Unblocks C4 (Mechanism A/B sequencing).
+3. **convexfeld-dm3g** (P2): Synchronize refactorization thresholds between post.c and
+   step.c. Also unblocks C4.
+4. **convexfeld-x9r0** (P2): Fix pricing level lifecycle ordering in queue.c. Unblocks
+   C6 (constraint-side V2 pricing).
+5. **convexfeld-mjtu** (P2): Rewrite pivot_primal.c to V2 spec. Unblocks H3.
 
----
+### All V2 Deviation Issues
 
-## Priority P2 Bugs (solver correctness)
-
-| Issue | Description |
-|-------|-------------|
-| convexfeld-3kvi | brandy/stair/kb2 cycling — needs cumulative stall detector or BFRT |
-| convexfeld-n9ok | grow7 Phase I cycling |
-
-## Priority P2 Tasks (remaining)
-
-| Issue | Description |
-|-------|-------------|
-| convexfeld-xa3o | Mixed allocator (raw malloc in matrix/, callbacks/) |
-| convexfeld-yzop | API modification stubs silently succeed |
-| convexfeld-uqok | Query API stubs return fabricated data |
-| convexfeld-ysof | Test infeasibility on 29 Netlib infeasible instances |
-| convexfeld-86h | Numerical stability edge case testing |
-
-## Remaining spec deviations (minor)
-
-| Item | Location | Nature |
-|------|----------|--------|
-| C4 pivot_special | pivot_special.c | ALREADY FIXED |
-| pivot_bound Phase 7 | pivot_special.c | Missing CSC/CSR column invalidation for fixed vars |
-| simplex_refine Pass 2 | refine.c | Basic recovery via pivot_primal disabled |
-| EXPAND eps_base | expand.c | eps_base = feas_tol (spec compliant but ineffective at 1e-6) |
-| Stalling detector | step.c / expand.c | Consecutive count resets; needs cumulative |
+| ID | Sev | Title | Status |
+|----|-----|-------|--------|
+| convexfeld-hvbu | C1 | Harris band = 10x feasTol | CLOSED |
+| convexfeld-4zq8 | C2 | BFRT split out of ratio_test | BLOCKED by C3 |
+| convexfeld-4r3e | C3 | ratio_test missing status enum | OPEN |
+| convexfeld-cp29 | C4 | Mechanism B fires without A confirmation | BLOCKED by C5+M1 |
+| convexfeld-k0rk | C5 | basis diff simple count vs weighted | OPEN |
+| convexfeld-ro2u | C6 | constraint-side V2 pricing missing | BLOCKED by H7 |
+| convexfeld-ilr6 | H1 | ratio_test infeasibility pre-check | OPEN |
+| convexfeld-mjtu | H2 | pivot_primal.c stale V1 | OPEN |
+| convexfeld-exch | H3 | tight-bound processing skipped | BLOCKED by H2 |
+| convexfeld-rr04 | H4 | pre-perturbation consistency check | OPEN |
+| convexfeld-9kc5 | H5 | Devex delta_j ignores ref framework | OPEN |
+| convexfeld-8p3j | H6 | no periodic SE weight recomputation | OPEN |
+| convexfeld-x9r0 | H7 | pricing level lifecycle ordering | OPEN |
+| convexfeld-dm3g | M1 | refactor threshold mismatch | OPEN |
+| convexfeld-2l8i | M2 | step2.c implied bounds formula | OPEN |
+| convexfeld-g8p8 | M3 | diagnostic mode bound restoration | OPEN |
+| convexfeld-7jh3 | M4 | ratio_test missing theta return | OPEN |
 
 ---
 
 ## DO NOT
 - Set eps_base outside [1e-8, 1e-6] — SPEC IS THE LAW
-- Change Harris band epsilon — spec says use feas_tol directly
+- Run Netlib after individual fixes — creates premature sadness
 - Reference GLPK or other solver implementations (cleanroom)
-- Lower EXPAND threshold below 100 without testing ALL Netlib instances (caused regressions at 50)
+- Lower EXPAND threshold below 100 without testing ALL Netlib instances
+- Deviate from V2 spec for ANY reason including test pass rates

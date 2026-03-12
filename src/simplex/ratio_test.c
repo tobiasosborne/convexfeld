@@ -82,7 +82,7 @@ int cxf_ratio_test(SolverState *state, CxfEnv *env, int enteringVar,
 
     const double feasTol = env->feasibility_tol;
     const double inf     = env->infinity;
-    const double band    = 10.0 * feasTol;   /* Maros 2003 Section 8.3 */
+    const double band    = feasTol;           /* V2 spec harris_ratio_test.md line 188 */
     const int m     = state->num_constrs;
     const int total = state->num_vars + m;
     const int *bv   = state->basis->basic_vars;
