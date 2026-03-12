@@ -15,7 +15,6 @@
 #include "convexfeld/cxf_pricing.h"
 #include "convexfeld/cxf_env.h"
 #include "convexfeld/cxf_types.h"
-#include <math.h>
 #include <string.h>
 
 #include "simplex_internal.h"
@@ -55,20 +54,9 @@ int cxf_simplex_perturbation(SolverState *state, CxfEnv *env) {
     /* Phase 2b: Pre-perturbation consistency check (perturbation.md Phase 2).
      * Validate candidate list against current solver state before processing.
      * Discard invalid candidates up-front to avoid stale data issues. */
-    if (cand_count > 0 && cand_list != NULL) {
-        int valid = 0;
-        for (int ci = 0; ci < cand_count; ci++) {
-            int j = cand_list[ci];
-            if (j < 0 || j >= total) continue;
-            if (!basis->var_status) continue;
-            int s = basis->var_status[j];
-            /* Keep only: nonbasic at lower, or basic with valid row */
-            if (s == CXF_VAR_AT_LOWER ||
-                (s >= 0 && s < m && j < n))
-                cand_list[valid++] = j;
-        }
-        cand_count = valid;
-    }
+    if (cand_count > 0 && cand_list != NULL)
+        cand_count = cxf_perturb_validate_candidates(
+            cand_list, cand_count, basis, m, n, total);
 
     /*--- Phase 3: Bound restoration (diagnostic mode, perturbation.md Phase 3).
      * In detailed diagnostic mode (verbosity >= 2), copy saved bounds into
@@ -84,96 +72,16 @@ int cxf_simplex_perturbation(SolverState *state, CxfEnv *env) {
         cxf_compute_activity_bounds(state, 0, NULL);
     }
 
-    /* Phase 4: candidate processing (nonbasic Case A + basic Case B). */
-    double *dj = state->work_dj;
-
-    if (cand_count > 0 && cand_list != NULL) {
-        /* V2 path: process only pricing candidates */
-        for (int ci = 0; ci < cand_count; ci++) {
-            int j = cand_list[ci];
-
-            int status = basis->var_status[j];
-
-            if (status == CXF_VAR_AT_LOWER && dj) {
-                /* Case A: Nonbasic at lower bound */
-                double lb = state->work_lb[j];
-                double ub = state->work_ub[j];
-                if (ub - lb < feas_tol) continue;
-
-                double rc = dj[j];
-                if (fabs(rc) <= feas_tol || rc < -feas_tol) {
-                    if (rc < -feas_tol && j >= n && (j - n) < m &&
-                        state->work_sense) {
-                        char sense = state->work_sense[j - n];
-                        if (sense == '=' || sense == 'E') {
-                            state->problem_row_index = j - n;
-                            state->perturb_count += perturbed;
-                            return CXF_INFEASIBLE;
-                        }
-                    }
-                    if (state->pricing)
-                        cxf_pricing_mark_dirty(state->pricing, j);
-                    perturbed++;
-                }
-            } else if (status >= 0) {
-                /* Case B: Basic variable — implied bound analysis */
-                int row = status;
-                if (row < 0 || row >= m) continue;
-                if (j >= n) continue;  /* skip auxiliaries */
-
-                int result = cxf_expand_analyze_basic(state, row, j,
-                                                      feas_tol);
-                if (result == -1) {
-                    state->problem_row_index = row;
-                    state->perturb_count += perturbed;
-                    return CXF_INFEASIBLE;
-                }
-                if (result == 1) {
-                    if (state->pricing)
-                        cxf_pricing_mark_dirty(state->pricing, j);
-                    perturbed++;
-                }
-            }
-        }
-    } else if (dj) {
-        /* Fallback: synthesize candidate list from full scan */
-        for (int j = 0; j < total; j++) {
-            int s = basis->var_status[j];
-            if (s != CXF_VAR_AT_LOWER && !(s >= 0 && j < n)) continue;
-            if (s == CXF_VAR_AT_LOWER) {
-                if (state->work_ub[j] - state->work_lb[j] < feas_tol)
-                    continue;
-                double rc = dj[j];
-                if (fabs(rc) > feas_tol && rc >= -feas_tol) continue;
-                if (rc < -feas_tol && j >= n && (j-n) < m &&
-                    state->work_sense) {
-                    char se = state->work_sense[j - n];
-                    if (se == '=' || se == 'E') {
-                        state->problem_row_index = j - n;
-                        state->perturb_count += perturbed;
-                        return CXF_INFEASIBLE;
-                    }
-                }
-                if (state->pricing)
-                    cxf_pricing_mark_dirty(state->pricing, j);
-                perturbed++;
-            } else {
-                int row = s;
-                if (row < 0 || row >= m) continue;
-                int r = cxf_expand_analyze_basic(state, row, j, feas_tol);
-                if (r == -1) {
-                    state->problem_row_index = row;
-                    state->perturb_count += perturbed;
-                    return CXF_INFEASIBLE;
-                }
-                if (r == 1) {
-                    if (state->pricing)
-                        cxf_pricing_mark_dirty(state->pricing, j);
-                    perturbed++;
-                }
-            }
-        }
+    /* Phase 4: candidate processing (nonbasic Case A + basic Case B).
+     * Delegated to perturbation_candidates.c. Returns >= 0 for count,
+     * or negative on infeasibility (abs value - 1 = count before). */
+    int phase4 = cxf_perturb_process_candidates(
+        state, basis, cand_list, cand_count, feas_tol, n, m, total);
+    if (phase4 < 0) {
+        state->perturb_count += (-(phase4 + 1));
+        return CXF_INFEASIBLE;
     }
+    perturbed = phase4;
 
     /* V2 perturbation.md lines 224-225: first stalling → A only.
      * Mechanism B fires only when A was already applied (stalling persists). */

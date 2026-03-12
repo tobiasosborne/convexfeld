@@ -47,6 +47,9 @@
 #include "cxf_pricing.h"
 #include "cxf_callback.h"
 #include "cxf_utilities.h"
+#include "cxf_mps.h"
+#include "cxf_solve_state.h"
+#include "cxf_timing.h"
 
 /*******************************************************************************
  * Version Information
@@ -65,15 +68,6 @@
  */
 void cxf_version(int *majorP, int *minorP, int *patchP);
 
-/*******************************************************************************
- * Error Handling
- ******************************************************************************/
-
-/**
- * @brief Get the last error message.
- * @param env Environment (may be NULL for generic message)
- * @return Error message string
- */
-const char *cxf_geterrormsg(CxfEnv *env);
+/* cxf_geterrormsg is declared in cxf_env.h (included above) */
 
 #endif /* CONVEXFELD_H */

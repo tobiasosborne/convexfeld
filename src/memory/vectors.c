@@ -11,6 +11,7 @@
 
 #include <stdlib.h>
 #include "convexfeld/cxf_types.h"
+#include "internal_types.h"
 
 /* External declarations for core memory functions */
 void *cxf_malloc(size_t size);

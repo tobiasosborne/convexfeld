@@ -9,8 +9,6 @@
  * Beads: v35i
  */
 
-#define _GNU_SOURCE  /* for qsort_r on Linux */
-
 #include <stdlib.h>
 #include <math.h>
 #include "convexfeld/cxf_types.h"
@@ -22,21 +20,27 @@
 
 /*============================================================================
  * Helper: Comparison for sorting by |reduced_cost| descending
+ *
+ * Uses file-static context instead of qsort_r for C99 portability.
+ * qsort_r has incompatible signatures on GNU (context last) vs
+ * BSD/macOS (context first), making it non-portable.
  *===========================================================================*/
+
+/** File-static context for qsort comparator (not thread-safe, but solver
+ *  is single-threaded per pricing call). */
+static const double *s_reduced_costs;
 
 /**
  * @brief Compare two candidate indices by |reduced_cost| descending.
  * @param a First candidate index pointer
  * @param b Second candidate index pointer
- * @param context Pointer to reduced_costs array
  */
-static int compare_by_abs_rc_desc(const void *a, const void *b, void *context) {
-    const double *reduced_costs = (const double *)context;
+static int compare_by_abs_rc_desc(const void *a, const void *b) {
     int idx_a = *(const int *)a;
     int idx_b = *(const int *)b;
 
-    double abs_rc_a = fabs(reduced_costs[idx_a]);
-    double abs_rc_b = fabs(reduced_costs[idx_b]);
+    double abs_rc_a = fabs(s_reduced_costs[idx_a]);
+    double abs_rc_b = fabs(s_reduced_costs[idx_b]);
 
     /* Sort descending: larger |RC| first */
     if (abs_rc_a > abs_rc_b) {
@@ -153,10 +157,12 @@ int cxf_pricing_candidates(PricingState *ctx, const double *reduced_costs,
     /* Update statistics */
     ctx->total_candidates_scanned += scanned;
 
-    /* Sort candidates by |reduced_cost| descending */
+    /* Sort candidates by |reduced_cost| descending (portable qsort) */
     if (count > 1) {
-        qsort_r(candidates, (size_t)count, sizeof(int),
-                compare_by_abs_rc_desc, (void *)reduced_costs);
+        s_reduced_costs = reduced_costs;
+        qsort(candidates, (size_t)count, sizeof(int),
+              compare_by_abs_rc_desc);
+        s_reduced_costs = NULL;
     }
 
     return count;

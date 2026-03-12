@@ -7,17 +7,11 @@
  */
 
 #include <string.h>
-#include "convexfeld/cxf_model.h"
-#include "convexfeld/cxf_env.h"
+#include "convexfeld/convexfeld.h"
 
 /* Extern declarations for validation functions */
 extern int cxf_checkenv(CxfEnv *env);
 extern int cxf_checkmodel(CxfModel *model);
-
-/* Version constants */
-#define CXF_VERSION_MAJOR 0
-#define CXF_VERSION_MINOR 1
-#define CXF_VERSION_PATCH 0
 
 /**
  * @brief Get library version information.

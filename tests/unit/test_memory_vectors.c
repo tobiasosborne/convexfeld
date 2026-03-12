@@ -7,6 +7,7 @@
 
 #include "unity.h"
 #include "convexfeld/cxf_types.h"
+#include "../../src/memory/internal_types.h"
 #include <stddef.h>
 #include <string.h>
 

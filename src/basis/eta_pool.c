@@ -12,6 +12,7 @@
 
 #include "convexfeld/cxf_types.h"
 #include "convexfeld/cxf_basis.h"
+#include "../memory/internal_types.h"
 #include <stdlib.h>
 #include <string.h>
 

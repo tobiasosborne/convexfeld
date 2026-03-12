@@ -311,43 +311,26 @@ typedef struct PricingState PricingState;
 typedef struct CallbackContext CallbackContext;
 
 /**
- * @brief Vector container for sparse vectors with indices and values.
- *
- * Used throughout ConvexFeld for storing sparse vectors, index lists,
- * and coefficient arrays.
+ * @brief Vector container for sparse vectors (forward declaration).
+ * Full definition in src/memory/internal_types.h (solver internal).
  */
-typedef struct VectorContainer {
-    int *indices;      /**< Array of indices (may be NULL) */
-    double *values;    /**< Array of values (may be NULL) */
-    void *auxData;     /**< Auxiliary data pointer (may be NULL) */
-    int capacity;      /**< Allocated capacity */
-    int size;          /**< Current number of elements */
-} VectorContainer;
+typedef struct VectorContainer VectorContainer;
 
 /**
- * @brief Chunk in the eta buffer arena allocator.
- *
- * Chunks are linked in a singly-linked list for bulk deallocation.
+ * @brief Chunk in the eta buffer arena allocator (forward declaration).
+ * Full definition in src/memory/internal_types.h (solver internal).
  */
-typedef struct EtaChunk {
-    char *data;              /**< Chunk data buffer */
-    size_t capacity;         /**< Chunk capacity in bytes */
-    struct EtaChunk *next;   /**< Next chunk in chain */
-} EtaChunk;
+typedef struct EtaChunk EtaChunk;
 
 /**
- * @brief Arena allocator for eta vectors.
- *
- * Provides efficient bump-pointer allocation with exponential chunk growth.
- * All memory is freed in bulk at refactorization.
+ * @brief Arena allocator for eta vectors (forward declaration).
+ * Full definition in src/memory/internal_types.h (solver internal).
  */
-typedef struct EtaBuffer {
-    EtaChunk *firstChunk;    /**< Head of chunk chain */
-    EtaChunk *activeChunk;   /**< Current chunk being allocated from */
-    size_t bytesUsed;        /**< Bytes used in active chunk */
-    size_t currentChunkSize; /**< Current chunk size for growth */
-    size_t minChunkSize;     /**< Minimum chunk size */
-} EtaBuffer;
+typedef struct EtaBuffer EtaBuffer;
+
+/*******************************************************************************
+ * Eta Buffer Size Constants
+ ******************************************************************************/
 
 /** @brief Maximum chunk size for eta buffer (64KB) */
 #define CXF_MAX_CHUNK_SIZE 65536

@@ -94,6 +94,15 @@ int cxf_simplex_refine(SolverState *state, CxfEnv *env);
 void cxf_scale_problem(SolverState *state, double *rowScale,
                        double *colScale);
 
+/* --- Perturbation candidates (perturbation_candidates.c) --- */
+int cxf_perturb_validate_candidates(int *cand_list, int cand_count,
+                                    BasisState *basis, int m, int n,
+                                    int total);
+int cxf_perturb_process_candidates(SolverState *state, BasisState *basis,
+                                   int *cand_list, int cand_count,
+                                   double feas_tol, int n, int m,
+                                   int total);
+
 /* --- EXPAND analysis (expand.c) --- */
 int cxf_expand_analyze_basic(SolverState *state, int row, int bvar,
                              double feas_tol);
