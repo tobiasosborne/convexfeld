@@ -28,13 +28,15 @@ static double compute_phase1_objective(SolverState *state) {
     BasisState *basis = state->basis;
     int m = state->num_constrs;
     double obj = 0.0;
+    /* two_phase_method.md §1: violations use feasibility tolerance */
+    const double ftol = CXF_FEASIBILITY_TOL;
     for (int i = 0; i < m; i++) {
         int bv = basis->basic_vars[i];
         double x = state->work_x[bv];
         double lb = state->work_lb[bv];
         double ub = state->work_ub[bv];
-        if (x < lb) obj += (lb - x);
-        else if (x > ub) obj += (x - ub);
+        if (x < lb - ftol) obj += (lb - x);
+        else if (x > ub + ftol) obj += (x - ub);
     }
     return obj;
 }
