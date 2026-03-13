@@ -1,10 +1,18 @@
 # Agent Handoff
 
-*Last updated: 2026-03-13 (recovery session)*
+*Last updated: 2026-03-03*
 
 ---
 
-## STATUS: 66/66 tests pass. Full spec V2 compliance audit complete. 301 beads filed. Master clean and pushed.
+## STATUS: 67/67 tests pass. Full spec V2 compliance audit complete. 301 beads filed. Master clean and pushed.
+
+### Fix: NaN/Inf step length detection (2026-03-03)
+
+**convexfeld-yzft CLOSED**: Added `!isfinite(stepSize)` guard in `cxf_simplex_iterate`
+(step.c:589) after `pricing_and_ftran` returns. If NaN/Inf detected: refactorize,
+recompute, retry; if persists, return `CXF_NUMERIC`. Previously NaN silently passed
+`STEP_CLAMP` check (IEEE 754: NaN > 1e15 → false) and corrupted x_B. 4 new tests
+in `test_nan_step_guard.c`. 67/67 tests pass.
 
 ### Spec V2 Full Compliance Audit (2026-03-13)
 
