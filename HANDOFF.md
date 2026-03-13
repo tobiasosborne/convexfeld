@@ -4,7 +4,41 @@
 
 ---
 
-## STATUS: 66/66 tests pass on master. 16 V2 deviation issues closed. Master clean and pushed.
+## STATUS: 66/66 tests pass. Full spec V2 compliance audit complete. 301 beads filed. Master clean and pushed.
+
+### Spec V2 Full Compliance Audit (2026-03-13)
+
+**Performed a full-scale read-only spec V2 compliance audit of the entire codebase.**
+
+10 parallel audit agents reviewed every implemented function against every spec V2 module.
+Results written to `docs/spec_v2_audit/` (10 detailed reports + SUMMARY.md).
+
+**Aggregate findings:**
+- ~200 violations, ~87 missing functions, ~59 compliant items
+- 301 individual beads created, all tagged `[specv2]` in title
+
+**7 critical bugs affecting solver correctness:**
+1. step3.c:161 — implied bound formula missing RHS term
+2. step.c:613 — BFRT flips don't update activities/negate row coefficients
+3. pivot_primal.c:185 — modifies original model RHS instead of working copy
+4. phase_loop.c:32 — Phase I objective check has no feasibility tolerance
+5. step.c:603 — NaN step length passes STEP_CLAMP silently
+6. step.c:270 — pricing tolerance levels all wrong (Standard=1e-6 vs spec 1e-10)
+7. cxf_basis.h:63 — EtaVector.next direction may be wrong
+
+**What IS compliant:** LU factorization, FTRAN/BTRAN, all 10 tolerance constants, Harris
+ratio test, Phase I w-coefficients, reduced cost computation, activity bound maintenance,
+eta arena allocator, refactorization check.
+
+**Systemic patterns:** 6 name collisions (functions reuse spec names for different behavior),
+missing infrastructure layers (parameter table, attribute table, memory tracking, logging),
+data location mismatches (spec distributes fields across structs differently than code).
+
+#### Next Steps (priority order)
+1. Fix the 7 critical bugs above (they affect solver correctness NOW)
+2. Address HIGH-priority violations (especially pricing tolerances, stall detection)
+3. Infrastructure: parameter table system, attribute table, memory tracking
+4. Run `bd list --status=open | grep specv2` to see all 301 filed issues
 
 ### Recovery Session (2026-03-13)
 
