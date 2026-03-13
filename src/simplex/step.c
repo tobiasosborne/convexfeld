@@ -586,6 +586,22 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env) {
                                flipped_rows, &num_flips);
     if (rc != CXF_OK) return rc;
 
+    /* V2 numerical_stability.md §C: NaN/Inf detection after step length */
+    if (!isfinite(stepSize)) {
+        cxf_solver_refactor(state, env);
+        cxf_recompute_xB(state);
+        cxf_recompute_objective(state);
+        cxf_compute_reduced_costs(state);
+        if (state->pricing)
+            cxf_pricing_recompute_weights(state->pricing, state);
+        rc = pricing_and_ftran(state, env, &entering, &entering_sign,
+                               &leavingRow, &pivotElement, &stepSize,
+                               flipped_rows, &num_flips);
+        if (rc != CXF_OK) return rc;
+        if (!isfinite(stepSize))
+            return CXF_NUMERIC;
+    }
+
     double *pivotCol = basis->work;
     state->flip_count += num_flips;
 
