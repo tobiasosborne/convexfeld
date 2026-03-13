@@ -267,9 +267,10 @@ static int pricing_and_ftran(SolverState *state, CxfEnv *env,
         if (state->pricing)
             cxf_pricing_set_level(state->pricing, level);
 
-        if (level == 0)      pricing_tol = env->optimality_tol * 10.0;
-        else if (level == 1) pricing_tol = env->optimality_tol;
-        else                 pricing_tol = env->optimality_tol * 0.1;
+        /* tolerances_constants.md §4: adaptive pricing tolerance */
+        if (level == 0)      pricing_tol = env->optimality_tol;         /* Fast ~1e-6  */
+        else if (level == 1) pricing_tol = env->optimality_tol * 1e-4;  /* Standard ~1e-10 */
+        else                 pricing_tol = env->optimality_tol * 1e-3;  /* Aggressive ~1e-9 */
 
         num_cand = 0;
         if (state->use_bland) {
