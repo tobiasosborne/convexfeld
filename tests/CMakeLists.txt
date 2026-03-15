@@ -450,6 +450,10 @@ add_cxf_test(test_optimize_return unit/test_optimize_return.c)
 # V2 simplex_iteration.md: post_iterate takes CxfModel* not CxfEnv* (convexfeld-mfjq)
 add_cxf_test(test_post_iterate_sig unit/test_post_iterate_sig.c)
 
+# V2 simplex_phases.md: preprocess before setup order (convexfeld-rb5z)
+add_cxf_test(test_solve_lp_order unit/test_solve_lp_order.c)
+target_link_libraries(test_solve_lp_order PRIVATE m)
+
 ################################################################################
 # Integration Tests
 ################################################################################
