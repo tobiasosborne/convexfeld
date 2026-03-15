@@ -51,7 +51,23 @@ int cxf_simplex_crash(SolverState *state, CxfEnv *env) {
         return CXF_ERROR_NULL_ARGUMENT;
     }
 
+    /* Use SolverState's working copies per crash_basis.md spec.
+     * The spec says S.rowStart, S.rowColIndices, S.constraintRHS,
+     * S.constraintSense — these map to state->csr_row_ptr,
+     * state->csr_col_idx, state->work_rhs, state->work_sense. */
+    double *rhs_arr = state->work_rhs;
+    char *sense_arr = state->work_sense;
+
+    /* Fallback to model if SolverState copies not yet populated */
     MatrixData *mat = state->model_ref ? state->model_ref->matrix : NULL;
+    if (rhs_arr == NULL && mat != NULL) rhs_arr = mat->rhs;
+    if (sense_arr == NULL && mat != NULL) sense_arr = mat->sense;
+
+    int64_t *row_ptr = state->csr_row_ptr;
+    int *col_idx = state->csr_col_idx;
+    if (row_ptr == NULL && mat != NULL) row_ptr = mat->row_ptr;
+    if (col_idx == NULL && mat != NULL) col_idx = mat->col_idx;
+
     double epsilon_feas = env->feasibility_tol;
     double epsilon_tiny = CXF_ZERO_TOL;  /* Much smaller than epsilon_feas */
 
@@ -61,8 +77,8 @@ int cxf_simplex_crash(SolverState *state, CxfEnv *env) {
 
         if (state->row_status[i] == CXF_ROW_UNASSIGNED) {
             /* --- Unassigned row: feasibility check --- */
-            double rhs = (mat && mat->rhs) ? mat->rhs[i] : 0.0;
-            char sense = (mat && mat->sense) ? mat->sense[i] : '<';
+            double rhs = rhs_arr ? rhs_arr[i] : 0.0;
+            char sense = sense_arr ? sense_arr[i] : '<';
 
             if (sense == '=' || sense == 'E') {
                 /* Equality: |rhs| must be small */
@@ -86,20 +102,23 @@ int cxf_simplex_crash(SolverState *state, CxfEnv *env) {
 
         } else if (state->row_status[i] > 0) {
             /* --- Candidate row: conditional removal --- */
-            char sense = (mat && mat->sense) ? mat->sense[i] : '<';
-            double rhs = (mat && mat->rhs) ? mat->rhs[i] : 0.0;
+            char sense = sense_arr ? sense_arr[i] : '<';
+            double rhs = rhs_arr ? rhs_arr[i] : 0.0;
 
             if (sense != '=' && sense != 'E' && rhs >= epsilon_tiny) {
                 /* Remove all column entries in this row via CSR */
-                if (mat && mat->row_ptr && mat->col_idx) {
-                    int64_t start = mat->row_ptr[i];
-                    int64_t end = mat->row_ptr[i + 1];
+                if (row_ptr && col_idx) {
+                    int64_t start = row_ptr[i];
+                    int64_t end = row_ptr[i + 1];
 
                     for (int64_t k = start; k < end; k++) {
-                        int col = mat->col_idx[k];
+                        int col = col_idx[k];
                         if (col >= 0 && state->col_nz_count) {
                             state->col_nz_count[col]--;
                         }
+                        /* Mark column entry as inactive per spec:
+                         * S.rowColIndices[k] := -1 */
+                        col_idx[k] = -1;
                     }
 
                     /* Track computational work */

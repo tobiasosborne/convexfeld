@@ -187,6 +187,10 @@ add_cxf_test(test_quadratic unit/test_quadratic.c)
 add_cxf_test(test_crash unit/test_crash.c)
 target_link_libraries(test_crash PRIVATE m)
 
+# Crash CSR source + inactive sentinel tests (convexfeld-tx3m, convexfeld-y8ur)
+add_cxf_test(test_crash_csr unit/test_crash_csr.c)
+target_link_libraries(test_crash_csr PRIVATE m)
+
 # M7.1.13: Perturbation tests (v2 — P2.6 EXPAND)
 add_cxf_test(test_perturbation unit/test_perturbation.c)
 target_link_libraries(test_perturbation PRIVATE m)

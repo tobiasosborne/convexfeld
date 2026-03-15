@@ -71,6 +71,14 @@ static SolverState *make_crash_state(int n, int m, double *rhs, char *sense) {
         mat->sense = (char *)malloc((size_t)m * sizeof(char));
         memcpy(mat->rhs, rhs, (size_t)m * sizeof(double));
         memcpy(mat->sense, sense, (size_t)m * sizeof(char));
+
+        /* Populate SolverState working copies (crash uses these per spec) */
+        free(state->work_rhs);
+        state->work_rhs = (double *)malloc((size_t)m * sizeof(double));
+        memcpy(state->work_rhs, rhs, (size_t)m * sizeof(double));
+        free(state->work_sense);
+        state->work_sense = (char *)malloc((size_t)m * sizeof(char));
+        memcpy(state->work_sense, sense, (size_t)m * sizeof(char));
     }
 
     state->num_basic = 0;
@@ -243,8 +251,17 @@ void test_crash_candidate_removal(void) {
     mat->row_idx[0] = 1; mat->row_idx[1] = 1;
     mat->values[0] = 2.0; mat->values[1] = 3.0;
 
-    /* Build CSR from CSC */
+    /* Build CSR from CSC (populates mat->row_ptr, mat->col_idx) */
     cxf_sparse_build_csr(mat);
+
+    /* Copy CSR into SolverState working arrays (crash reads from these) */
+    free(state->csr_row_ptr);
+    state->csr_row_ptr = (int64_t *)malloc(3 * sizeof(int64_t));
+    memcpy(state->csr_row_ptr, mat->row_ptr, 3 * sizeof(int64_t));
+    int64_t nnz = mat->row_ptr[2];
+    free(state->csr_col_idx);
+    state->csr_col_idx = (int *)malloc((size_t)nnz * sizeof(int));
+    memcpy(state->csr_col_idx, mat->col_idx, (size_t)nnz * sizeof(int));
 
     /* Set col_nz_count: col 0 has 1 nz, col 1 has 1 nz */
     state->col_nz_count[0] = 1;
@@ -265,10 +282,15 @@ void test_crash_candidate_removal(void) {
     TEST_ASSERT_EQUAL_INT(0, state->col_nz_count[0]);
     TEST_ASSERT_EQUAL_INT(0, state->col_nz_count[1]);
 
-    /* Model CSR must NOT be mutated (bug fix: was writing -1) */
-    int64_t r1_start = mat->row_ptr[1];
-    int64_t r1_end = mat->row_ptr[2];
+    /* SolverState CSR entries must be marked -1 (inactive sentinel) */
+    int64_t r1_start = state->csr_row_ptr[1];
+    int64_t r1_end = state->csr_row_ptr[2];
     for (int64_t k = r1_start; k < r1_end; k++) {
+        TEST_ASSERT_EQUAL_INT(-1, state->csr_col_idx[k]);
+    }
+
+    /* Model CSR must NOT be mutated */
+    for (int64_t k = mat->row_ptr[1]; k < mat->row_ptr[2]; k++) {
         TEST_ASSERT_TRUE(mat->col_idx[k] >= 0);
     }
 
