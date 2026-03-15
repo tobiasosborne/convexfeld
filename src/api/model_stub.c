@@ -7,6 +7,7 @@
  * Note: cxf_newmodel and cxf_freemodel are in model.c (M8.1.8).
  */
 
+#include <math.h>
 #include "convexfeld/cxf_model.h"
 #include "convexfeld/cxf_env.h"
 
@@ -103,6 +104,16 @@ int cxf_addvar(CxfModel *model, int numnz, int *vind, double *vval,
         return CXF_ERROR_NULL_ARGUMENT;
     }
 
+    /* Reject NaN/Inf in numerical data (numerical_stability.md §C) */
+    if (!isfinite(obj) || !isfinite(lb) || !isfinite(ub)) {
+        return CXF_ERROR_INVALID_ARGUMENT;
+    }
+    for (int i = 0; i < numnz; i++) {
+        if (!isfinite(vval[i])) {
+            return CXF_ERROR_INVALID_ARGUMENT;
+        }
+    }
+
     /* Grow capacity if needed */
     if (model->num_vars >= model->var_capacity) {
         status = cxf_model_grow_vars(model, model->num_vars + 1);
@@ -168,6 +179,16 @@ int cxf_addvars(CxfModel *model, int numvars, int numnz,
 
     if (numvars <= 0) {
         return CXF_OK;
+    }
+
+    /* Reject NaN/Inf in numerical data (numerical_stability.md §C) */
+    for (int i = 0; i < numvars; i++) {
+        if (obj != NULL && !isfinite(obj[i])) return CXF_ERROR_INVALID_ARGUMENT;
+        if (lb != NULL && !isfinite(lb[i])) return CXF_ERROR_INVALID_ARGUMENT;
+        if (ub != NULL && !isfinite(ub[i])) return CXF_ERROR_INVALID_ARGUMENT;
+    }
+    for (int i = 0; i < numnz; i++) {
+        if (vval != NULL && !isfinite(vval[i])) return CXF_ERROR_INVALID_ARGUMENT;
     }
 
     /* Grow capacity if needed */

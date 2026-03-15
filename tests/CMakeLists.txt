@@ -369,6 +369,10 @@ target_link_libraries(test_work_counter PRIVATE m)
 add_cxf_test(test_cancellation_detect unit/test_cancellation_detect.c)
 target_link_libraries(test_cancellation_detect PRIVATE m)
 
+# NaN/Inf input data rejection at API entry points (numerical_stability.md §C)
+add_cxf_test(test_input_validation unit/test_input_validation.c)
+target_link_libraries(test_input_validation PRIVATE m)
+
 ################################################################################
 # Integration Tests
 ################################################################################

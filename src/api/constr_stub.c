@@ -125,7 +125,7 @@ int cxf_addconstr(CxfModel *model, int numnz, const int *cind,
     if (model == NULL) return CXF_ERROR_NULL_ARGUMENT;
     if (model->modification_blocked) return CXF_ERROR_INVALID_ARGUMENT;
     if (sense != '<' && sense != '>' && sense != '=') return CXF_ERROR_INVALID_ARGUMENT;
-    if (isnan(rhs)) return CXF_ERROR_INVALID_ARGUMENT;
+    if (!isfinite(rhs)) return CXF_ERROR_INVALID_ARGUMENT;
 
     if (numnz > 0) {
         if (cind == NULL || cval == NULL) return CXF_ERROR_NULL_ARGUMENT;
@@ -191,7 +191,7 @@ int cxf_addconstrs(CxfModel *model, int numconstrs, int numnz,
 
     if (rhs != NULL) {
         for (int i = 0; i < numconstrs; i++) {
-            if (isnan(rhs[i])) return CXF_ERROR_INVALID_ARGUMENT;
+            if (!isfinite(rhs[i])) return CXF_ERROR_INVALID_ARGUMENT;
         }
     }
 

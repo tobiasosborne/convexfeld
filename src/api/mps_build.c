@@ -8,6 +8,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 #include "mps_internal.h"
 #include "convexfeld/cxf_model.h"
 #include "convexfeld/cxf_matrix.h"
@@ -42,6 +43,11 @@ static int build_csc_direct(MpsState *s, CxfModel *model, const int *row_map,
             int mps_row = c->constr_idx[k];
             int mapped = row_map[mps_row];
             if (mapped >= 0) {
+                /* Reject NaN/Inf coefficients (numerical_stability.md §C) */
+                if (!isfinite(c->constr_val[k])) {
+                    cxf_free(col_counts);
+                    return CXF_ERROR_INVALID_ARGUMENT;
+                }
                 col_counts[col]++;
                 total_nnz++;
             }
@@ -105,6 +111,8 @@ static int build_csc_direct(MpsState *s, CxfModel *model, const int *row_map,
     int constr_idx = 0;
     for (int i = 0; i < s->num_rows; i++) {
         if (s->rows[i].sense == 'N') continue;
+        /* Reject NaN/Inf RHS (numerical_stability.md §C) */
+        if (!isfinite(s->rows[i].rhs)) return CXF_ERROR_INVALID_ARGUMENT;
         mat->rhs[constr_idx] = s->rows[i].rhs;
         mat->sense[constr_idx] = s->rows[i].sense;
         if (mat->range_values)
