@@ -245,7 +245,7 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env);
  * @param model Model with logging config
  * @param state Solver state with timing data
  */
-void cxf_log_iteration_progress(CxfModel *model, SolverState *state);
+void cxf_simplex_iterate(CxfModel *model, SolverState *state);
 
 /**
  * @brief Phase-end processing: constraint cleanup + Phase I→II (v2 P3.21).

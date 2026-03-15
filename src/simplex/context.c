@@ -410,7 +410,7 @@ int cxf_simplex_get_phase(SolverState *state) {
     return state->phase;
 }
 
-/* cxf_log_iteration_progress (logging-only) is in iterate.c */
+/* cxf_simplex_iterate (logging-only) is in iterate.c */
 /* cxf_simplex_step (iteration engine) is in step.c */
 
 /* cxf_simplex_phase_end is implemented in post.c */

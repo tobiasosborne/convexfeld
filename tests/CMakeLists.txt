@@ -168,6 +168,9 @@ add_cxf_test(test_callback_ownership unit/test_callback_ownership.c)
 # M7.1.2: Simplex Tests - Iteration
 add_cxf_test(test_simplex_iteration unit/test_simplex_iteration.c)
 
+# V2 spec rename: cxf_simplex_iterate (was cxf_log_iteration_progress, convexfeld-ge8e)
+add_cxf_test(test_simplex_iterate_rename unit/test_simplex_iterate_rename.c)
+
 # M2.3.1: Validation tests
 add_cxf_test(test_validation unit/test_validation.c)
 target_link_libraries(test_validation PRIVATE m)  # For math functions (NAN, INFINITY)

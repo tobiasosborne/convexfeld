@@ -4,7 +4,7 @@
  *
  * V2 iteration sequence (per P3.20 Module-Level Notes):
  *   1. progress_snapshot
- *   2. log_iteration_progress
+ *   2. simplex_iterate
  *   3. phase_end (pre-pivot)
  *   4. perturbation (if stalling)
  *   5. step (main pivot + BFRT)
@@ -170,7 +170,7 @@ int cxf_solve_lp(CxfModel *model) {
 
             /* (1) Progress snapshot — taken at round start */
             /* (2) Progress logging + callback */
-            cxf_log_iteration_progress(model, state);
+            cxf_simplex_iterate(model, state);
 
             /* (3) Pre-pivot phase_end — runs unconditionally per spec
              * P1.2 (fiyt): removed phase==2 guard. Spec simplex_iteration.md

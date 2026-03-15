@@ -30,7 +30,7 @@
  *   3. Format and emit progress message.
  *   4. Invoke external monitoring callback unconditionally.
  */
-void cxf_log_iteration_progress(CxfModel *model, SolverState *state) {
+void cxf_simplex_iterate(CxfModel *model, SolverState *state) {
     if (model == NULL || state == NULL) return;
 
     CxfEnv *env = model->env;
