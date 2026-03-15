@@ -2,8 +2,8 @@
  * @file config.c
  * @brief Thread configuration: effective thread count resolution
  *
- * Implements cxf_get_threads per threading_sync.md V2 spec:
- * hierarchy of constraints, most restrictive wins.
+ * Implements cxf_get_threads and cxf_set_thread_count per
+ * threading_sync.md V2 spec.
  */
 
 #include "convexfeld/cxf_types.h"
@@ -13,6 +13,8 @@
 int cxf_get_logical_processors(void);
 /* From threading/cpu.c */
 int cxf_get_physical_cores(void);
+/* From logging/output.c */
+void cxf_log_printf(CxfEnv *env, int level, const char *format, ...);
 
 /** @brief Internal cap on auto-detected thread count (~32 per spec) */
 #define CXF_THREAD_CAP 32
@@ -73,21 +75,32 @@ int cxf_get_threads(CxfEnv *env) {
 }
 
 /**
- * @brief Validate a requested thread count.
+ * @brief Validate a requested thread count per V2 threading_sync.md.
  *
- * Checks that thread_count >= 1. Does NOT store the value;
- * storage is via cxf_setintparam("Threads", N).
+ * If thread_count exceeds logical processors, emits a warning via
+ * cxf_log_printf. Does NOT store the value or modify any state.
+ * Always succeeds (purely diagnostic).
  *
- * @param env  Environment handle (must not be NULL)
- * @param thread_count  Thread count to validate (must be >= 1)
- * @return CXF_OK on success, CXF_ERROR_INVALID_ARGUMENT otherwise
+ * @param env           Environment for log output and hardware info
+ * @param thread_count  Thread count to validate
  */
-int cxf_validate_thread_count(CxfEnv *env, int thread_count) {
+void cxf_set_thread_count(CxfEnv *env, int thread_count) {
+    int logical;
+
     if (env == NULL) {
-        return CXF_ERROR_INVALID_ARGUMENT;
+        return;
     }
-    if (thread_count < 1) {
-        return CXF_ERROR_INVALID_ARGUMENT;
+
+    logical = cxf_get_logical_processors();
+
+    if (thread_count > logical) {
+        cxf_log_printf(env, 0, "--------------------------------------");
+        cxf_log_printf(env, 0,
+            "Warning: Threads (%d) exceeds logical processors (%d)",
+            thread_count, logical);
+        cxf_log_printf(env, 0,
+            "Consider reducing the Threads parameter to avoid "
+            "oversubscription");
+        cxf_log_printf(env, 0, "--------------------------------------");
     }
-    return CXF_OK;
 }

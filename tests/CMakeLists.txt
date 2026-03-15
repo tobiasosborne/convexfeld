@@ -185,6 +185,9 @@ target_link_libraries(test_validate_array_diag PRIVATE m)
 # M3.3.1: Threading tests
 add_cxf_test(test_threading unit/test_threading.c)
 
+# V2: cxf_set_thread_count spec compliance (convexfeld-385q)
+add_cxf_test(test_set_thread_count unit/test_set_thread_count.c)
+
 # M7.1.3: Simplex Tests - Edge Cases
 add_cxf_test(test_simplex_edge unit/test_simplex_edge.c)
 

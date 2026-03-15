@@ -10,7 +10,7 @@
 /* Forward declarations for threading functions */
 int cxf_get_logical_processors(void);
 int cxf_get_physical_cores(void);
-int cxf_validate_thread_count(CxfEnv *env, int thread_count);
+void cxf_set_thread_count(CxfEnv *env, int thread_count);
 int cxf_get_threads(CxfEnv *env);
 void cxf_env_lock(CxfEnv *env);
 void cxf_env_unlock(CxfEnv *env);
@@ -63,28 +63,26 @@ void test_get_physical_cores_consistent(void) {
 }
 
 /*============================================================================
- * cxf_validate_thread_count Tests
+ * cxf_set_thread_count Tests (V2: void return, warns on oversubscription)
  *===========================================================================*/
 
-void test_set_thread_count_success(void) {
-    int result = cxf_validate_thread_count(env, 1);
-    TEST_ASSERT_EQUAL_INT(CXF_OK, result);
+void test_set_thread_count_normal(void) {
+    /* Valid count within logical processors -- should not crash */
+    cxf_set_thread_count(env, 1);
+    TEST_PASS();
 }
 
 void test_set_thread_count_null_env(void) {
-    int result = cxf_validate_thread_count(NULL, 4);
-    TEST_ASSERT_EQUAL_INT(CXF_ERROR_INVALID_ARGUMENT, result);
+    /* NULL env -- should not crash */
+    cxf_set_thread_count(NULL, 4);
+    TEST_PASS();
 }
 
-void test_set_thread_count_invalid(void) {
-    TEST_ASSERT_EQUAL_INT(CXF_ERROR_INVALID_ARGUMENT, cxf_validate_thread_count(env, 0));
-    TEST_ASSERT_EQUAL_INT(CXF_ERROR_INVALID_ARGUMENT, cxf_validate_thread_count(env, -1));
-}
-
-void test_set_thread_count_caps_at_logical(void) {
+void test_set_thread_count_oversubscribed(void) {
     int logical = cxf_get_logical_processors();
-    int result = cxf_validate_thread_count(env, logical + 100);
-    TEST_ASSERT_EQUAL_INT(CXF_OK, result);
+    /* Exceeds logical processors -- emits warning, should not crash */
+    cxf_set_thread_count(env, logical + 100);
+    TEST_PASS();
 }
 
 /*============================================================================
@@ -157,11 +155,10 @@ int main(void) {
     RUN_TEST(test_get_physical_cores_not_more_than_logical);
     RUN_TEST(test_get_physical_cores_consistent);
 
-    /* cxf_validate_thread_count tests */
-    RUN_TEST(test_set_thread_count_success);
+    /* cxf_set_thread_count tests (V2: void, warns on oversubscription) */
+    RUN_TEST(test_set_thread_count_normal);
     RUN_TEST(test_set_thread_count_null_env);
-    RUN_TEST(test_set_thread_count_invalid);
-    RUN_TEST(test_set_thread_count_caps_at_logical);
+    RUN_TEST(test_set_thread_count_oversubscribed);
 
     /* cxf_get_threads tests */
     RUN_TEST(test_get_threads_null_env_returns_zero);
