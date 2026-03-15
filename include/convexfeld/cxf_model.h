@@ -61,7 +61,9 @@ struct CxfModel {
     /* Bookkeeping */
     int callback_count;       /**< Number of registered callbacks */
     int solve_mode;           /**< Special solve mode flag */
-    int env_flag;             /**< Environment-related flag for cleanup */
+    int environment_owned;    /**< 1 if model owns a private child Environment
+                                   that must be freed on destruction; 0 if
+                                   borrowing a shared Environment (V2 spec) */
 };
 
 /*******************************************************************************

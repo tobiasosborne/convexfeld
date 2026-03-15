@@ -67,7 +67,7 @@ static void cxf_model_init_fields(CxfModel *model, CxfEnv *env,
     /* Bookkeeping */
     model->callback_count = 0;
     model->solve_mode = 0;
-    model->env_flag = 0;
+    model->environment_owned = 0;
 }
 
 int cxf_newmodel(CxfEnv *env, CxfModel **modelP, const char *name,

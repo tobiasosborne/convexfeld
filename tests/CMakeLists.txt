@@ -427,6 +427,9 @@ target_link_libraries(test_phase_transition_refactor PRIVATE m)
 add_cxf_test(test_phase_end_tol unit/test_phase_end_tol.c)
 target_link_libraries(test_phase_end_tol PRIVATE m)
 
+# V2: Model.environment_owned field rename from env_flag (convexfeld-usbc)
+add_cxf_test(test_env_owned unit/test_env_owned.c)
+
 ################################################################################
 # Integration Tests
 ################################################################################

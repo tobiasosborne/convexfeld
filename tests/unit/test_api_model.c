@@ -152,7 +152,7 @@ void test_newmodel_initializes_bookkeeping(void) {
     cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
     TEST_ASSERT_EQUAL_INT(0, model->callback_count);
     TEST_ASSERT_EQUAL_INT(0, model->solve_mode);
-    TEST_ASSERT_EQUAL_INT(0, model->env_flag);
+    TEST_ASSERT_EQUAL_INT(0, model->environment_owned);
     cxf_freemodel(model);
 }
 
