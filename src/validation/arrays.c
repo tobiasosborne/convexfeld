@@ -3,11 +3,11 @@
  * @brief Array and variable type validation functions.
  *
  * Implements validation for numeric arrays and variable types.
- * Specs: cxf_validate_array.md, cxf_validate_vartypes.md
+ * Spec: data_validation.md (cxf_validate_array, cxf_validate_vartypes)
  */
 
 #include "convexfeld/cxf_types.h"
-#include "convexfeld/cxf_model.h"
+#include "convexfeld/cxf_error.h"
 #include <math.h>
 
 /**
@@ -16,27 +16,29 @@
  * Checks that array does not contain NaN values.
  * Infinity is allowed per spec (valid for bounds).
  *
- * @param env   Environment pointer (unused in validation)
+ * @param env   Environment pointer (for error reporting, may be NULL)
  * @param count Number of elements in array
  * @param array Array to validate (NULL is valid)
  * @return CXF_OK if valid, CXF_ERROR_INVALID_ARGUMENT if NaN found
  */
 int cxf_validate_array(CxfEnv *env, int count, const double *array) {
-    (void)env;  /* Unused */
-
-    /* NULL array is valid (indicates defaults) */
+    /* NULL array is valid (vacuously valid) */
     if (array == NULL) {
         return CXF_OK;
     }
 
-    /* Zero or negative count is valid */
+    /* Zero or negative count is valid (vacuously valid) */
     if (count <= 0) {
         return CXF_OK;
     }
 
-    /* Check each element for NaN */
+    /* Check each element for NaN (early-exit on first) */
     for (int i = 0; i < count; i++) {
         if (isnan(array[i])) {
+            if (env != NULL) {
+                cxf_error_env(env, CXF_ERROR_INVALID_ARGUMENT, 0,
+                              "NaN at index %d", i);
+            }
             return CXF_ERROR_INVALID_ARGUMENT;
         }
     }
@@ -45,68 +47,44 @@ int cxf_validate_array(CxfEnv *env, int count, const double *array) {
 }
 
 /**
- * @brief Validate variable types and clamp binary bounds.
+ * @brief Validate variable type array per data_validation.md V2 spec.
  *
- * Validates that all variable types are legal: C, B, I, S, N.
- * For binary variables, clamps bounds to [0, 1] and checks feasibility.
+ * Validates that every element is a recognized LP variable type code
+ * (C, B, I, S, N). Case-insensitive: lowercase letters are normalized
+ * to uppercase before comparison. Pure validation -- no side effects.
  *
- * @param model Model to validate
- * @return CXF_OK if valid, CXF_ERROR_INVALID_ARGUMENT if invalid type
+ * @param env      Environment pointer (for error logging, may be NULL)
+ * @param count    Number of type codes in the array
+ * @param vartypes Array of variable type characters (NULL is valid)
+ * @return CXF_OK if valid, CXF_ERROR_INVALID_ARGUMENT if invalid code
  */
-int cxf_validate_vartypes(CxfModel *model) {
-    int i, n;
-    char t;
-
-    /* NULL model handled gracefully */
-    if (model == NULL) {
+int cxf_validate_vartypes(CxfEnv *env, int count, const char *vartypes) {
+    /* NULL vartypes is vacuously valid */
+    if (vartypes == NULL) {
         return CXF_OK;
     }
 
-    n = model->num_vars;
-    if (n <= 0) {
+    /* Zero or negative count is vacuously valid */
+    if (count <= 0) {
         return CXF_OK;
     }
 
-    /* NULL vtype means all continuous - valid */
-    if (model->vtype == NULL) {
-        return CXF_OK;
-    }
-
-    /* Validate each variable type */
-    for (i = 0; i < n; i++) {
-        t = model->vtype[i];
-
-        /* Check for valid type character */
-        if (t != 'C' && t != 'B' && t != 'I' && t != 'S' && t != 'N') {
-            return CXF_ERROR_INVALID_ARGUMENT;
+    /* Validate each variable type (early-exit on first invalid) */
+    for (int i = 0; i < count; i++) {
+        char orig = vartypes[i];
+        /* Case normalization: lowercase -> uppercase */
+        char t = orig;
+        if (t >= 'a' && t <= 'z') {
+            t = (char)(t - ('a' - 'A'));
         }
 
-        /* Binary variables: clamp bounds to [0, 1] */
-        if (t == 'B') {
-            /* Clamp lower bound */
-            if (model->lb != NULL) {
-                if (model->lb[i] < 0.0) {
-                    model->lb[i] = 0.0;
-                } else if (model->lb[i] > 1.0) {
-                    model->lb[i] = 1.0;
-                }
+        if (t != 'C' && t != 'B' && t != 'I' && t != 'S' && t != 'N') {
+            if (env != NULL) {
+                cxf_error_env(env, CXF_ERROR_INVALID_ARGUMENT, 0,
+                              "Invalid variable type '%c' at index %d",
+                              orig, i);
             }
-
-            /* Clamp upper bound */
-            if (model->ub != NULL) {
-                if (model->ub[i] < 0.0) {
-                    model->ub[i] = 0.0;
-                } else if (model->ub[i] > 1.0) {
-                    model->ub[i] = 1.0;
-                }
-            }
-
-            /* Check feasibility after clamping */
-            if (model->lb != NULL && model->ub != NULL) {
-                if (model->lb[i] > model->ub[i]) {
-                    return CXF_ERROR_INVALID_ARGUMENT;
-                }
-            }
+            return CXF_ERROR_INVALID_ARGUMENT;
         }
     }
 
