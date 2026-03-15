@@ -60,7 +60,7 @@ struct EtaVector {
     double pivot_elem;        /**< Pivot element */
     double obj_coeff;         /**< Objective coefficient of pivot_var */
     int status;               /**< New status of pivot_var: -1=lower, -2=upper, -3=superbasic, >=0=basic */
-    EtaVector *next;         /**< Link to next eta (newer) */
+    EtaVector *next;         /**< Link to next eta (older) */
 };
 
 /**

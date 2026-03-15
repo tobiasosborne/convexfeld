@@ -289,6 +289,10 @@ add_cxf_test(test_status_clear unit/test_status_clear.c)
 # V2 model_type_checking.md: cxf_check_model_flags1/flags2 spec compliance
 add_cxf_test(test_model_flags_v2 unit/test_model_flags_v2.c)
 
+# Eta linked list direction (V2 spec: next points to older, convexfeld-pxh0)
+add_cxf_test(test_eta_list_direction unit/test_eta_list_direction.c)
+target_link_libraries(test_eta_list_direction PRIVATE m)
+
 ################################################################################
 # Integration Tests
 ################################################################################
