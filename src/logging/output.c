@@ -40,11 +40,6 @@ void cxf_log_printf(CxfEnv *env, int level, const char *format, ...) {
         return;
     }
 
-    /* Check output_flag: 0 = suppress all, >= 1 = enable */
-    if (env->output_flag <= 0) {
-        return;
-    }
-
     /* Format the message */
     va_start(args, format);
     len = vsnprintf(buffer, sizeof(buffer), format, args);
@@ -56,11 +51,17 @@ void cxf_log_printf(CxfEnv *env, int level, const char *format, ...) {
     /* Handle truncation gracefully (just truncate, no error) */
     (void)len;
 
-    /* Output to console */
-    printf("%s\n", buffer);
-    fflush(stdout);
+    /* Output to console (suppressed when output_flag <= 0 per spec:
+     * logging.md Verbosity Control — quiet mode suppresses console) */
+    if (env->output_flag > 0) {
+        printf("%s\n", buffer);
+        fflush(stdout);
+    }
 
-    /* Output to user callback if registered */
+    /* Output to user callback if registered.
+     * Per V2 spec (logging.md §Verbosity Control, callback_protocol.md
+     * §Parameters): callbacks remain active regardless of output_flag.
+     * Quiet mode suppresses console/file only, never callbacks. */
     if (env->log_callback != NULL) {
         env->log_callback(buffer, env->log_callback_data);
     }

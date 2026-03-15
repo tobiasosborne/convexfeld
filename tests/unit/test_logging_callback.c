@@ -90,11 +90,14 @@ void test_log_printf_verbosity_filtered(void) {
     TEST_ASSERT_EQUAL_INT(0, callback_count);
 }
 
-void test_log_printf_output_flag_disabled(void) {
+void test_log_printf_output_flag_disables_console_not_callback(void) {
     cxf_register_log_callback(env, test_log_callback, NULL);
-    env->output_flag = 0;  /* Disable output */
-    cxf_log_printf(env, 0, "this should not appear");
-    TEST_ASSERT_EQUAL_INT(0, callback_count);
+    env->output_flag = 0;  /* Quiet mode: suppress console, keep callbacks */
+    cxf_log_printf(env, 0, "callback still receives this");
+    /* V2 spec (logging.md §Verbosity, callback_protocol.md §Parameters):
+     * quiet mode suppresses console/file, not callbacks */
+    TEST_ASSERT_EQUAL_INT(1, callback_count);
+    TEST_ASSERT_EQUAL_STRING("callback still receives this", last_callback_msg);
 }
 
 /*============================================================================
@@ -163,7 +166,7 @@ int main(void) {
     RUN_TEST(test_log_printf_with_callback);
     RUN_TEST(test_log_printf_format_args);
     RUN_TEST(test_log_printf_verbosity_filtered);
-    RUN_TEST(test_log_printf_output_flag_disabled);
+    RUN_TEST(test_log_printf_output_flag_disables_console_not_callback);
 
     /* cxf_register_log_callback tests */
     RUN_TEST(test_register_log_callback_success);

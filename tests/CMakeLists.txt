@@ -139,6 +139,9 @@ target_link_libraries(test_logging PRIVATE m)  # For math functions
 add_cxf_test(test_logging_callback unit/test_logging_callback.c)
 target_link_libraries(test_logging_callback PRIVATE m)  # For math functions
 
+# V2: Quiet-mode callback delivery (logging.md §Verbosity, convexfeld-ir53)
+add_cxf_test(test_log_quiet_callback unit/test_log_quiet_callback.c)
+
 # M3.1.7: Pivot validation tests
 add_cxf_test(test_pivot_check unit/test_pivot_check.c)
 target_link_libraries(test_pivot_check PRIVATE m)  # For math functions
