@@ -80,6 +80,7 @@ int cxf_pivot_bound(void *env, void *state, int var, double new_value,
         eta->next = basis->eta_head;
         basis->eta_head = eta;
         basis->eta_count++;
+        ctx->eta_count = basis->eta_count;  /* V2 sync: convexfeld-0ev4 */
     }
 
     /* Phase 2: Linear objective update */

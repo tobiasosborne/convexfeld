@@ -92,6 +92,7 @@ int cxf_simplex_refine(SolverState *state, CxfEnv *env) {
                 eta->next = basis->eta_head;
                 basis->eta_head = eta;
                 basis->eta_count++;
+                state->eta_count = basis->eta_count;  /* V2 sync: convexfeld-0ev4 */
             }
             state->work_x[j] = snap_val;
         }
