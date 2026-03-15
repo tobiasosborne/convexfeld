@@ -43,7 +43,7 @@ extern int cxf_simplex_preprocess(SolverState *state, CxfEnv *env, int flags);
 extern int cxf_simplex_step(SolverState *state, CxfEnv *env);
 extern int cxf_simplex_perturbation(SolverState *state, CxfEnv *env);
 extern int cxf_simplex_phase_end(SolverState *state, CxfEnv *env, int doScan);
-extern void cxf_progress_snapshot(SolverState *state);
+extern void cxf_progress_snapshot(SolverState *state, int *snapshot);
 extern int cxf_ftran(BasisState *basis, const double *column, double *result);
 
 /*---------------------------------------------------------------------------*/
@@ -376,7 +376,10 @@ int main(int argc, char **argv) {
 
     /* Main diagnostic loop */
     fprintf(stderr, "\n=== ITERATION TRACE ===\n");
-    cxf_progress_snapshot(state);
+    {
+        int snap_buf[CXF_SNAPSHOT_SIZE];
+        cxf_progress_snapshot(state, snap_buf);
+    }
 
     for (int iter = 0; iter < max_diag_iters; iter++) {
         /* Pre-step state */

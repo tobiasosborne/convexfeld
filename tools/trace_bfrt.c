@@ -17,7 +17,7 @@ extern void cxf_simplex_setup(SolverState *state, CxfEnv *env, int c, int *i);
 extern int cxf_simplex_preprocess(SolverState *state, CxfEnv *env, int f);
 extern int cxf_simplex_step(SolverState *state, CxfEnv *env);
 extern int cxf_simplex_perturbation(SolverState *state, CxfEnv *env);
-extern void cxf_progress_snapshot(SolverState *state);
+extern void cxf_progress_snapshot(SolverState *state, int *snapshot);
 
 static int count_bound_violations(const SolverState *state, double *worst) {
     int n = state->num_vars, m = state->num_constrs, total = n + m;
@@ -46,7 +46,10 @@ int main(int argc, char **argv) {
     cxf_compute_reduced_costs(state);
     cxf_simplex_setup(state, env, 0, NULL);
     cxf_simplex_preprocess(state, env, 0);
-    cxf_progress_snapshot(state);
+    {
+        int snap_buf[CXF_SNAPSHOT_SIZE];
+        cxf_progress_snapshot(state, snap_buf);
+    }
 
     int prev_flips = 0;
     for (int iter = 0; iter < 200; iter++) {

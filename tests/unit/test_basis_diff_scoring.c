@@ -12,6 +12,7 @@
  */
 
 #include "unity.h"
+#include "convexfeld/cxf_basis.h"
 #include "convexfeld/cxf_solver.h"
 #include "convexfeld/cxf_types.h"
 #include <string.h>

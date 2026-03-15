@@ -461,6 +461,10 @@ target_link_libraries(test_solve_lp_order PRIVATE m)
 add_cxf_test(test_max_candidates unit/test_max_candidates.c)
 target_link_libraries(test_max_candidates PRIVATE m)
 
+# V2 basis_state.md: progress_snapshot on BasisState (convexfeld-7522)
+add_cxf_test(test_snapshot_location unit/test_snapshot_location.c)
+target_link_libraries(test_snapshot_location PRIVATE m)
+
 ################################################################################
 # Integration Tests
 ################################################################################

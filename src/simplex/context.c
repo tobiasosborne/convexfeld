@@ -161,7 +161,7 @@ int cxf_simplex_init(CxfModel *model, SolverState **stateP) {
     ctx->cols_eliminated = 0;
     ctx->bounds_propagated = 0;
     ctx->flip_count = 0;
-    memset(ctx->progress_snapshot, 0, sizeof(ctx->progress_snapshot));
+    /* progress_snapshot is zero-initialized on BasisState (see below) */
 
     /* Crash basis arrays (v2 — P2.5) */
     ctx->num_basic = 0;
