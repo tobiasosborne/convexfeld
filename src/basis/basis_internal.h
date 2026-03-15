@@ -62,7 +62,8 @@ void eta_collect_free(struct EtaVector **etas,
 /* --- Pivot (pivot_eta.c) --- */
 int cxf_pivot_with_eta(struct BasisState *basis, int pivotRow,
                        const double *pivotCol, int enteringVar,
-                       int leavingVar, int leavingStatus);
+                       int leavingVar, int leavingStatus,
+                       double reducedCost, int direction);
 
 /* --- Refactorization (refactor.c) --- */
 int cxf_solver_refactor(struct SolverState *ctx, struct CxfEnv *env);

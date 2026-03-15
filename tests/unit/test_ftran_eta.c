@@ -14,7 +14,8 @@ void cxf_basis_free(BasisState *basis);
 int cxf_ftran(BasisState *basis, const double *column, double *result);
 int cxf_pivot_with_eta(BasisState *basis, int pivotRow,
                        const double *pivotCol, int enteringVar,
-                       int leavingVar, int leavingStatus);
+                       int leavingVar, int leavingStatus,
+                       double reducedCost, int direction);
 
 void setUp(void) {}
 void tearDown(void) {}
@@ -38,7 +39,7 @@ void test_ftran_single_eta(void) {
     /* After pivot at row 0, FTRAN of pivot column should give e_0. */
     BasisState *b = make_basis_3x6();
     double pcol[] = {2.0, 0.5, 0.25};
-    int rc = cxf_pivot_with_eta(b, 0, pcol, 0, 3, CXF_VAR_AT_LOWER);
+    int rc = cxf_pivot_with_eta(b, 0, pcol, 0, 3, CXF_VAR_AT_LOWER, 0.0, 1);
     TEST_ASSERT_EQUAL_INT(CXF_OK, rc);
 
     /* FTRAN of the same pivot column should give e_0 (identity pivot col) */
@@ -56,7 +57,7 @@ void test_ftran_eta_nonpivot_column(void) {
     /* After one pivot, FTRAN a different column. */
     BasisState *b = make_basis_3x6();
     double pcol[] = {2.0, 0.5, 0.25};
-    cxf_pivot_with_eta(b, 0, pcol, 0, 3, CXF_VAR_AT_LOWER);
+    cxf_pivot_with_eta(b, 0, pcol, 0, 3, CXF_VAR_AT_LOWER, 0.0, 1);
 
     /* FTRAN [1,0,0]: factor=1/2=0.5, r[0]=0.5, r[1]-=0.25, r[2]-=0.125 */
     double col[] = {1.0, 0.0, 0.0};
@@ -73,7 +74,7 @@ void test_ftran_eta_zero_in_pivot_row(void) {
     /* Hyper-sparse skip: if result[pivot_row]==0 before eta, skip it. */
     BasisState *b = make_basis_3x6();
     double pcol[] = {2.0, 0.5, 0.25};
-    cxf_pivot_with_eta(b, 0, pcol, 0, 3, CXF_VAR_AT_LOWER);
+    cxf_pivot_with_eta(b, 0, pcol, 0, 3, CXF_VAR_AT_LOWER, 0.0, 1);
 
     /* Column [0, 1, 0] has 0 in pivot_row 0, so eta is skipped. */
     double col[] = {0.0, 1.0, 0.0};
@@ -94,7 +95,7 @@ void test_ftran_two_pivots(void) {
 
     /* Pivot 1: entering var 0 at row 0 */
     double pcol1[] = {2.0, 0.5, 0.25};
-    cxf_pivot_with_eta(b, 0, pcol1, 0, 3, CXF_VAR_AT_LOWER);
+    cxf_pivot_with_eta(b, 0, pcol1, 0, 3, CXF_VAR_AT_LOWER, 0.0, 1);
 
     /* FTRAN column [0.1, 1.5, 0.3] through updated basis for pivot 2 */
     double col2[] = {0.1, 1.5, 0.3};
@@ -102,7 +103,7 @@ void test_ftran_two_pivots(void) {
     cxf_ftran(b, col2, ftran2);
 
     /* Pivot 2: use ftran2 as the pivot column, entering var 1 at row 1 */
-    cxf_pivot_with_eta(b, 1, ftran2, 1, 4, CXF_VAR_AT_LOWER);
+    cxf_pivot_with_eta(b, 1, ftran2, 1, 4, CXF_VAR_AT_LOWER, 0.0, 1);
 
     /* FTRAN of ftran2 through updated basis should give e_1 */
     double result[3];
@@ -120,19 +121,19 @@ void test_ftran_three_pivots_all_rows(void) {
 
     /* Pivot 1: row 0 */
     double pcol1[] = {2.0, 0.5, 0.25};
-    cxf_pivot_with_eta(b, 0, pcol1, 0, 3, CXF_VAR_AT_LOWER);
+    cxf_pivot_with_eta(b, 0, pcol1, 0, 3, CXF_VAR_AT_LOWER, 0.0, 1);
 
     /* FTRAN for pivot 2: row 1 */
     double col2[] = {0.1, 1.5, 0.3};
     double ftran2[3];
     cxf_ftran(b, col2, ftran2);
-    cxf_pivot_with_eta(b, 1, ftran2, 1, 4, CXF_VAR_AT_LOWER);
+    cxf_pivot_with_eta(b, 1, ftran2, 1, 4, CXF_VAR_AT_LOWER, 0.0, 1);
 
     /* FTRAN for pivot 3: row 2 */
     double col3[] = {0.2, 0.4, 3.0};
     double ftran3[3];
     cxf_ftran(b, col3, ftran3);
-    cxf_pivot_with_eta(b, 2, ftran3, 2, 5, CXF_VAR_AT_LOWER);
+    cxf_pivot_with_eta(b, 2, ftran3, 2, 5, CXF_VAR_AT_LOWER, 0.0, 1);
 
     /* FTRAN of col3 through final basis should give e_2 */
     double result[3];
@@ -150,7 +151,7 @@ void test_ftran_identity_eta(void) {
     /* Pivot column is a unit vector at pivot_row: eta has nnz=0. */
     BasisState *b = make_basis_3x6();
     double pcol[] = {1.0, 0.0, 0.0};
-    cxf_pivot_with_eta(b, 0, pcol, 0, 3, CXF_VAR_AT_LOWER);
+    cxf_pivot_with_eta(b, 0, pcol, 0, 3, CXF_VAR_AT_LOWER, 0.0, 1);
     TEST_ASSERT_EQUAL_INT(0, b->eta_head->nnz);
 
     /* FTRAN should still work correctly (identity eta) */
@@ -170,7 +171,7 @@ void test_ftran_identity_eta(void) {
 void test_ftran_negative_pivot(void) {
     BasisState *b = make_basis_3x6();
     double pcol[] = {-3.0, 1.0, 0.0};
-    cxf_pivot_with_eta(b, 0, pcol, 0, 3, CXF_VAR_AT_LOWER);
+    cxf_pivot_with_eta(b, 0, pcol, 0, 3, CXF_VAR_AT_LOWER, 0.0, 1);
 
     /* FTRAN of pcol should give e_0 */
     double result[3];

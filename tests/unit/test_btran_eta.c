@@ -16,7 +16,8 @@ int cxf_btran(BasisState *basis, int row, double *result);
 int cxf_btran_vec(BasisState *basis, const double *input, double *result);
 int cxf_pivot_with_eta(BasisState *basis, int pivotRow,
                        const double *pivotCol, int enteringVar,
-                       int leavingVar, int leavingStatus);
+                       int leavingVar, int leavingStatus,
+                       double reducedCost, int direction);
 
 void setUp(void) {}
 void tearDown(void) {}
@@ -41,7 +42,7 @@ void test_btran_single_eta_row0(void) {
     /* BTRAN row 0 after one pivot: duality y^T pcol = FTRAN(pcol)[0] */
     BasisState *b = make_basis_3x6();
     double pcol[] = {2.0, 0.5, 0.25};
-    cxf_pivot_with_eta(b, 0, pcol, 0, 3, CXF_VAR_AT_LOWER);
+    cxf_pivot_with_eta(b, 0, pcol, 0, 3, CXF_VAR_AT_LOWER, 0.0, 1);
 
     double y[3];
     cxf_btran(b, 0, y);
@@ -55,7 +56,7 @@ void test_btran_single_eta_row0(void) {
 void test_btran_single_eta_row1(void) {
     BasisState *b = make_basis_3x6();
     double pcol[] = {2.0, 0.5, 0.25};
-    cxf_pivot_with_eta(b, 0, pcol, 0, 3, CXF_VAR_AT_LOWER);
+    cxf_pivot_with_eta(b, 0, pcol, 0, 3, CXF_VAR_AT_LOWER, 0.0, 1);
 
     double y[3];
     cxf_btran(b, 1, y);
@@ -70,7 +71,7 @@ void test_btran_single_eta_row1(void) {
 void test_btran_vec_single_eta(void) {
     BasisState *b = make_basis_3x6();
     double pcol[] = {2.0, 0.5, 0.25};
-    cxf_pivot_with_eta(b, 0, pcol, 0, 3, CXF_VAR_AT_LOWER);
+    cxf_pivot_with_eta(b, 0, pcol, 0, 3, CXF_VAR_AT_LOWER, 0.0, 1);
 
     double input[] = {1.0, 2.0, 3.0};
     double y[3];
@@ -86,11 +87,11 @@ void test_btran_vec_single_eta(void) {
 void test_btran_two_pivots_duality(void) {
     BasisState *b = make_basis_3x6();
     double pcol1[] = {2.0, 0.5, 0.25};
-    cxf_pivot_with_eta(b, 0, pcol1, 0, 3, CXF_VAR_AT_LOWER);
+    cxf_pivot_with_eta(b, 0, pcol1, 0, 3, CXF_VAR_AT_LOWER, 0.0, 1);
     double col2[] = {0.1, 1.5, 0.3};
     double ftran2[3];
     cxf_ftran(b, col2, ftran2);
-    cxf_pivot_with_eta(b, 1, ftran2, 1, 4, CXF_VAR_AT_LOWER);
+    cxf_pivot_with_eta(b, 1, ftran2, 1, 4, CXF_VAR_AT_LOWER, 0.0, 1);
     double a[] = {7.0, 11.0, 13.0};
     double ftran_a[3];
     cxf_ftran(b, a, ftran_a);
@@ -106,11 +107,11 @@ void test_btran_two_pivots_duality(void) {
 void test_btran_vec_two_pivots_duality(void) {
     BasisState *b = make_basis_3x6();
     double pcol1[] = {2.0, 0.5, 0.25};
-    cxf_pivot_with_eta(b, 0, pcol1, 0, 3, CXF_VAR_AT_LOWER);
+    cxf_pivot_with_eta(b, 0, pcol1, 0, 3, CXF_VAR_AT_LOWER, 0.0, 1);
     double col2[] = {0.1, 1.5, 0.3};
     double ftran2[3];
     cxf_ftran(b, col2, ftran2);
-    cxf_pivot_with_eta(b, 1, ftran2, 1, 4, CXF_VAR_AT_LOWER);
+    cxf_pivot_with_eta(b, 1, ftran2, 1, 4, CXF_VAR_AT_LOWER, 0.0, 1);
 
     double input[] = {3.0, 5.0, 7.0};
     double y[3];
@@ -126,15 +127,15 @@ void test_btran_vec_two_pivots_duality(void) {
 void test_btran_three_pivots_all_rows(void) {
     BasisState *b = make_basis_3x6();
     double pcol1[] = {2.0, 0.5, 0.25};
-    cxf_pivot_with_eta(b, 0, pcol1, 0, 3, CXF_VAR_AT_LOWER);
+    cxf_pivot_with_eta(b, 0, pcol1, 0, 3, CXF_VAR_AT_LOWER, 0.0, 1);
     double col2[] = {0.1, 1.5, 0.3};
     double ftran2[3];
     cxf_ftran(b, col2, ftran2);
-    cxf_pivot_with_eta(b, 1, ftran2, 1, 4, CXF_VAR_AT_LOWER);
+    cxf_pivot_with_eta(b, 1, ftran2, 1, 4, CXF_VAR_AT_LOWER, 0.0, 1);
     double col3[] = {0.2, 0.4, 3.0};
     double ftran3[3];
     cxf_ftran(b, col3, ftran3);
-    cxf_pivot_with_eta(b, 2, ftran3, 2, 5, CXF_VAR_AT_LOWER);
+    cxf_pivot_with_eta(b, 2, ftran3, 2, 5, CXF_VAR_AT_LOWER, 0.0, 1);
 
     double a[] = {1.0, 2.0, 3.0};
     double ftran_a[3];
@@ -153,7 +154,7 @@ void test_btran_identity_eta(void) {
     /* nnz=0 eta: pivot column is a unit vector */
     BasisState *b = make_basis_3x6();
     double pcol[] = {1.0, 0.0, 0.0};
-    cxf_pivot_with_eta(b, 0, pcol, 0, 3, CXF_VAR_AT_LOWER);
+    cxf_pivot_with_eta(b, 0, pcol, 0, 3, CXF_VAR_AT_LOWER, 0.0, 1);
 
     double y[3];
     cxf_btran(b, 0, y);
@@ -167,7 +168,7 @@ void test_btran_identity_eta(void) {
 void test_btran_negative_pivot(void) {
     BasisState *b = make_basis_3x6();
     double pcol[] = {-3.0, 1.0, 0.0};
-    cxf_pivot_with_eta(b, 0, pcol, 0, 3, CXF_VAR_AT_LOWER);
+    cxf_pivot_with_eta(b, 0, pcol, 0, 3, CXF_VAR_AT_LOWER, 0.0, 1);
 
     double a[] = {5.0, 10.0, 15.0};
     double ftran_a[3];

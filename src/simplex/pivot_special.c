@@ -66,12 +66,14 @@ int cxf_pivot_bound(void *env, void *state, int var, double new_value,
         }
         if (eta == NULL) return CXF_ERROR_OUT_OF_MEMORY;
 
-        eta->type = 3;                           /* Variable-fixing record */
+        eta->type = CXF_ETA_VARIABLE_FIX;
         eta->pivot_row = -1;
-        eta->pivot_var = var;
+        eta->entering_var = var;
+        eta->leaving_var = -1;                   /* N/A for variable fixing */
         eta->pivot_elem = new_value;
-        eta->obj_coeff = ctx->work_obj[var];     /* Previous reduced cost */
-        eta->status = basis->var_status[var];     /* Previous status */
+        eta->reduced_cost = ctx->work_obj[var];  /* Previous reduced cost */
+        eta->direction = 0;                      /* N/A for variable fixing */
+        eta->status = basis->var_status[var];    /* Previous status */
         eta->nnz = 0;
         eta->indices = NULL;
         eta->values = NULL;

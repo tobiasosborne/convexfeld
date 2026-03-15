@@ -329,6 +329,19 @@ typedef struct EtaChunk EtaChunk;
 typedef struct EtaBuffer EtaBuffer;
 
 /*******************************************************************************
+ * Eta Vector Type Constants (V2 eta_vector.md)
+ ******************************************************************************/
+
+/** @brief Eta type: pivot transformation (entering/leaving variable exchange) */
+#define CXF_ETA_PIVOT         2
+
+/** @brief Eta type: variable fixing (bound snap, presolve, etc.) */
+#define CXF_ETA_VARIABLE_FIX  3
+
+/** @brief Eta type: quadratic warm-start record */
+#define CXF_ETA_WARM_START    4
+
+/*******************************************************************************
  * Eta Buffer Size Constants
  ******************************************************************************/
 

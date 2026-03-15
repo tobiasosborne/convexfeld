@@ -24,7 +24,7 @@
  * The eta represents an elementary transformation matrix that differs from
  * the identity in only one column/row.
  *
- * @param type Eta type: 1=refactorization, 2=pivot.
+ * @param type Eta type: CXF_ETA_PIVOT, CXF_ETA_VARIABLE_FIX, CXF_ETA_WARM_START.
  * @param pivot_row Row index for the pivot operation.
  * @param nnz Number of non-zeros in the sparse representation.
  * @return Pointer to new EtaVector, or NULL on failure.
@@ -81,7 +81,7 @@ void cxf_eta_free(EtaVector *eta) {
  * Resizes arrays if necessary. Clears all values to zero.
  *
  * @param eta EtaVector to initialize.
- * @param type Eta type: 1=refactorization, 2=pivot.
+ * @param type Eta type: CXF_ETA_PIVOT, CXF_ETA_VARIABLE_FIX, CXF_ETA_WARM_START.
  * @param pivot_row Row index for pivot.
  * @param nnz Number of non-zeros (must match allocated capacity).
  * @return CXF_OK on success, error code on failure.
@@ -147,8 +147,10 @@ int cxf_eta_validate(const EtaVector *eta, int max_rows) {
         return CXF_ERROR_INVALID_ARGUMENT;
     }
 
-    /* Check type is valid (1 or 2) */
-    if (eta->type != 1 && eta->type != 2) {
+    /* Check type is valid (V2: PIVOT, VARIABLE_FIX, or WARM_START) */
+    if (eta->type != CXF_ETA_PIVOT &&
+        eta->type != CXF_ETA_VARIABLE_FIX &&
+        eta->type != CXF_ETA_WARM_START) {
         return CXF_ERROR_INVALID_ARGUMENT;
     }
 

@@ -162,8 +162,8 @@ void test_eta_record_created(void) {
 
     TEST_ASSERT_NOT_NULL(test_basis.eta_head);
     TEST_ASSERT_EQUAL_INT(1, test_basis.eta_count);
-    TEST_ASSERT_EQUAL_INT(3, test_basis.eta_head->type);
-    TEST_ASSERT_EQUAL_INT(0, test_basis.eta_head->pivot_var);
+    TEST_ASSERT_EQUAL_INT(CXF_ETA_VARIABLE_FIX, test_basis.eta_head->type);
+    TEST_ASSERT_EQUAL_INT(0, test_basis.eta_head->entering_var);
     TEST_ASSERT_DOUBLE_WITHIN(1e-12, 5.0, test_basis.eta_head->pivot_elem);
 }
 
@@ -171,7 +171,7 @@ void test_eta_stores_previous_rc_and_status(void) {
     /* var0: work_obj=3.0, status=AT_LOWER before fix */
     cxf_pivot_bound(&test_env, &test_state, 0, 5.0, 10.0, 0);
 
-    TEST_ASSERT_DOUBLE_WITHIN(1e-12, 3.0, test_basis.eta_head->obj_coeff);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-12, 3.0, test_basis.eta_head->reduced_cost);
     TEST_ASSERT_EQUAL_INT(CXF_VAR_AT_LOWER, test_basis.eta_head->status);
 }
 

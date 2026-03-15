@@ -61,10 +61,10 @@ void test_basis_init_sets_arrays(void) {
 
 /*--- EtaVector creation/free tests ---*/
 
-void test_eta_create_type1(void) {
-    EtaVector *eta = cxf_eta_create(1, 2, 5);  /* Type 1, pivot row 2, 5 nnz */
+void test_eta_create_pivot(void) {
+    EtaVector *eta = cxf_eta_create(CXF_ETA_PIVOT, 2, 5);
     TEST_ASSERT_NOT_NULL(eta);
-    TEST_ASSERT_EQUAL_INT(1, eta->type);
+    TEST_ASSERT_EQUAL_INT(CXF_ETA_PIVOT, eta->type);
     TEST_ASSERT_EQUAL_INT(2, eta->pivot_row);
     TEST_ASSERT_EQUAL_INT(5, eta->nnz);
     TEST_ASSERT_NOT_NULL(eta->indices);
@@ -73,10 +73,10 @@ void test_eta_create_type1(void) {
     cxf_eta_free(eta);
 }
 
-void test_eta_create_type2(void) {
-    EtaVector *eta = cxf_eta_create(2, 0, 3);  /* Type 2, pivot row 0, 3 nnz */
+void test_eta_create_variable_fix(void) {
+    EtaVector *eta = cxf_eta_create(CXF_ETA_VARIABLE_FIX, 0, 3);
     TEST_ASSERT_NOT_NULL(eta);
-    TEST_ASSERT_EQUAL_INT(2, eta->type);
+    TEST_ASSERT_EQUAL_INT(CXF_ETA_VARIABLE_FIX, eta->type);
     cxf_eta_free(eta);
 }
 
@@ -86,7 +86,7 @@ void test_eta_free_null_safe(void) {
 }
 
 void test_eta_create_empty(void) {
-    EtaVector *eta = cxf_eta_create(1, 0, 0);  /* Empty eta */
+    EtaVector *eta = cxf_eta_create(CXF_ETA_PIVOT, 0, 0);  /* Empty eta */
     TEST_ASSERT_NOT_NULL(eta);
     TEST_ASSERT_EQUAL_INT(0, eta->nnz);
     cxf_eta_free(eta);
@@ -126,8 +126,8 @@ int main(void) {
     RUN_TEST(test_basis_free_null_safe);
     RUN_TEST(test_basis_create_zero_constraints);
     RUN_TEST(test_basis_init_sets_arrays);
-    RUN_TEST(test_eta_create_type1);
-    RUN_TEST(test_eta_create_type2);
+    RUN_TEST(test_eta_create_pivot);
+    RUN_TEST(test_eta_create_variable_fix);
     RUN_TEST(test_eta_free_null_safe);
     RUN_TEST(test_eta_create_empty);
     RUN_TEST(test_basis_refactor_clears_eta_list);

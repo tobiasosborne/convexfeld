@@ -22,7 +22,8 @@
 BasisState *cxf_basis_create(int m, int n);
 void cxf_basis_free(BasisState *basis);
 int cxf_pivot_with_eta(BasisState *basis, int pivotRow, const double *pivotCol,
-                       int enteringVar, int leavingVar, int leavingStatus);
+                       int enteringVar, int leavingVar, int leavingStatus,
+                       double reducedCost, int direction);
 int cxf_ftran(BasisState *basis, const double *column, double *result);
 int cxf_btran(BasisState *basis, int row, double *result);
 
@@ -51,7 +52,7 @@ void tearDown(void) {
 void test_single_eta_next_is_null(void) {
     double col[] = {2.0, 0.5, 0.1};
     TEST_ASSERT_EQUAL_INT(CXF_OK,
-        cxf_pivot_with_eta(basis, 0, col, 0, 3, CXF_VAR_AT_LOWER));
+        cxf_pivot_with_eta(basis, 0, col, 0, 3, CXF_VAR_AT_LOWER, 0.0, 1));
     TEST_ASSERT_NOT_NULL(basis->eta_head);
     TEST_ASSERT_NULL(basis->eta_head->next);
 }
@@ -70,11 +71,11 @@ void test_two_pivots_head_is_newer_next_is_older(void) {
 
     /* Pivot 1: entering var 0 replaces var 3 in row 0 */
     TEST_ASSERT_EQUAL_INT(CXF_OK,
-        cxf_pivot_with_eta(basis, 0, col1, 0, 3, CXF_VAR_AT_LOWER));
+        cxf_pivot_with_eta(basis, 0, col1, 0, 3, CXF_VAR_AT_LOWER, 0.0, 1));
 
     /* Pivot 2: entering var 1 replaces var 4 in row 1 */
     TEST_ASSERT_EQUAL_INT(CXF_OK,
-        cxf_pivot_with_eta(basis, 1, col2, 1, 4, CXF_VAR_AT_LOWER));
+        cxf_pivot_with_eta(basis, 1, col2, 1, 4, CXF_VAR_AT_LOWER, 0.0, 1));
 
     TEST_ASSERT_EQUAL_INT(2, basis->eta_count);
 
@@ -100,9 +101,9 @@ void test_three_pivots_newest_to_oldest(void) {
     double col2[] = {0.1, 1.5, 0.3};
     double col3[] = {0.2, 0.3, 1.8};
 
-    cxf_pivot_with_eta(basis, 0, col1, 0, 3, CXF_VAR_AT_LOWER);
-    cxf_pivot_with_eta(basis, 1, col2, 1, 4, CXF_VAR_AT_LOWER);
-    cxf_pivot_with_eta(basis, 2, col3, 2, 5, CXF_VAR_AT_LOWER);
+    cxf_pivot_with_eta(basis, 0, col1, 0, 3, CXF_VAR_AT_LOWER, 0.0, 1);
+    cxf_pivot_with_eta(basis, 1, col2, 1, 4, CXF_VAR_AT_LOWER, 0.0, 1);
+    cxf_pivot_with_eta(basis, 2, col3, 2, 5, CXF_VAR_AT_LOWER, 0.0, 1);
 
     TEST_ASSERT_EQUAL_INT(3, basis->eta_count);
 
@@ -129,9 +130,9 @@ void test_list_length_matches_eta_count(void) {
     double col2[] = {0.1, 1.5, 0.3};
     double col3[] = {0.2, 0.3, 1.8};
 
-    cxf_pivot_with_eta(basis, 0, col1, 0, 3, CXF_VAR_AT_LOWER);
-    cxf_pivot_with_eta(basis, 1, col2, 1, 4, CXF_VAR_AT_LOWER);
-    cxf_pivot_with_eta(basis, 2, col3, 2, 5, CXF_VAR_AT_LOWER);
+    cxf_pivot_with_eta(basis, 0, col1, 0, 3, CXF_VAR_AT_LOWER, 0.0, 1);
+    cxf_pivot_with_eta(basis, 1, col2, 1, 4, CXF_VAR_AT_LOWER, 0.0, 1);
+    cxf_pivot_with_eta(basis, 2, col3, 2, 5, CXF_VAR_AT_LOWER, 0.0, 1);
 
     int count = 0;
     for (EtaVector *e = basis->eta_head; e != NULL; e = e->next)

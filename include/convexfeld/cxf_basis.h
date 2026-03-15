@@ -51,15 +51,17 @@ typedef struct LUFactors {
  * Eta matrices form a linked list for PFI representation.
  */
 struct EtaVector {
-    int type;                 /**< 1=refactorization, 2=pivot */
-    int pivot_row;            /**< Row index for pivot */
-    int pivot_var;            /**< Variable index involved in transformation */
+    int type;                 /**< CXF_ETA_PIVOT, CXF_ETA_VARIABLE_FIX, or CXF_ETA_WARM_START */
+    int pivot_row;            /**< Row index where leaving variable resided */
+    int entering_var;         /**< Column index of entering variable (V2 enteringVar) */
+    int leaving_var;          /**< Column index of leaving variable (V2 leavingVar) */
     int nnz;                  /**< Non-zeros in eta vector */
     int *indices;             /**< Row indices [nnz] */
     double *values;           /**< Values [nnz] */
-    double pivot_elem;        /**< Pivot element */
-    double obj_coeff;         /**< Objective coefficient of pivot_var */
-    int status;               /**< New status of pivot_var: -1=lower, -2=upper, -3=superbasic, >=0=basic */
+    double pivot_elem;        /**< Pivot element A[pivotRow, enteringVar] */
+    double reduced_cost;      /**< Reduced cost of entering var at pivot time (V2 reducedCost) */
+    int direction;            /**< Entering var bound direction: >=0 from lower, <0 from upper */
+    int status;               /**< Previous status (Variant 2: var status before fix) */
     EtaVector *next;         /**< Link to next eta (older) */
 };
 

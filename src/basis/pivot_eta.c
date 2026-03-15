@@ -41,11 +41,14 @@
  * @param leavingVar Index of leaving variable.
  * @param leavingStatus Nonbasic status for leaving var (CXF_VAR_AT_LOWER or
  *                      CXF_VAR_AT_UPPER). Caller determines from bound proximity.
+ * @param reducedCost Reduced cost of the entering variable at pivot time.
+ * @param direction Entering var bound direction: >=0 from lower, <0 from upper.
  * @return CXF_OK on success, CXF_ERROR_OUT_OF_MEMORY on allocation failure,
  *         -1 if pivot element is too small (|pivot| < CXF_PIVOT_TOL).
  */
 int cxf_pivot_with_eta(BasisState *basis, int pivotRow, const double *pivotCol,
-                       int enteringVar, int leavingVar, int leavingStatus) {
+                       int enteringVar, int leavingVar, int leavingStatus,
+                       double reducedCost, int direction) {
     /* Validate arguments */
     if (basis == NULL || pivotCol == NULL) {
         return CXF_ERROR_NULL_ARGUMENT;
@@ -87,12 +90,14 @@ int cxf_pivot_with_eta(BasisState *basis, int pivotRow, const double *pivotCol,
         return CXF_ERROR_OUT_OF_MEMORY;
     }
 
-    eta->type = 2;              /* Type 2 = pivot update */
+    eta->type = CXF_ETA_PIVOT;
     eta->pivot_row = pivotRow;
-    eta->pivot_var = enteringVar;
+    eta->entering_var = enteringVar;
+    eta->leaving_var = leavingVar;
     eta->pivot_elem = pivot;    /* Store actual pivot, not reciprocal */
-    eta->obj_coeff = 0.0;       /* Not used for pivot updates */
-    eta->status = 0;            /* Not used for pivot updates */
+    eta->reduced_cost = reducedCost;
+    eta->direction = direction;
+    eta->status = 0;            /* Not used for pivot etas */
     eta->nnz = nnz;
     eta->next = NULL;
 

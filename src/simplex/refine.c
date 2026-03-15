@@ -78,11 +78,13 @@ int cxf_simplex_refine(SolverState *state, CxfEnv *env) {
             else
                 eta = (EtaVector *)calloc(1, sizeof(EtaVector));
             if (eta != NULL) {
-                eta->type = 3;  /* Variable-fixing */
+                eta->type = CXF_ETA_VARIABLE_FIX;
                 eta->pivot_row = -1;
-                eta->pivot_var = j;
+                eta->entering_var = j;
+                eta->leaving_var = -1;
                 eta->pivot_elem = snap_val;
-                eta->obj_coeff = state->work_obj[j];
+                eta->reduced_cost = state->work_obj[j];
+                eta->direction = 0;
                 eta->status = basis->var_status[j];
                 eta->nnz = 0;
                 eta->indices = NULL;

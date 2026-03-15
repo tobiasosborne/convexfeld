@@ -71,7 +71,8 @@ static void extract_column_ext(const SolverState *state, int col,
  * @brief Low-level pivot: update primal values, create eta, fix leaving status.
  */
 int cxf_apply_pivot(SolverState *state, int entering, int leavingRow,
-                    const double *pivotCol, double stepSize) {
+                    const double *pivotCol, double stepSize,
+                    double reducedCost, int direction) {
     if (state == NULL || pivotCol == NULL) return CXF_ERROR_NULL_ARGUMENT;
     if (state->basis == NULL) return CXF_ERROR_INVALID_ARGUMENT;
 
@@ -107,7 +108,8 @@ int cxf_apply_pivot(SolverState *state, int entering, int leavingRow,
 
     /* Create eta vector and exchange basis */
     int rc = cxf_pivot_with_eta(basis, leavingRow, pivotCol,
-                                entering, leaving, leave_status);
+                                entering, leaving, leave_status,
+                                reducedCost, direction);
     state->eta_count = basis->eta_count;
     return rc;
 }
@@ -652,11 +654,13 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env) {
             state->work_ub[leaving] < CXF_INFINITY)
             lv_status = CXF_VAR_AT_UPPER;
         rc = cxf_pivot_with_eta(basis, leavingRow, pivotCol,
-                                entering, leaving, lv_status);
+                                entering, leaving, lv_status,
+                                d_entering, entering_sign);
         if (rc != CXF_OK) return rc;
         state->eta_count = basis->eta_count;
     } else {
-        rc = cxf_apply_pivot(state, entering, leavingRow, pivotCol, stepSize);
+        rc = cxf_apply_pivot(state, entering, leavingRow, pivotCol, stepSize,
+                             d_entering, entering_sign);
         if (rc != CXF_OK) return rc;
     }
 
