@@ -486,6 +486,10 @@ add_cxf_test(test_pool_capacity unit/test_pool_capacity.c)
 # V2 model_type_checking.md: cxf_is_quadratic + cxf_is_socp (convexfeld-nrop, convexfeld-e8ch)
 add_cxf_test(test_model_type_qp_socp unit/test_model_type_qp_socp.c)
 
+# EXPAND eps_base mid-range scaling (perturbation.md Phase 5, convexfeld-4xf3)
+add_cxf_test(test_expand_eps_base unit/test_expand_eps_base.c)
+target_link_libraries(test_expand_eps_base PRIVATE m)
+
 ################################################################################
 # Integration Tests
 ################################################################################

@@ -120,8 +120,9 @@ int cxf_expand_widen_bounds(SolverState *state, CxfEnv *env,
 
     int widened = 0;
     /* Spec: "epsilon_base is typically on the order of 1e-6 to 1e-8
-     * (scaled from the feasibility tolerance)." */
-    double eps_base = feas_tol;
+     * (scaled from the feasibility tolerance)."
+     * Use feas_tol/10 so default 1e-6 lands at 1e-7 (mid-range). */
+    double eps_base = feas_tol / 10.0;
     if (eps_base < 1e-8) eps_base = 1e-8;
     if (eps_base > 1e-6) eps_base = 1e-6;
 
