@@ -473,6 +473,9 @@ target_link_libraries(test_phase_one_perf PRIVATE m)
 add_cxf_test(test_midpoint_snap unit/test_midpoint_snap.c)
 target_link_libraries(test_midpoint_snap PRIVATE m)
 
+# V2 model_type_checking.md: cxf_is_mip_model extended checks (convexfeld-4047)
+add_cxf_test(test_is_mip_extended unit/test_is_mip_extended.c)
+
 ################################################################################
 # Integration Tests
 ################################################################################

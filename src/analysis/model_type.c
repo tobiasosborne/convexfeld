@@ -13,39 +13,54 @@
 #include <stddef.h>
 
 /**
- * @brief Check if model contains integer-type variables (MIP).
+ * @brief Check if model contains any MIP-qualifying elements.
  *
- * Scans the model's variable type array for any non-continuous variable.
- * Returns immediately upon finding the first integer-type variable.
+ * Per V2 model_type_checking.md: checks MIP solve flag, integer/binary vars,
+ * SOS constraints, indicator constraints, semi-continuous/semi-integer vars,
+ * and other MIP indicators. Returns 1 if any MIP element is found.
  *
  * @param model Model to check (may be NULL)
- * @return 1 if model has integer variables, 0 if all continuous or NULL
+ * @return 1 if model is MIP, 0 if pure continuous or NULL
  */
 int cxf_is_mip_model(CxfModel *model) {
     if (model == NULL) {
         return 0;
     }
 
-    /* No variables means no integer variables */
-    if (model->num_vars <= 0) {
-        return 0;
+    /* V2: Check MIP solve flag (solve_mode nonzero) */
+    if (model->solve_mode != 0) {
+        return 1;
     }
 
-    /* NULL vtype means all continuous (default) */
-    if (model->vtype == NULL) {
-        return 0;
+    /* V2: Check SOS constraint data (non-NULL means SOS present) */
+    if (model->sos_data != NULL) {
+        return 1;
     }
 
-    /* Scan for any non-continuous variable */
-    for (int i = 0; i < model->num_vars; i++) {
-        char vt = model->vtype[i];
-        /* Non-continuous types: Binary(B), Integer(I), Semi-cont(S), Semi-int(N) */
-        if (vt != 'C' && vt != CXF_CONTINUOUS) {
-            return 1;  /* Found integer variable */
+    /* V2: Check general constraint data (indicators, etc.) */
+    if (model->gen_constr_data != NULL) {
+        return 1;
+    }
+
+    /*
+     * V2 TODO: When MatrixData gains these fields, check them here:
+     * - piecewise-linear objective term count
+     * - quadratic constraint count (may indicate non-convex MIQCP)
+     * - multi-objective / scenario optimization flag
+     * - force-non-convex flag
+     */
+
+    /* Check variable types for any non-continuous variable */
+    if (model->num_vars > 0 && model->vtype != NULL) {
+        for (int i = 0; i < model->num_vars; i++) {
+            char vt = model->vtype[i];
+            if (vt != 'C' && vt != CXF_CONTINUOUS) {
+                return 1;
+            }
         }
     }
 
-    return 0;  /* All continuous */
+    return 0;  /* Pure continuous */
 }
 
 /**
