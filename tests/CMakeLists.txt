@@ -310,6 +310,10 @@ add_cxf_test(test_param_case unit/test_param_case.c)
 add_cxf_test(test_eta_fields unit/test_eta_fields.c)
 target_link_libraries(test_eta_fields PRIVATE m)
 
+# Constraint queue L0 status filtering (pricing_support.md, convexfeld-yvbq)
+add_cxf_test(test_queue_filter_l0 unit/test_queue_filter_l0.c)
+target_link_libraries(test_queue_filter_l0 PRIVATE m)
+
 ################################################################################
 # Integration Tests
 ################################################################################

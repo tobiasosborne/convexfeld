@@ -29,25 +29,36 @@
 /* Flag bit constants (same as queue_insert.c) */
 
 /**
- * @brief Filter one queue at level 0: discard basic variables, compact.
+ * @brief Filter one queue at level 0: discard invalid entries, compact.
  *
  * For variable queues: keep nonbasic (status < 0), discard basic (>= 0).
- * For constraint queues: keep all valid indices.
- * The is_var_queue flag selects the filtering mode.
+ * For constraint queues: keep entries whose constraint status (i.e.
+ *   status[status_offset + idx]) is non-negative per pricing_support.md L0.
+ *
+ * @param status_offset  For constraint queues: num_vars (maps constr idx
+ *                       to its slack var in the combined status array).
+ *                       For variable queues: 0 (unused).
  */
 static int filter_queue_l0(int *queue, int total, const int *status,
-                           int status_count, int is_var_queue) {
+                           int status_count, int is_var_queue,
+                           int status_offset) {
     int write = 0;
     for (int i = 0; i < total; i++) {
         int idx = queue[i];
-        if (idx < 0 || idx >= status_count) continue;
+        if (idx < 0) continue;
         if (is_var_queue) {
             /* Variable queue: keep nonbasic variables (status < 0) */
-            if (status[idx] < 0)
+            if (idx >= status_count) continue;
+            if (status != NULL && status[idx] < 0)
                 queue[write++] = idx;
         } else {
-            /* Constraint queue: keep all valid constraint indices */
-            queue[write++] = idx;
+            /* Constraint queue: keep entries with non-negative constraint
+             * status.  Constraint idx maps to status[status_offset + idx]
+             * (the slack variable for that constraint). */
+            int si = status_offset + idx;
+            if (si >= status_count) continue;
+            if (status != NULL && status[si] >= 0)
+                queue[write++] = idx;
         }
     }
     return write;
@@ -57,23 +68,38 @@ static int filter_queue_l0(int *queue, int total, const int *status,
  * @brief Filter one queue at levels 1-2: promote pending, demote stale.
  *
  * Variable queues discard basic (status >= 0) entries.
- * Constraint queues keep all valid entries.
+ * Constraint queues discard entries with negative constraint status
+ * (status[status_offset + idx] < 0) per pricing_support.md L1-L2.
+ *
+ * @param status_offset  For constraint queues: num_vars.
+ *                       For variable queues: 0 (unused).
  */
 static int filter_queue_lx(int *queue, int total, uint8_t *flags,
                            int flag_count, const int *status,
                            int status_count, uint8_t commit_bit,
                            uint8_t pend_bit, uint8_t level_mask,
-                           int is_var_queue) {
+                           int is_var_queue, int status_offset) {
     int write = 0;
     for (int i = 0; i < total; i++) {
         int idx = queue[i];
         if (idx < 0 || idx >= flag_count) continue;
 
-        /* Status check: discard basic variables from var queues */
-        if (is_var_queue && idx < status_count &&
-            status != NULL && status[idx] >= 0) {
-            flags[idx] &= (uint8_t)~level_mask;
-            continue;
+        /* Status check: discard invalid entries */
+        if (status != NULL) {
+            if (is_var_queue) {
+                /* Variable queue: discard basic (status >= 0) */
+                if (idx < status_count && status[idx] >= 0) {
+                    flags[idx] &= (uint8_t)~level_mask;
+                    continue;
+                }
+            } else {
+                /* Constraint queue: discard negative constraint status */
+                int si = status_offset + idx;
+                if (si < status_count && status[si] < 0) {
+                    flags[idx] &= (uint8_t)~level_mask;
+                    continue;
+                }
+            }
         }
 
         if (flags[idx] & pend_bit) {
@@ -105,19 +131,23 @@ void cxf_pricing_update_queues(PricingState *ctx, SolverState *state) {
 
     int total_vars = state->num_vars + state->num_constrs;
 
+    int num_vars = state->num_vars;
+
     if (level == 0) {
         /* Level 0: simple status-based compaction */
         if (ctx->constr_queue[0] != NULL) {
             int n = filter_queue_l0(ctx->constr_queue[0],
                                     ctx->constr_q_total[0],
-                                    var_status, total_vars, 0);
+                                    var_status, total_vars, 0,
+                                    num_vars);
             ctx->constr_q_committed[0] = n;
             ctx->constr_q_total[0] = n;
         }
         if (ctx->var_queue[0] != NULL) {
             int n = filter_queue_l0(ctx->var_queue[0],
                                     ctx->var_q_total[0],
-                                    var_status, total_vars, 1);
+                                    var_status, total_vars, 1,
+                                    0);
             ctx->var_q_committed[0] = n;
             ctx->var_q_total[0] = n;
         }
@@ -132,7 +162,7 @@ void cxf_pricing_update_queues(PricingState *ctx, SolverState *state) {
             int n = filter_queue_lx(ctx->constr_queue[level],
                 ctx->constr_q_total[level], ctx->constr_flags,
                 ctx->num_constrs, var_status, total_vars,
-                cb, pb, lm, 0);
+                cb, pb, lm, 0, num_vars);
             ctx->constr_q_committed[level] = n;
             ctx->constr_q_total[level] = n;
         }
@@ -142,7 +172,7 @@ void cxf_pricing_update_queues(PricingState *ctx, SolverState *state) {
             int n = filter_queue_lx(ctx->var_queue[level],
                 ctx->var_q_total[level], ctx->var_flags,
                 ctx->num_vars, var_status, total_vars,
-                cb, pb, lm, 1);
+                cb, pb, lm, 1, 0);
             ctx->var_q_committed[level] = n;
             ctx->var_q_total[level] = n;
         }
