@@ -36,6 +36,9 @@ struct CxfEnv {
     volatile int *terminate_flag_ptr; /**< External termination flag (fastest check) */
     volatile int terminate_flag;      /**< Primary termination flag */
 
+    /* Threading */
+    int threads;              /**< User Threads parameter: 0=auto, >0=explicit cap */
+    int license_thread_limit; /**< License thread limit: 0=unlimited, >0=hard cap */
     /* Refactorization parameters */
     int max_eta_count;        /**< Maximum eta vectors before forced refactor */
     int64_t max_eta_memory;   /**< Maximum eta memory before forced refactor */

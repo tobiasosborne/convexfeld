@@ -82,6 +82,15 @@ int cxf_setintparam(CxfEnv *env, const char *paramname, int newvalue) {
         return CXF_OK;
     }
 
+    /* Threads: 0=auto, 1-1024=explicit cap */
+    if (strcasecmp_local(paramname, "Threads") == 0) {
+        if (newvalue < 0 || newvalue > 1024) {
+            return CXF_ERROR_VALUE_OUT_OF_RANGE;
+        }
+        env->threads = newvalue;
+        return CXF_OK;
+    }
+
     /* Unknown parameter */
     return CXF_ERROR_INVALID_ARGUMENT;
 }
@@ -129,6 +138,12 @@ int cxf_getintparam(CxfEnv *env, const char *paramname, int *valueP) {
     /* MaxEtaCount */
     if (strcasecmp_local(paramname, "MaxEtaCount") == 0) {
         *valueP = env->max_eta_count;
+        return CXF_OK;
+    }
+
+    /* Threads */
+    if (strcasecmp_local(paramname, "Threads") == 0) {
+        *valueP = env->threads;
         return CXF_OK;
     }
 

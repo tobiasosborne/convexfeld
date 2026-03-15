@@ -1,74 +1,93 @@
 /**
  * @file config.c
- * @brief Thread configuration implementation
+ * @brief Thread configuration: effective thread count resolution
  *
- * Provides functions for configuring thread count in the environment.
- * Currently implements stub behavior where thread count is not stored,
- * and auto-mode (0 threads) is always returned.
+ * Implements cxf_get_threads per threading_sync.md V2 spec:
+ * hierarchy of constraints, most restrictive wins.
  */
 
 #include "convexfeld/cxf_types.h"
 #include "convexfeld/cxf_env.h"
 
+/* From logging/system.c */
+int cxf_get_logical_processors(void);
+/* From threading/cpu.c */
+int cxf_get_physical_cores(void);
+
+/** @brief Internal cap on auto-detected thread count (~32 per spec) */
+#define CXF_THREAD_CAP 32
+
 /**
- * @brief Get the configured thread count
+ * @brief Compute effective thread count per V2 threading_sync.md.
  *
- * Returns the number of threads configured for parallel operations.
- * Currently returns 0 (auto mode) for all non-NULL environments.
+ * Resolution chain (each step can only reduce, never increase):
+ *  1. Model-level override (not yet wired; reserved for future use)
+ *  2. Auto-detect: logical processors, prefer physical cores on large
+ *     systems, cap at CXF_THREAD_CAP
+ *  3. User Threads parameter (env->threads): if > 0 and < current, use it
+ *  4. License thread limit (env->license_thread_limit): if > 0 and < current
  *
- * @param env Environment handle (may be NULL)
- * @return Number of threads configured, or 0 for auto mode or NULL env
- *
- * @note Current stub implementation:
- *       - Returns 0 for NULL env
- *       - Returns 0 (auto mode) for valid env
- *       - Thread count storage not yet implemented
+ * @param env Environment (may be NULL)
+ * @return Positive effective thread count, or 0 if env is NULL
  */
 int cxf_get_threads(CxfEnv *env) {
+    int count;
+    int physical;
+
     if (env == NULL) {
         return 0;
     }
 
-    /* Stub: Always return 0 (auto mode) until thread count storage
-     * is added to CxfEnv structure */
-    return 0;
+    /* Step 1: model-level override (reserved, not yet wired) */
+    /* When CxfModel gains a thread_override field, check it here:
+     *   if (model_thread_override >= 1) count = model_thread_override;
+     * For now, fall through to auto-detection. */
+
+    /* Step 2: auto-detect with cap */
+    count = cxf_get_logical_processors();
+
+    if (count > CXF_THREAD_CAP) {
+        /* Prefer physical cores on large systems */
+        physical = cxf_get_physical_cores();
+        if (physical < count) {
+            count = physical;
+        }
+        /* Clamp to cap */
+        if (count > CXF_THREAD_CAP) {
+            count = CXF_THREAD_CAP;
+        }
+    }
+
+    /* Step 3: user Threads parameter (0 = auto, no reduction) */
+    if (env->threads > 0 && env->threads < count) {
+        count = env->threads;
+    }
+
+    /* Step 4: license thread limit (0 = unlimited, no reduction) */
+    if (env->license_thread_limit > 0 && env->license_thread_limit < count) {
+        count = env->license_thread_limit;
+    }
+
+    /* Ensure at least 1 */
+    return (count > 0) ? count : 1;
 }
 
 /**
- * @brief Set the thread count for parallel operations
+ * @brief Validate a requested thread count.
  *
- * Configures the number of threads to use for parallel operations.
- * Currently validates input but does not store the value (stub behavior).
+ * Checks that thread_count >= 1. Does NOT store the value;
+ * storage is via cxf_setintparam("Threads", N).
  *
- * @param env Environment handle (must not be NULL)
- * @param thread_count Number of threads to use (must be >= 1)
- * @return CXF_OK on success
- * @return CXF_ERROR_INVALID_ARGUMENT if env is NULL
- * @return CXF_ERROR_INVALID_ARGUMENT if thread_count < 1
- *
- * @note Current stub implementation:
- *       - Validates parameters
- *       - Does not store thread_count (storage not in CxfEnv yet)
- *       - Returns CXF_OK for valid inputs
- *
- * @note Future implementation will:
- *       - Store thread_count in CxfEnv structure
- *       - Allow retrieval via cxf_get_threads()
+ * @param env  Environment handle (must not be NULL)
+ * @param thread_count  Thread count to validate (must be >= 1)
+ * @return CXF_OK on success, CXF_ERROR_INVALID_ARGUMENT otherwise
  */
 int cxf_validate_thread_count(CxfEnv *env, int thread_count) {
-    /* Validate environment handle */
     if (env == NULL) {
         return CXF_ERROR_INVALID_ARGUMENT;
     }
-
-    /* Validate thread count - must be at least 1 */
     if (thread_count < 1) {
         return CXF_ERROR_INVALID_ARGUMENT;
     }
-
-    /* Stub: Accept the thread_count but don't store it yet
-     * Thread count storage will be added to CxfEnv in future milestone */
-    (void)thread_count;
-
     return CXF_OK;
 }
