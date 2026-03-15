@@ -126,7 +126,9 @@ void test_phase_end_infeasible_returns_error(void) {
 /* Termination condition tests */
 void test_post_iterate_null_state_fails(void) {
     TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT,
-                          cxf_simplex_post_iterate(NULL, env, NULL));
+                          cxf_simplex_post_iterate(NULL, NULL, NULL));
+    TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT,
+                          cxf_simplex_post_iterate(model, NULL, NULL));
 }
 
 void test_post_iterate_returns_continue_or_refactor(void) {
@@ -136,7 +138,7 @@ void test_post_iterate_returns_continue_or_refactor(void) {
     cxf_simplex_setup(state, env, 0, NULL);
 
     int stall = 0;
-    int status = cxf_simplex_post_iterate(state, env, &stall);
+    int status = cxf_simplex_post_iterate(model, state, &stall);
     TEST_ASSERT_TRUE(status == 0 || status == 1);
 
     cxf_simplex_final(state);

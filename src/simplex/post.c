@@ -12,6 +12,7 @@
 #include "convexfeld/cxf_solver.h"
 #include "convexfeld/cxf_basis.h"
 #include "convexfeld/cxf_env.h"
+#include "convexfeld/cxf_model.h"
 #include "convexfeld/cxf_matrix.h"
 #include "convexfeld/cxf_pricing.h"
 #include "convexfeld/cxf_types.h"
@@ -28,16 +29,20 @@
 /*===========================================================================
  * cxf_simplex_post_iterate — Post-iteration monitoring (v2 P3.20)
  *
- * Signature: (Model*, SolverState*, int *outStall) per v2 spec.
- * Currently takes (SolverState*, CxfEnv*, int *outStall).
+ * V2 spec signature: (CxfModel*, SolverState*, int *outStall) -> int
+ * Derives env from model->env internally.
  *
  * Checks: (1) stall detection, (2) iteration limit,
  *         (3) objective stagnation, (4) user interrupt.
  *===========================================================================*/
 
-int cxf_simplex_post_iterate(SolverState *state, CxfEnv *env,
+int cxf_simplex_post_iterate(CxfModel *model, SolverState *state,
                              int *outStall) {
-    if (state == NULL || env == NULL)
+    if (model == NULL || state == NULL)
+        return CXF_ERROR_NULL_ARGUMENT;
+
+    CxfEnv *env = model->env;
+    if (env == NULL)
         return CXF_ERROR_NULL_ARGUMENT;
 
     if (state->work_counter)

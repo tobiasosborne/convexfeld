@@ -447,6 +447,9 @@ target_link_libraries(test_problem_var_index PRIVATE m)
 # V2 solve_entry.md: cxf_optimize return value semantics (convexfeld-tlnu)
 add_cxf_test(test_optimize_return unit/test_optimize_return.c)
 
+# V2 simplex_iteration.md: post_iterate takes CxfModel* not CxfEnv* (convexfeld-mfjq)
+add_cxf_test(test_post_iterate_sig unit/test_post_iterate_sig.c)
+
 ################################################################################
 # Integration Tests
 ################################################################################

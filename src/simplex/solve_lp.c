@@ -292,7 +292,7 @@ int cxf_solve_lp(CxfModel *model) {
             }
 
             /* (10) Post-iterate: stall, stagnation, termination */
-            status = cxf_simplex_post_iterate(state, env, &stall);
+            status = cxf_simplex_post_iterate(model, state, &stall);
             if (status == CXF_ITERATION_LIMIT) {
                 model->status = CXF_ITERATION_LIMIT;
                 terminated = 1; break;

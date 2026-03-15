@@ -258,12 +258,12 @@ int cxf_simplex_phase_end(SolverState *state, CxfEnv *env, int doScan);
 
 /**
  * @brief Post-iteration monitoring: stall, stagnation, limits (v2 P3.20).
+ * @param model    Model (derives env internally from model->env)
  * @param state    Solver context
- * @param env      Environment
  * @param outStall Output: 1 if stalling detected, 0 otherwise (may be NULL)
  * @return 0 to continue, termination code to stop
  */
-int cxf_simplex_post_iterate(SolverState *state, CxfEnv *env,
+int cxf_simplex_post_iterate(CxfModel *model, SolverState *state,
                              int *outStall);
 
 /**
