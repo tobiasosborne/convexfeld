@@ -109,6 +109,9 @@ target_link_libraries(test_error_numeric PRIVATE m)  # For math functions (NAN, 
 
 add_cxf_test(test_error_reporting unit/test_error_reporting.c)
 
+# P3.09: Zero error code handling (convexfeld-mrz6, convexfeld-tyy6)
+add_cxf_test(test_error_zero_code unit/test_error_zero_code.c)
+
 # M4.2.1: Timing tests
 add_cxf_test(test_timing unit/test_timing.c)
 target_link_libraries(test_timing PRIVATE m)  # For math functions

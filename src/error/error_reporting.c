@@ -96,7 +96,7 @@ static void write_error(CxfEnv *env, int error_code, int overwrite,
 
 void cxf_error_env(CxfEnv *env, int error_code, int overwrite,
                    const char *format, ...) {
-    if (!env) return;
+    if (!env || error_code == 0) return;
     char buf[512];
     va_list ap;
     va_start(ap, format);
@@ -107,7 +107,7 @@ void cxf_error_env(CxfEnv *env, int error_code, int overwrite,
 
 void cxf_error_model(CxfModel *model, int error_code, int overwrite,
                      const char *format, ...) {
-    if (!model || !model->env) return;
+    if (!model || !model->env || error_code == 0) return;
     char buf[512];
     va_list ap;
     va_start(ap, format);
@@ -118,10 +118,27 @@ void cxf_error_model(CxfModel *model, int error_code, int overwrite,
 
 void cxf_set_error_message(CxfModel *model, int error_code) {
     if (!model || !model->env) return;
-    write_error(model->env, error_code, 0, cxf_error_message(error_code));
+    CxfEnv *env = model->env;
+
+    /* Zero error code: clear buffer to empty string (V2 spec) */
+    if (error_code == 0) {
+        env->error_buffer[0] = '\0';
+        return;
+    }
+
+    /* Nonzero: delegate to write_error for code + message */
+    write_error(env, error_code, 0, cxf_error_message(error_code));
 }
 
 void cxf_env_set_status(CxfEnv *env, int error_code) {
     if (!env) return;
+
+    /* Zero error code: clear buffer to empty string (V2 spec) */
+    if (error_code == 0) {
+        env->error_buffer[0] = '\0';
+        return;
+    }
+
+    /* Nonzero: delegate to write_error for code + message */
     write_error(env, error_code, 0, cxf_error_message(error_code));
 }
