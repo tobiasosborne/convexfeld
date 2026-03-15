@@ -154,24 +154,28 @@ int cxf_simplex_step3(SolverState *state, CxfEnv *env) {
             double a = state->csr_values[k];
             if (fabs(a) < CXF_PIVOT_TOL) continue;
 
-            /* Implied bounds from constraint activity */
+            /* Implied bounds from constraint activity (Savelsbergh 1994).
+             * x_k <= l_k + (b_i - L_act_i) / a_ik  (for <= with a > 0)
+             * x_k >= u_k + (b_i - U_act_i) / a_ik  (for <= with a < 0)
+             * where L_act_i / U_act_i include variable k's contribution. */
+            double rhs_i = (state->work_rhs) ? state->work_rhs[row] : 0.0;
             if (sense == '<' || sense == 'L' ||
                 sense == '=' || sense == 'E') {
                 if (a > 0) {
-                    double impl = lb - min_act / a;
+                    double impl = lb + (rhs_i - min_act) / a;
                     tightened += tighten_bound(state, j, impl, 0, tol);
                 } else {
-                    double impl = lb - max_act / a;
+                    double impl = ub + (rhs_i - max_act) / a;
                     tightened += tighten_bound(state, j, impl, 1, tol);
                 }
             }
             if (sense == '>' || sense == 'G' ||
                 sense == '=' || sense == 'E') {
                 if (a > 0) {
-                    double impl = ub - max_act / a;
+                    double impl = ub + (rhs_i - max_act) / a;
                     tightened += tighten_bound(state, j, impl, 1, tol);
                 } else {
-                    double impl = ub - min_act / a;
+                    double impl = lb + (rhs_i - min_act) / a;
                     tightened += tighten_bound(state, j, impl, 0, tol);
                 }
             }

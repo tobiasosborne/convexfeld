@@ -261,6 +261,10 @@ target_link_libraries(test_ftran_eta PRIVATE m)
 add_cxf_test(test_btran_eta unit/test_btran_eta.c)
 target_link_libraries(test_btran_eta PRIVATE m)
 
+# Step3 implied bound formula (Savelsbergh 1994, convexfeld-cm5w)
+add_cxf_test(test_step3_implied_bound unit/test_step3_implied_bound.c)
+target_link_libraries(test_step3_implied_bound PRIVATE m)
+
 ################################################################################
 # Integration Tests
 ################################################################################
