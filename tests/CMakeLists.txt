@@ -296,6 +296,10 @@ add_cxf_test(test_model_flags_v2 unit/test_model_flags_v2.c)
 add_cxf_test(test_eta_list_direction unit/test_eta_list_direction.c)
 target_link_libraries(test_eta_list_direction PRIVATE m)
 
+# V2 cxf_sort_indices: values ascending, indices as satellite (convexfeld-6ygu)
+add_cxf_test(test_sort_indices unit/test_sort_indices.c)
+target_link_libraries(test_sort_indices PRIVATE m)
+
 ################################################################################
 # Integration Tests
 ################################################################################

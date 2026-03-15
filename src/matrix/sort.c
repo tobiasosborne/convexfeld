@@ -1,12 +1,13 @@
 /**
  * @file sort.c
- * @brief Sort sparse matrix indices (M4.1.6)
+ * @brief Sort sparse matrix arrays (M4.1.6)
  *
- * Sorts arrays of integer indices with optional value synchronization.
- * Uses introsort (Musser 1997): quicksort with median-of-three pivot,
- * heapsort fallback at depth 2*log2(n), insertion sort for n <= 16.
+ * Provides cxf_sort_indices (V2 spec: sorts values ascending, indices as
+ * satellite) and legacy index-key sorts. Uses introsort (Musser 1997):
+ * quicksort with median-of-three pivot, heapsort fallback at depth
+ * 2*log2(n), insertion sort for n <= 16.
  *
- * Spec: docs/specs/functions/matrix/cxf_sort_indices.md
+ * Spec: docs/specs-v2/specs/modules/matrix_core.md
  */
 
 #include <stdlib.h>

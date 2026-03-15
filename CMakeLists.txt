@@ -98,6 +98,7 @@ target_sources(convexfeld PRIVATE
     src/matrix/vectors.c
     src/matrix/row_major.c
     src/matrix/sort.c
+    src/matrix/sort_values.c
     # Basis module (M5.1.2-M5.1.8 complete + M7 pivot_eta + LU factors)
     src/basis/basis_state.c
     src/basis/eta_factors.c
