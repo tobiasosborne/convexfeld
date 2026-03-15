@@ -440,6 +440,9 @@ target_link_libraries(test_phase_end_tol PRIVATE m)
 # V2: Model.environment_owned field rename from env_flag (convexfeld-usbc)
 add_cxf_test(test_env_owned unit/test_env_owned.c)
 
+# V2: freemodel child environment cleanup (convexfeld-3wx7)
+add_cxf_test(test_freemodel_cleanup unit/test_freemodel_cleanup.c)
+
 # V2 solver_state.md: problem_var_index stores variable index (convexfeld-7tas)
 add_cxf_test(test_problem_var_index unit/test_problem_var_index.c)
 target_link_libraries(test_problem_var_index PRIVATE m)

@@ -56,6 +56,8 @@ void test_environment_owned_settable_to_one(void) {
     /* V2 spec: 1 means model owns a private child environment. */
     model->environment_owned = 1;
     TEST_ASSERT_EQUAL_INT(1, model->environment_owned);
+    /* Reset to 0 so tearDown doesn't double-free the shared env */
+    model->environment_owned = 0;
 }
 
 void test_environment_owned_roundtrip(void) {
@@ -74,6 +76,8 @@ void test_environment_owned_not_copied(void) {
     TEST_ASSERT_NOT_NULL(copy);
     TEST_ASSERT_EQUAL_INT(0, copy->environment_owned);
     cxf_freemodel(copy);
+    /* Reset to 0 so tearDown doesn't double-free the shared env */
+    model->environment_owned = 0;
 }
 
 void test_second_model_also_zero(void) {

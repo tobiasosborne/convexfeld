@@ -160,7 +160,12 @@ void cxf_freemodel(CxfModel *model) {
     cxf_free(model->sos_data);
     cxf_free(model->gen_constr_data);
 
-    /* Mark as invalid before freeing */
+    /* V2 spec model.md Destruction Step 2: free child environment if owned */
+    if (model->environment_owned && model->env != NULL) {
+        cxf_freeenv(model->env);
+    }
+
+    /* Sentinel invalidation as last step (V2 spec Destruction Step 3) */
     model->magic = 0;
     model->env = NULL;
     model->primary_model = NULL;
