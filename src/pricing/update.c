@@ -2,7 +2,7 @@
  * @file update.c
  * @brief V2 queue processing (P4.4)
  *
- * cxf_pricing_update_queues: process V2 queues at current level —
+ * cxf_pricing_update: process V2 queues at current level —
  *     filter invalid entries, promote pending->committed, invalidate
  *     caches. Spec: pricing_core.md (P4.4)
  *
@@ -19,7 +19,7 @@
 #include "pricing_internal.h"
 
 /*===========================================================================
- * V2 Queue Consumer (P4.4) — cxf_pricing_update_queues
+ * V2 Queue Consumer (P4.4) — cxf_pricing_update
  *
  * Processes both V2 queues at current level per pricing_core.md Phase 3.
  * Phase activation guard -> status filter -> flag promote/demote -> cache
@@ -114,7 +114,7 @@ static int filter_queue_lx(int *queue, int total, uint8_t *flags,
     return write;
 }
 
-void cxf_pricing_update_queues(PricingState *ctx, SolverState *state) {
+void cxf_pricing_update(PricingState *ctx, SolverState *state) {
     if (ctx == NULL || state == NULL) return;
 
     int level = ctx->current_level;

@@ -263,7 +263,7 @@ static int pricing_and_ftran(SolverState *state, CxfEnv *env,
     double pricing_tol = env->optimality_tol;  /* Updated per level */
 
     if (state->pricing)
-        cxf_pricing_update_queues(state->pricing, state);
+        cxf_pricing_update(state->pricing, state);
 
     for (int level = 0; level <= 2; level++) {
         if (state->pricing)

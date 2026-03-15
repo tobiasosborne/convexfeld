@@ -76,7 +76,7 @@ void cxf_pricing_cascade_update(PricingState *ctx, SolverState *state,
  * @brief Complete current pricing level (P4.6: V2 queue compaction).
  *
  * V1: Clears dirty flags, invalidates V1 caches.
- * V2: Delegates to cxf_pricing_update_queues for flag-based
+ * V2: Delegates to cxf_pricing_update for flag-based
  *     promote/demote and cache invalidation at levels 1-2.
  */
 void cxf_pricing_end_level(PricingState *ctx) {
@@ -105,7 +105,7 @@ void cxf_pricing_end_level(PricingState *ctx) {
         ctx->num_dirty = 0;
     }
 
-    /* V2 (P4.6): Queue filtering is handled by cxf_pricing_update_queues
+    /* V2 (P4.6): Queue filtering is handled by cxf_pricing_update
      * (update.c) which has access to SolverState for status-based filtering.
      * That function is called by step.c before pricing. Here we invalidate
      * V2 caches AFTER filtering, per pricing_core.md Phase 3.

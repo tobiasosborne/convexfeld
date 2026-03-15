@@ -130,7 +130,7 @@ void cxf_pricing_update_constr(PricingState *ctx,
                                struct SolverState *state, int constrIndex);
 
 /** P4.4: Process V2 queues at current level (filter, promote, invalidate). */
-void cxf_pricing_update_queues(PricingState *ctx,
+void cxf_pricing_update(PricingState *ctx,
                                struct SolverState *state);
 
 /** P4.5: Retrieve candidate variables via V2 adaptive strategy. */

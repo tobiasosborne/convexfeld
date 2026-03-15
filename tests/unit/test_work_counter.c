@@ -2,7 +2,7 @@
  * @file test_work_counter.c
  * @brief Tests: work counter uses pre-compaction (scanned) queue sizes.
  *
- * Verifies that cxf_pricing_update_queues increments the work counter
+ * Verifies that cxf_pricing_update increments the work counter
  * by the number of entries SCANNED (pre-compaction), not entries
  * surviving compaction, per pricing_support.md Work Counter Integration.
  *
@@ -78,7 +78,7 @@ void test_l0_work_counter_no_filtering(void) {
     ctx->current_level = 0;
     ctx->level_active[0] = 1;
 
-    cxf_pricing_update_queues(ctx, s);
+    cxf_pricing_update(ctx, s);
 
     /* All survive => work = m + n = 7 (pre == post) */
     TEST_ASSERT_EQUAL_DOUBLE(7.0, work);
@@ -121,7 +121,7 @@ void test_l0_work_counter_with_filtering(void) {
     ctx->current_level = 0;
     ctx->level_active[0] = 1;
 
-    cxf_pricing_update_queues(ctx, s);
+    cxf_pricing_update(ctx, s);
 
     /* Post-compaction: constr=2, var=3 (total 5)
      * Pre-compaction:  constr=4, var=4 (total 8)
@@ -167,7 +167,7 @@ void test_l0_work_counter_all_filtered(void) {
     ctx->current_level = 0;
     ctx->level_active[0] = 1;
 
-    cxf_pricing_update_queues(ctx, s);
+    cxf_pricing_update(ctx, s);
 
     /* Post-compaction: 0. Pre-compaction: 6. Work = 6, NOT 0. */
     TEST_ASSERT_EQUAL_DOUBLE(6.0, work);
@@ -217,7 +217,7 @@ void test_l1_work_counter_with_filtering(void) {
     ctx->current_level = 1;
     ctx->level_active[1] = 1;
 
-    cxf_pricing_update_queues(ctx, s);
+    cxf_pricing_update(ctx, s);
 
     /* Post-compaction: constr=2, var=2 (total=4)
      * Pre-compaction:  constr=3, var=3 (total=6)
@@ -248,7 +248,7 @@ void test_work_counter_null_noop(void) {
     ctx->level_active[0] = 1;
 
     /* Should not crash */
-    cxf_pricing_update_queues(ctx, s);
+    cxf_pricing_update(ctx, s);
 
     cxf_pricing_free(ctx);
     free_test_state(s);
@@ -276,7 +276,7 @@ void test_work_counter_accumulates(void) {
     ctx->current_level = 0;
     ctx->level_active[0] = 1;
 
-    cxf_pricing_update_queues(ctx, s);
+    cxf_pricing_update(ctx, s);
 
     /* 5.0 + (2 + 1) = 8.0 */
     TEST_ASSERT_EQUAL_DOUBLE(8.0, work);

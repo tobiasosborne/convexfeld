@@ -369,6 +369,10 @@ target_link_libraries(test_cache_level0 PRIVATE m)
 add_cxf_test(test_work_counter unit/test_work_counter.c)
 target_link_libraries(test_work_counter PRIVATE m)
 
+# V2 spec rename: cxf_pricing_update (was cxf_pricing_update_queues, convexfeld-5ox8)
+add_cxf_test(test_pricing_update_rename unit/test_pricing_update_rename.c)
+target_link_libraries(test_pricing_update_rename PRIVATE m)
+
 # Cancellation detection in pivot_update (numerical_stability.md §B)
 add_cxf_test(test_cancellation_detect unit/test_cancellation_detect.c)
 target_link_libraries(test_cancellation_detect PRIVATE m)

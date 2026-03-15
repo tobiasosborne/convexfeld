@@ -2,7 +2,7 @@
  * @file test_queue_filter_l0.c
  * @brief Tests for constraint queue status filtering in update_queues.
  *
- * Verifies that cxf_pricing_update_queues filters constraint queue entries
+ * Verifies that cxf_pricing_update filters constraint queue entries
  * by constraint status (var_status[num_vars + constr_idx] >= 0) at all
  * levels, per pricing_support.md Level 0 and pricing_core.md Phase 3.
  *
@@ -70,7 +70,7 @@ void test_l0_constr_queue_keeps_basic_slacks(void) {
     /* Activate level first (phase guard) */
     ctx->level_active[0] = 1;
 
-    cxf_pricing_update_queues(ctx, s);
+    cxf_pricing_update(ctx, s);
 
     /* All slacks are basic (status >= 0) => all kept */
     TEST_ASSERT_EQUAL_INT(m, ctx->constr_q_committed[0]);
@@ -99,7 +99,7 @@ void test_l0_constr_queue_discards_nonbasic_slacks(void) {
     ctx->current_level = 0;
     ctx->level_active[0] = 1;
 
-    cxf_pricing_update_queues(ctx, s);
+    cxf_pricing_update(ctx, s);
 
     /* Constraint 1 should be gone (slack nonbasic), 3 remain */
     TEST_ASSERT_EQUAL_INT(3, ctx->constr_q_committed[0]);
@@ -140,7 +140,7 @@ void test_l0_constr_queue_all_nonbasic_empties(void) {
     ctx->current_level = 0;
     ctx->level_active[0] = 1;
 
-    cxf_pricing_update_queues(ctx, s);
+    cxf_pricing_update(ctx, s);
 
     TEST_ASSERT_EQUAL_INT(0, ctx->constr_q_committed[0]);
     TEST_ASSERT_EQUAL_INT(0, ctx->constr_q_total[0]);
@@ -168,7 +168,7 @@ void test_l0_var_queue_still_works(void) {
     ctx->current_level = 0;
     ctx->level_active[0] = 1;
 
-    cxf_pricing_update_queues(ctx, s);
+    cxf_pricing_update(ctx, s);
 
     TEST_ASSERT_EQUAL_INT(2, ctx->var_q_committed[0]);
 
@@ -202,7 +202,7 @@ void test_lx_constr_queue_discards_nonbasic_slack(void) {
     ctx->current_level = 1;
     ctx->level_active[1] = 1;
 
-    cxf_pricing_update_queues(ctx, s);
+    cxf_pricing_update(ctx, s);
 
     /* Constraint 2 should be discarded (nonbasic slack) */
     TEST_ASSERT_EQUAL_INT(2, ctx->constr_q_committed[1]);
@@ -233,7 +233,7 @@ void test_lx_constr_queue_keeps_basic_slack_with_pending(void) {
     ctx->current_level = 1;
     ctx->level_active[1] = 1;
 
-    cxf_pricing_update_queues(ctx, s);
+    cxf_pricing_update(ctx, s);
 
     /* Both kept and promoted */
     TEST_ASSERT_EQUAL_INT(2, ctx->constr_q_committed[1]);

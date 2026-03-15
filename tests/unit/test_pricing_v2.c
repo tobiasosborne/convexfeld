@@ -194,7 +194,7 @@ void test_update_constr_csr_traversal(void) {
     free_test_state(s);
 }
 
-/*--- cxf_pricing_update_queues tests (P4.4) ---*/
+/*--- cxf_pricing_update tests (P4.4) ---*/
 
 void test_update_queues_activation_guard(void) {
     PricingState *ctx = cxf_pricing_create(5, 3);
@@ -205,7 +205,7 @@ void test_update_queues_activation_guard(void) {
     ctx->current_level = 1;
     TEST_ASSERT_EQUAL_INT(0, ctx->level_active[1]);
 
-    cxf_pricing_update_queues(ctx, s);
+    cxf_pricing_update(ctx, s);
     /* First call just activates */
     TEST_ASSERT_EQUAL_INT(1, ctx->level_active[1]);
 
@@ -227,7 +227,7 @@ void test_update_queues_promote_pending(void) {
     ctx->var_queue[1][0] = 0;
     ctx->var_q_total[1] = 1;
 
-    cxf_pricing_update_queues(ctx, s);
+    cxf_pricing_update(ctx, s);
 
     /* Should be promoted: committed bit set, pending cleared */
     TEST_ASSERT_EQUAL_INT(1, ctx->var_q_committed[1]);
