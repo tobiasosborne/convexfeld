@@ -42,12 +42,14 @@ static void apply_transition(double *act, int *unbd, double a,
         /* Finite to finite: cancellation-safe delta */
         *act = safe_add(*act, a * (new_val - old_val), is_min);
     } else if (!old_inf && new_inf) {
-        /* Finite to infinite: remove old finite contribution */
-        *act -= a * old_val;
+        /* Finite to infinite: remove old finite contribution.
+         * Use safe_add for cancellation detection (§B). */
+        *act = safe_add(*act, -(a * old_val), is_min);
         if (unbd) (*unbd)++;
     } else if (old_inf && !new_inf) {
-        /* Infinite to finite: add new finite contribution */
-        *act += a * new_val;
+        /* Infinite to finite: add new finite contribution.
+         * Use safe_add for cancellation detection (§B). */
+        *act = safe_add(*act, a * new_val, is_min);
         if (unbd) (*unbd)--;
     }
     /* Infinite to infinite: no change */

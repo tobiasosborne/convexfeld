@@ -365,6 +365,10 @@ target_link_libraries(test_cache_level0 PRIVATE m)
 add_cxf_test(test_work_counter unit/test_work_counter.c)
 target_link_libraries(test_work_counter PRIVATE m)
 
+# Cancellation detection in pivot_update (numerical_stability.md §B)
+add_cxf_test(test_cancellation_detect unit/test_cancellation_detect.c)
+target_link_libraries(test_cancellation_detect PRIVATE m)
+
 ################################################################################
 # Integration Tests
 ################################################################################
