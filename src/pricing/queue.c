@@ -108,13 +108,18 @@ void cxf_pricing_end_level(PricingState *ctx) {
     /* V2 (P4.6): Queue filtering is handled by cxf_pricing_update_queues
      * (update.c) which has access to SolverState for status-based filtering.
      * That function is called by step.c before pricing. Here we invalidate
-     * V2 caches AFTER filtering, per pricing_support.md Phase 3. */
-    ctx->cached_var_count[level] = -1;
-    ctx->cached_var_count2[level] = -1;
-    ctx->cached_var_count3[level] = -1;
-    ctx->cached_constr_count[level] = -1;
-    ctx->cached_constr_count2[level] = -1;
-    ctx->cached_constr_count3[level] = -1;
+     * V2 caches AFTER filtering, per pricing_core.md Phase 3.
+     *
+     * No cache invalidation at level 0: level 0 returns the base dirty list
+     * directly without caching (pricing_core.md §Caching Behavior). */
+    if (level > 0) {
+        ctx->cached_var_count[level] = -1;
+        ctx->cached_var_count2[level] = -1;
+        ctx->cached_var_count3[level] = -1;
+        ctx->cached_constr_count[level] = -1;
+        ctx->cached_constr_count2[level] = -1;
+        ctx->cached_constr_count3[level] = -1;
+    }
 }
 
 /**

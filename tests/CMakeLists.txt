@@ -357,6 +357,10 @@ add_cxf_test(test_locale_safety unit/test_locale_safety.c)
 add_cxf_test(test_markowitz_adaptive unit/test_markowitz_adaptive.c)
 target_link_libraries(test_markowitz_adaptive PRIVATE m)
 
+# V2 cache invalidation must not occur at level 0 (pricing_core.md, convexfeld-l0w2)
+add_cxf_test(test_cache_level0 unit/test_cache_level0.c)
+target_link_libraries(test_cache_level0 PRIVATE m)
+
 ################################################################################
 # Integration Tests
 ################################################################################
