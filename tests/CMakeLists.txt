@@ -469,6 +469,10 @@ target_link_libraries(test_snapshot_location PRIVATE m)
 add_cxf_test(test_phase_one_perf unit/test_phase_one_perf.c)
 target_link_libraries(test_phase_one_perf PRIVATE m)
 
+# V2 numerical_stability.md §C: nearly-fixed variable midpoint snap (convexfeld-6e7z)
+add_cxf_test(test_midpoint_snap unit/test_midpoint_snap.c)
+target_link_libraries(test_midpoint_snap PRIVATE m)
+
 ################################################################################
 # Integration Tests
 ################################################################################

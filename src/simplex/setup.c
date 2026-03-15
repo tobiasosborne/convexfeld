@@ -208,12 +208,23 @@ int cxf_simplex_preprocess(SolverState *state, CxfEnv *env) {
         double range = ub[j] - lb[j];
         if (range > tightness) continue;
 
-        /* Fix at closest bound */
+        /* Fix variable: use midpoint when gap is nonzero but within
+         * bound_equality_tol, per numerical_stability.md Section C.
+         * Exactly-fixed variables (range == 0) stay at their bound. */
         if (state->basis != NULL && state->basis->var_status != NULL &&
             state->basis->var_status[j] < 0) {
-            double x_j = (state->work_x != NULL) ? state->work_x[j] : lb[j];
-            double target = (fabs(x_j - lb[j]) <= fabs(x_j - ub[j])) ?
-                            lb[j] : ub[j];
+            double target;
+            if (range > 0.0 && range < CXF_BOUND_EQUALITY_TOL) {
+                /* Nonzero gap within tolerance: midpoint minimizes
+                 * constraint perturbation from the fixing operation. */
+                target = 0.5 * (lb[j] + ub[j]);
+            } else {
+                /* Exactly fixed or wider gap: snap to closest bound */
+                double x_j = (state->work_x != NULL) ? state->work_x[j]
+                                                      : lb[j];
+                target = (fabs(x_j - lb[j]) <= fabs(x_j - ub[j])) ?
+                         lb[j] : ub[j];
+            }
             if (state->work_x != NULL) state->work_x[j] = target;
             lb[j] = target;
             ub[j] = target;
