@@ -178,17 +178,16 @@ void cxf_simplex_setup(SolverState *state, CxfEnv *env,
  * Scans variables with tight bound range (ub - lb < threshold).
  * Fixes them at the closest bound, updates activity bounds.
  *
+ * V2 spec signature: (state, env) -> int.
+ *
  * @param state Solver context
  * @param env   Environment with feasibility_tol
- * @param flags Control flags (bit 0: skip if set)
  * @return 0 on success, CXF_INFEASIBLE if lb > ub
  */
-int cxf_simplex_preprocess(SolverState *state, CxfEnv *env, int flags) {
+int cxf_simplex_preprocess(SolverState *state, CxfEnv *env) {
     if (state == NULL || env == NULL) {
         return CXF_ERROR_NULL_ARGUMENT;
     }
-
-    if (flags & 1) return CXF_OK;
 
     int n = state->num_vars;
     double feas_tol = env->feasibility_tol;

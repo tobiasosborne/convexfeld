@@ -139,7 +139,7 @@ void test_setup_does_not_initialize_pricing(void) {
  ******************************************************************************/
 
 void test_preprocess_null_state_fails(void) {
-    int status = cxf_simplex_preprocess(NULL, env, 0);
+    int status = cxf_simplex_preprocess(NULL, env);
     TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT, status);
 }
 
@@ -148,20 +148,8 @@ void test_preprocess_null_env_fails(void) {
     SolverState *state = NULL;
     cxf_simplex_init(model, &state);
 
-    int status = cxf_simplex_preprocess(state, NULL, 0);
+    int status = cxf_simplex_preprocess(state, NULL);
     TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT, status);
-
-    cxf_simplex_final(state);
-}
-
-void test_preprocess_skip_flag(void) {
-    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x");
-    SolverState *state = NULL;
-    cxf_simplex_init(model, &state);
-
-    /* Pass flag=1 to skip preprocessing */
-    int status = cxf_simplex_preprocess(state, env, 1);
-    TEST_ASSERT_EQUAL_INT(CXF_OK, status);
 
     cxf_simplex_final(state);
 }
@@ -170,7 +158,7 @@ void test_preprocess_empty_model(void) {
     SolverState *state = NULL;
     cxf_simplex_init(model, &state);
 
-    int status = cxf_simplex_preprocess(state, env, 0);
+    int status = cxf_simplex_preprocess(state, env);
     TEST_ASSERT_EQUAL_INT(CXF_OK, status);
 
     cxf_simplex_final(state);
@@ -183,7 +171,7 @@ void test_preprocess_feasible_bounds(void) {
     SolverState *state = NULL;
     cxf_simplex_init(model, &state);
 
-    int status = cxf_simplex_preprocess(state, env, 0);
+    int status = cxf_simplex_preprocess(state, env);
     TEST_ASSERT_EQUAL_INT(CXF_OK, status);
 
     cxf_simplex_final(state);
@@ -196,7 +184,7 @@ void test_preprocess_detects_infeasible_bounds(void) {
     SolverState *state = NULL;
     cxf_simplex_init(model, &state);
 
-    int status = cxf_simplex_preprocess(state, env, 0);
+    int status = cxf_simplex_preprocess(state, env);
     TEST_ASSERT_EQUAL_INT(CXF_INFEASIBLE, status);
 
     cxf_simplex_final(state);
@@ -210,7 +198,7 @@ void test_preprocess_multiple_vars_one_infeasible(void) {
     SolverState *state = NULL;
     cxf_simplex_init(model, &state);
 
-    int status = cxf_simplex_preprocess(state, env, 0);
+    int status = cxf_simplex_preprocess(state, env);
     TEST_ASSERT_EQUAL_INT(CXF_INFEASIBLE, status);
 
     cxf_simplex_final(state);
@@ -228,7 +216,7 @@ void test_setup_and_preprocess_sequence(void) {
     cxf_simplex_init(model, &state);
 
     /* Run preprocess first */
-    int status = cxf_simplex_preprocess(state, env, 0);
+    int status = cxf_simplex_preprocess(state, env);
     TEST_ASSERT_EQUAL_INT(CXF_OK, status);
 
     /* Then setup — computes activity bounds only */
@@ -264,7 +252,6 @@ int main(void) {
     /* cxf_simplex_preprocess tests */
     RUN_TEST(test_preprocess_null_state_fails);
     RUN_TEST(test_preprocess_null_env_fails);
-    RUN_TEST(test_preprocess_skip_flag);
     RUN_TEST(test_preprocess_empty_model);
     RUN_TEST(test_preprocess_feasible_bounds);
     RUN_TEST(test_preprocess_detects_infeasible_bounds);

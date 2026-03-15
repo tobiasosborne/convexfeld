@@ -190,6 +190,10 @@ target_link_libraries(test_pivot_eta PRIVATE m)  # For math functions
 add_cxf_test(test_simplex_setup unit/test_simplex_setup.c)
 target_link_libraries(test_simplex_setup PRIVATE m)  # For math functions
 
+# V2 cxf_simplex_preprocess signature compliance (convexfeld-frsq)
+add_cxf_test(test_preprocess_sig unit/test_preprocess_sig.c)
+target_link_libraries(test_preprocess_sig PRIVATE m)
+
 # M5.3.1: Solver State tests
 add_cxf_test(test_solver_state unit/test_solver_state.c)
 

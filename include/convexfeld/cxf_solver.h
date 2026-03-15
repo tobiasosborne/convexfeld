@@ -206,10 +206,9 @@ void cxf_simplex_setup(SolverState *state, CxfEnv *env,
  *
  * @param state Solver context
  * @param env Environment
- * @param flags Control flags (bit 0: skip preprocessing if set)
  * @return CXF_OK on success, 3=infeasible detected
  */
-int cxf_simplex_preprocess(SolverState *state, CxfEnv *env, int flags);
+int cxf_simplex_preprocess(SolverState *state, CxfEnv *env);
 
 /**
  * @brief Get solver status (stub - to be implemented).

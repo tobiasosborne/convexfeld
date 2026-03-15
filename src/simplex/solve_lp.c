@@ -148,7 +148,7 @@ int cxf_solve_lp(CxfModel *model) {
     cxf_simplex_setup(state, env, 0, NULL);
 
     /* Preprocess: fix near-bound variables (v2 P3.21) */
-    cxf_simplex_preprocess(state, env, 0);
+    cxf_simplex_preprocess(state, env);
 
     /* ===== Two-level iteration loop (v2 P3.25 Phase 6) ===== */
     int terminated = 0;
