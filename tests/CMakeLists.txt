@@ -220,6 +220,10 @@ target_link_libraries(test_pivot_update PRIVATE m)
 add_cxf_test(test_pivot_primal unit/test_pivot_primal.c)
 target_link_libraries(test_pivot_primal PRIVATE m)
 
+# Pivot primal RHS (V2: work_rhs not model RHS, convexfeld-ir0d) tests
+add_cxf_test(test_pivot_primal_rhs unit/test_pivot_primal_rhs.c)
+target_link_libraries(test_pivot_primal_rhs PRIVATE m)
+
 # Tight-bound variable processing (V2 simplex_iteration.md Phase 3.2) tests
 add_cxf_test(test_tight_bound unit/test_tight_bound.c)
 target_link_libraries(test_tight_bound PRIVATE m)

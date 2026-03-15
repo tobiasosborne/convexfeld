@@ -10,7 +10,7 @@
  * - Pivot value determination based on objective direction
  * - Objective value and coefficient updates
  * - Variable status updates
- * - Constraint RHS updates (propagates pivot to all affected constraints)
+ * - Working RHS updates (propagates pivot to all affected constraints via work_rhs)
  *
  * Deferred for future implementation:
  * - Eta vector creation for basis representation
@@ -23,8 +23,6 @@
 #include "convexfeld/cxf_env.h"
 #include "convexfeld/cxf_basis.h"
 #include "convexfeld/cxf_types.h"
-#include "convexfeld/cxf_model.h"
-#include "convexfeld/cxf_matrix.h"
 #include <math.h>
 
 /** @brief Threshold for determining if objective coefficient is significant */
@@ -42,7 +40,7 @@
  * 2. Determines appropriate pivot value based on objective direction
  * 3. Updates objective value and coefficient
  * 4. Marks variable status (AT_LOWER or AT_UPPER)
- * 5. Updates constraint RHS values: rhs[i] -= a_ij * pivotValue
+ * 5. Updates working RHS values: work_rhs[i] -= a_ij * pivotValue
  *
  * Deferred for future implementation:
  * - Create eta vector for basis representation (via cxf_pivot_with_eta)
@@ -174,38 +172,32 @@ int cxf_pivot_primal(void *env, void *state, int var, double tolerance) {
     }
 
     /*
-     * Step 5: Constraint RHS Update
+     * Step 5: Working RHS Update
      *
-     * After pivoting variable to new value, update RHS of all constraints
-     * that contain this variable. For each row i with coefficient a_ij:
-     *   rhs[i] = rhs[i] - a_ij * pivotValue
+     * After pivoting variable to new value, update working RHS of all
+     * constraints that contain this variable. Uses SolverState working
+     * copies (csc_col_ptr, csc_row_idx, csc_values, work_rhs) per V2
+     * spec — never modifies the original model data.
      *
-     * This maintains constraint satisfaction after fixing the variable.
+     * For each row i with coefficient a_ij:
+     *   work_rhs[i] = work_rhs[i] - a_ij * pivotValue
      */
-    if (ctx->model_ref != NULL && ctx->model_ref->matrix != NULL) {
-        MatrixData *matrix = ctx->model_ref->matrix;
+    if (ctx->csc_col_ptr != NULL && ctx->csc_row_idx != NULL &&
+        ctx->csc_values != NULL && ctx->work_rhs != NULL) {
 
-        /* Check if matrix has data structures allocated */
-        if (matrix->col_ptr != NULL && matrix->row_idx != NULL &&
-            matrix->values != NULL && matrix->rhs != NULL) {
+        /* Get column range for this variable in working CSC */
+        int64_t col_start = ctx->csc_col_ptr[var];
+        int64_t col_end = ctx->csc_col_ptr[var + 1];
 
-            /* Validate variable index is within matrix dimensions */
-            if (var < matrix->num_cols) {
-                /* Get column range for this variable in CSC format */
-                int64_t col_start = matrix->col_ptr[var];
-                int64_t col_end = matrix->col_ptr[var + 1];
+        /* Iterate through all non-zeros in this variable's column */
+        for (int64_t k = col_start; k < col_end; k++) {
+            int row = ctx->csc_row_idx[k];
+            double coeff = ctx->csc_values[k];
 
-                /* Iterate through all non-zeros in this variable's column */
-                for (int64_t k = col_start; k < col_end; k++) {
-                    int row = matrix->row_idx[k];
-                    double coeff = matrix->values[k];
-
-                    /* Bounds check: ensure row index is valid */
-                    if (row >= 0 && row < matrix->num_rows) {
-                        /* Update RHS: rhs[i] -= a_ij * pivotValue */
-                        matrix->rhs[row] -= coeff * pivotValue;
-                    }
-                }
+            /* Bounds check: ensure row index is valid */
+            if (row >= 0 && row < ctx->num_constrs) {
+                /* Update working RHS: work_rhs[i] -= a_ij * pivotValue */
+                ctx->work_rhs[row] -= coeff * pivotValue;
             }
         }
     }
