@@ -28,7 +28,7 @@
 int cxf_init_callback_struct(CxfEnv *env, void *callbackSubStruct);
 void cxf_set_terminate(CxfEnv *env);
 int cxf_check_terminate(CxfEnv *env);
-void cxf_callback_terminate(CxfModel *model);
+int cxf_callback_terminate(CxfModel *model);
 void cxf_reset_callback_state(CxfEnv *env);
 int cxf_pre_optimize_hook(CxfModel *model);
 int cxf_post_optimize_hook(CxfModel *model);
@@ -282,13 +282,14 @@ void test_check_terminate_null_env_returns_zero(void) {
 
 void test_callback_terminate_sets_env_flag(void) {
     env->terminate_flag = 0;
-    cxf_callback_terminate(model);
+    int rc = cxf_callback_terminate(model);
+    TEST_ASSERT_EQUAL_INT(CXF_OK, rc);
     TEST_ASSERT_EQUAL_INT(1, env->terminate_flag);
 }
 
-void test_callback_terminate_null_model_safe(void) {
-    cxf_callback_terminate(NULL);  /* Should not crash */
-    TEST_PASS();
+void test_callback_terminate_null_model_returns_error(void) {
+    int rc = cxf_callback_terminate(NULL);
+    TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT, rc);
 }
 
 /*******************************************************************************
@@ -423,7 +424,7 @@ int main(void) {
 
     /* cxf_callback_terminate tests */
     RUN_TEST(test_callback_terminate_sets_env_flag);
-    RUN_TEST(test_callback_terminate_null_model_safe);
+    RUN_TEST(test_callback_terminate_null_model_returns_error);
 
     /* cxf_reset_callback_state tests */
     RUN_TEST(test_reset_callback_state_null_env_safe);

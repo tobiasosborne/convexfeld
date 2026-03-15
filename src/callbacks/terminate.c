@@ -46,31 +46,42 @@ void cxf_set_terminate(CxfEnv *env) {
  *===========================================================================*/
 
 /**
- * @brief Request termination from within a callback.
+ * @brief Request termination from within a callback (V2 spec).
  *
- * Sets termination flags in the model's environment and callback state.
- * This provides a callback-safe way for user code to signal termination
- * during optimization.
+ * Traverses to the root environment (via master_env chain) and sets the
+ * termination flag there. Also sets callback-specific terminate_requested
+ * and external terminate_flag_ptr if configured.
  *
- * Safe to call with NULL model or NULL environment (no-op).
+ * Per V2 spec: returns 0 on success, error code on failure.
+ * Null model or null env returns CXF_ERROR_NULL_ARGUMENT.
+ * Null async state (terminate_flag_ptr) is silently skipped.
  *
- * @param model Model being optimized (may be NULL)
+ * @param model Model being optimized
+ * @return 0 on success, error code on failure
  */
-void cxf_callback_terminate(CxfModel *model) {
+int cxf_callback_terminate(CxfModel *model) {
     if (model == NULL || model->env == NULL) {
-        return;
+        return CXF_ERROR_NULL_ARGUMENT;
     }
 
-    /* Set environment termination flag */
-    model->env->terminate_flag = 1;
+    /* Traverse to root environment per V2 spec */
+    CxfEnv *root = model->env;
+    while (root->master_env != NULL) {
+        root = root->master_env;
+    }
+
+    /* Set termination flag on root environment */
+    root->terminate_flag = 1;
+
+    /* Set external termination flag if configured (silently skip if NULL) */
+    if (root->terminate_flag_ptr != NULL) {
+        *root->terminate_flag_ptr = 1;
+    }
 
     /* Set callback-specific termination flag if callback state exists */
-    if (model->env->callback_state != NULL) {
-        model->env->callback_state->terminate_requested = 1;
+    if (root->callback_state != NULL) {
+        root->callback_state->terminate_requested = 1;
     }
 
-    /* Set external termination flag if configured */
-    if (model->env->terminate_flag_ptr != NULL) {
-        *model->env->terminate_flag_ptr = 1;
-    }
+    return CXF_OK;
 }
