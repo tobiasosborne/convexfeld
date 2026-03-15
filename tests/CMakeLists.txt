@@ -408,6 +408,10 @@ target_link_libraries(test_phase_one_tol PRIVATE m)
 add_cxf_test(test_snapshot_naming unit/test_snapshot_naming.c)
 target_link_libraries(test_snapshot_naming PRIVATE m)
 
+# Bound propagation tolerance: CXF_MIN_PIVOT not CXF_PIVOT_TOL (convexfeld-2tl9)
+add_cxf_test(test_bound_prop_tol unit/test_bound_prop_tol.c)
+target_link_libraries(test_bound_prop_tol PRIVATE m)
+
 ################################################################################
 # Integration Tests
 ################################################################################

@@ -106,7 +106,7 @@ int cxf_simplex_step2(SolverState *state, CxfEnv *env) {
             for (int64_t k2 = cs2; k2 < ce2; k2++) {
                 int r2 = state->csc_row_idx[k2];
                 double a2 = state->csc_values[k2];
-                if (fabs(a2) < CXF_PIVOT_TOL) continue;
+                if (fabs(a2) < CXF_MIN_PIVOT) continue;
                 double fmin = state->min_activity[r2];
                 double fmax = state->max_activity[r2];
                 if (fmin <= -CXF_INFINITY || fmax >= CXF_INFINITY) continue;
@@ -147,7 +147,7 @@ int cxf_simplex_step2(SolverState *state, CxfEnv *env) {
         for (int64_t k = cs; k < ce; k++) {
             int row = state->csc_row_idx[k];
             double a = state->csc_values[k];
-            if (fabs(a) < CXF_PIVOT_TOL) continue;
+            if (fabs(a) < CXF_MIN_PIVOT) continue;
 
             double min_act = state->min_activity[row];
             double max_act = state->max_activity[row];

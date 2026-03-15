@@ -152,7 +152,7 @@ int cxf_simplex_step3(SolverState *state, CxfEnv *env) {
             if (ub - lb < tol) continue;
 
             double a = state->csr_values[k];
-            if (fabs(a) < CXF_PIVOT_TOL) continue;
+            if (fabs(a) < CXF_MIN_PIVOT) continue;
 
             /* Implied bounds from constraint activity (Savelsbergh 1994).
              * x_k <= l_k + (b_i - L_act_i) / a_ik  (for <= with a > 0)
