@@ -1,10 +1,50 @@
 # Agent Handoff
 
-*Last updated: 2026-03-03*
+*Last updated: 2026-03-15*
 
 ---
 
-## STATUS: 67/67 tests pass. Full spec V2 compliance audit complete. 301 beads filed. Master clean and pushed.
+## STATUS: 97/97 tests pass. 31 V2 spec compliance issues closed this session. ~271 remain. Master clean and pushed.
+
+### V2 Spec Compliance Sprint (2026-03-15)
+
+**31 issues closed across 10 parallel batches**, all surgical spec V2 fixes with tests. Key fixes:
+
+**Solver correctness (critical):**
+- step3 implied bound formula: added missing RHS term (Savelsbergh 1994)
+- pivot_primal: uses work_rhs not model RHS (prevents model corruption)
+- pivot_primal threshold: uses bound_equality_tol (1e-10) not pricing_tol
+- perturbation: now reactive (stalling-triggered) not proactive
+- rejected pivot recovery: refactorization retry before CXF_NUMERIC
+- cancellation detection: all activity bound updates route through safe_add
+- adaptive Markowitz: tolerance increases on high growth factor
+
+**Data model / struct compliance:**
+- EtaVector: added entering_var, leaving_var, direction, reduced_cost fields; fixed type constants
+- CallbackContext: moved callback_func to CxfEnv per spec
+- SolverState: added var_flags array
+- cxf_get_timestamp: now returns int64_t session ID (timing renamed to cxf_get_elapsed_time)
+
+**API / validation compliance:**
+- modification_blocked flag set/cleared around optimize
+- model status cleared before solve
+- locale save/restore (LC_NUMERIC → "C") around optimize
+- parameter API: case-insensitive matching
+- validate_vartypes: correct (env, count, vartypes) signature
+- cxf_callback_terminate: returns int, root-env traversal
+- cxf_check_model_flags1/flags2: correct semantics
+- error zero code: clear buffer / no-state-modify guard
+- cxf_special_check: takes (state, varIdx) signature
+- cxf_get_threads: full resolution chain
+- cxf_sort_indices: sort by values (doubles), indices as satellite
+- cxf_pricing_candidates: V2 takes spec name, V1 renamed to _v1
+
+**Infrastructure:**
+- crash.c: reads CSR from SolverState, marks inactive with sentinel -1
+- basis_diff scoring: 6-term formula matches spec weights/normalizations
+- quiet mode logging: callbacks remain active when output_flag=0
+- L0 cache: no invalidation at level 0 per spec
+- work counter: uses pre-compaction (scanned) counts
 
 ### Fix: NaN/Inf step length detection (2026-03-03)
 
