@@ -64,48 +64,72 @@ int cxf_is_mip_model(CxfModel *model) {
 }
 
 /**
- * @brief Check if model is a Quadratic Program (QP).
+ * @brief Check if model qualifies as a pure Quadratic Program (QP).
  *
- * Determines if the model has a quadratic objective without disqualifying
- * features (quadratic constraints, bilinear terms, etc.).
+ * Per V2 model_type_checking.md: returns 1 if the Environment has a
+ * force-QP parameter set (override), OR if general constraints are
+ * present AND no disqualifying elements (binary vars, indicator
+ * constraints, semi-continuous/semi-integer vars, NLP vars, nonlinear
+ * elements, multi-scenario).
  *
- * Note: Currently returns 0 as quadratic objective fields are not yet
- * implemented in the MatrixData structure.
+ * If no general constraints are present, returns 0 (pure LP).
  *
  * @param model Model to check (may be NULL)
- * @return 1 if model is QP, 0 otherwise or NULL
+ * @return 1 if model is a pure QP, 0 otherwise or NULL
  */
 int cxf_is_quadratic(CxfModel *model) {
     if (model == NULL) {
         return 0;
     }
 
-    /*
-     * Note: Quadratic objective detection would check:
-     *
-     * if (model->matrix != NULL) {
-     *     if (model->matrix->quadObjTerms > 0) {
-     *         // Check for disqualifying features
-     *         if (model->matrix->quadConstrCount > 0) return 0;
-     *         if (model->matrix->bilinearCount > 0) return 0;
-     *         return 1;  // Pure QP
-     *     }
-     * }
-     *
-     * For now, these fields are not yet implemented.
+    /* V2 path 1: force-QP env parameter override.
+     * TODO: When CxfEnv gains a force_qp field, check it here:
+     *   if (model->env != NULL && model->env->force_qp) return 1;
      */
 
-    return 0;  /* Pure linear (no quadratic objective) */
+    /* V2 path 2: general constraints present, no disqualifiers */
+    if (model->gen_constr_data == NULL) {
+        return 0;  /* No general constraints -> pure LP, not QP */
+    }
+
+    /* Disqualifier: binary variables */
+    if (model->num_vars > 0 && model->vtype != NULL) {
+        for (int i = 0; i < model->num_vars; i++) {
+            char vt = model->vtype[i];
+            if (vt == 'B' || vt == CXF_BINARY) return 0;
+            if (vt == 'S' || vt == CXF_SEMICONT) return 0;
+            if (vt == 'N' || vt == CXF_SEMIINT) return 0;
+        }
+    }
+
+    /* Disqualifier: SOS/indicator constraints (sos_data doubles as
+     * indicator presence check per current data model) */
+    if (model->sos_data != NULL) {
+        return 0;
+    }
+
+    /* TODO: When MatrixData gains these fields, check:
+     * - indicator constraint count
+     * - NLP variable count (when NLP mode enabled in env)
+     * - other nonlinear element count
+     * - multi-scenario configuration count
+     */
+
+    return 1;  /* General constraints present, no disqualifiers */
 }
 
 /**
- * @brief Check if model has SOCP/QCP features.
+ * @brief Check if model has any SOCP-related elements.
  *
- * Examines the model for second-order cone, quadratic constraints,
- * bilinear terms, and other conic features that require barrier methods.
+ * Per V2 model_type_checking.md: returns 1 if ANY SOCP presence
+ * indicator is found. This is the public/reporting variant — all
+ * checked fields are treated as presence indicators (no
+ * disqualifier logic). Used for model statistics, not solver routing.
  *
- * Note: Currently returns 0 as SOCP/QCP fields are not yet implemented
- * in the MatrixData structure.
+ * Indicators checked: force-SOCP env param, general constraints
+ * (which may contain quadratic/cone/indicator constraints),
+ * SOS data (which may encode cone structure), semi-continuous/
+ * semi-integer variables.
  *
  * @param model Model to check (may be NULL)
  * @return 1 if model has SOCP/QCP features, 0 if pure linear or NULL
@@ -115,19 +139,38 @@ int cxf_is_socp(CxfModel *model) {
         return 0;
     }
 
-    /*
-     * Note: SOCP/QCP detection would check:
-     *
-     * if (model->matrix != NULL) {
-     *     if (model->matrix->qcpConstrCount > 0) return 1;
-     *     if (model->matrix->bilinearCount > 0) return 1;
-     *     if (model->matrix->socConstrCount > 0) return 1;
-     *     if (model->matrix->rotatedConeCount > 0) return 1;
-     *     if (model->matrix->expConeCount > 0) return 1;
-     *     if (model->matrix->powConeCount > 0) return 1;
-     * }
-     *
-     * For now, these fields are not yet implemented.
+    /* V2: force-SOCP env parameter override.
+     * TODO: When CxfEnv gains a force_socp field, check it here:
+     *   if (model->env != NULL && model->env->force_socp) return 1;
+     */
+
+    /* V2: general constraint data signals quadratic/cone/indicator
+     * constraints may be present */
+    if (model->gen_constr_data != NULL) {
+        return 1;
+    }
+
+    /* V2: SOS data may encode cone structure */
+    if (model->sos_data != NULL) {
+        return 1;
+    }
+
+    /* V2: semi-continuous or semi-integer variables */
+    if (model->num_vars > 0 && model->vtype != NULL) {
+        for (int i = 0; i < model->num_vars; i++) {
+            char vt = model->vtype[i];
+            if (vt == 'S' || vt == CXF_SEMICONT) return 1;
+            if (vt == 'N' || vt == CXF_SEMIINT) return 1;
+        }
+    }
+
+    /* TODO: When MatrixData gains these fields, also check:
+     * - quadratic constraint count
+     * - explicit cone constraint count
+     * - indicator constraint count
+     * - multi-scenario configuration count
+     * - NLP variable count (when NLP mode enabled)
+     * - other nonlinear element count
      */
 
     return 0;  /* Pure linear (no SOCP/QCP features) */

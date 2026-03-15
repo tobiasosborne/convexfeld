@@ -483,6 +483,9 @@ add_cxf_test(test_is_mip_extended unit/test_is_mip_extended.c)
 # V2 simplex_lifecycle.md Phase 2: eta pool capacity formula (convexfeld-gm35)
 add_cxf_test(test_pool_capacity unit/test_pool_capacity.c)
 
+# V2 model_type_checking.md: cxf_is_quadratic + cxf_is_socp (convexfeld-nrop, convexfeld-e8ch)
+add_cxf_test(test_model_type_qp_socp unit/test_model_type_qp_socp.c)
+
 ################################################################################
 # Integration Tests
 ################################################################################
