@@ -408,6 +408,9 @@ static int pricing_and_ftran(SolverState *state, CxfEnv *env,
                 extract_column_ext(state, entering, column);
                 rc = cxf_ftran(basis, column, pivotCol);
                 if (rc != CXF_OK) return rc;
+                /* numerical_stability.md §C: NaN/Inf scan after retry FTRAN */
+                for (int ri = 0; ri < m; ri++)
+                    if (!isfinite(pivotCol[ri])) return CXF_NUMERIC;
             }
         }
 
@@ -451,6 +454,9 @@ static int pricing_and_ftran(SolverState *state, CxfEnv *env,
             extract_column_ext(state, entering, column);
             rc = cxf_ftran(basis, column, pivotCol);
             if (rc != CXF_OK) return CXF_NUMERIC;
+            /* numerical_stability.md §C: NaN/Inf scan after recovery FTRAN */
+            for (int ri = 0; ri < m; ri++)
+                if (!isfinite(pivotCol[ri])) return CXF_NUMERIC;
             rt_status = CXF_RT_NORMAL_PIVOT;
             rt_theta = 0.0;
             rt_nflips = 0;

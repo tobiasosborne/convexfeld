@@ -406,6 +406,10 @@ target_link_libraries(test_cancellation_detect PRIVATE m)
 add_cxf_test(test_input_validation unit/test_input_validation.c)
 target_link_libraries(test_input_validation PRIVATE m)
 
+# FTRAN result NaN/Inf detection (numerical_stability.md §C, convexfeld-tyr8)
+add_cxf_test(test_ftran_nan_check unit/test_ftran_nan_check.c)
+target_link_libraries(test_ftran_nan_check PRIVATE m)
+
 # SolverState.eta_count sync with BasisState.eta_count (convexfeld-0ev4)
 add_cxf_test(test_eta_count_sync unit/test_eta_count_sync.c)
 target_link_libraries(test_eta_count_sync PRIVATE m)
