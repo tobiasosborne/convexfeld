@@ -4,7 +4,22 @@
 
 ---
 
-## STATUS: 130/130 tests pass. 82 V2 spec compliance issues closed this session (19 triage, 63 code fixes). ~232 remain. Master clean and pushed.
+## STATUS: 130/130 tests pass. 22/26 Netlib pass (+4 new). 82 V2 spec compliance issues closed this session (19 triage, 63 code fixes). ~232 remain. Master clean and pushed.
+
+### Netlib Results (2026-03-15, post V2 sprint)
+
+**22 PASS** (was 18): afiro, sc50b, sc105, share2b, israel, adlittle, blend, lotfi,
+beaconfd, stocfor1, ship04l, standata, standgub, standmps, scagr7, sctap1,
+scorpion, e226, **brandy** (NEW), **bandm** (NEW), **scfxm1** (NEW), **scsd1** (NEW)
+
+**4 new passes from V2 fixes:**
+- brandy: was TIMEOUT (cycling) → PASS 0.26s — reactive perturbation + Phase I→II refactorize
+- bandm: was ITER_LIMIT (Phase I cycling) → PASS 0.29s — same fixes
+- scfxm1: was TIMEOUT — PASS 0.10s — eps_base mid-range scaling
+- scsd1: was cycling (all-equality) → PASS 0.006s — perturbation/tolerance fixes
+
+**Still failing:** kb2 (ITER_LIMIT), stair (TIMEOUT), bore3d (TIMEOUT), etamacro (TIMEOUT),
+tuff (obj err 0.16%), grow7 (wrong obj 20.8%), boeing1 (status 10003), boeing2 (wrong obj)
 
 ### V2 Spec Compliance Sprint (2026-03-15)
 
