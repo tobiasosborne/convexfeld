@@ -68,22 +68,47 @@ int cxf_setup_phase_one(SolverState *state) {
         basis->basic_vars[i] = slack_idx;
         basis->var_status[slack_idx] = i;
 
-        /* Compute slack value: s = (rhs - a'x) / diag */
+        /* Initialize slack = rhs / diag (row_sum accumulated below) */
         double rhs = state->work_rhs ? state->work_rhs[i] : 0.0;
-        double row_sum = 0.0;
-        if (state->csc_col_ptr != NULL) {
-            for (int j = 0; j < n; j++) {
-                int64_t start = state->csc_col_ptr[j];
-                int64_t end = state->csc_col_ptr[j + 1];
-                for (int64_t k = start; k < end; k++) {
-                    if (state->csc_row_idx[k] == i) {
-                        row_sum += state->csc_values[k] * state->work_x[j];
-                        break;
-                    }
-                }
+        state->work_x[slack_idx] = rhs;
+    }
+
+    /* Compute slack values: s_i = (rhs_i - sum_j a_ij * x_j) / diag_i.
+     * Use CSR row traversal O(nnz) if available, else CSC column
+     * accumulation O(nnz). Avoids old O(n*nnz) per-row column scan. */
+    if (state->csr_row_ptr != NULL && state->csr_col_idx != NULL
+        && state->csr_values != NULL) {
+        /* CSR path: iterate each row's nonzeros directly */
+        for (int i = 0; i < m; i++) {
+            double row_sum = 0.0;
+            int64_t rs = state->csr_row_ptr[i];
+            int64_t re = state->csr_row_ptr[i + 1];
+            for (int64_t k = rs; k < re; k++) {
+                int j = state->csr_col_idx[k];
+                if (j >= 0 && j < n)
+                    row_sum += state->csr_values[k] * state->work_x[j];
             }
+            state->work_x[n + i] = (state->work_x[n + i] - row_sum)
+                                    / basis->diag_coeff[i];
         }
-        state->work_x[slack_idx] = (rhs - row_sum) / basis->diag_coeff[i];
+    } else if (state->csc_col_ptr != NULL) {
+        /* CSC path: single pass over all columns, accumulate per-row */
+        for (int j = 0; j < n; j++) {
+            double xj = state->work_x[j];
+            if (xj == 0.0) continue;
+            int64_t cs = state->csc_col_ptr[j];
+            int64_t ce = state->csc_col_ptr[j + 1];
+            for (int64_t k = cs; k < ce; k++)
+                state->work_x[n + state->csc_row_idx[k]] -=
+                    state->csc_values[k] * xj;
+        }
+        /* Divide by diag_coeff */
+        for (int i = 0; i < m; i++)
+            state->work_x[n + i] /= basis->diag_coeff[i];
+    } else {
+        /* No matrix: slack = rhs / diag (already set) */
+        for (int i = 0; i < m; i++)
+            state->work_x[n + i] /= basis->diag_coeff[i];
     }
 
     /* Step 2b: Apply MPS RANGES to slack bounds.

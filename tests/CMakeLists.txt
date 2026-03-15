@@ -465,6 +465,10 @@ target_link_libraries(test_max_candidates PRIVATE m)
 add_cxf_test(test_snapshot_location unit/test_snapshot_location.c)
 target_link_libraries(test_snapshot_location PRIVATE m)
 
+# Phase I slack computation O(nnz) via CSR/CSC (convexfeld-h2k0)
+add_cxf_test(test_phase_one_perf unit/test_phase_one_perf.c)
+target_link_libraries(test_phase_one_perf PRIVATE m)
+
 ################################################################################
 # Integration Tests
 ################################################################################
