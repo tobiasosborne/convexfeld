@@ -43,18 +43,22 @@ static double compute_phase1_objective(SolverState *state) {
 
 /**
  * @brief Safety net: check if any nonbasic variable has improving reduced cost.
+ *
+ * @param opt_tol  Optimality tolerance for reduced-cost check.
+ *                 Caller passes env->optimality_tol or a tighter local value;
+ *                 this function never reads env directly.
  */
-static int has_improving_direction(SolverState *state, CxfEnv *env) {
+static int has_improving_direction(SolverState *state, double opt_tol) {
     int total = state->num_vars + state->num_constrs;
     for (int j = 0; j < total; j++) {
         if (state->basis->var_status[j] >= 0) continue;
         double lb = state->work_lb[j], ub = state->work_ub[j];
         if (ub <= lb + CXF_FEASIBILITY_TOL) continue;
         if (state->basis->var_status[j] == CXF_VAR_AT_LOWER &&
-            state->work_dj[j] < -env->optimality_tol)
+            state->work_dj[j] < -opt_tol)
             return 1;
         if (state->basis->var_status[j] == CXF_VAR_AT_UPPER &&
-            state->work_dj[j] > env->optimality_tol)
+            state->work_dj[j] > opt_tol)
             return 1;
     }
     return 0;
@@ -100,19 +104,16 @@ int cxf_check_phase_one_end(SolverState *state, CxfModel *model, CxfEnv *env) {
         }
     }
     cxf_compute_reduced_costs(state);
-    if (has_improving_direction(state, env)) return 1;
+    if (has_improving_direction(state, env->optimality_tol)) return 1;
 
     /* Phase I near-feasibility: try tighter pricing tolerance.
      * Spec: two_phase_method.md line 142 — "solver may attempt
      * additional iterations with tighter tolerances."
-     * IMPORTANT: restore tolerance before returning — leaking the
-     * tighter value corrupts all subsequent Phase I/II pricing. */
+     * Use a local tighter tolerance — never mutate env. */
     if (phase1_obj < 100.0 * tol) {
-        double save_tol = env->optimality_tol;
-        env->optimality_tol *= 0.01;
+        double tight_tol = env->optimality_tol * 0.01;
         cxf_compute_reduced_costs(state);
-        int found = has_improving_direction(state, env);
-        env->optimality_tol = save_tol;  /* always restore */
+        int found = has_improving_direction(state, tight_tol);
         if (found) return 1;
     }
 

@@ -423,6 +423,10 @@ target_link_libraries(test_bound_prop_tol PRIVATE m)
 add_cxf_test(test_phase_transition_refactor unit/test_phase_transition_refactor.c)
 target_link_libraries(test_phase_transition_refactor PRIVATE m)
 
+# Phase I end: env tolerance never mutated (two_phase_method.md, convexfeld-eph4)
+add_cxf_test(test_phase_end_tol unit/test_phase_end_tol.c)
+target_link_libraries(test_phase_end_tol PRIVATE m)
+
 ################################################################################
 # Integration Tests
 ################################################################################
