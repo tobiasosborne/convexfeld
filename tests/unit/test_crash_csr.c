@@ -72,7 +72,7 @@ static SolverState *make_csr_state(int n, int m, double *rhs, char *sense,
     memcpy(state->csr_col_idx, col_idx, (size_t)nnz * sizeof(int));
 
     state->num_basic = 0;
-    state->problem_row_index = -1;
+    state->problem_var_index = -1;
 
     return state;
 }

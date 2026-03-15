@@ -83,14 +83,14 @@ int cxf_simplex_crash(SolverState *state, CxfEnv *env) {
             if (sense == '=' || sense == 'E') {
                 /* Equality: |rhs| must be small */
                 if (fabs(rhs) >= epsilon_feas) {
-                    state->problem_row_index = i;
+                    state->problem_var_index = state->num_vars + i;
                     state->num_basic += basic_count;
                     return CXF_INFEASIBLE;
                 }
             } else {
                 /* Inequality: rhs must not be too negative */
                 if (rhs < -epsilon_feas) {
-                    state->problem_row_index = i;
+                    state->problem_var_index = state->num_vars + i;
                     state->num_basic += basic_count;
                     return CXF_INFEASIBLE;
                 }

@@ -41,7 +41,7 @@ int cxf_perturb_validate_candidates(int *cand_list, int cand_count,
  * @brief Process a single perturbation candidate (Case A or Case B).
  *
  * @return  1 = perturbed, 0 = skipped,
- *         -1 = infeasibility detected (problem_row_index set).
+ *         -1 = infeasibility detected (problem_var_index set).
  */
 static int process_one_candidate(SolverState *state, int j, int status,
                                  double feas_tol, int n, int m) {
@@ -58,7 +58,7 @@ static int process_one_candidate(SolverState *state, int j, int status,
             state->work_sense) {
             char sense = state->work_sense[j - n];
             if (sense == '=' || sense == 'E') {
-                state->problem_row_index = j - n;
+                state->problem_var_index = j;
                 return -1;
             }
         }
@@ -75,7 +75,7 @@ static int process_one_candidate(SolverState *state, int j, int status,
 
         int result = cxf_expand_analyze_basic(state, row, j, feas_tol);
         if (result == -1) {
-            state->problem_row_index = row;
+            state->problem_var_index = j;
             return -1;
         }
         if (result == 1) {

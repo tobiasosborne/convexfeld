@@ -156,7 +156,8 @@ void test_perturb_infeasible_equality(void) {
     int rc = cxf_simplex_perturbation(state, env);
 
     TEST_ASSERT_EQUAL_INT(CXF_INFEASIBLE, rc);
-    TEST_ASSERT_EQUAL_INT(0, state->problem_row_index);
+    /* V2: problem_var_index = slack variable index n = 2 (not row 0) */
+    TEST_ASSERT_EQUAL_INT(n, state->problem_var_index);
 
     cxf_simplex_final(state);
     cxf_freemodel(model);

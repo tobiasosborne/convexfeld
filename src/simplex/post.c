@@ -143,7 +143,7 @@ int cxf_simplex_phase_end(SolverState *state, CxfEnv *env, int doScan) {
         if (fabs(rc) > opt_tol) {
             /* Free variable with significant reduced cost:
              * dual infeasibility — problem may be infeasible */
-            state->problem_row_index = j;
+            state->problem_var_index = j;
             free(modified);
             return CXF_INFEASIBLE;
         }

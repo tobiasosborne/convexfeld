@@ -82,7 +82,7 @@ static SolverState *make_crash_state(int n, int m, double *rhs, char *sense) {
     }
 
     state->num_basic = 0;
-    state->problem_row_index = -1;
+    state->problem_var_index = -1;
 
     return state;
 }
@@ -135,7 +135,7 @@ void test_crash_feasible_inequalities(void) {
     for (int i = 0; i < 3; i++) {
         TEST_ASSERT_EQUAL_INT(CXF_ROW_BASIC_LOWER, state->row_status[i]);
     }
-    TEST_ASSERT_EQUAL_INT(-1, state->problem_row_index);
+    TEST_ASSERT_EQUAL_INT(-1, state->problem_var_index);
 
     free_crash_state(state);
 }
@@ -151,7 +151,8 @@ void test_crash_infeasible_inequality(void) {
     int rc = cxf_simplex_crash(state, env);
 
     TEST_ASSERT_EQUAL_INT(CXF_INFEASIBLE, rc);
-    TEST_ASSERT_EQUAL_INT(1, state->problem_row_index);
+    /* V2: problem_var_index = n + row = 2 + 1 = 3 (slack var for row 1) */
+    TEST_ASSERT_EQUAL_INT(3, state->problem_var_index);
     /* First row was processed before infeasible one */
     TEST_ASSERT_EQUAL_INT(1, state->num_basic);
 
@@ -169,7 +170,8 @@ void test_crash_infeasible_equality(void) {
     int rc = cxf_simplex_crash(state, env);
 
     TEST_ASSERT_EQUAL_INT(CXF_INFEASIBLE, rc);
-    TEST_ASSERT_EQUAL_INT(1, state->problem_row_index);
+    /* V2: problem_var_index = n + row = 2 + 1 = 3 (slack var for row 1) */
+    TEST_ASSERT_EQUAL_INT(3, state->problem_var_index);
     TEST_ASSERT_EQUAL_INT(1, state->num_basic);  /* Row 0 OK, row 1 fails */
 
     free_crash_state(state);

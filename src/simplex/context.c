@@ -165,7 +165,7 @@ int cxf_simplex_init(CxfModel *model, SolverState **stateP) {
 
     /* Crash basis arrays (v2 — P2.5) */
     ctx->num_basic = 0;
-    ctx->problem_row_index = -1;
+    ctx->problem_var_index = -1;
     if (m > 0) {
         ctx->row_status = (int *)calloc((size_t)m, sizeof(int));
         if (ctx->row_status == NULL) {

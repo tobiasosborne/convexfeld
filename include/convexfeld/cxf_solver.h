@@ -139,7 +139,7 @@ struct SolverState {
                                    -1 = BASIC_LOWER, -2 = BASIC_UPPER */
     int *col_nz_count;        /**< Active column nonzero counts [num_vars + num_constrs] */
     int num_basic;            /**< Count of basic rows assigned by crash */
-    int problem_row_index;    /**< Diagnostic: constraint index causing infeasibility */
+    int problem_var_index;    /**< Diagnostic: variable index causing infeasibility/unboundedness (V2 solver_state.md) */
 
     /* P3.1: Working copies of constraint matrix (owned by SolverState).
      * Prevents mutation of model->matrix during solving (e.g. BFRT). */
