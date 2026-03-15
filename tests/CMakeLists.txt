@@ -237,6 +237,10 @@ target_link_libraries(test_pivot_primal PRIVATE m)
 add_cxf_test(test_pivot_primal_rhs unit/test_pivot_primal_rhs.c)
 target_link_libraries(test_pivot_primal_rhs PRIVATE m)
 
+# Pivot primal threshold (V2: bound_eq_tol not pricing_tol, convexfeld-o9se) tests
+add_cxf_test(test_pivot_primal_threshold unit/test_pivot_primal_threshold.c)
+target_link_libraries(test_pivot_primal_threshold PRIVATE m)
+
 # Tight-bound variable processing (V2 simplex_iteration.md Phase 3.2) tests
 add_cxf_test(test_tight_bound unit/test_tight_bound.c)
 target_link_libraries(test_tight_bound PRIVATE m)

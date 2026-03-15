@@ -87,13 +87,15 @@ void tearDown(void) {}
 
 /*=== V2 compliance: CXF_INFEASIBLE return code ===*/
 
-void test_tight_bounds_returns_CXF_INFEASIBLE(void) {
-    /* Bounds range = 1e-9, tolerance = 1e-6 → 2*tol = 2e-6 > range */
+void test_tight_bounds_above_bound_eq_tol_succeeds(void) {
+    /* Bounds range = 1e-9 > CXF_BOUND_EQUALITY_TOL (1e-10).
+     * Per tolerances_constants.md Section 9 and numerical_stability.md
+     * Section C, this is NOT fixed — pivot should proceed. */
     work_lb[0] = 5.0;
     work_ub[0] = 5.0 + 1e-9;
 
     int rc = cxf_pivot_primal(&test_env, &test_state, 0, 1e-6);
-    TEST_ASSERT_EQUAL_INT(CXF_INFEASIBLE, rc);
+    TEST_ASSERT_EQUAL_INT(CXF_OK, rc);
 }
 
 void test_equal_bounds_returns_CXF_INFEASIBLE(void) {
@@ -153,8 +155,8 @@ void test_negative_rc_fixes_at_upper(void) {
 int main(void) {
     UNITY_BEGIN();
 
-    /* V2 compliance: CXF_INFEASIBLE */
-    RUN_TEST(test_tight_bounds_returns_CXF_INFEASIBLE);
+    /* V2 compliance: bound equality tolerance */
+    RUN_TEST(test_tight_bounds_above_bound_eq_tol_succeeds);
     RUN_TEST(test_equal_bounds_returns_CXF_INFEASIBLE);
 
     /* Null/invalid args */

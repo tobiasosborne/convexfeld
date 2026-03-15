@@ -105,26 +105,27 @@ void tearDown(void) {}
 /*=== Test: tight-bound structural variable triggers pivot_primal ===*/
 
 void test_tight_bound_var_fixed_at_lower(void) {
-    /* var0: bounds [5.0, 5.0 + 1e-9], range < optimality_tol (1e-6)
-     * obj coeff positive → pivot_primal should fix at lower bound */
+    /* var0: bounds [5.0, 5.0 + 1e-9], range = 1e-9 > CXF_BOUND_EQUALITY_TOL
+     * (1e-10). Per tolerances_constants.md Section 9, this is NOT fixed.
+     * obj coeff positive → pivot_primal should fix at lower bound. */
     work_lb[0] = 5.0;
     work_ub[0] = 5.0 + 1e-9;
     work_obj[0] = 3.0;  /* positive RC → fix at lb */
 
     int rc = cxf_pivot_primal(&test_env, &test_state, 0, 1e-6);
-    /* pivot_primal returns CXF_INFEASIBLE for bounds tighter than 2*tol */
-    TEST_ASSERT_EQUAL_INT(CXF_INFEASIBLE, rc);
+    TEST_ASSERT_EQUAL_INT(CXF_OK, rc);
 }
 
 void test_tight_bound_var_fixed_at_upper(void) {
-    /* var1: bounds [3.0, 3.0 + 5e-7], range = 5e-7 < 2*tol = 2e-6
-     * obj coeff negative → pivot_primal returns CXF_INFEASIBLE (too tight) */
+    /* var1: bounds [3.0, 3.0 + 5e-7], range = 5e-7 > CXF_BOUND_EQUALITY_TOL
+     * (1e-10). Per tolerances_constants.md Section 9, this is NOT fixed.
+     * obj coeff negative → pivot_primal should fix at upper bound. */
     work_lb[1] = 3.0;
     work_ub[1] = 3.0 + 5e-7;
     work_obj[1] = -2.0;
 
     int rc = cxf_pivot_primal(&test_env, &test_state, 1, 1e-6);
-    TEST_ASSERT_EQUAL_INT(CXF_INFEASIBLE, rc);
+    TEST_ASSERT_EQUAL_INT(CXF_OK, rc);
 }
 
 /*=== Test: variable with wider bounds is NOT processed by pivot_primal ===*/

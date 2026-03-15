@@ -87,17 +87,22 @@ int cxf_pivot_primal(void *env, void *state, int var, double tolerance) {
     }
 
     /*
-     * Step 1: Infeasibility Check
+     * Step 1: Fixed-variable check
      *
-     * If bounds are too tight (|ub - lb| < 2*tolerance), cannot determine
-     * a feasible pivot value. Return infeasibility code.
+     * Per numerical_stability.md Section C and tolerances_constants.md
+     * Section 9: a variable whose bound range is within the bound
+     * equality tolerance (~1e-10) is treated as fixed.  Fixed variables
+     * are handled by the tight-bound routine, not declared infeasible.
+     * Using the pricing tolerance here was wrong — it is orders of
+     * magnitude too loose and would falsely reject variables with
+     * small but legitimate bound ranges.
      */
     lb = ctx->work_lb[var];
     ub = ctx->work_ub[var];
     boundRange = ub - lb;
 
-    if (fabs(boundRange) < 2.0 * tolerance) {
-        /* Bounds too tight - infeasible */
+    if (fabs(boundRange) < CXF_BOUND_EQUALITY_TOL) {
+        /* Variable is effectively fixed — cannot pivot */
         return CXF_INFEASIBLE;
     }
 
