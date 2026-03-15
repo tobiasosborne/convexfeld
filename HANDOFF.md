@@ -4,7 +4,7 @@
 
 ---
 
-## STATUS: 124/124 tests pass. 65 V2 spec compliance issues closed this session. ~249 remain. Master clean and pushed.
+## STATUS: 127/127 tests pass. 75 V2 spec compliance issues closed this session (16 triage, 59 code fixes). ~239 remain. Master clean and pushed.
 
 ### V2 Spec Compliance Sprint (2026-03-15)
 
