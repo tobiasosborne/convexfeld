@@ -337,6 +337,9 @@ add_cxf_test(test_get_threads unit/test_get_threads.c)
 add_cxf_test(test_basis_diff_scoring unit/test_basis_diff_scoring.c)
 target_link_libraries(test_basis_diff_scoring PRIVATE m)
 
+# Locale safety: save/restore LC_NUMERIC around cxf_optimize (solve_entry.md Steps 3/12)
+add_cxf_test(test_locale_safety unit/test_locale_safety.c)
+
 ################################################################################
 # Integration Tests
 ################################################################################
