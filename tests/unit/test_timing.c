@@ -3,7 +3,7 @@
  * @brief TDD tests for timing functions (M4.2.1)
  *
  * Tests for timing module functions:
- * - cxf_get_timestamp
+ * - cxf_get_elapsed_time
  * - cxf_timing_start
  * - cxf_timing_end
  * - cxf_timing_update
@@ -51,22 +51,22 @@ void tearDown(void) {
 }
 
 /*============================================================================
- * cxf_get_timestamp Tests
+ * cxf_get_elapsed_time Tests
  *===========================================================================*/
 
-void test_get_timestamp_returns_positive(void) {
-    double ts = cxf_get_timestamp();
+void test_get_elapsed_time_returns_positive(void) {
+    double ts = cxf_get_elapsed_time();
     TEST_ASSERT_GREATER_THAN(0.0, ts);
 }
 
-void test_get_timestamp_monotonic(void) {
-    double ts1 = cxf_get_timestamp();
-    double ts2 = cxf_get_timestamp();
+void test_get_elapsed_time_monotonic(void) {
+    double ts1 = cxf_get_elapsed_time();
+    double ts2 = cxf_get_elapsed_time();
     TEST_ASSERT_GREATER_OR_EQUAL(ts1, ts2);
 }
 
-void test_get_timestamp_elapsed_reasonable(void) {
-    double start = cxf_get_timestamp();
+void test_get_elapsed_time_elapsed_reasonable(void) {
+    double start = cxf_get_elapsed_time();
 
     /* Busy loop to consume some time - result is used to prevent optimization */
     volatile double sum = 0.0;
@@ -74,7 +74,7 @@ void test_get_timestamp_elapsed_reasonable(void) {
         sum += (double)i * 0.001;
     }
 
-    double end = cxf_get_timestamp();
+    double end = cxf_get_elapsed_time();
     double elapsed = end - start;
 
     /* Use sum to prevent optimization */
@@ -443,10 +443,10 @@ void test_timing_refactor_recommended_ftran_degradation(void) {
 int main(void) {
     UNITY_BEGIN();
 
-    /* cxf_get_timestamp tests */
-    RUN_TEST(test_get_timestamp_returns_positive);
-    RUN_TEST(test_get_timestamp_monotonic);
-    RUN_TEST(test_get_timestamp_elapsed_reasonable);
+    /* cxf_get_elapsed_time tests */
+    RUN_TEST(test_get_elapsed_time_returns_positive);
+    RUN_TEST(test_get_elapsed_time_monotonic);
+    RUN_TEST(test_get_elapsed_time_elapsed_reasonable);
 
     /* cxf_timing_start tests */
     RUN_TEST(test_timing_start_records_timestamp);

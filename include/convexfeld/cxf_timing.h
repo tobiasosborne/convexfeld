@@ -8,6 +8,8 @@
 #ifndef CXF_TIMING_H
 #define CXF_TIMING_H
 
+#include <stdint.h>
+
 /* Maximum timing sections */
 #define CXF_MAX_TIMING_SECTIONS 8
 
@@ -32,10 +34,20 @@ typedef struct TimingState {
 } TimingState;
 
 /**
- * @brief Get current high-resolution timestamp.
- * @return Current timestamp in seconds
+ * @brief Get current monotonic time for elapsed-time measurement.
+ * @return Current time in seconds (CLOCK_MONOTONIC)
  */
-double cxf_get_timestamp(void);
+double cxf_get_elapsed_time(void);
+
+/**
+ * @brief Generate a 64-bit session identifier (V2 spec).
+ *
+ * Uses UTC system time, converts to nanoseconds since epoch,
+ * and applies hash mixing. NOT usable for timing.
+ *
+ * @return 64-bit hashed session identifier
+ */
+int64_t cxf_get_timestamp(void);
 
 /**
  * @brief Record start timestamp for timing measurement.

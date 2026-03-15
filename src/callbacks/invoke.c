@@ -50,9 +50,9 @@ static int invoke_callback_hook(CxfModel *model, int where,
 
     ctx->callback_calls += 1.0;
 
-    double start_time = cxf_get_timestamp();
+    double start_time = cxf_get_elapsed_time();
     int result = callback_func(model, cbdata, where, user_data);
-    double end_time = cxf_get_timestamp();
+    double end_time = cxf_get_elapsed_time();
     ctx->callback_time += end_time - start_time;
 
     if (result != 0 && set_terminate) {

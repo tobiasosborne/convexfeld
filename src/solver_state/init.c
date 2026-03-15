@@ -56,7 +56,7 @@ int cxf_init_solve_state(SolveState *solve, SolverState *state, CxfEnv *env) {
     solve->env = env;
 
     /* Capture current timestamp */
-    solve->startTime = cxf_get_timestamp();
+    solve->startTime = cxf_get_elapsed_time();
 
     /* Read parameters from environment or use defaults */
     if (env != NULL) {

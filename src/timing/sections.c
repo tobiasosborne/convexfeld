@@ -24,7 +24,7 @@ void cxf_timing_start(TimingState *timing) {
     if (timing == NULL) {
         return;
     }
-    timing->start_time = cxf_get_timestamp();
+    timing->start_time = cxf_get_elapsed_time();
 }
 
 /**
@@ -40,7 +40,7 @@ void cxf_timing_end(TimingState *timing) {
         return;
     }
 
-    double end_time = cxf_get_timestamp();
+    double end_time = cxf_get_elapsed_time();
     timing->elapsed = end_time - timing->start_time;
 
     /* Validate section index before updating */

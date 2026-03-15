@@ -49,7 +49,7 @@ typedef struct SolveState {
     CxfEnv *env;                /**< Environment pointer */
 
     /* Timing and limits */
-    double startTime;         /**< Start timestamp (from cxf_get_timestamp) */
+    double startTime;         /**< Start timestamp (from cxf_get_elapsed_time) */
     double timeLimit;         /**< Time limit (from env or 1e100) */
     int iterLimit;            /**< Iteration limit (from env or INT_MAX) */
 

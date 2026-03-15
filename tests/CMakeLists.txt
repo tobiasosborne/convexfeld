@@ -116,6 +116,9 @@ add_cxf_test(test_error_zero_code unit/test_error_zero_code.c)
 add_cxf_test(test_timing unit/test_timing.c)
 target_link_libraries(test_timing PRIVATE m)  # For math functions
 
+# V2: cxf_get_timestamp session-ID generator (convexfeld-2v8r)
+add_cxf_test(test_timestamp_v2 unit/test_timestamp_v2.c)
+
 # M4.3.1-M4.3.2: Analysis tests
 add_cxf_test(test_analysis unit/test_analysis.c)
 

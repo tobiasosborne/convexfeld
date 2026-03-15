@@ -94,7 +94,7 @@ void cxf_reset_callback_state(CxfEnv *env) {
     }
 
     /* Get current timestamp for timing fields */
-    current_time = cxf_get_timestamp();
+    current_time = cxf_get_elapsed_time();
 
     /* Reset statistics */
     ctx->callback_calls = 0.0;
