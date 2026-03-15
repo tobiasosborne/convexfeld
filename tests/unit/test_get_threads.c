@@ -15,8 +15,8 @@
 
 /* Threading functions under test */
 int cxf_get_threads(CxfEnv *env);
-int cxf_get_logical_processors(void);
-int cxf_get_physical_cores(void);
+int cxf_get_logical_processors(CxfEnv *env);
+int cxf_get_physical_cores(CxfEnv *env);
 
 /* Environment lifecycle */
 int cxf_loadenv(CxfEnv **envP, const char *logfilename);
@@ -55,7 +55,7 @@ void test_get_threads_default_at_most_32(void) {
 
 void test_get_threads_default_at_most_logical(void) {
     int count = cxf_get_threads(env);
-    int logical = cxf_get_logical_processors();
+    int logical = cxf_get_logical_processors(env);
     TEST_ASSERT_LESS_OR_EQUAL(logical, count);
 }
 

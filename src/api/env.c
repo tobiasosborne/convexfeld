@@ -1,8 +1,6 @@
 /**
  * @file env.c
- * @brief Full CxfEnv structure implementation (M8.1.7)
- *
- * Implements environment lifecycle and accessor functions.
+ * @brief CxfEnv lifecycle and accessor functions (M8.1.7)
  */
 
 #include <string.h>
@@ -11,20 +9,16 @@
 
 #include "../memory/memory_internal.h"
 
-/* Forward declare memory functions */
+/* Internal CPU detection helpers (from logging/system.c and threading/cpu.c) */
+int cxf_detect_logical_processors(void);
+int cxf_detect_physical_cores(void);
 
 /* Default values for refactorization parameters */
 #define DEFAULT_MAX_ETA_COUNT     100
 #define DEFAULT_MAX_ETA_MEMORY    (1024 * 1024)  /* 1 MB */
 #define DEFAULT_REFACTOR_INTERVAL 50
 
-/**
- * @brief Internal helper to initialize common environment fields.
- *
- * @param env Environment to initialize
- * @param logfilename Log file name (ignored in current implementation)
- * @param set_active 1 to set active=1, 0 for inactive environment
- */
+/** Initialize common environment fields. */
 static void cxf_env_init_fields(CxfEnv *env, const char *logfilename, int set_active) {
     (void)logfilename;  /* Reserved for future log file support */
 
@@ -48,6 +42,10 @@ static void cxf_env_init_fields(CxfEnv *env, const char *logfilename, int set_ac
     /* Threading defaults: 0 = auto, no license limit */
     env->threads = 0;
     env->license_thread_limit = 0;
+
+    /* Detect and cache CPU topology at init time (V2 threading_sync.md) */
+    env->logical_processors = cxf_detect_logical_processors();
+    env->physical_cores = cxf_detect_physical_cores();
 
     /* Refactorization defaults */
     env->max_eta_count = DEFAULT_MAX_ETA_COUNT;

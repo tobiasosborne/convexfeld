@@ -9,10 +9,9 @@
 #include "convexfeld/cxf_types.h"
 #include "convexfeld/cxf_env.h"
 
-/* From logging/system.c */
-int cxf_get_logical_processors(void);
-/* From threading/cpu.c */
-int cxf_get_physical_cores(void);
+/* V2 environment accessors (logging/system.c and threading/cpu.c) */
+int cxf_get_logical_processors(CxfEnv *env);
+int cxf_get_physical_cores(CxfEnv *env);
 /* From logging/output.c */
 void cxf_log_printf(CxfEnv *env, int level, const char *format, ...);
 
@@ -46,11 +45,11 @@ int cxf_get_threads(CxfEnv *env) {
      * For now, fall through to auto-detection. */
 
     /* Step 2: auto-detect with cap */
-    count = cxf_get_logical_processors();
+    count = cxf_get_logical_processors(env);
 
     if (count > CXF_THREAD_CAP) {
         /* Prefer physical cores on large systems */
-        physical = cxf_get_physical_cores();
+        physical = cxf_get_physical_cores(env);
         if (physical < count) {
             count = physical;
         }
@@ -91,7 +90,7 @@ void cxf_set_thread_count(CxfEnv *env, int thread_count) {
         return;
     }
 
-    logical = cxf_get_logical_processors();
+    logical = cxf_get_logical_processors(env);
 
     if (thread_count > logical) {
         cxf_log_printf(env, 0, "--------------------------------------");

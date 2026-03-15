@@ -1,10 +1,14 @@
 /**
  * @file cpu.c
  * @brief CPU detection and information
+ *
+ * - cxf_detect_physical_cores: Internal detection helper
+ * - cxf_get_physical_cores: V2 accessor returning min(logical, physical)
  */
 
 #define _POSIX_C_SOURCE 199309L
 #include "convexfeld/cxf_types.h"
+#include "convexfeld/cxf_env.h"
 #include "../memory/memory_internal.h"
 
 #ifdef _WIN32
@@ -15,18 +19,18 @@
 #include <string.h>
 #endif
 
-/* Defined in logging/system.c */
-int cxf_get_logical_processors(void);
+/* Internal detection helper from logging/system.c */
+int cxf_detect_logical_processors(void);
 
 /**
- * @brief Get the number of physical CPU cores
+ * @brief Detect the number of physical CPU cores (internal helper).
  *
- * Attempts to detect actual physical cores (excluding hyperthreading).
- * Falls back to logical processor count if detection fails.
+ * Called once during environment initialization. The result is cached
+ * in env->physical_cores.
  *
  * @return Number of physical cores (always >= 1)
  */
-int cxf_get_physical_cores(void) {
+int cxf_detect_physical_cores(void) {
 #ifdef _WIN32
     /* Windows: Use GetLogicalProcessorInformation */
     DWORD length = 0;
@@ -64,7 +68,7 @@ int cxf_get_physical_cores(void) {
     }
 
 fallback:
-    return cxf_get_logical_processors();
+    return cxf_detect_logical_processors();
 
 #else
     /* Linux: Try reading from /sys/devices/system/cpu/present */
@@ -88,6 +92,25 @@ fallback:
     }
 
     /* Fallback to logical processors */
-    return cxf_get_logical_processors();
+    return cxf_detect_logical_processors();
 #endif
+}
+
+/**
+ * @brief Return min(logical, physical) from cached environment values.
+ *
+ * Per V2 threading_sync.md: returns a conservative estimate by taking
+ * the minimum of logical processor count and physical core count.
+ *
+ * @param env Environment containing hardware detection results
+ * @return Effective physical core count
+ */
+int cxf_get_physical_cores(CxfEnv *env) {
+    if (env == NULL) {
+        return 1;
+    }
+    if (env->logical_processors < env->physical_cores) {
+        return env->logical_processors;
+    }
+    return env->physical_cores;
 }

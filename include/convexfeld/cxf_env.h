@@ -39,6 +39,8 @@ struct CxfEnv {
     /* Threading */
     int threads;              /**< User Threads parameter: 0=auto, >0=explicit cap */
     int license_thread_limit; /**< License thread limit: 0=unlimited, >0=hard cap */
+    int logical_processors;   /**< Detected logical processors (cached at init) */
+    int physical_cores;       /**< Detected physical cores (cached at init) */
     /* Refactorization parameters */
     int max_eta_count;        /**< Maximum eta vectors before forced refactor */
     int64_t max_eta_memory;   /**< Maximum eta memory before forced refactor */

@@ -21,7 +21,7 @@ void cxf_log_printf(CxfEnv *env, int level, const char *format, ...);
 int cxf_register_log_callback(CxfEnv *env,
                                void (*callback)(const char *msg, void *data),
                                void *data);
-int cxf_get_logical_processors(void);
+int cxf_get_logical_processors(CxfEnv *env);
 
 /* Test callback state */
 static char last_callback_msg[256];
@@ -130,17 +130,17 @@ void test_register_log_callback_unregister(void) {
  *===========================================================================*/
 
 void test_get_logical_processors_returns_positive(void) {
-    int count = cxf_get_logical_processors();
+    int count = cxf_get_logical_processors(env);
     TEST_ASSERT_GREATER_THAN(0, count);
 }
 
 void test_get_logical_processors_returns_at_least_one(void) {
-    int count = cxf_get_logical_processors();
+    int count = cxf_get_logical_processors(env);
     TEST_ASSERT_GREATER_OR_EQUAL(1, count);
 }
 
 void test_get_logical_processors_reasonable_range(void) {
-    int count = cxf_get_logical_processors();
+    int count = cxf_get_logical_processors(env);
     /* Should be between 1 and 1024 (reasonable server max) */
     TEST_ASSERT_GREATER_OR_EQUAL(1, count);
     TEST_ASSERT_LESS_OR_EQUAL(1024, count);
@@ -148,8 +148,8 @@ void test_get_logical_processors_reasonable_range(void) {
 
 void test_get_logical_processors_consistent(void) {
     /* Multiple calls should return the same value */
-    int first = cxf_get_logical_processors();
-    int second = cxf_get_logical_processors();
+    int first = cxf_get_logical_processors(env);
+    int second = cxf_get_logical_processors(env);
     TEST_ASSERT_EQUAL_INT(first, second);
 }
 

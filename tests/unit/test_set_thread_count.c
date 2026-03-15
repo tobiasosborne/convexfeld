@@ -16,7 +16,7 @@
 void cxf_set_thread_count(CxfEnv *env, int thread_count);
 
 /* Hardware query used for boundary testing */
-int cxf_get_logical_processors(void);
+int cxf_get_logical_processors(CxfEnv *env);
 
 /* Logging callback API */
 int cxf_register_log_callback(CxfEnv *env,
@@ -75,7 +75,7 @@ void test_returns_void(void) {
  *=========================================================================*/
 
 void test_no_warning_within_logical(void) {
-    int logical = cxf_get_logical_processors();
+    int logical = cxf_get_logical_processors(env);
     cxf_set_thread_count(env, logical);
     TEST_ASSERT_EQUAL_INT(0, log_call_count);
 }
@@ -90,14 +90,14 @@ void test_no_warning_single_thread(void) {
  *=========================================================================*/
 
 void test_warning_on_oversubscription(void) {
-    int logical = cxf_get_logical_processors();
+    int logical = cxf_get_logical_processors(env);
     cxf_set_thread_count(env, logical + 1);
     /* Spec says up to 4 log lines: separator, warning, suggestion, separator */
     TEST_ASSERT_GREATER_OR_EQUAL(1, log_call_count);
 }
 
 void test_warning_mentions_counts(void) {
-    int logical = cxf_get_logical_processors();
+    int logical = cxf_get_logical_processors(env);
     int requested = logical + 50;
     cxf_set_thread_count(env, requested);
     /* At least one log line should have been emitted */
@@ -118,7 +118,7 @@ void test_null_env_safe(void) {
  *=========================================================================*/
 
 void test_exact_logical_no_warning(void) {
-    int logical = cxf_get_logical_processors();
+    int logical = cxf_get_logical_processors(env);
     cxf_set_thread_count(env, logical);
     TEST_ASSERT_EQUAL_INT(0, log_call_count);
 }

@@ -188,6 +188,9 @@ add_cxf_test(test_threading unit/test_threading.c)
 # V2: cxf_set_thread_count spec compliance (convexfeld-385q)
 add_cxf_test(test_set_thread_count unit/test_set_thread_count.c)
 
+# V2: CPU env accessor spec compliance (convexfeld-f87d, convexfeld-2c8i)
+add_cxf_test(test_cpu_env_accessor unit/test_cpu_env_accessor.c)
+
 # M7.1.3: Simplex Tests - Edge Cases
 add_cxf_test(test_simplex_edge unit/test_simplex_edge.c)
 

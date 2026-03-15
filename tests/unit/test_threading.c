@@ -7,9 +7,9 @@
 #include "convexfeld/cxf_types.h"
 #include "convexfeld/cxf_env.h"
 
-/* Forward declarations for threading functions */
-int cxf_get_logical_processors(void);
-int cxf_get_physical_cores(void);
+/* Forward declarations for threading functions (V2: env accessors) */
+int cxf_get_logical_processors(CxfEnv *env);
+int cxf_get_physical_cores(CxfEnv *env);
 void cxf_set_thread_count(CxfEnv *env, int thread_count);
 int cxf_get_threads(CxfEnv *env);
 void cxf_env_lock(CxfEnv *env);
@@ -30,14 +30,14 @@ void tearDown(void) { if (env) { cxf_freeenv(env); env = NULL; } }
  *===========================================================================*/
 
 void test_get_logical_processors_positive(void) {
-    int count = cxf_get_logical_processors();
+    int count = cxf_get_logical_processors(env);
     TEST_ASSERT_GREATER_OR_EQUAL(1, count);
     TEST_ASSERT_LESS_OR_EQUAL(1024, count);
 }
 
 void test_get_logical_processors_consistent(void) {
-    int first = cxf_get_logical_processors();
-    int second = cxf_get_logical_processors();
+    int first = cxf_get_logical_processors(env);
+    int second = cxf_get_logical_processors(env);
     TEST_ASSERT_EQUAL_INT(first, second);
 }
 
@@ -46,19 +46,19 @@ void test_get_logical_processors_consistent(void) {
  *===========================================================================*/
 
 void test_get_physical_cores_positive(void) {
-    int count = cxf_get_physical_cores();
+    int count = cxf_get_physical_cores(env);
     TEST_ASSERT_GREATER_OR_EQUAL(1, count);
 }
 
 void test_get_physical_cores_not_more_than_logical(void) {
-    int physical = cxf_get_physical_cores();
-    int logical = cxf_get_logical_processors();
+    int physical = cxf_get_physical_cores(env);
+    int logical = cxf_get_logical_processors(env);
     TEST_ASSERT_LESS_OR_EQUAL(logical, physical);
 }
 
 void test_get_physical_cores_consistent(void) {
-    int first = cxf_get_physical_cores();
-    int second = cxf_get_physical_cores();
+    int first = cxf_get_physical_cores(env);
+    int second = cxf_get_physical_cores(env);
     TEST_ASSERT_EQUAL_INT(first, second);
 }
 
@@ -79,7 +79,7 @@ void test_set_thread_count_null_env(void) {
 }
 
 void test_set_thread_count_oversubscribed(void) {
-    int logical = cxf_get_logical_processors();
+    int logical = cxf_get_logical_processors(env);
     /* Exceeds logical processors -- emits warning, should not crash */
     cxf_set_thread_count(env, logical + 100);
     TEST_PASS();
