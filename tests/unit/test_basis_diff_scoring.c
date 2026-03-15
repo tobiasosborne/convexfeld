@@ -17,9 +17,9 @@
 #include <string.h>
 #include <math.h>
 
-/* Declarations */
-void cxf_progress_snapshot(SolverState *state);
-double cxf_basis_diff(SolverState *state);
+/* Declarations — V2 signatures with external snapshot buffer */
+void cxf_progress_snapshot(SolverState *state, int *snapshot);
+double cxf_basis_diff(SolverState *state, const int *snapshot);
 
 void setUp(void) {}
 void tearDown(void) {}
@@ -47,148 +47,142 @@ static double col_denom(int n, int snap_cols) {
 }
 
 void test_term1_structural_uses_nnz(void) {
-    /* Term 1: 4.0 * d_perturb / nnzDenom */
     SolverState s = make_state(20, 10, 100);
-    cxf_progress_snapshot(&s);
+    int snap[CXF_SNAPSHOT_SIZE];
+    cxf_progress_snapshot(&s, snap);
     s.perturb_count = 5;
-    double score = cxf_basis_diff(&s);
+    double score = cxf_basis_diff(&s, snap);
     double expected = 4.0 * 5.0 / 100.0;
-    /* Other terms may contribute via d_perturb=0 for other terms, but
-     * only term 1 uses perturb_count. Isolate by setting nothing else. */
     TEST_ASSERT_DOUBLE_WITHIN(1e-10, expected, score);
 }
 
 void test_term2_column_reduction(void) {
-    /* Term 2: 1.0 * d_cols / colDenom */
     SolverState s = make_state(20, 10, 100);
-    cxf_progress_snapshot(&s);
+    int snap[CXF_SNAPSHOT_SIZE];
+    cxf_progress_snapshot(&s, snap);
     s.cols_eliminated = 3;
-    double score = cxf_basis_diff(&s);
+    double score = cxf_basis_diff(&s, snap);
     double cd = col_denom(20, 0);
     double expected = 1.0 * 3.0 / cd;
     TEST_ASSERT_DOUBLE_WITHIN(1e-10, expected, score);
 }
 
 void test_term3_iteration_counters_four(void) {
-    /* Term 3: 0.25 * (d_piv + d_iter + d_flips + d_degen) / colDenom */
     SolverState s = make_state(20, 10, 100);
-    cxf_progress_snapshot(&s);
+    int snap[CXF_SNAPSHOT_SIZE];
+    cxf_progress_snapshot(&s, snap);
     s.iteration = 10;
     s.flip_count = 4;
     s.degenerate_count = 2;
-    /* pivots_since_refactor needs basis; leave NULL => d_piv clamps to 0.
-     * Term 6 also uses d_iter, so expected includes both. */
     double cd = col_denom(20, 0);
     double rd = row_denom(10, 0, 0);
     double t3 = 0.25 * (double)(0 + 10 + 4 + 2) / cd;
     double t6 = 0.1 * 10.0 / rd;
     double expected = t3 + t6;
-    double score = cxf_basis_diff(&s);
+    double score = cxf_basis_diff(&s, snap);
     TEST_ASSERT_DOUBLE_WITHIN(1e-10, expected, score);
 }
 
 void test_term4_row_statistics(void) {
-    /* Term 4: 1.0 * (d_rows + d_props) / rowDenom */
     SolverState s = make_state(20, 10, 100);
-    cxf_progress_snapshot(&s);
+    int snap[CXF_SNAPSHOT_SIZE];
+    cxf_progress_snapshot(&s, snap);
     s.rows_eliminated = 3;
     s.bounds_propagated = 5;
     double rd = row_denom(10, 0, 0);
     double expected = 1.0 * (3.0 + 5.0) / rd;
-    double score = cxf_basis_diff(&s);
+    double score = cxf_basis_diff(&s, snap);
     TEST_ASSERT_DOUBLE_WITHIN(1e-10, expected, score);
 }
 
 void test_term5_conversion(void) {
-    /* Term 5: 0.5 * d_ftran / rowDenom */
     SolverState s = make_state(20, 10, 100);
-    cxf_progress_snapshot(&s);
+    int snap[CXF_SNAPSHOT_SIZE];
+    cxf_progress_snapshot(&s, snap);
     s.ftran_count = 6;
     double rd = row_denom(10, 0, 0);
     double expected = 0.5 * 6.0 / rd;
-    double score = cxf_basis_diff(&s);
+    double score = cxf_basis_diff(&s, snap);
     TEST_ASSERT_DOUBLE_WITHIN(1e-10, expected, score);
 }
 
 void test_term6_work_counter(void) {
-    /* Term 6: 0.1 * d_iter / rowDenom. d_iter also in term 3. */
     SolverState s = make_state(20, 10, 100);
-    cxf_progress_snapshot(&s);
+    int snap[CXF_SNAPSHOT_SIZE];
+    cxf_progress_snapshot(&s, snap);
     s.iteration = 8;
     double cd = col_denom(20, 0);
     double rd = row_denom(10, 0, 0);
-    double t3 = 0.25 * 8.0 / cd;  /* d_iter appears in term 3 too */
+    double t3 = 0.25 * 8.0 / cd;
     double t6 = 0.1 * 8.0 / rd;
     double expected = t3 + t6;
-    double score = cxf_basis_diff(&s);
+    double score = cxf_basis_diff(&s, snap);
     TEST_ASSERT_DOUBLE_WITHIN(1e-10, expected, score);
 }
 
 void test_all_six_terms_combined(void) {
-    /* All 6 terms active. Verify exact composite score.
-     * basis=NULL so d_piv clamps to 0. Tests all other counters. */
     SolverState s = make_state(40, 20, 200);
-    cxf_progress_snapshot(&s);
+    int snap[CXF_SNAPSHOT_SIZE];
+    cxf_progress_snapshot(&s, snap);
 
-    s.perturb_count = 3;       /* T1 */
-    s.cols_eliminated = 2;     /* T2 */
-    s.iteration = 12;          /* T3 iter + T6 */
-    s.flip_count = 4;          /* T3 flips */
-    s.degenerate_count = 1;    /* T3 degen */
-    s.rows_eliminated = 3;     /* T4 rows */
-    s.bounds_propagated = 7;   /* T4 props */
-    s.ftran_count = 9;         /* T5 */
+    s.perturb_count = 3;
+    s.cols_eliminated = 2;
+    s.iteration = 12;
+    s.flip_count = 4;
+    s.degenerate_count = 1;
+    s.rows_eliminated = 3;
+    s.bounds_propagated = 7;
+    s.ftran_count = 9;
 
     double nnzD = 200.0;
-    double cd = col_denom(40, 0);     /* 40 */
-    double rd = row_denom(20, 0, 0);  /* 20 */
+    double cd = col_denom(40, 0);
+    double rd = row_denom(20, 0, 0);
 
     double t1 = 4.0  * 3.0 / nnzD;
     double t2 = 1.0  * 2.0 / cd;
-    double t3 = 0.25 * (double)(0 + 12 + 4 + 1) / cd;  /* piv=0 */
+    double t3 = 0.25 * (double)(0 + 12 + 4 + 1) / cd;
     double t4 = 1.0  * (double)(3 + 7) / rd;
     double t5 = 0.5  * 9.0 / rd;
     double t6 = 0.1  * 12.0 / rd;
     double expected = t1 + t2 + t3 + t4 + t5 + t6;
 
-    double score = cxf_basis_diff(&s);
+    double score = cxf_basis_diff(&s, snap);
     TEST_ASSERT_DOUBLE_WITHIN(1e-10, expected, score);
 }
 
 void test_rowdenom_includes_snapshot_props(void) {
-    /* rowDenom = (m - snap_rows) + snap_rows + snap_props.
-     * With snap_props = 10, rowDenom = 20 + 10 = 30 (not 20). */
     SolverState s = make_state(20, 20, 100);
+    int snap[CXF_SNAPSHOT_SIZE];
     s.bounds_propagated = 10;
-    cxf_progress_snapshot(&s);
+    cxf_progress_snapshot(&s, snap);
 
     s.rows_eliminated = 2;
-    s.bounds_propagated = 15;  /* d_props = 5 */
-    double rd = row_denom(20, 0, 10);  /* 20 + 0 + 10 = 30 */
+    s.bounds_propagated = 15;
+    double rd = row_denom(20, 0, 10);
     double expected = 1.0 * (2.0 + 5.0) / rd;
-    double score = cxf_basis_diff(&s);
+    double score = cxf_basis_diff(&s, snap);
     TEST_ASSERT_DOUBLE_WITHIN(1e-10, expected, score);
 }
 
 void test_nnz_floor_prevents_div_zero(void) {
-    /* With num_nonzeros = 0, nnzDenom should floor to 1. */
     SolverState s = make_state(10, 5, 0);
-    cxf_progress_snapshot(&s);
+    int snap[CXF_SNAPSHOT_SIZE];
+    cxf_progress_snapshot(&s, snap);
     s.perturb_count = 2;
-    double score = cxf_basis_diff(&s);
-    double expected = 4.0 * 2.0 / 1.0;  /* nnzDenom = 1 */
+    double score = cxf_basis_diff(&s, snap);
+    double expected = 4.0 * 2.0 / 1.0;
     TEST_ASSERT_DOUBLE_WITHIN(1e-10, expected, score);
 }
 
 void test_negative_deltas_clamped(void) {
-    /* Counter resets produce zero signal, not negative. */
     SolverState s = make_state(10, 5, 50);
+    int snap[CXF_SNAPSHOT_SIZE];
     s.iteration = 100;
     s.perturb_count = 10;
-    cxf_progress_snapshot(&s);
-    s.iteration = 50;       /* went down */
-    s.perturb_count = 5;    /* went down */
-    double score = cxf_basis_diff(&s);
+    cxf_progress_snapshot(&s, snap);
+    s.iteration = 50;
+    s.perturb_count = 5;
+    double score = cxf_basis_diff(&s, snap);
     TEST_ASSERT_DOUBLE_WITHIN(1e-10, 0.0, score);
 }
 

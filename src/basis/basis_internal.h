@@ -77,8 +77,8 @@ void cxf_eta_pool_free(struct EtaBuffer *pool);
 void cxf_eta_list_clear(struct BasisState *basis);
 
 /* --- Snapshot/diff (basis_stub.c) --- */
-void cxf_progress_snapshot(struct SolverState *state);
-double cxf_basis_diff(struct SolverState *state);
+void cxf_progress_snapshot(struct SolverState *state, int *snapshot);
+double cxf_basis_diff(struct SolverState *state, const int *snapshot);
 
 /* --- Sparse LU working matrix (sparse_work.c, sparse_elim.c) --- */
 

@@ -153,9 +153,10 @@ int cxf_solve_lp(CxfModel *model) {
     /* ===== Two-level iteration loop (v2 P3.25 Phase 6) ===== */
     int terminated = 0;
     int stall = 0;
+    int snap_buf[CXF_SNAPSHOT_SIZE];
 
     for (int round = 0; round < MAX_OUTER_ROUNDS && !terminated; round++) {
-        cxf_progress_snapshot(state);
+        cxf_progress_snapshot(state, snap_buf);
         int inner_checks = 0;  /* convergence check count within this round */
 
         while (state->iteration < state->max_iterations) {
@@ -278,7 +279,7 @@ int cxf_solve_lp(CxfModel *model) {
                 state->iteration > 0 &&
                 state->iteration % (state->num_constrs + 1) == 0) {
                 inner_checks++;
-                double progress = cxf_basis_diff(state);
+                double progress = cxf_basis_diff(state, snap_buf);
                 int grace = inner_checks - 5;
                 double threshold = (grace > 0)
                     ? (double)grace * CONVERGENCE_BASE : 0.0;
@@ -287,7 +288,7 @@ int cxf_solve_lp(CxfModel *model) {
                     break;
                 }
                 state->iteration_mode = 0;
-                cxf_progress_snapshot(state);
+                cxf_progress_snapshot(state, snap_buf);
             }
 
             /* (10) Post-iterate: stall, stagnation, termination */

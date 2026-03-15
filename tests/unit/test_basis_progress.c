@@ -1,6 +1,6 @@
 /**
  * @file test_basis_progress.c
- * @brief Tests for legacy progress snapshot/diff and BasisSnapshot
+ * @brief Tests for progress snapshot/diff and BasisSnapshot
  *        equality/free operations (split from test_basis.c).
  */
 
@@ -16,9 +16,9 @@
 BasisState *cxf_basis_create(int m, int n);
 void cxf_basis_free(BasisState *basis);
 
-/* Legacy progress snapshot/diff */
-void cxf_progress_snapshot(SolverState *state);
-double cxf_basis_diff(SolverState *state);
+/* V2 progress snapshot/diff — external snapshot buffer */
+void cxf_progress_snapshot(SolverState *state, int *snapshot);
+double cxf_basis_diff(SolverState *state, const int *snapshot);
 
 /* BasisSnapshot API */
 int cxf_progress_snapshot_create(BasisState *basis, BasisSnapshot *snapshot,
@@ -29,7 +29,7 @@ void cxf_progress_snapshot_free(BasisSnapshot *snapshot);
 void setUp(void) {}
 void tearDown(void) {}
 
-/*--- Legacy snapshot/comparison tests ---*/
+/*--- Progress snapshot/comparison tests ---*/
 
 void test_basis_snapshot_captures_counters(void) {
     SolverState state;
@@ -43,14 +43,15 @@ void test_basis_snapshot_captures_counters(void) {
     state.num_vars = 10;
     state.num_constrs = 5;
 
-    cxf_progress_snapshot(&state);
+    int snap[CXF_SNAPSHOT_SIZE];
+    cxf_progress_snapshot(&state, snap);
 
-    TEST_ASSERT_EQUAL_INT(42, state.progress_snapshot[0]);
-    TEST_ASSERT_EQUAL_INT(5, state.progress_snapshot[3]);
-    TEST_ASSERT_EQUAL_INT(3, state.progress_snapshot[4]);
-    TEST_ASSERT_EQUAL_INT(7, state.progress_snapshot[5]);
-    TEST_ASSERT_EQUAL_INT(2, state.progress_snapshot[6]);
-    TEST_ASSERT_EQUAL_INT(2, state.progress_snapshot[7]);
+    TEST_ASSERT_EQUAL_INT(42, snap[0]);
+    TEST_ASSERT_EQUAL_INT(5, snap[3]);
+    TEST_ASSERT_EQUAL_INT(3, snap[4]);
+    TEST_ASSERT_EQUAL_INT(7, snap[5]);
+    TEST_ASSERT_EQUAL_INT(2, snap[6]);
+    TEST_ASSERT_EQUAL_INT(2, snap[7]);
 }
 
 void test_basis_diff_no_progress(void) {
@@ -60,8 +61,9 @@ void test_basis_diff_no_progress(void) {
     state.num_vars = 10;
     state.num_constrs = 5;
 
-    cxf_progress_snapshot(&state);
-    double diff = cxf_basis_diff(&state);
+    int snap[CXF_SNAPSHOT_SIZE];
+    cxf_progress_snapshot(&state, snap);
+    double diff = cxf_basis_diff(&state, snap);
     TEST_ASSERT_DOUBLE_WITHIN(1e-10, 0.0, diff);
 }
 
@@ -72,12 +74,13 @@ void test_basis_diff_with_progress(void) {
     state.num_constrs = 5;
     state.iteration = 10;
 
-    cxf_progress_snapshot(&state);
+    int snap[CXF_SNAPSHOT_SIZE];
+    cxf_progress_snapshot(&state, snap);
 
     state.iteration = 20;
     state.cols_eliminated = 3;
 
-    double diff = cxf_basis_diff(&state);
+    double diff = cxf_basis_diff(&state, snap);
     /* V2 6-term formula. d_iter=10, d_cols=3. nnzDenom=1 (num_nonzeros=0).
      * colDenom=10, rowDenom = (5-0)+0+0 = 5. */
     double t2 = 1.0 * 3.0 / 10.0;   /* column reduction */
@@ -97,37 +100,53 @@ void test_basis_diff_six_terms(void) {
     state.num_nonzeros = 80;
     state.iteration = 0;
 
-    cxf_progress_snapshot(&state);
+    int snap[CXF_SNAPSHOT_SIZE];
+    cxf_progress_snapshot(&state, snap);
 
-    state.iteration = 10;         /* d_iter=10 (T3+T6) */
-    state.cols_eliminated = 2;    /* d_cols=2 (T2) */
-    state.rows_eliminated = 1;    /* d_rows=1 (T4) */
-    state.bounds_propagated = 4;  /* d_props=4 (T4) */
-    state.ftran_count = 8;        /* d_ftran=8 (T5) */
-    state.flip_count = 3;         /* d_flips=3 (T3) */
-    state.perturb_count = 2;      /* d_perturb=2 (T1) */
-    state.degenerate_count = 5;   /* d_degen=5 (T3) */
+    state.iteration = 10;
+    state.cols_eliminated = 2;
+    state.rows_eliminated = 1;
+    state.bounds_propagated = 4;
+    state.ftran_count = 8;
+    state.flip_count = 3;
+    state.perturb_count = 2;
+    state.degenerate_count = 5;
 
-    double diff = cxf_basis_diff(&state);
-    /* colDenom = 20, nnzDenom = 80,
-     * rowDenom = (10-0)+0+0 = 10 */
-    double t1 = 4.0  * 2.0 / 80.0;                  /* structural */
-    double t2 = 1.0  * 2.0 / 20.0;                  /* col reduction */
-    double t3 = 0.25 * (double)(0+10+3+5) / 20.0;   /* 4 iter counters */
-    double t4 = 1.0  * (double)(1+4) / 10.0;        /* row stats */
-    double t5 = 0.5  * 8.0 / 10.0;                  /* conversion */
-    double t6 = 0.1  * 10.0 / 10.0;                 /* work */
+    double diff = cxf_basis_diff(&state, snap);
+    double t1 = 4.0  * 2.0 / 80.0;
+    double t2 = 1.0  * 2.0 / 20.0;
+    double t3 = 0.25 * (double)(0+10+3+5) / 20.0;
+    double t4 = 1.0  * (double)(1+4) / 10.0;
+    double t5 = 0.5  * 8.0 / 10.0;
+    double t6 = 0.1  * 10.0 / 10.0;
     double expected = t1 + t2 + t3 + t4 + t5 + t6;
     TEST_ASSERT_DOUBLE_WITHIN(1e-10, expected, diff);
 }
 
 void test_basis_diff_null_returns_zero(void) {
-    double diff = cxf_basis_diff(NULL);
+    int snap[CXF_SNAPSHOT_SIZE] = {0};
+    double diff = cxf_basis_diff(NULL, snap);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-10, 0.0, diff);
+}
+
+void test_basis_diff_null_snapshot_returns_zero(void) {
+    SolverState state;
+    memset(&state, 0, sizeof(state));
+    state.num_vars = 10;
+    state.num_constrs = 5;
+    double diff = cxf_basis_diff(&state, NULL);
     TEST_ASSERT_DOUBLE_WITHIN(1e-10, 0.0, diff);
 }
 
 void test_basis_snapshot_null_safe(void) {
-    cxf_progress_snapshot(NULL);  /* Should not crash */
+    int snap[CXF_SNAPSHOT_SIZE];
+    cxf_progress_snapshot(NULL, snap);  /* Should not crash */
+}
+
+void test_basis_snapshot_null_buf_safe(void) {
+    SolverState state;
+    memset(&state, 0, sizeof(state));
+    cxf_progress_snapshot(&state, NULL);  /* Should not crash */
 }
 
 void test_basis_snapshot_preserves_on_update(void) {
@@ -137,11 +156,12 @@ void test_basis_snapshot_preserves_on_update(void) {
     state.num_vars = 4;
     state.num_constrs = 2;
 
-    cxf_progress_snapshot(&state);
-    TEST_ASSERT_EQUAL_INT(5, state.progress_snapshot[0]);
+    int snap[CXF_SNAPSHOT_SIZE];
+    cxf_progress_snapshot(&state, snap);
+    TEST_ASSERT_EQUAL_INT(5, snap[0]);
 
     state.iteration = 15;
-    TEST_ASSERT_EQUAL_INT(5, state.progress_snapshot[0]);
+    TEST_ASSERT_EQUAL_INT(5, snap[0]);
 }
 
 /*--- BasisSnapshot equal/free tests ---*/
@@ -209,7 +229,9 @@ int main(void) {
     RUN_TEST(test_basis_diff_with_progress);
     RUN_TEST(test_basis_diff_six_terms);
     RUN_TEST(test_basis_diff_null_returns_zero);
+    RUN_TEST(test_basis_diff_null_snapshot_returns_zero);
     RUN_TEST(test_basis_snapshot_null_safe);
+    RUN_TEST(test_basis_snapshot_null_buf_safe);
     RUN_TEST(test_basis_snapshot_preserves_on_update);
     RUN_TEST(test_snapshot_equal_true);
     RUN_TEST(test_snapshot_equal_false);

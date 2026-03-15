@@ -42,7 +42,7 @@
  * @brief Capture progress counters into snapshot buffer (v2 P3.16).
  *
  * Lightweight O(1): copies scalar counters, no loops over problem data.
- * Snapshot stored in state->progress_snapshot[CXF_SNAPSHOT_SIZE].
+ * Snapshot written to caller-provided buffer of CXF_SNAPSHOT_SIZE ints.
  *
  * Slot layout:
  *   [0] iteration          [5] bounds_propagated
@@ -51,19 +51,19 @@
  *   [3] rows_eliminated    [8] degenerate_count
  *   [4] cols_eliminated    [9] perturb_count
  */
-void cxf_progress_snapshot(SolverState *state) {
-    if (state == NULL) return;
-    state->progress_snapshot[0] = state->iteration;
-    state->progress_snapshot[1] = (state->basis != NULL) ?
+void cxf_progress_snapshot(SolverState *state, int *snapshot) {
+    if (state == NULL || snapshot == NULL) return;
+    snapshot[0] = state->iteration;
+    snapshot[1] = (state->basis != NULL) ?
         state->basis->pivots_since_refactor : 0;
-    state->progress_snapshot[2] = state->ftran_count;
-    state->progress_snapshot[3] = state->rows_eliminated;
-    state->progress_snapshot[4] = state->cols_eliminated;
-    state->progress_snapshot[5] = state->bounds_propagated;
-    state->progress_snapshot[6] = state->flip_count;
-    state->progress_snapshot[7] = state->phase;
-    state->progress_snapshot[8] = state->degenerate_count;
-    state->progress_snapshot[9] = state->perturb_count;
+    snapshot[2] = state->ftran_count;
+    snapshot[3] = state->rows_eliminated;
+    snapshot[4] = state->cols_eliminated;
+    snapshot[5] = state->bounds_propagated;
+    snapshot[6] = state->flip_count;
+    snapshot[7] = state->phase;
+    snapshot[8] = state->degenerate_count;
+    snapshot[9] = state->perturb_count;
 }
 
 /**
@@ -77,23 +77,23 @@ void cxf_progress_snapshot(SolverState *state) {
  * receive light weight. Deltas clamped to >= 0 so counter resets
  * between snapshots produce zero signal rather than negative.
  */
-double cxf_basis_diff(SolverState *state) {
-    if (state == NULL) return 0.0;
+double cxf_basis_diff(SolverState *state, const int *snapshot) {
+    if (state == NULL || snapshot == NULL) return 0.0;
 
     int n = state->num_vars    > 0 ? state->num_vars    : 1;
     int m = state->num_constrs > 0 ? state->num_constrs : 1;
 
     /* Deltas — clamped to >= 0 (counter resets = no signal, not noise) */
-    int d_iter  = state->iteration        - state->progress_snapshot[0];
+    int d_iter  = state->iteration        - snapshot[0];
     int d_piv   = ((state->basis != NULL) ?
-        state->basis->pivots_since_refactor : 0) - state->progress_snapshot[1];
-    int d_ftran = state->ftran_count      - state->progress_snapshot[2];
-    int d_rows  = state->rows_eliminated  - state->progress_snapshot[3];
-    int d_cols  = state->cols_eliminated  - state->progress_snapshot[4];
-    int d_props = state->bounds_propagated - state->progress_snapshot[5];
-    int d_flips = state->flip_count       - state->progress_snapshot[6];
-    int d_degen = state->degenerate_count - state->progress_snapshot[8];
-    int d_perturb = state->perturb_count  - state->progress_snapshot[9];
+        state->basis->pivots_since_refactor : 0) - snapshot[1];
+    int d_ftran = state->ftran_count      - snapshot[2];
+    int d_rows  = state->rows_eliminated  - snapshot[3];
+    int d_cols  = state->cols_eliminated  - snapshot[4];
+    int d_props = state->bounds_propagated - snapshot[5];
+    int d_flips = state->flip_count       - snapshot[6];
+    int d_degen = state->degenerate_count - snapshot[8];
+    int d_perturb = state->perturb_count  - snapshot[9];
 
     if (d_iter  < 0) d_iter  = 0;
     if (d_piv   < 0) d_piv   = 0;
@@ -109,9 +109,9 @@ double cxf_basis_diff(SolverState *state) {
      * colDenom = working columns at snapshot time (n - removed cols), floor 1
      * rowDenom = active constraint count + matrix status changes +
      *            bounds-processing changes at snapshot time, floor 1 */
-    int snap_cols = state->progress_snapshot[4];
-    int snap_rows = state->progress_snapshot[3];
-    int snap_props = state->progress_snapshot[5];
+    int snap_cols = snapshot[4];
+    int snap_rows = snapshot[3];
+    int snap_props = snapshot[5];
     double colDenom = (double)((n - snap_cols) > 1 ? (n - snap_cols) : 1);
     int rowSum = (m - snap_rows) + snap_rows + snap_props;
     double rowDenom = (double)(rowSum > 1 ? rowSum : 1);
