@@ -59,7 +59,12 @@ const char *cxf_error_message(int error_code) {
     case 20001: return "Element not in model";
     case 20002: return "Failed to create model";
     case 20003: return "Internal error";
-    default:    return "Unknown error";
+    default: {
+        static char fallback[64];
+        snprintf(fallback, sizeof(fallback), "Unknown error (code %d)",
+                 error_code);
+        return fallback;
+    }
     }
 }
 

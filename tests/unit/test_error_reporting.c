@@ -42,7 +42,8 @@ void test_error_message_lookup(void) {
     TEST_ASSERT_EQUAL_STRING("NULL argument", cxf_error_message(10002));
     TEST_ASSERT_EQUAL_STRING("Feature not supported", cxf_error_message(10024));
     TEST_ASSERT_EQUAL_STRING("Internal error", cxf_error_message(20003));
-    TEST_ASSERT_EQUAL_STRING("Unknown error", cxf_error_message(99999));
+    TEST_ASSERT_EQUAL_STRING("Unknown error (code 99999)",
+                              cxf_error_message(99999));
 }
 
 void test_error_env_writes_code_and_message(void) {
