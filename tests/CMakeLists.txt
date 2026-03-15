@@ -283,6 +283,9 @@ add_cxf_test(test_modification_blocked unit/test_modification_blocked.c)
 # Status clear before solve (solve_entry.md Step 4)
 add_cxf_test(test_status_clear unit/test_status_clear.c)
 
+# V2 model_type_checking.md: cxf_check_model_flags1/flags2 spec compliance
+add_cxf_test(test_model_flags_v2 unit/test_model_flags_v2.c)
+
 ################################################################################
 # Integration Tests
 ################################################################################

@@ -18,7 +18,7 @@
 int cxf_check_nan(const double *arr, int n);
 int cxf_is_finite(const double *arr, int n);
 int cxf_check_model_flags1(CxfModel *model);
-int cxf_check_model_flags2(CxfModel *model, int flag);
+int cxf_check_model_flags2(CxfModel *model);
 
 /* Test fixtures */
 static CxfEnv *env = NULL;
@@ -83,72 +83,87 @@ void test_check_nan_or_inf_null_array(void) {
 }
 
 /*============================================================================
- * cxf_check_model_flags1 Tests (MIP detection)
+ * cxf_check_model_flags1 Tests (Active optimization state — V2 spec)
  *===========================================================================*/
 
 void test_check_model_flags1_null_model(void) {
     TEST_ASSERT_EQUAL_INT(0, cxf_check_model_flags1(NULL));
 }
 
-void test_check_model_flags1_pure_continuous(void) {
+void test_check_model_flags1_no_active_state(void) {
     CxfModel *model = NULL;
     cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
     TEST_ASSERT_NOT_NULL(model);
-    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x0");
-    cxf_addvar(model, 0, NULL, NULL, 2.0, 0.0, 10.0, 'C', "x1");
+    /* Fresh model: self_ptr=NULL, modification_blocked=0 */
     TEST_ASSERT_EQUAL_INT(0, cxf_check_model_flags1(model));
     cxf_freemodel(model);
 }
 
-void test_check_model_flags1_with_binary(void) {
+void test_check_model_flags1_concurrent_solve(void) {
     CxfModel *model = NULL;
     cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
     TEST_ASSERT_NOT_NULL(model);
-    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 1.0, 'B', "b0");
+    /* Simulate concurrent solve: self_ptr set */
+    model->self_ptr = model;
     TEST_ASSERT_EQUAL_INT(1, cxf_check_model_flags1(model));
+    model->self_ptr = NULL;
     cxf_freemodel(model);
 }
 
-void test_check_model_flags1_with_integer(void) {
+void test_check_model_flags1_active_with_basis(void) {
     CxfModel *model = NULL;
     cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
     TEST_ASSERT_NOT_NULL(model);
-    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'I', "i0");
+    /* Simulate active flag + basis factorization */
+    model->modification_blocked = 1;
+    int dummy = 42;
+    model->solution_data = &dummy;
     TEST_ASSERT_EQUAL_INT(1, cxf_check_model_flags1(model));
+    model->modification_blocked = 0;
+    model->solution_data = NULL;
     cxf_freemodel(model);
 }
 
-void test_check_model_flags1_empty_model(void) {
+void test_check_model_flags1_active_no_basis(void) {
     CxfModel *model = NULL;
     cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
     TEST_ASSERT_NOT_NULL(model);
+    /* Active flag but no basis factorization */
+    model->modification_blocked = 1;
+    model->solution_data = NULL;
     TEST_ASSERT_EQUAL_INT(0, cxf_check_model_flags1(model));
+    model->modification_blocked = 0;
     cxf_freemodel(model);
 }
 
 /*============================================================================
- * cxf_check_model_flags2 Tests (Quadratic/conic detection)
+ * cxf_check_model_flags2 Tests (Dual data availability — V2 spec)
  *===========================================================================*/
 
 void test_check_model_flags2_null_model(void) {
-    TEST_ASSERT_EQUAL_INT(0, cxf_check_model_flags2(NULL, 0));
+    TEST_ASSERT_EQUAL_INT(0, cxf_check_model_flags2(NULL));
 }
 
-void test_check_model_flags2_pure_linear(void) {
+void test_check_model_flags2_no_solve(void) {
     CxfModel *model = NULL;
     cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
     TEST_ASSERT_NOT_NULL(model);
-    cxf_addvar(model, 0, NULL, NULL, 1.0, 0.0, 10.0, 'C', "x0");
-    cxf_addvar(model, 0, NULL, NULL, 2.0, 0.0, 10.0, 'C', "x1");
-    TEST_ASSERT_EQUAL_INT(0, cxf_check_model_flags2(model, 0));
+    /* Fresh model: no solve indicator */
+    TEST_ASSERT_EQUAL_INT(0, cxf_check_model_flags2(model));
     cxf_freemodel(model);
 }
 
-void test_check_model_flags2_empty_model(void) {
+void test_check_model_flags2_no_dual_data(void) {
     CxfModel *model = NULL;
     cxf_newmodel(env, &model, "test", 0, NULL, NULL, NULL, NULL, NULL);
     TEST_ASSERT_NOT_NULL(model);
-    TEST_ASSERT_EQUAL_INT(0, cxf_check_model_flags2(model, 0));
+    /* Solve indicator set but no dual data */
+    model->self_ptr = model;
+    model->status = CXF_OPTIMAL;
+    model->modification_blocked = 1;
+    TEST_ASSERT_EQUAL_INT(0, cxf_check_model_flags2(model));
+    model->self_ptr = NULL;
+    model->modification_blocked = 0;
     cxf_freemodel(model);
 }
 
@@ -172,14 +187,14 @@ int main(void) {
     RUN_TEST(test_check_nan_or_inf_null_array);
 
     RUN_TEST(test_check_model_flags1_null_model);
-    RUN_TEST(test_check_model_flags1_pure_continuous);
-    RUN_TEST(test_check_model_flags1_with_binary);
-    RUN_TEST(test_check_model_flags1_with_integer);
-    RUN_TEST(test_check_model_flags1_empty_model);
+    RUN_TEST(test_check_model_flags1_no_active_state);
+    RUN_TEST(test_check_model_flags1_concurrent_solve);
+    RUN_TEST(test_check_model_flags1_active_with_basis);
+    RUN_TEST(test_check_model_flags1_active_no_basis);
 
     RUN_TEST(test_check_model_flags2_null_model);
-    RUN_TEST(test_check_model_flags2_pure_linear);
-    RUN_TEST(test_check_model_flags2_empty_model);
+    RUN_TEST(test_check_model_flags2_no_solve);
+    RUN_TEST(test_check_model_flags2_no_dual_data);
 
     return UNITY_END();
 }
