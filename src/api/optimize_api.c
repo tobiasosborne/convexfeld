@@ -96,7 +96,6 @@ int cxf_optimize_internal(CxfModel *model) {
     if (status == CXF_OPTIMAL) {
         cxf_log_printf(env, 0, "Optimization completed successfully");
         cxf_log_printf(env, 0, "Objective value: %.6f", model->obj_val);
-        status = CXF_OK;  /* Convert OPTIMAL status to OK for API */
     } else {
         cxf_log_printf(env, 0, "Optimization completed with status: %d", status);
     }
@@ -104,5 +103,12 @@ int cxf_optimize_internal(CxfModel *model) {
     /* Clear optimization flag */
     env->optimizing = 0;
 
-    return status;
+    /* V2 solve_entry.md: return 0 on success, non-zero only for errors.
+     * Solver outcome codes (OPTIMAL, INFEASIBLE, UNBOUNDED, ITERATION_LIMIT,
+     * TIME_LIMIT, etc.) are stored on model->status and are NOT errors.
+     * Only error codes (10001+) propagate as return values. */
+    if (CXF_IS_ERROR(status)) {
+        return status;
+    }
+    return CXF_OK;
 }

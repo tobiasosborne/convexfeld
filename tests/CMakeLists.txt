@@ -441,6 +441,9 @@ add_cxf_test(test_env_owned unit/test_env_owned.c)
 add_cxf_test(test_problem_var_index unit/test_problem_var_index.c)
 target_link_libraries(test_problem_var_index PRIVATE m)
 
+# V2 solve_entry.md: cxf_optimize return value semantics (convexfeld-tlnu)
+add_cxf_test(test_optimize_return unit/test_optimize_return.c)
+
 ################################################################################
 # Integration Tests
 ################################################################################
