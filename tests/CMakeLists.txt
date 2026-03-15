@@ -412,6 +412,10 @@ target_link_libraries(test_snapshot_naming PRIVATE m)
 add_cxf_test(test_bound_prop_tol unit/test_bound_prop_tol.c)
 target_link_libraries(test_bound_prop_tol PRIVATE m)
 
+# Phase I->II transition refactorization + xB recomputation (numerical_stability.md §A.4)
+add_cxf_test(test_phase_transition_refactor unit/test_phase_transition_refactor.c)
+target_link_libraries(test_phase_transition_refactor PRIVATE m)
+
 ################################################################################
 # Integration Tests
 ################################################################################

@@ -201,11 +201,16 @@ int cxf_transition_to_phase_two(SolverState *state, CxfModel *model) {
             state->work_ub[n + i] = 0.0;  /* fix equality slack at zero */
     }
 
-    /* Step 2: Refactorize for Phase II accuracy */
+    /* Step 2: Refactorize + full recomputation for Phase II accuracy.
+     * numerical_stability.md Section A item 4: Phase I→II transition
+     * forces refactorization to ensure clean numerical state.
+     * Recompute x_B from scratch so Phase II starts with accurate
+     * primal values, then recompute objective using those values. */
     cxf_solver_refactor(state, model->env);
+    cxf_recompute_xB(state);
 
-    /* Step 3: Recompute objective value with original objective.
-     * Include slack range [n, n+m) — their obj=0, but algebraic completeness. */
+    /* Step 3: Recompute objective with original Phase II coefficients.
+     * Must follow x_B recomputation for accurate primal values. */
     state->obj_value = 0.0;
     for (int j = 0; j < n + m; j++)
         state->obj_value += state->work_obj[j] * state->work_x[j];
