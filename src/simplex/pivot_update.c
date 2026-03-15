@@ -131,17 +131,22 @@ void cxf_pivot_update(SolverState *state, int col,
 /**
  * @brief Compute feasible step length bounds for ratio test (F2 P3.19).
  *
- * Given entering variable's pivot column, compute the max step before
- * any basic variable hits its bound.
+ * Given entering variable's pivot column and direction, compute the max
+ * step before any basic variable hits its bound.
+ *
+ * Per harris_ratio_test.md Stage 1: let s = direction (+1 if entering
+ * variable increases, -1 if decreases).  Basic variable i is driven
+ * toward lb when s*d_i > 0, toward ub when s*d_i < 0.
  *
  * @param state      Solver state with bounds and basic vars
  * @param pivotCol   FTRAN result (dense, size m)
  * @param entering   Entering variable index
+ * @param direction  Entering direction: +1 (increase) or -1 (decrease)
  * @param theta_max  Output: maximum feasible step
  * @return 0 on success, CXF_UNBOUNDED if no bound blocks
  */
 int cxf_pivot_check(SolverState *state, const double *pivotCol,
-                    int entering, double *theta_max) {
+                    int entering, int direction, double *theta_max) {
     if (state == NULL || pivotCol == NULL || theta_max == NULL) {
         return CXF_ERROR_NULL_ARGUMENT;
     }
@@ -151,7 +156,8 @@ int cxf_pivot_check(SolverState *state, const double *pivotCol,
     int found = 0;
 
     for (int i = 0; i < m; i++) {
-        if (fabs(pivotCol[i]) < CXF_PIVOT_TOL) continue;
+        double sd = direction * pivotCol[i];
+        if (fabs(sd) < CXF_PIVOT_TOL) continue;
 
         int bv = state->basis->basic_vars[i];
         double x_bv = state->work_x[bv];
@@ -159,10 +165,12 @@ int cxf_pivot_check(SolverState *state, const double *pivotCol,
         double ub_bv = state->work_ub[bv];
         double theta;
 
-        if (pivotCol[i] > 0) {
-            theta = (x_bv - lb_bv) / pivotCol[i];
+        if (sd > 0) {
+            /* Driven toward lower bound */
+            theta = (x_bv - lb_bv) / sd;
         } else {
-            theta = (x_bv - ub_bv) / pivotCol[i];
+            /* Driven toward upper bound */
+            theta = (ub_bv - x_bv) / (-sd);
         }
 
         if (theta < 0) theta = 0;

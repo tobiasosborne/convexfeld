@@ -250,6 +250,10 @@ target_link_libraries(test_pivot_special PRIVATE m)
 add_cxf_test(test_pivot_update unit/test_pivot_update.c)
 target_link_libraries(test_pivot_update PRIVATE m)
 
+# Pivot check direction (V2: harris_ratio_test.md Stage 1 entering direction, convexfeld-xzcx)
+add_cxf_test(test_pivot_check_dir unit/test_pivot_check_dir.c)
+target_link_libraries(test_pivot_check_dir PRIVATE m)
+
 # Pivot primal (V2 spec compliance: CXF_INFEASIBLE, primal criterion) tests
 add_cxf_test(test_pivot_primal unit/test_pivot_primal.c)
 target_link_libraries(test_pivot_primal PRIVATE m)
