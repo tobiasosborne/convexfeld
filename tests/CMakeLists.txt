@@ -454,6 +454,10 @@ add_cxf_test(test_post_iterate_sig unit/test_post_iterate_sig.c)
 add_cxf_test(test_solve_lp_order unit/test_solve_lp_order.c)
 target_link_libraries(test_solve_lp_order PRIVATE m)
 
+# Dynamic candidate buffer: no hard cap on pricing candidates (convexfeld-xar1)
+add_cxf_test(test_max_candidates unit/test_max_candidates.c)
+target_link_libraries(test_max_candidates PRIVATE m)
+
 ################################################################################
 # Integration Tests
 ################################################################################

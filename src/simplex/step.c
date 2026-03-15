@@ -24,7 +24,6 @@
 
 #define REFACTOR_INTERVAL  100
 #define MAX_BFRT_FLIPS     10
-#define MAX_CANDIDATES     10
 #define STEP_CLAMP         1e15   /* numerical_stability.md Section C */
 
 /* External declarations */
@@ -258,7 +257,8 @@ static int pricing_and_ftran(SolverState *state, CxfEnv *env,
     double *column = state->work_column;
 
     /* Multi-level pricing (v2 P2.3 + P3.20 + P4.4/P4.5) */
-    int candidates[MAX_CANDIDATES];
+    int *candidates = (int *)malloc((size_t)total * sizeof(int));
+    if (candidates == NULL) return CXF_ERROR_OUT_OF_MEMORY;
     int num_cand = 0;
     double pricing_tol = env->optimality_tol;  /* Updated per level */
 
@@ -276,7 +276,7 @@ static int pricing_and_ftran(SolverState *state, CxfEnv *env,
 
         num_cand = 0;
         if (state->use_bland) {
-            for (int j = 0; j < total && num_cand < MAX_CANDIDATES; j++) {
+            for (int j = 0; j < total; j++) {
                 if (basis->var_status[j] >= 0) continue;
                 if (state->work_ub[j] <=
                     state->work_lb[j] + CXF_FEASIBILITY_TOL) continue;
@@ -301,7 +301,7 @@ static int pricing_and_ftran(SolverState *state, CxfEnv *env,
                     double rc = state->work_dj[j];
                     if ((basis->var_status[j] == CXF_VAR_AT_LOWER && rc < -pricing_tol) ||
                         (basis->var_status[j] == CXF_VAR_AT_UPPER && rc > pricing_tol)) {
-                        if (num_cand < MAX_CANDIDATES) candidates[num_cand++] = j;
+                        candidates[num_cand++] = j;
                     }
                 }
             }
@@ -340,12 +340,13 @@ static int pricing_and_ftran(SolverState *state, CxfEnv *env,
         }
     }
 
-    if (num_cand == 0) return ITERATE_OPTIMAL;
+    if (num_cand == 0) { free(candidates); return ITERATE_OPTIMAL; }
 
     /* Per-candidate evaluation: FTRAN + quality check + ratio test */
     int entering = -1, leavingRow = -1;
     double pivotElement = 0.0, stepSize = 0.0;
     int entering_sign = 1;
+    int ret = CXF_OK;
     int rc;
 
     for (int ci = 0; ci < num_cand; ci++) {
@@ -355,8 +356,9 @@ static int pricing_and_ftran(SolverState *state, CxfEnv *env,
                state->work_dj[entering] > 0.0) ? -1 : 1;
 
         if (state->work_lb[entering] >
-            state->work_ub[entering] + env->feasibility_tol)
-            return ITERATE_INFEASIBLE;
+            state->work_ub[entering] + env->feasibility_tol) {
+            ret = ITERATE_INFEASIBLE; goto cleanup;
+        }
 
         /* Phase 3.2: Tight-bound handling (simplex_iteration.md).
          * Variables with bound range at or below pricing tolerance
@@ -366,10 +368,10 @@ static int pricing_and_ftran(SolverState *state, CxfEnv *env,
             double bound_range = state->work_ub[entering] - state->work_lb[entering];
             if (bound_range >= 0 && bound_range <= pricing_tol) {
                 int pp_rc = cxf_pivot_primal(env, state, entering, pricing_tol);
-                if (pp_rc == CXF_INFEASIBLE) return ITERATE_INFEASIBLE;
-                if (pp_rc != CXF_OK && pp_rc != 0) return pp_rc;
+                if (pp_rc == CXF_INFEASIBLE) { ret = ITERATE_INFEASIBLE; goto cleanup; }
+                if (pp_rc != CXF_OK && pp_rc != 0) { ret = pp_rc; goto cleanup; }
                 state->iteration++;
-                return ITERATE_CONTINUE;
+                ret = ITERATE_CONTINUE; goto cleanup;
             }
         }
 
@@ -407,10 +409,10 @@ static int pricing_and_ftran(SolverState *state, CxfEnv *env,
                     cxf_pricing_recompute_weights(state->pricing, state);
                 extract_column_ext(state, entering, column);
                 rc = cxf_ftran(basis, column, pivotCol);
-                if (rc != CXF_OK) return rc;
+                if (rc != CXF_OK) { ret = rc; goto cleanup; }
                 /* numerical_stability.md §C: NaN/Inf scan after retry FTRAN */
                 for (int ri = 0; ri < m; ri++)
-                    if (!isfinite(pivotCol[ri])) return CXF_NUMERIC;
+                    if (!isfinite(pivotCol[ri])) { ret = CXF_NUMERIC; goto cleanup; }
             }
         }
 
@@ -436,11 +438,11 @@ static int pricing_and_ftran(SolverState *state, CxfEnv *env,
                     state->work_x[basis->basic_vars[ii]] -= delta * pivotCol[ii];
                 state->obj_value += state->work_dj[entering] * delta;
                 state->iteration++;
-                return ITERATE_CONTINUE;
+                ret = ITERATE_CONTINUE; goto cleanup;
             }
-            return ITERATE_UNBOUNDED;
+            ret = ITERATE_UNBOUNDED; goto cleanup;
         }
-        if (rc != CXF_OK) return rc;
+        if (rc != CXF_OK) { ret = rc; goto cleanup; }
         if (fabs(pivotElement) < CXF_PIVOT_TOL) {
             if (state->use_bland && ci + 1 < num_cand) continue;
             /* numerical_stability.md §A.4: rejected pivot triggers
@@ -453,10 +455,10 @@ static int pricing_and_ftran(SolverState *state, CxfEnv *env,
                 cxf_pricing_recompute_weights(state->pricing, state);
             extract_column_ext(state, entering, column);
             rc = cxf_ftran(basis, column, pivotCol);
-            if (rc != CXF_OK) return CXF_NUMERIC;
+            if (rc != CXF_OK) { ret = CXF_NUMERIC; goto cleanup; }
             /* numerical_stability.md §C: NaN/Inf scan after recovery FTRAN */
             for (int ri = 0; ri < m; ri++)
-                if (!isfinite(pivotCol[ri])) return CXF_NUMERIC;
+                if (!isfinite(pivotCol[ri])) { ret = CXF_NUMERIC; goto cleanup; }
             rt_status = CXF_RT_NORMAL_PIVOT;
             rt_theta = 0.0;
             rt_nflips = 0;
@@ -464,9 +466,10 @@ static int pricing_and_ftran(SolverState *state, CxfEnv *env,
                                 &leavingRow, &pivotElement, &rt_status,
                                 &rt_theta,
                                 out_flip_rows, MAX_BFRT_FLIPS, &rt_nflips);
-            if (rc != CXF_OK) return rc;
-            if (fabs(pivotElement) < CXF_PIVOT_TOL)
-                return CXF_NUMERIC;
+            if (rc != CXF_OK) { ret = rc; goto cleanup; }
+            if (fabs(pivotElement) < CXF_PIVOT_TOL) {
+                ret = CXF_NUMERIC; goto cleanup;
+            }
         }
 
         /* Use theta from ratio_test (includes BFRT), cap by entering bound */
@@ -490,7 +493,10 @@ static int pricing_and_ftran(SolverState *state, CxfEnv *env,
     *out_leavingRow = leavingRow;
     *out_pivotElement = pivotElement;
     *out_stepSize = stepSize;
-    return CXF_OK;
+
+cleanup:
+    free(candidates);
+    return ret;
 }
 
 /*===========================================================================
