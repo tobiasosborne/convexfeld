@@ -300,6 +300,9 @@ target_link_libraries(test_eta_list_direction PRIVATE m)
 add_cxf_test(test_sort_indices unit/test_sort_indices.c)
 target_link_libraries(test_sort_indices PRIVATE m)
 
+# Parameter name case-insensitive lookup (V2 parameter_system.md, convexfeld-djuf)
+add_cxf_test(test_param_case unit/test_param_case.c)
+
 ################################################################################
 # Integration Tests
 ################################################################################
