@@ -353,6 +353,10 @@ target_link_libraries(test_basis_diff_scoring PRIVATE m)
 # Locale safety: save/restore LC_NUMERIC around cxf_optimize (solve_entry.md Steps 3/12)
 add_cxf_test(test_locale_safety unit/test_locale_safety.c)
 
+# Adaptive Markowitz tolerance on high growth factor (numerical_stability.md §D)
+add_cxf_test(test_markowitz_adaptive unit/test_markowitz_adaptive.c)
+target_link_libraries(test_markowitz_adaptive PRIVATE m)
+
 ################################################################################
 # Integration Tests
 ################################################################################

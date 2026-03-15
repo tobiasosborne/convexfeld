@@ -51,6 +51,7 @@ BasisState *cxf_basis_create(int m, int n) {
     basis->pivots_since_refactor = 0;
     basis->refactor_freq = DEFAULT_REFACTOR_FREQ;
     basis->iteration = 0;
+    basis->markowitz_tol = CXF_MARKOWITZ_TOL;  /* §D adaptive default */
 
     /* Allocate arrays for constraints (rows) */
     if (m > 0) {

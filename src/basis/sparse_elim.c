@@ -17,7 +17,7 @@
 #define MARKOWITZ_TOL CXF_MARKOWITZ_TOL  /* 1/128 ≈ 0.0078 */
 #define MIN_PIVOT     CXF_MIN_PIVOT      /* 1e-13 */
 
-int sparse_find_pivot(const SparseWork *sw,
+int sparse_find_pivot(const SparseWork *sw, double markowitz_tol,
                       int *out_row, int *out_col, double *out_val) {
     int best_row = -1, best_col = -1;
     int64_t best_score = (int64_t)(sw->m + 1) * (int64_t)(sw->m + 1);
@@ -28,7 +28,7 @@ int sparse_find_pivot(const SparseWork *sw,
         if (!sw->col_active[j]) continue;
         double cmax = sw->col_max[j];
         if (cmax < MIN_PIVOT) continue;
-        double threshold = MARKOWITZ_TOL * cmax;
+        double threshold = markowitz_tol * cmax;
 
         /* Count active entries in this column for Markowitz score */
         const SparseCol *col = &sw->cols[j];

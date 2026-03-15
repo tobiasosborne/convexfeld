@@ -115,7 +115,7 @@ int sparse_to_dense(const SparseWork *sw,
                     double *D, int *map_row, int *map_col);
 
 /* sparse_elim.c */
-int sparse_find_pivot(const SparseWork *sw,
+int sparse_find_pivot(const SparseWork *sw, double markowitz_tol,
                       int *out_row, int *out_col, double *out_val);
 int sparse_eliminate(SparseWork *sw, int piv_row, int piv_col,
                      double piv_val,
@@ -124,7 +124,7 @@ int sparse_eliminate(SparseWork *sw, int piv_row, int piv_col,
                      int *L_count, int *L_cap, int step);
 
 /* dense_elim.c */
-int dense_find_pivot(const double *D, int n,
+int dense_find_pivot(const double *D, int n, double markowitz_tol,
                      const int *relim, const int *celim,
                      int *out_r, int *out_c, double *out_v);
 int dense_eliminate(double *D, int n, int piv_r, int piv_c,

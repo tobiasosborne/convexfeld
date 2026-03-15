@@ -22,6 +22,7 @@
 #define MIN_PIVOT       CXF_MIN_PIVOT      /* 1e-13 */
 #define DENSE_THRESHOLD 0.4
 #define GROWTH_LIMIT    1e8
+#define MARKOWITZ_MAX   0.99   /* Upper bound for adaptive Markowitz tol */
 
 int cxf_lu_factorize(LUFactors *lu, SolverState *ctx) {
     if (!lu || !ctx || !ctx->basis) return CXF_ERROR_NULL_ARGUMENT;
@@ -51,6 +52,10 @@ int cxf_lu_factorize(LUFactors *lu, SolverState *ctx) {
         rc = 1001; goto cleanup;
     }
 
+    /* Adaptive Markowitz tolerance (numerical_stability.md §D) */
+    double mtol = basis->markowitz_tol;
+    if (mtol < CXF_MARKOWITZ_TOL) mtol = CXF_MARKOWITZ_TOL;
+
     /* Track growth factor: max |A_ij| from initial matrix */
     double max_initial = 0.0;
     for (int j = 0; j < m; j++)
@@ -64,7 +69,7 @@ int cxf_lu_factorize(LUFactors *lu, SolverState *ctx) {
             break;
 
         int piv_row, piv_col; double piv_val;
-        if (sparse_find_pivot(sw, &piv_row, &piv_col, &piv_val)) {
+        if (sparse_find_pivot(sw, mtol, &piv_row, &piv_col, &piv_val)) {
             rc = 3; goto cleanup;  /* Singular */
         }
         lu->perm_row[step] = piv_row;
@@ -114,7 +119,7 @@ int cxf_lu_factorize(LUFactors *lu, SolverState *ctx) {
 
         for (int ds = 0; step < m; step++, ds++) {
             int dr, dc; double dv;
-            if (dense_find_pivot(D, dn, d_relim, d_celim, &dr, &dc, &dv)) {
+            if (dense_find_pivot(D, dn, mtol, d_relim, d_celim, &dr, &dc, &dv)) {
                 free(D); free(map_r); free(map_c);
                 free(d_relim); free(d_celim);
                 rc = 3; goto cleanup;
@@ -168,8 +173,13 @@ int cxf_lu_factorize(LUFactors *lu, SolverState *ctx) {
     if (rc == 0) lu->valid = 1;
 
     /* Growth factor monitoring (numerical_stability.md Section D) */
-    if (max_initial > 0.0 && max_u / max_initial > GROWTH_LIMIT)
+    if (max_initial > 0.0 && max_u / max_initial > GROWTH_LIMIT) {
         basis->numerical_flag = 1;
+        /* Adaptive: increase Markowitz tol for next factorization */
+        double new_tol = basis->markowitz_tol * 2.0;
+        if (new_tol > MARKOWITZ_MAX) new_tol = MARKOWITZ_MAX;
+        basis->markowitz_tol = new_tol;
+    }
 
 cleanup:
     sparse_work_free(sw);

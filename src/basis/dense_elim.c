@@ -29,7 +29,7 @@ static int grow_coo(int **arr_i, int **arr_j, double **arr_v,
     return 0;
 }
 
-int dense_find_pivot(const double *D, int n,
+int dense_find_pivot(const double *D, int n, double markowitz_tol,
                      const int *relim, const int *celim,
                      int *out_r, int *out_c, double *out_v) {
     int best_r = -1, best_c = -1;
@@ -47,7 +47,7 @@ int dense_find_pivot(const double *D, int n,
             if (av >= MIN_PIVOT) { col_cnt++; if (av > cmax) cmax = av; }
         }
         if (col_cnt == 0 || cmax < MIN_PIVOT) continue;
-        double thr = MARKOWITZ_TOL * cmax;
+        double thr = markowitz_tol * cmax;
         for (int i = 0; i < n; i++) {
             if (relim[i]) continue;
             double av = fabs(D[i * n + j]);

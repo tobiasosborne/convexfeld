@@ -105,6 +105,9 @@ struct BasisState {
     double *work;             /**< Working array [m] (used as pivotCol) */
     double *work2;            /**< Working array [m] (FTRAN/BTRAN LU temp) */
 
+    /* Adaptive Markowitz tolerance (numerical_stability.md §D) */
+    double markowitz_tol;     /**< Current Markowitz pivot tolerance (init CXF_MARKOWITZ_TOL) */
+
     /* Refactorization control */
     int refactor_freq;        /**< Refactorization frequency */
     int pivots_since_refactor;/**< Pivots since last refactor */

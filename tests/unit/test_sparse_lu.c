@@ -24,7 +24,8 @@ SparseWork *sparse_work_create(int m);
 void sparse_work_free(SparseWork *sw);
 int sparse_col_append(SparseCol *col, int row, double val);
 double sparse_work_density(const SparseWork *sw);
-int sparse_find_pivot(const SparseWork *sw, int *r, int *c, double *v);
+int sparse_find_pivot(const SparseWork *sw, double markowitz_tol,
+                      int *r, int *c, double *v);
 int sparse_extract_pivot_row(const SparseWork *sw, int pr, int *c, double *v);
 int sparse_eliminate(SparseWork *sw, int pr, int pc, double pv,
                      const int *prc, const double *prv, int prl,
@@ -114,7 +115,7 @@ void test_sparse_find_pivot_singleton(void) {
     }
     sw->total_nnz = 3;
     int r, c; double v;
-    TEST_ASSERT_EQUAL_INT(0, sparse_find_pivot(sw, &r, &c, &v));
+    TEST_ASSERT_EQUAL_INT(0, sparse_find_pivot(sw, CXF_MARKOWITZ_TOL, &r, &c, &v));
     /* Any singleton is valid (cost 0) */
     TEST_ASSERT_TRUE(r >= 0 && r < 3);
     TEST_ASSERT_EQUAL_INT(r, c);  /* identity: row == col */
@@ -144,7 +145,7 @@ void test_sparse_find_pivot_markowitz(void) {
     sw->total_nnz = 7;
 
     int r, c; double v;
-    TEST_ASSERT_EQUAL_INT(0, sparse_find_pivot(sw, &r, &c, &v));
+    TEST_ASSERT_EQUAL_INT(0, sparse_find_pivot(sw, CXF_MARKOWITZ_TOL, &r, &c, &v));
     TEST_ASSERT_EQUAL_INT(0, r);
     TEST_ASSERT_EQUAL_INT(0, c);
     TEST_ASSERT_DOUBLE_WITHIN(1e-15, 2.0, v);
