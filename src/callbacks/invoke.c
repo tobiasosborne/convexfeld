@@ -27,7 +27,7 @@
  *
  * @param model      Model being optimized.
  * @param where      CXF_CB_PRE_SOLVE or CXF_CB_POST_SOLVE.
- * @param set_terminate  If true, set terminate_requested on non-zero return.
+ * @param set_terminate  If true, set env->terminate_flag on non-zero return.
  * @return 0 to continue, non-zero if callback requests abort.
  */
 static int invoke_callback_hook(CxfModel *model, int where,
@@ -42,7 +42,8 @@ static int invoke_callback_hook(CxfModel *model, int where,
 
     if (ctx->enabled == 0) return 0;
 
-    CxfCallbackFunc callback_func = ctx->callback_func;
+    /* V2: callback_func resides on Environment, not CallbackState */
+    CxfCallbackFunc callback_func = env->callback_func;
     if (callback_func == NULL) return 0;
 
     void *user_data = ctx->user_data;
@@ -55,8 +56,9 @@ static int invoke_callback_hook(CxfModel *model, int where,
     double end_time = cxf_get_elapsed_time();
     ctx->callback_time += end_time - start_time;
 
+    /* V2: termination via Environment's asyncState (terminate_flag) */
     if (result != 0 && set_terminate) {
-        ctx->terminate_requested = 1;
+        env->terminate_flag = 1;
     }
 
     return result;

@@ -61,6 +61,10 @@ struct CxfEnv {
     void (*log_callback)(const char *msg, void *data); /**< User log callback */
     void *log_callback_data;  /**< User data for log callback */
 
+    /* Optimization callback — per V2 spec (callback_state.md §Relationships),
+     * the callback function pointer resides on the Environment, not CallbackState. */
+    CxfCallbackFunc callback_func; /**< User optimization callback function */
+
     /* Optional owned structures (allocated on demand) */
     CallbackContext *callback_state; /**< Callback registration and tracking (may be NULL) */
     CxfEnv *master_env;       /**< Parent environment for copy/child environments (NULL for root) */

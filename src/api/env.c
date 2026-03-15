@@ -71,6 +71,9 @@ static void cxf_env_init_fields(CxfEnv *env, const char *logfilename, int set_ac
     env->log_callback = NULL;
     env->log_callback_data = NULL;
 
+    /* Optimization callback — V2: resides on Environment */
+    env->callback_func = NULL;
+
     /* Optional structures (NULL until needed) */
     env->callback_state = NULL;
     env->master_env = NULL;
@@ -141,6 +144,7 @@ int cxf_freeenv(CxfEnv *env) {
         cxf_callback_free(env->callback_state);
         env->callback_state = NULL;
     }
+    env->callback_func = NULL;  /* V2: callback_func on Environment */
 
     /* Note: Models are NOT owned by the environment.
      * The application must free models before freeing the environment.

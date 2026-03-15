@@ -275,6 +275,17 @@ typedef struct CxfEnv CxfEnv;
 typedef struct CxfModel CxfModel;
 
 /**
+ * @brief Callback function signature (V2: resides on Environment).
+ * @param model  The model being optimized
+ * @param cbdata Callback data pointer (typically CallbackContext)
+ * @param where  Context code indicating invocation point (CXF_CB_*)
+ * @param usrdata User-provided data pointer
+ * @return 0 to continue, non-zero to terminate
+ */
+typedef int (*CxfCallbackFunc)(CxfModel *model, void *cbdata,
+                                int where, void *usrdata);
+
+/**
  * @brief Sparse matrix in CSC format with optional CSR.
  * @see include/convexfeld/cxf_matrix.h
  */

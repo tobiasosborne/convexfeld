@@ -49,8 +49,9 @@ void cxf_set_terminate(CxfEnv *env) {
  * @brief Request termination from within a callback (V2 spec).
  *
  * Traverses to the root environment (via master_env chain) and sets the
- * termination flag there. Also sets callback-specific terminate_requested
- * and external terminate_flag_ptr if configured.
+ * termination flag there. V2: termination uses Environment's asyncState
+ * (terminate_flag), not CallbackContext. Also sets external
+ * terminate_flag_ptr if configured.
  *
  * Per V2 spec: returns 0 on success, error code on failure.
  * Null model or null env returns CXF_ERROR_NULL_ARGUMENT.
@@ -78,10 +79,7 @@ int cxf_callback_terminate(CxfModel *model) {
         *root->terminate_flag_ptr = 1;
     }
 
-    /* Set callback-specific termination flag if callback state exists */
-    if (root->callback_state != NULL) {
-        root->callback_state->terminate_requested = 1;
-    }
+    /* V2: termination via env->terminate_flag only, not CallbackContext */
 
     return CXF_OK;
 }

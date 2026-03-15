@@ -55,8 +55,8 @@ int cxf_init_callback_struct(CxfEnv *env, void *callbackSubStruct) {
  * @brief Reset callback state in environment.
  *
  * Resets callback state counters and temporary fields while preserving
- * the CallbackState allocation and user configuration (callback_func,
- * user_data, enabled flag, magic numbers).
+ * the CallbackState allocation and user configuration (user_data,
+ * enabled flag, magic numbers).
  *
  * This allows callback infrastructure to be reused across multiple
  * optimization runs without deallocation overhead.
@@ -67,12 +67,12 @@ int cxf_init_callback_struct(CxfEnv *env, void *callbackSubStruct) {
  * - iteration_count -> 0
  * - best_obj -> INFINITY
  * - start_time -> current timestamp
- * - terminate_requested -> 0
  *
  * Fields preserved:
  * - magic, safety_magic
- * - callback_func, user_data
+ * - user_data (V2: callback_func is on CxfEnv)
  * - enabled
+ * V2: terminate_requested removed; use env->terminate_flag
  *
  * NULL-safe: returns immediately if env or callback_state is NULL.
  *
@@ -107,8 +107,7 @@ void cxf_reset_callback_state(CxfEnv *env) {
     /* Reset timing - mark start of new run */
     ctx->start_time = current_time;
 
-    /* Clear termination request from previous run */
-    ctx->terminate_requested = 0;
-
-    /* Preserve: magic, safety_magic, callback_func, user_data, enabled */
+    /* V2: termination via env->terminate_flag, not ctx->terminate_requested.
+     * Preserve: magic, safety_magic, user_data, enabled.
+     * callback_func is on CxfEnv, not CallbackContext. */
 }

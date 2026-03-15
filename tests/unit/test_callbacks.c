@@ -96,9 +96,8 @@ void test_callback_create_sets_magic(void) {
 void test_callback_create_initializes_fields(void) {
     CallbackContext *ctx = cxf_callback_create();
     TEST_ASSERT_NOT_NULL(ctx);
-    TEST_ASSERT_NULL(ctx->callback_func);
+    /* V2: callback_func moved to CxfEnv, terminate_requested removed */
     TEST_ASSERT_NULL(ctx->user_data);
-    TEST_ASSERT_EQUAL_INT(0, ctx->terminate_requested);
     TEST_ASSERT_EQUAL_INT(0, ctx->enabled);
     TEST_ASSERT_EQUAL_DOUBLE(0.0, ctx->start_time);
     TEST_ASSERT_EQUAL_INT(0, ctx->iteration_count);
@@ -163,7 +162,6 @@ void test_callback_reset_stats_clears_counters(void) {
     ctx->iteration_count = 50;
     ctx->best_obj = 42.0;
     ctx->start_time = 1234567890.0;
-    ctx->terminate_requested = 1;
 
     int status = cxf_callback_reset_stats(ctx);
     TEST_ASSERT_EQUAL_INT(CXF_OK, status);
@@ -172,22 +170,20 @@ void test_callback_reset_stats_clears_counters(void) {
     TEST_ASSERT_EQUAL_INT(0, ctx->iteration_count);
     TEST_ASSERT_TRUE(isinf(ctx->best_obj));
     TEST_ASSERT_EQUAL_DOUBLE(0.0, ctx->start_time);
-    TEST_ASSERT_EQUAL_INT(0, ctx->terminate_requested);
+    /* V2: terminate_requested removed; termination via env->terminate_flag */
     cxf_callback_free(ctx);
 }
 
 void test_callback_reset_stats_preserves_registration(void) {
     CallbackContext *ctx = cxf_callback_create();
     TEST_ASSERT_NOT_NULL(ctx);
-    /* Set registration info */
-    ctx->callback_func = (CxfCallbackFunc)0x12345678;
+    /* Set registration info — V2: callback_func is on env, not ctx */
     ctx->user_data = (void *)0x87654321;
     ctx->enabled = 1;
 
     int status = cxf_callback_reset_stats(ctx);
     TEST_ASSERT_EQUAL_INT(CXF_OK, status);
     /* Registration preserved */
-    TEST_ASSERT_EQUAL_PTR((void *)0x12345678, ctx->callback_func);
     TEST_ASSERT_EQUAL_PTR((void *)0x87654321, ctx->user_data);
     TEST_ASSERT_EQUAL_INT(1, ctx->enabled);
     cxf_callback_free(ctx);
@@ -320,10 +316,8 @@ void test_reset_callback_state_clears_statistics(void) {
     ctx->iteration_count = 50;
     ctx->best_obj = 42.0;
     ctx->start_time = 1234567890.0;
-    ctx->terminate_requested = 1;
 
-    /* Set registration info (should be preserved) */
-    ctx->callback_func = (CxfCallbackFunc)0x12345678;
+    /* Set registration info (should be preserved) — V2: callback_func on env */
     ctx->user_data = (void *)0x87654321;
     ctx->enabled = 1;
 
@@ -335,12 +329,10 @@ void test_reset_callback_state_clears_statistics(void) {
     TEST_ASSERT_EQUAL_DOUBLE(0.0, ctx->callback_time);
     TEST_ASSERT_EQUAL_INT(0, ctx->iteration_count);
     TEST_ASSERT_TRUE(isinf(ctx->best_obj));
-    TEST_ASSERT_EQUAL_INT(0, ctx->terminate_requested);
     /* start_time should be updated to current timestamp (> 0) */
     TEST_ASSERT_TRUE(ctx->start_time > 0.0);
 
     /* Verify registration preserved */
-    TEST_ASSERT_EQUAL_PTR((void *)0x12345678, ctx->callback_func);
     TEST_ASSERT_EQUAL_PTR((void *)0x87654321, ctx->user_data);
     TEST_ASSERT_EQUAL_INT(1, ctx->enabled);
 

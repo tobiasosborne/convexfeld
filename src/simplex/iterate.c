@@ -57,14 +57,15 @@ void cxf_log_iteration_progress(CxfModel *model, SolverState *state) {
      * This enables GUI/external monitoring even when logging disabled. */
     if (env != NULL && env->callback_state != NULL) {
         CallbackContext *cb = env->callback_state;
-        if (cb->enabled && cb->callback_func != NULL) {
+        /* V2: callback_func resides on Environment, not CallbackState */
+        if (cb->enabled && env->callback_func != NULL) {
             cb->iteration_count = iter;
             cb->best_obj = state->obj_value;
-            int result = cb->callback_func(model, cb, CXF_CB_POLLING,
-                                           cb->user_data);
+            int result = env->callback_func(model, cb, CXF_CB_POLLING,
+                                            cb->user_data);
             cb->callback_calls += 1.0;
             if (result != 0) {
-                /* Callback requested termination */
+                /* Callback requested termination via env asyncState */
                 if (env->terminate_flag_ptr)
                     *(env->terminate_flag_ptr) = 1;
                 env->terminate_flag = 1;

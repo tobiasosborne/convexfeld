@@ -138,8 +138,8 @@ void cxf_free_callback_state(CallbackContext *ctx) {
     ctx->magic = 0;
     ctx->safety_magic = 0;
 
-    /* Do NOT free user_data - owned by caller */
-    ctx->callback_func = NULL;
+    /* Do NOT free user_data - owned by caller.
+     * V2: callback_func is on CxfEnv, not CallbackContext. */
     ctx->user_data = NULL;
 
     cxf_free(ctx);

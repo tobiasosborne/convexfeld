@@ -7,7 +7,7 @@
  * - Traverses to root environment via master_env chain
  * - Sets termination flag on root environment
  * - Sets external terminate_flag_ptr if configured
- * - Sets callback_state->terminate_requested if present
+ * - V2: termination via env->terminate_flag (not ctx->terminate_requested)
  * - Returns CXF_ERROR_NULL_ARGUMENT for NULL model or NULL env
  */
 
@@ -148,14 +148,15 @@ void test_null_flag_ptr_silently_skipped(void) {
     /* No crash, no error */
 }
 
-void test_sets_callback_state_terminate_requested(void) {
+void test_terminate_uses_env_flag_with_callback_state(void) {
+    /* V2: termination goes through env->terminate_flag, not ctx */
     CallbackContext *ctx = cxf_callback_create();
     TEST_ASSERT_NOT_NULL(ctx);
-    ctx->terminate_requested = 0;
     env->callback_state = ctx;
+    env->terminate_flag = 0;
 
     cxf_callback_terminate(model);
-    TEST_ASSERT_EQUAL_INT(1, ctx->terminate_requested);
+    TEST_ASSERT_EQUAL_INT(1, env->terminate_flag);
 
     env->callback_state = NULL;
     cxf_callback_free(ctx);
@@ -194,7 +195,7 @@ int main(void) {
     /* External flag and callback state */
     RUN_TEST(test_sets_external_flag_ptr);
     RUN_TEST(test_null_flag_ptr_silently_skipped);
-    RUN_TEST(test_sets_callback_state_terminate_requested);
+    RUN_TEST(test_terminate_uses_env_flag_with_callback_state);
     RUN_TEST(test_null_callback_state_silently_skipped);
     RUN_TEST(test_idempotent_double_call);
 

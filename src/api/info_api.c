@@ -63,8 +63,7 @@ int cxf_setcallbackfunc(CxfModel *model,
     }
 
     /* Stub: Just validate and return success.
-     * Full implementation will store cb and usrdata in model.
-     * Note: Model structure does not yet have callback_func and
-     * callback_data fields. */
+     * V2: callback_func resides on Environment (env->callback_func),
+     * not CallbackState. Full implementation stores cb in env. */
     return CXF_OK;
 }

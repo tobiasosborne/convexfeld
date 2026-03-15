@@ -21,15 +21,7 @@
 #define CXF_CB_MIP_SOL      3  /**< MIP solution found */
 #define CXF_CB_POST_SOLVE   4  /**< After optimization completes */
 
-/**
- * @brief Callback function signature.
- * @param model The model being optimized
- * @param cbdata Callback data pointer (typically CallbackContext)
- * @param where Context code indicating invocation point (CXF_CB_*)
- * @param usrdata User-provided data pointer
- * @return 0 to continue, non-zero to terminate
- */
-typedef int (*CxfCallbackFunc)(CxfModel *model, void *cbdata, int where, void *usrdata);
+/* CxfCallbackFunc typedef is in cxf_types.h (V2: resides on Environment) */
 
 /**
  * @brief Callback context structure.
@@ -41,18 +33,19 @@ struct CallbackContext {
     uint32_t magic;           /**< Validation magic (CXF_CALLBACK_MAGIC) */
     uint64_t safety_magic;    /**< Safety magic (CXF_CALLBACK_MAGIC2) */
 
-    /* Callback registration */
-    CxfCallbackFunc callback_func; /**< User callback function */
+    /* Callback registration — per V2 spec (callback_state.md), the callback
+     * function pointer resides on the Environment, not CallbackState.
+     * See CxfEnv.callback_func. */
     void *user_data;          /**< User-provided data pointer */
 
-    /* State */
-    int terminate_requested;  /**< 1 if termination requested */
+    /* State — per V2 spec, termination uses Environment's asyncState
+     * (terminate_flag). See CxfEnv.terminate_flag. */
     int enabled;              /**< 1 if callback enabled */
 
     /* Timing */
     double start_time;        /**< Callback session start time */
-    int iteration_count;      /**< Current iteration count */
-    double best_obj;          /**< Best objective found */
+    int iteration_count;      /**< Current iteration count (non-spec, operational) */
+    double best_obj;          /**< Best objective found (non-spec, operational) */
 
     /* Statistics */
     double callback_calls;    /**< Cumulative callback invocations */
@@ -97,7 +90,7 @@ int cxf_callback_validate(const CallbackContext *ctx);
  * @brief Reset CallbackContext statistics.
  *
  * Clears callback_calls, callback_time, and iteration_count.
- * Does not change callback_func, user_data, or enabled state.
+ * Does not change user_data or enabled state.
  *
  * @param ctx CallbackContext to reset.
  * @return CXF_OK on success, error code if ctx is NULL or invalid.

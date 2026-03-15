@@ -156,6 +156,9 @@ target_link_libraries(test_callbacks PRIVATE m)  # For math functions (isinf)
 # V2: cxf_callback_terminate spec compliance (convexfeld-7izs)
 add_cxf_test(test_callback_terminate_v2 unit/test_callback_terminate_v2.c)
 
+# V2: callback_func ownership on Environment (convexfeld-vd3h)
+add_cxf_test(test_callback_ownership unit/test_callback_ownership.c)
+
 # M7.1.2: Simplex Tests - Iteration
 add_cxf_test(test_simplex_iteration unit/test_simplex_iteration.c)
 

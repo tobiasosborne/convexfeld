@@ -38,12 +38,11 @@ CallbackContext *cxf_callback_create(void) {
     ctx->magic = CXF_CALLBACK_MAGIC;
     ctx->safety_magic = CXF_CALLBACK_MAGIC2;
 
-    /* Initialize callback registration (empty) */
-    ctx->callback_func = NULL;
+    /* Initialize callback registration (empty).
+     * V2: callback_func is on CxfEnv, not CallbackContext. */
     ctx->user_data = NULL;
 
-    /* Initialize state */
-    ctx->terminate_requested = 0;
+    /* Initialize state — V2: termination via env->terminate_flag */
     ctx->enabled = 0;  /* Disabled until callback is registered */
 
     /* Initialize timing */
@@ -117,7 +116,7 @@ int cxf_callback_validate(const CallbackContext *ctx) {
  * @brief Reset CallbackContext statistics.
  *
  * Clears callback_calls, callback_time, and iteration_count.
- * Does not change callback_func, user_data, or enabled state.
+ * Does not change user_data or enabled state.
  *
  * @param ctx CallbackContext to reset.
  * @return CXF_OK on success, error code if ctx is NULL or invalid.
@@ -133,7 +132,6 @@ int cxf_callback_reset_stats(CallbackContext *ctx) {
     ctx->iteration_count = 0;
     ctx->best_obj = INFINITY;
     ctx->start_time = 0.0;
-    ctx->terminate_requested = 0;
 
     return CXF_OK;
 }
