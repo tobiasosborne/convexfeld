@@ -301,6 +301,10 @@ target_link_libraries(test_pivot_recovery PRIVATE m)
 add_cxf_test(test_phase_end unit/test_phase_end.c)
 target_link_libraries(test_phase_end PRIVATE m)
 
+# Phase-end large constraint count (convexfeld-qxw8: modified[] was fixed 256)
+add_cxf_test(test_phase_end_large unit/test_phase_end_large.c)
+target_link_libraries(test_phase_end_large PRIVATE m)
+
 # Core algorithm: recompute tests (xB, objective, FTRAN residual)
 add_cxf_test(test_recompute unit/test_recompute.c)
 target_link_libraries(test_recompute PRIVATE m)

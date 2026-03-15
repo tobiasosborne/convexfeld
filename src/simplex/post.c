@@ -16,6 +16,7 @@
 #include "convexfeld/cxf_pricing.h"
 #include "convexfeld/cxf_types.h"
 #include <math.h>
+#include <stdlib.h>
 
 #include "simplex_internal.h"
 #include "../basis/basis_internal.h"
@@ -122,8 +123,11 @@ int cxf_simplex_phase_end(SolverState *state, CxfEnv *env, int doScan) {
     int m = state->num_constrs;
     int total = n + m;
 
-    /* Track modified constraints for selective activity recomputation */
-    int modified[256];
+    /* Track modified constraints for selective activity recomputation.
+     * Dynamically sized to num_constrs (was fixed 256, silently dropping
+     * constraints beyond that limit — convexfeld-qxw8). */
+    int *modified = (int *)malloc((size_t)m * sizeof(int));
+    if (!modified) return CXF_ERROR_OUT_OF_MEMORY;
     int num_modified = 0;
 
     /*--- Phase 1: Constraint candidate processing ---*/
@@ -140,6 +144,7 @@ int cxf_simplex_phase_end(SolverState *state, CxfEnv *env, int doScan) {
             /* Free variable with significant reduced cost:
              * dual infeasibility — problem may be infeasible */
             state->problem_row_index = j;
+            free(modified);
             return CXF_INFEASIBLE;
         }
     }
@@ -192,8 +197,7 @@ int cxf_simplex_phase_end(SolverState *state, CxfEnv *env, int doScan) {
                 }
             }
 
-            if (num_modified < 256)
-                modified[num_modified++] = i;
+            modified[num_modified++] = i;
 
             /* Note: do NOT increment cols_eliminated here. Inactive
              * constraint identification is not column elimination —
@@ -204,7 +208,7 @@ int cxf_simplex_phase_end(SolverState *state, CxfEnv *env, int doScan) {
     /* 1c. Small-contribution variable scan (if doScan enabled) */
     if (doScan && state->csr_row_ptr &&
         state->work_ub && state->work_lb && state->work_x) {
-        for (int i = 0; i < m && num_modified < 256; i++) {
+        for (int i = 0; i < m; i++) {
             int64_t rs = state->csr_row_ptr[i];
             int64_t re = state->csr_row_ptr[i + 1];
 
@@ -245,5 +249,6 @@ int cxf_simplex_phase_end(SolverState *state, CxfEnv *env, int doScan) {
      * in the orchestrator (solve_lp.c), not here. phase_end focuses on
      * constraint cleanup which only applies in Phase II. */
 
+    free(modified);
     return CXF_OK;
 }
