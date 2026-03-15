@@ -276,6 +276,9 @@ target_link_libraries(test_step3_implied_bound PRIVATE m)
 # modification_blocked flag during optimization (solve_entry.md Steps 4/12)
 add_cxf_test(test_modification_blocked unit/test_modification_blocked.c)
 
+# Status clear before solve (solve_entry.md Step 4)
+add_cxf_test(test_status_clear unit/test_status_clear.c)
+
 ################################################################################
 # Integration Tests
 ################################################################################

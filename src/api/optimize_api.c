@@ -66,6 +66,9 @@ int cxf_optimize_internal(CxfModel *model) {
     /* Set self-pointer for optimization session tracking */
     model->self_ptr = model;
 
+    /* Clear model status code per solve_entry.md Step 4 */
+    model->status = CXF_LOADED;
+
     /* Reset termination flag at start of optimization */
     cxf_reset_terminate(env);
 
