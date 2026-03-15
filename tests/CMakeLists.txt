@@ -228,6 +228,10 @@ target_link_libraries(test_tight_bound PRIVATE m)
 add_cxf_test(test_ratio_test unit/test_ratio_test.c)
 target_link_libraries(test_ratio_test PRIVATE m)
 
+# Perturbation conditional on stalling (convexfeld-9ksl)
+add_cxf_test(test_perturb_conditional unit/test_perturb_conditional.c)
+target_link_libraries(test_perturb_conditional PRIVATE m)
+
 # MPS Solve integration tests
 add_cxf_test(test_mps_solve unit/test_mps_solve.c)
 target_link_libraries(test_mps_solve PRIVATE m)

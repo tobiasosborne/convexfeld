@@ -179,11 +179,12 @@ int cxf_solve_lp(CxfModel *model) {
                 model->status = CXF_INFEASIBLE; terminated = 1; break;
             }
 
-            /* (4) Perturbation — proactive in first 2 iters of round 0,
-             * then reactive on stall/degeneracy. P1.6 (zr5l). */
-            if (round == 0 && state->iteration <= 2) {
-                cxf_simplex_perturbation(state, env);
-            } else if (stall || state->degenerate_count > STALL_THRESHOLD) {
+            /* (4) Perturbation — reactive on stall/degeneracy only.
+             * V2 solve_lp_core.md Phase 6 step 4: apply perturbation only
+             * "if the EXPAND procedure determines that the solver is
+             * stalling." Proactive early-iteration perturbation removed
+             * per convexfeld-9ksl. */
+            if (stall || state->degenerate_count > STALL_THRESHOLD) {
                 cxf_simplex_perturbation(state, env);
                 stall = 0;
             }
