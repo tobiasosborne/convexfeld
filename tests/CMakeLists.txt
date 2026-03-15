@@ -172,6 +172,10 @@ target_link_libraries(test_validation PRIVATE m)  # For math functions (NAN, INF
 # P3.08: cxf_validate_vartypes V2 spec compliance (convexfeld-05dr)
 add_cxf_test(test_validate_vartypes unit/test_validate_vartypes.c)
 
+# V2: cxf_validate_array diagnostic error messages (convexfeld-vt9j)
+add_cxf_test(test_validate_array_diag unit/test_validate_array_diag.c)
+target_link_libraries(test_validate_array_diag PRIVATE m)
+
 # M3.3.1: Threading tests
 add_cxf_test(test_threading unit/test_threading.c)
 
