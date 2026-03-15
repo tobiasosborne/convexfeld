@@ -24,12 +24,23 @@
  * @return CXF_OK on success, error code otherwise
  */
 int cxf_optimize(CxfModel *model) {
+    int status;
+
     if (model == NULL) {
         return CXF_ERROR_NULL_ARGUMENT;
     }
 
+    /* Step 4 (solve_entry.md): Set modification_blocked to prevent
+     * concurrent modifications during optimization */
+    model->modification_blocked = 1;
+
     /* Delegate to internal optimization dispatcher */
-    return cxf_optimize_internal(model);
+    status = cxf_optimize_internal(model);
+
+    /* Step 12 (solve_entry.md): Clear modification_blocked on all paths */
+    model->modification_blocked = 0;
+
+    return status;
 }
 
 /* cxf_getintattr and cxf_getdblattr moved to attrs_api.c (M8.1.15) */

@@ -269,6 +269,9 @@ target_link_libraries(test_btran_eta PRIVATE m)
 add_cxf_test(test_step3_implied_bound unit/test_step3_implied_bound.c)
 target_link_libraries(test_step3_implied_bound PRIVATE m)
 
+# modification_blocked flag during optimization (solve_entry.md Steps 4/12)
+add_cxf_test(test_modification_blocked unit/test_modification_blocked.c)
+
 ################################################################################
 # Integration Tests
 ################################################################################
