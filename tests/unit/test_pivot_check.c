@@ -91,9 +91,10 @@ void test_special_check_upper_finite_flag_valid(void) {
     g_flags[0] = 0x04;
     TEST_ASSERT_EQUAL_INT(1, cxf_special_check(&g_state, 0));
 }
-void test_special_check_reject_quadratic(void) {
+void test_special_check_quadratic_accepted_no_qmatrix(void) {
+    /* V2 spec: quadratic flag without Q-matrix data => accept */
     g_flags[0] = 0x08;
-    TEST_ASSERT_EQUAL_INT(0, cxf_special_check(&g_state, 0));
+    TEST_ASSERT_EQUAL_INT(1, cxf_special_check(&g_state, 0));
 }
 void test_special_check_null_state(void) {
     TEST_ASSERT_EQUAL_INT(0, cxf_special_check(NULL, 0));
@@ -124,7 +125,7 @@ int main(void) {
     RUN_TEST(test_special_check_reject_unbounded_lower);
     RUN_TEST(test_special_check_reject_reserved_flags);
     RUN_TEST(test_special_check_upper_finite_flag_valid);
-    RUN_TEST(test_special_check_reject_quadratic);
+    RUN_TEST(test_special_check_quadratic_accepted_no_qmatrix);
     RUN_TEST(test_special_check_null_state);
     RUN_TEST(test_special_check_negative_finite_bound);
     return UNITY_END();

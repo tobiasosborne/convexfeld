@@ -371,6 +371,10 @@ target_link_libraries(test_nan_check_v2 PRIVATE m)
 add_cxf_test(test_special_check_v2 unit/test_special_check_v2.c)
 target_link_libraries(test_special_check_v2 PRIVATE m)
 
+# V2: cxf_special_check Stage 4 quadratic acceptance (convexfeld-o4n9)
+add_cxf_test(test_special_check_qp unit/test_special_check_qp.c)
+target_link_libraries(test_special_check_qp PRIVATE m)
+
 # V2 cxf_get_threads: thread count resolution chain (convexfeld-gx34)
 add_cxf_test(test_get_threads unit/test_get_threads.c)
 

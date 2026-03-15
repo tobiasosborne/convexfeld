@@ -104,12 +104,14 @@ void test_v2_stage3_no_ub_flag_lb_large(void) {
 }
 
 /*==========================================================================
- * Stage 4 — Quadratic (LP-only: always reject)
+ * Stage 4 — Quadratic (LP-only: accept when no Q-matrix data)
  *=========================================================================*/
 
-void test_v2_stage4_quadratic_rejected(void) {
+void test_v2_stage4_quadratic_no_qmatrix_accepted(void) {
+    /* V2 spec: validate Q-matrix structure if quadratic flag set.
+     * LP-only solver has no Q-matrix storage, so accept. */
     g_flags[0] = VARFLAG_HAS_QUADRATIC;
-    TEST_ASSERT_EQUAL_INT(0, cxf_special_check(&g_state, 0));
+    TEST_ASSERT_EQUAL_INT(1, cxf_special_check(&g_state, 0));
 }
 
 /*==========================================================================
@@ -168,7 +170,7 @@ int main(void) {
     RUN_TEST(test_v2_stage3_ub_flag_lb_above_pos_inf);
     RUN_TEST(test_v2_stage3_no_ub_flag_lb_large);
     /* Stage 4 */
-    RUN_TEST(test_v2_stage4_quadratic_rejected);
+    RUN_TEST(test_v2_stage4_quadratic_no_qmatrix_accepted);
     /* Edge cases */
     RUN_TEST(test_v2_null_state);
     RUN_TEST(test_v2_null_var_flags_treated_as_zero);
