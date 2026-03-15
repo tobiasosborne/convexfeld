@@ -133,6 +133,12 @@ void cxf_pricing_update_queues(PricingState *ctx, SolverState *state) {
 
     int num_vars = state->num_vars;
 
+    /* Capture pre-compaction queue sizes for work counter.
+     * Per pricing_support.md: work counter reflects entries SCANNED,
+     * not entries surviving compaction. */
+    int pre_constr_total = ctx->constr_q_total[level];
+    int pre_var_total = ctx->var_q_total[level];
+
     if (level == 0) {
         /* Level 0: simple status-based compaction */
         if (ctx->constr_queue[0] != NULL) {
@@ -186,9 +192,9 @@ void cxf_pricing_update_queues(PricingState *ctx, SolverState *state) {
         ctx->cached_constr_count3[level] = -1;
     }
 
-    /* Work counter */
+    /* Work counter: use pre-compaction sizes (entries scanned) per
+     * pricing_support.md Work Counter Integration. */
     if (state->work_counter != NULL) {
-        *state->work_counter += (double)(ctx->constr_q_total[level] +
-                                          ctx->var_q_total[level]);
+        *state->work_counter += (double)(pre_constr_total + pre_var_total);
     }
 }

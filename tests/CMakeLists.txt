@@ -361,6 +361,10 @@ target_link_libraries(test_markowitz_adaptive PRIVATE m)
 add_cxf_test(test_cache_level0 unit/test_cache_level0.c)
 target_link_libraries(test_cache_level0 PRIVATE m)
 
+# Work counter uses pre-compaction counts (pricing_support.md, convexfeld-xlam)
+add_cxf_test(test_work_counter unit/test_work_counter.c)
+target_link_libraries(test_work_counter PRIVATE m)
+
 ################################################################################
 # Integration Tests
 ################################################################################
