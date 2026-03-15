@@ -78,39 +78,45 @@ void test_basis_diff_with_progress(void) {
     state.cols_eliminated = 3;
 
     double diff = cxf_basis_diff(&state);
-    /* 6-term formula: structural + iteration + propagation + FTRAN +
-     * perturbation + degenerate. Only structural and iteration fire here. */
-    double expected = 4.0 * 3.0 / 10.0 + 0.25 * 10.0 / 10.0;
+    /* V2 6-term formula. d_iter=10, d_cols=3. nnzDenom=1 (num_nonzeros=0).
+     * colDenom=10, rowDenom = (5-0)+0+0 = 5. */
+    double t2 = 1.0 * 3.0 / 10.0;   /* column reduction */
+    double t3 = 0.25 * 10.0 / 10.0;  /* iteration (d_iter only) */
+    double t6 = 0.1 * 10.0 / 5.0;    /* work counter (d_iter) */
+    double expected = t2 + t3 + t6;
     TEST_ASSERT_DOUBLE_WITHIN(1e-6, expected, diff);
 }
 
 void test_basis_diff_six_terms(void) {
-    /* Validate all 6 terms of the V2 weighted score formula */
+    /* Validate all 6 terms of the V2 weighted score formula per
+     * basis_operations.md §cxf_basis_diff. */
     SolverState state;
     memset(&state, 0, sizeof(state));
     state.num_vars = 20;
     state.num_constrs = 10;
+    state.num_nonzeros = 80;
     state.iteration = 0;
 
     cxf_progress_snapshot(&state);
 
-    state.iteration = 10;         /* d_iter=10 */
-    state.cols_eliminated = 2;    /* d_cols=2 */
-    state.rows_eliminated = 1;    /* d_rows=1 */
-    state.bounds_propagated = 4;  /* d_props=4 */
-    state.ftran_count = 8;        /* d_ftran=8 */
-    state.flip_count = 3;         /* d_flips=3 */
-    state.perturb_count = 2;      /* d_perturb=2 */
-    state.degenerate_count = 5;   /* d_degen=5 */
+    state.iteration = 10;         /* d_iter=10 (T3+T6) */
+    state.cols_eliminated = 2;    /* d_cols=2 (T2) */
+    state.rows_eliminated = 1;    /* d_rows=1 (T4) */
+    state.bounds_propagated = 4;  /* d_props=4 (T4) */
+    state.ftran_count = 8;        /* d_ftran=8 (T5) */
+    state.flip_count = 3;         /* d_flips=3 (T3) */
+    state.perturb_count = 2;      /* d_perturb=2 (T1) */
+    state.degenerate_count = 5;   /* d_degen=5 (T3) */
 
     double diff = cxf_basis_diff(&state);
-    /* colDenom = 20 - 0 = 20, rowDenom = 10 - 0 = 10 */
-    double t1 = 4.0 * (2 + 1) / 20.0;          /* structural */
-    double t2 = 0.25 * (10 + 0 + 3) / 20.0;    /* iteration (piv=0) */
-    double t3 = 1.0 * 4 / 10.0;                 /* propagation */
-    double t4 = 0.5 * 8 / 10.0;                 /* FTRAN */
-    double t5 = 2.0 * 2 / 20.0;                 /* perturbation */
-    double t6 = 0.1 * 5 / 20.0;                 /* degenerate */
+    /* colDenom = 20, nnzDenom = 80,
+     * rowDenom = (10-0)+0+0 = 10 */
+    double t1 = 4.0  * 2.0 / 80.0;                  /* structural */
+    double t2 = 1.0  * 2.0 / 20.0;                  /* col reduction */
+    double t3 = 0.25 * (double)(0+10+3+5) / 20.0;   /* 4 iter counters */
+    double t4 = 1.0  * (double)(1+4) / 10.0;        /* row stats */
+    double t5 = 0.5  * 8.0 / 10.0;                  /* conversion */
+    double t6 = 0.1  * 10.0 / 10.0;                 /* work */
     double expected = t1 + t2 + t3 + t4 + t5 + t6;
     TEST_ASSERT_DOUBLE_WITHIN(1e-10, expected, diff);
 }

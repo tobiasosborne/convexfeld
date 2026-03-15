@@ -329,6 +329,10 @@ target_link_libraries(test_special_check_v2 PRIVATE m)
 # V2 cxf_get_threads: thread count resolution chain (convexfeld-gx34)
 add_cxf_test(test_get_threads unit/test_get_threads.c)
 
+# V2 basis_diff scoring formula (convexfeld-3xyi)
+add_cxf_test(test_basis_diff_scoring unit/test_basis_diff_scoring.c)
+target_link_libraries(test_basis_diff_scoring PRIVATE m)
+
 ################################################################################
 # Integration Tests
 ################################################################################

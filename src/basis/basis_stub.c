@@ -105,34 +105,48 @@ double cxf_basis_diff(SolverState *state) {
     if (d_degen < 0) d_degen = 0;
     if (d_perturb < 0) d_perturb = 0;
 
-    /* Normalization denominators (spec: basis_operations.md)
-     * colDenom = working columns at snapshot time
-     * rowDenom = working rows at snapshot time */
+    /* Normalization denominators (spec: basis_operations.md §cxf_basis_diff)
+     * colDenom = working columns at snapshot time (n - removed cols), floor 1
+     * rowDenom = active constraint count + matrix status changes +
+     *            bounds-processing changes at snapshot time, floor 1 */
     int snap_cols = state->progress_snapshot[4];
     int snap_rows = state->progress_snapshot[3];
+    int snap_props = state->progress_snapshot[5];
     double colDenom = (double)((n - snap_cols) > 1 ? (n - snap_cols) : 1);
-    double rowDenom = (double)((m - snap_rows) > 1 ? (m - snap_rows) : 1);
+    int rowSum = (m - snap_rows) + snap_rows + snap_props;
+    double rowDenom = (double)(rowSum > 1 ? rowSum : 1);
 
-    /* Category weights (spec: structural heavy, iteration light) */
+    /* Total nonzeros normalizer for structural term (spec: basis_operations.md)
+     * Floor at 1 to prevent division by zero. */
+    double nnzDenom = (double)(state->num_nonzeros > 1 ? state->num_nonzeros : 1);
+
+    /* Category weights per V2 spec basis_operations.md §cxf_basis_diff */
     double score = 0.0;
 
-    /* Term 1: Structural progress (heavy — problem reduction is real progress) */
-    score += 4.0 * (double)(d_cols + d_rows) / colDenom;
+    /* Term 1: Structural change — variable-fixing counter delta.
+     * Normalized by total constraint matrix nnz. Heavy weight. */
+    score += 4.0 * (double)d_perturb / nnzDenom;
 
-    /* Term 2: Iteration activity (light — expected, only absence tells) */
-    score += 0.25 * (double)(d_iter + d_piv + d_flips) / colDenom;
+    /* Term 2: Column reduction — net removed columns adjusted by variable
+     * count changes. Normalized by colDenom. Unit weight. */
+    score += 1.0 * (double)d_cols / colDenom;
 
-    /* Term 3: Bound propagation (unit — constraint-level tightening) */
-    score += 1.0 * (double)d_props / rowDenom;
+    /* Term 3: Iteration counters — aggregate 4 counters: basis membership
+     * changes (pivots), pricing ops (iterations), bound-type conversions
+     * (flips), candidate evaluations (degenerate). Light weight. */
+    score += 0.25 * (double)(d_piv + d_iter + d_flips + d_degen) / colDenom;
 
-    /* Term 4: Computational effort (moderate — FTRAN work proxy) */
+    /* Term 4: Row statistics — aggregate row-related counters: removed rows,
+     * bounds-processing work. Normalized by rowDenom. Unit weight. */
+    score += 1.0 * (double)(d_rows + d_props) / rowDenom;
+
+    /* Term 5: Conversion term — FTRAN work as proxy for structural progress
+     * at constraint level. Normalized by rowDenom. Moderate weight. */
     score += 0.5 * (double)d_ftran / rowDenom;
 
-    /* Term 5: Perturbation activity (structural intervention) */
-    score += 2.0 * (double)d_perturb / colDenom;
-
-    /* Term 6: Degenerate pivots (light — activity without progress) */
-    score += 0.1 * (double)d_degen / colDenom;
+    /* Term 6: Work counter — per-iteration work metric. Normalized by
+     * rowDenom with its own dedicated weight. */
+    score += 0.1 * (double)d_iter / rowDenom;
 
     return score;
 }
