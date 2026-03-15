@@ -1,7 +1,7 @@
 /**
  * @file test_error_numeric.c
  * @brief Tests for numeric validation and model flag checks:
- *        cxf_check_nan, cxf_is_finite, cxf_check_model_flags1,
+ *        cxf_check_nan_array, cxf_check_is_finite_array, cxf_check_model_flags1,
  *        cxf_check_model_flags2 (M3.1.1)
  *
  * Split from test_error.c. Tests MUST be written BEFORE implementation (TDD).
@@ -15,8 +15,8 @@
 #include <float.h>
 
 /* Forward declarations for functions under test */
-int cxf_check_nan(const double *arr, int n);
-int cxf_is_finite(const double *arr, int n);
+int cxf_check_nan_array(const double *arr, int n);
+int cxf_check_is_finite_array(const double *arr, int n);
 int cxf_check_model_flags1(CxfModel *model);
 int cxf_check_model_flags2(CxfModel *model);
 
@@ -27,59 +27,59 @@ void setUp(void) { cxf_loadenv(&env, NULL); }
 void tearDown(void) { cxf_freeenv(env); env = NULL; }
 
 /*============================================================================
- * cxf_check_nan Tests
+ * cxf_check_nan_array Tests
  *===========================================================================*/
 
 void test_check_nan_clean_array(void) {
     double arr[] = {1.0, 2.0, 3.0, -4.5, 0.0};
-    TEST_ASSERT_EQUAL_INT(0, cxf_check_nan(arr, 5));
+    TEST_ASSERT_EQUAL_INT(0, cxf_check_nan_array(arr, 5));
 }
 
 void test_check_nan_with_nan(void) {
     double arr[] = {1.0, NAN, 3.0};
-    TEST_ASSERT_EQUAL_INT(1, cxf_check_nan(arr, 3));
+    TEST_ASSERT_EQUAL_INT(1, cxf_check_nan_array(arr, 3));
 }
 
 void test_check_nan_empty_array(void) {
     double arr[] = {1.0};
-    TEST_ASSERT_EQUAL_INT(0, cxf_check_nan(arr, 0));
+    TEST_ASSERT_EQUAL_INT(0, cxf_check_nan_array(arr, 0));
 }
 
 void test_check_nan_null_array(void) {
-    TEST_ASSERT_EQUAL_INT(-1, cxf_check_nan(NULL, 5));
+    TEST_ASSERT_EQUAL_INT(-1, cxf_check_nan_array(NULL, 5));
 }
 
 void test_check_nan_inf_not_detected(void) {
     double arr[] = {1.0, INFINITY, 3.0};
-    TEST_ASSERT_EQUAL_INT(0, cxf_check_nan(arr, 3));  /* Inf is NOT NaN */
+    TEST_ASSERT_EQUAL_INT(0, cxf_check_nan_array(arr, 3));  /* Inf is NOT NaN */
 }
 
 /*============================================================================
- * cxf_is_finite Tests
+ * cxf_check_is_finite_array Tests
  *===========================================================================*/
 
 void test_check_nan_or_inf_clean_array(void) {
     double arr[] = {1.0, -2.0, 0.0, DBL_MAX, -DBL_MAX};
-    TEST_ASSERT_EQUAL_INT(0, cxf_is_finite(arr, 5));
+    TEST_ASSERT_EQUAL_INT(0, cxf_check_is_finite_array(arr, 5));
 }
 
 void test_check_nan_or_inf_with_nan(void) {
     double arr[] = {1.0, 2.0, NAN};
-    TEST_ASSERT_EQUAL_INT(1, cxf_is_finite(arr, 3));
+    TEST_ASSERT_EQUAL_INT(1, cxf_check_is_finite_array(arr, 3));
 }
 
 void test_check_nan_or_inf_with_inf(void) {
     double arr[] = {1.0, INFINITY, 3.0};
-    TEST_ASSERT_EQUAL_INT(1, cxf_is_finite(arr, 3));
+    TEST_ASSERT_EQUAL_INT(1, cxf_check_is_finite_array(arr, 3));
 }
 
 void test_check_nan_or_inf_with_neg_inf(void) {
     double arr[] = {-INFINITY, 2.0, 3.0};
-    TEST_ASSERT_EQUAL_INT(1, cxf_is_finite(arr, 3));
+    TEST_ASSERT_EQUAL_INT(1, cxf_check_is_finite_array(arr, 3));
 }
 
 void test_check_nan_or_inf_null_array(void) {
-    TEST_ASSERT_EQUAL_INT(-1, cxf_is_finite(NULL, 5));
+    TEST_ASSERT_EQUAL_INT(-1, cxf_check_is_finite_array(NULL, 5));
 }
 
 /*============================================================================

@@ -314,6 +314,10 @@ target_link_libraries(test_eta_fields PRIVATE m)
 add_cxf_test(test_queue_filter_l0 unit/test_queue_filter_l0.c)
 target_link_libraries(test_queue_filter_l0 PRIVATE m)
 
+# V2 input_validation.md: single-value NaN/finite checks (convexfeld-o4n4, convexfeld-roxb)
+add_cxf_test(test_nan_check_v2 unit/test_nan_check_v2.c)
+target_link_libraries(test_nan_check_v2 PRIVATE m)
+
 ################################################################################
 # Integration Tests
 ################################################################################
