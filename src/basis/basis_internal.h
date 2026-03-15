@@ -9,6 +9,7 @@
 #define BASIS_INTERNAL_H
 
 #include <stddef.h>
+#include <stdint.h>
 
 /* Forward declarations */
 struct BasisState;
@@ -71,6 +72,7 @@ int cxf_refactor_check(struct SolverState *state, struct CxfEnv *env);
 int cxf_fix_variables_at_bounds(struct BasisState *basis);
 
 /* --- Eta pool (eta_pool.c) --- */
+size_t cxf_eta_pool_capacity(int m, int n, int64_t nnz);
 struct EtaBuffer *cxf_eta_pool_create(size_t initial_size);
 void *cxf_eta_pool_alloc(struct EtaBuffer *pool, size_t size);
 void cxf_eta_pool_free(struct EtaBuffer *pool);

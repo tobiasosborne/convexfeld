@@ -480,6 +480,9 @@ target_link_libraries(test_midpoint_snap PRIVATE m)
 # V2 model_type_checking.md: cxf_is_mip_model extended checks (convexfeld-4047)
 add_cxf_test(test_is_mip_extended unit/test_is_mip_extended.c)
 
+# V2 simplex_lifecycle.md Phase 2: eta pool capacity formula (convexfeld-gm35)
+add_cxf_test(test_pool_capacity unit/test_pool_capacity.c)
+
 ################################################################################
 # Integration Tests
 ################################################################################

@@ -6,8 +6,9 @@
  * All memory freed in bulk at refactorization via cxf_eta_pool_reset.
  * O(1) deallocation instead of O(k) individual free chain.
  *
- * Spec: basis_state.md Memory Pool, eta_vector.md Arena Allocation
- * Beads: auj4
+ * Spec: basis_state.md Memory Pool, eta_vector.md Arena Allocation,
+ *        simplex_lifecycle.md Phase 2 (pool capacity formula)
+ * Beads: auj4, convexfeld-gm35
  */
 
 #include "convexfeld/cxf_types.h"
@@ -15,6 +16,43 @@
 #include "../memory/internal_types.h"
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
+
+/** V2 spec: MIN_POOL_SIZE = 10000 (simplex_lifecycle.md Phase 2) */
+#define MIN_POOL_SIZE 10000
+
+/** V2 spec: ENTRY_SIZE = 32 bytes per entry */
+#define ENTRY_SIZE 32
+
+/**
+ * @brief Compute eta pool initial capacity per V2 spec.
+ *
+ * simplex_lifecycle.md Phase 2:
+ *   poolCapacity   = max(MIN_POOL_SIZE, maxDimension, nnz / 10)
+ *   etaPoolEntries = poolCapacity + nnz
+ *   etaPoolBytes   = etaPoolEntries * ENTRY_SIZE
+ *
+ * @param m   Number of constraints
+ * @param n   Number of variables
+ * @param nnz Total nonzeros in constraint matrix
+ * @return    Initial pool size in bytes
+ */
+size_t cxf_eta_pool_capacity(int m, int n, int64_t nnz) {
+    int64_t max_dim = (m > n) ? m : n;
+    int64_t nnz_tenth = nnz / 10;
+
+    /* V2 spec: cap nnz/10 at 2 billion */
+    if (nnz_tenth > 2000000000LL)
+        nnz_tenth = 2000000000LL;
+
+    int64_t pool_cap = MIN_POOL_SIZE;
+    if (max_dim > pool_cap) pool_cap = max_dim;
+    if (nnz_tenth > pool_cap) pool_cap = nnz_tenth;
+
+    int64_t entries = pool_cap + nnz;
+    size_t bytes = (size_t)entries * ENTRY_SIZE;
+    return bytes;
+}
 
 /**
  * @brief Create an eta memory pool.

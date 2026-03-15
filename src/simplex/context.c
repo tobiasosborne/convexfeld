@@ -275,9 +275,11 @@ int cxf_simplex_init(CxfModel *model, SolverState **stateP) {
         return CXF_ERROR_OUT_OF_MEMORY;
     }
 
-    /* P2.3: Create eta memory pool for arena allocation */
+    /* P2.3: Create eta memory pool for arena allocation.
+     * V2 simplex_lifecycle.md Phase 2: pool capacity uses spec formula. */
     if (ctx->basis != NULL) {
-        ctx->basis->eta_pool = cxf_eta_pool_create(CXF_MIN_CHUNK_SIZE);
+        size_t pool_bytes = cxf_eta_pool_capacity(m, n, ctx->num_nonzeros);
+        ctx->basis->eta_pool = cxf_eta_pool_create(pool_bytes);
         /* Pool creation failure is non-fatal — falls back to calloc */
     }
 
