@@ -16,10 +16,10 @@
 BasisState *cxf_basis_create(int m, int n);
 void cxf_basis_free(BasisState *basis);
 
-/* BasisSnapshot API */
-int cxf_progress_snapshot_create(BasisState *basis, BasisSnapshot *snapshot,
+/* Full BasisSnapshot API (heavy, implementation extension) */
+int cxf_basis_snapshot_full(BasisState *basis, BasisSnapshot *snapshot,
                               int includeFactors);
-void cxf_progress_snapshot_free(BasisSnapshot *snapshot);
+void cxf_basis_snapshot_full_free(BasisSnapshot *snapshot);
 
 /* Warm start */
 int cxf_basis_warm(BasisState *basis, const int *basic_vars, int m);
@@ -98,7 +98,7 @@ void test_basis_warm_snapshot_copies_basis(void) {
     source->var_status[4] = 2;
 
     BasisSnapshot snap;
-    cxf_progress_snapshot_create(source, &snap, 0);
+    cxf_basis_snapshot_full(source, &snap, 0);
 
     BasisState *target = cxf_basis_create(3, 5);
     int status = cxf_basis_warm_snapshot(target, &snap);
@@ -112,7 +112,7 @@ void test_basis_warm_snapshot_copies_basis(void) {
     TEST_ASSERT_EQUAL_INT(0, target->var_status[1]);
     TEST_ASSERT_EQUAL_INT(CXF_VAR_AT_LOWER, target->var_status[2]);
 
-    cxf_progress_snapshot_free(&snap);
+    cxf_basis_snapshot_full_free(&snap);
     cxf_basis_free(source);
     cxf_basis_free(target);
 }
@@ -149,13 +149,13 @@ void test_basis_warm_snapshot_dimension_mismatch(void) {
     source->basic_vars[2] = 2;
 
     BasisSnapshot snap;
-    cxf_progress_snapshot_create(source, &snap, 0);
+    cxf_basis_snapshot_full(source, &snap, 0);
 
     BasisState *target = cxf_basis_create(2, 4);
     int status = cxf_basis_warm_snapshot(target, &snap);
     TEST_ASSERT_EQUAL_INT(CXF_ERROR_INVALID_ARGUMENT, status);
 
-    cxf_progress_snapshot_free(&snap);
+    cxf_basis_snapshot_full_free(&snap);
     cxf_basis_free(source);
     cxf_basis_free(target);
 }
@@ -166,7 +166,7 @@ void test_basis_warm_snapshot_clears_etas(void) {
     source->basic_vars[1] = 1;
 
     BasisSnapshot snap;
-    cxf_progress_snapshot_create(source, &snap, 0);
+    cxf_basis_snapshot_full(source, &snap, 0);
 
     BasisState *target = cxf_basis_create(2, 3);
     target->eta_count = 15;
@@ -177,7 +177,7 @@ void test_basis_warm_snapshot_clears_etas(void) {
     TEST_ASSERT_EQUAL_INT(0, target->eta_count);
     TEST_ASSERT_EQUAL_INT(0, target->pivots_since_refactor);
 
-    cxf_progress_snapshot_free(&snap);
+    cxf_basis_snapshot_full_free(&snap);
     cxf_basis_free(source);
     cxf_basis_free(target);
 }

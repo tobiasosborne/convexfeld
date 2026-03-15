@@ -1,11 +1,19 @@
 /**
  * @file snapshot.c
- * @brief BasisSnapshot implementation (M5.1.7)
+ * @brief Full BasisSnapshot implementation (M5.1.7)
  *
- * Provides snapshot functionality for capturing, comparing, and restoring
- * basis states. Used for debugging, warm-starting, and iteration tracking.
+ * HEAVY snapshot: copies entire basisHeader and varStatus arrays.
+ * Used for warm-starting, debugging, and basis comparison.
  *
- * Spec: docs/specs/functions/cxf_progress_snapshot.md
+ * This is an IMPLEMENTATION EXTENSION — NOT the V2 spec snapshot.
+ * The V2 spec's cxf_basis_snapshot (lightweight O(1) counter snapshot)
+ * lives in basis_stub.c as cxf_progress_snapshot().
+ *
+ * Two snapshot mechanisms exist:
+ *   1. Lightweight (spec): cxf_progress_snapshot() in basis_stub.c
+ *      — copies CXF_SNAPSHOT_SIZE scalar counters, O(1)
+ *   2. Heavy (this file): cxf_basis_snapshot_full()
+ *      — copies full basisHeader + varStatus arrays, O(m+n)
  */
 
 #include "convexfeld/cxf_basis.h"
@@ -14,16 +22,11 @@
 #include <string.h>
 
 /**
- * @brief Create a snapshot of the current basis state.
+ * @brief Create a FULL snapshot of the current basis state (heavy).
  *
- * Captures the complete basis state including:
- * - Dimensions (numVars, numConstrs)
- * - basisHeader array (basic variable indices)
- * - varStatus array (status of all variables)
- * - Current iteration number
- *
- * The includeFactors parameter is reserved for future use to copy
- * L, U factors and pivot permutation when available.
+ * This is the heavy snapshot — copies entire basisHeader and varStatus
+ * arrays. For the lightweight V2 spec counter snapshot, see
+ * cxf_progress_snapshot() in basis_stub.c.
  *
  * @param basis Source basis state.
  * @param snapshot Destination snapshot (caller allocated struct).
@@ -31,7 +34,7 @@
  * @return CXF_OK on success, CXF_ERROR_NULL_ARGUMENT if args are NULL,
  *         CXF_ERROR_OUT_OF_MEMORY on allocation failure.
  */
-int cxf_progress_snapshot_create(BasisState *basis, BasisSnapshot *snapshot,
+int cxf_basis_snapshot_full(BasisState *basis, BasisSnapshot *snapshot,
                               int includeFactors) {
     if (basis == NULL || snapshot == NULL) {
         return CXF_ERROR_NULL_ARGUMENT;
@@ -80,16 +83,17 @@ int cxf_progress_snapshot_create(BasisState *basis, BasisSnapshot *snapshot,
 }
 
 /**
- * @brief Compute the number of differences between two snapshots.
+ * @brief Count element-wise differences between two full snapshots (heavy).
  *
- * Compares basisHeader and varStatus arrays element by element.
- * Returns -1 if dimensions do not match or arguments are invalid.
+ * Returns an integer COUNT of differing basisHeader + varStatus elements.
+ * This is NOT the V2 spec's cxf_basis_diff (weighted double score).
+ * For the spec-compliant weighted diff, see cxf_basis_diff() in basis_stub.c.
  *
  * @param s1 First snapshot.
  * @param s2 Second snapshot.
  * @return Number of differing elements, or -1 on error/mismatch.
  */
-int cxf_progress_snapshot_diff(const BasisSnapshot *s1, const BasisSnapshot *s2) {
+int cxf_basis_snapshot_full_diff(const BasisSnapshot *s1, const BasisSnapshot *s2) {
     if (s1 == NULL || s2 == NULL) {
         return -1;
     }
@@ -120,18 +124,18 @@ int cxf_progress_snapshot_diff(const BasisSnapshot *s1, const BasisSnapshot *s2)
 }
 
 /**
- * @brief Check if two snapshots are identical.
+ * @brief Check if two full basis snapshots are identical.
  *
  * @param s1 First snapshot.
  * @param s2 Second snapshot.
  * @return 1 if equal, 0 if different or on error.
  */
-int cxf_progress_snapshot_equal(const BasisSnapshot *s1, const BasisSnapshot *s2) {
-    return cxf_progress_snapshot_diff(s1, s2) == 0;
+int cxf_basis_snapshot_full_equal(const BasisSnapshot *s1, const BasisSnapshot *s2) {
+    return cxf_basis_snapshot_full_diff(s1, s2) == 0;
 }
 
 /**
- * @brief Free memory allocated within a snapshot.
+ * @brief Free memory allocated within a full basis snapshot.
  *
  * Frees basisHeader, varStatus, and any factor copies.
  * Sets valid to 0. Does not free the snapshot struct itself.
@@ -139,7 +143,7 @@ int cxf_progress_snapshot_equal(const BasisSnapshot *s1, const BasisSnapshot *s2
  *
  * @param snapshot Snapshot to free (may be NULL).
  */
-void cxf_progress_snapshot_free(BasisSnapshot *snapshot) {
+void cxf_basis_snapshot_full_free(BasisSnapshot *snapshot) {
     if (snapshot == NULL) {
         return;
     }

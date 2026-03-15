@@ -181,44 +181,50 @@ void cxf_lu_clear(LUFactors *lu);
 int cxf_lu_factorize(LUFactors *lu, SolverState *ctx);
 
 /*******************************************************************************
- * BasisSnapshot functions (M5.1.7)
+ * Full BasisSnapshot functions (M5.1.7) — IMPLEMENTATION EXTENSION
+ *
+ * Heavy snapshot: copies entire basisHeader + varStatus arrays, O(m+n).
+ * For the V2 spec's lightweight counter snapshot (O(1)), see
+ * cxf_progress_snapshot() and cxf_basis_diff() in basis_stub.c.
  ******************************************************************************/
 
 /**
- * @brief Create a snapshot of the current basis state.
+ * @brief Create a FULL snapshot of the current basis state (heavy).
  *
  * @param basis Source basis state.
  * @param snapshot Destination snapshot (caller allocated).
  * @param includeFactors If 1, copy factorization data (currently no-op).
  * @return CXF_OK on success, CXF_ERROR_OUT_OF_MEMORY on allocation failure.
  */
-int cxf_progress_snapshot_create(BasisState *basis, BasisSnapshot *snapshot,
-                              int includeFactors);
+int cxf_basis_snapshot_full(BasisState *basis, BasisSnapshot *snapshot,
+                            int includeFactors);
 
 /**
- * @brief Compute the number of differences between two snapshots.
+ * @brief Count element-wise differences between two full snapshots.
+ *
+ * Returns int COUNT (not the V2 spec's weighted double score).
  *
  * @param s1 First snapshot.
  * @param s2 Second snapshot.
  * @return Number of differing elements, or -1 on error.
  */
-int cxf_progress_snapshot_diff(const BasisSnapshot *s1, const BasisSnapshot *s2);
+int cxf_basis_snapshot_full_diff(const BasisSnapshot *s1, const BasisSnapshot *s2);
 
 /**
- * @brief Check if two snapshots are identical.
+ * @brief Check if two full basis snapshots are identical.
  *
  * @param s1 First snapshot.
  * @param s2 Second snapshot.
  * @return 1 if equal, 0 if different.
  */
-int cxf_progress_snapshot_equal(const BasisSnapshot *s1, const BasisSnapshot *s2);
+int cxf_basis_snapshot_full_equal(const BasisSnapshot *s1, const BasisSnapshot *s2);
 
 /**
- * @brief Free memory allocated within a snapshot.
+ * @brief Free memory allocated within a full basis snapshot.
  *
  * @param snapshot Snapshot to free (does not free the struct itself).
  */
-void cxf_progress_snapshot_free(BasisSnapshot *snapshot);
+void cxf_basis_snapshot_full_free(BasisSnapshot *snapshot);
 
 /*******************************************************************************
  * BTRAN with arbitrary input vector

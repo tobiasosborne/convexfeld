@@ -16,11 +16,11 @@
 BasisState *cxf_basis_create(int m, int n);
 void cxf_basis_free(BasisState *basis);
 
-/* BasisSnapshot API */
-int cxf_progress_snapshot_create(BasisState *basis, BasisSnapshot *snapshot,
+/* Full BasisSnapshot API (heavy, implementation extension) */
+int cxf_basis_snapshot_full(BasisState *basis, BasisSnapshot *snapshot,
                               int includeFactors);
-int cxf_progress_snapshot_diff(const BasisSnapshot *s1, const BasisSnapshot *s2);
-void cxf_progress_snapshot_free(BasisSnapshot *snapshot);
+int cxf_basis_snapshot_full_diff(const BasisSnapshot *s1, const BasisSnapshot *s2);
+void cxf_basis_snapshot_full_free(BasisSnapshot *snapshot);
 
 void setUp(void) {}
 void tearDown(void) {}
@@ -39,7 +39,7 @@ void test_snapshot_create_copies_data(void) {
     basis->iteration = 42;
 
     BasisSnapshot snap;
-    int status = cxf_progress_snapshot_create(basis, &snap, 0);
+    int status = cxf_basis_snapshot_full(basis, &snap, 0);
 
     TEST_ASSERT_EQUAL_INT(CXF_OK, status);
     TEST_ASSERT_EQUAL_INT(1, snap.valid);
@@ -57,17 +57,17 @@ void test_snapshot_create_copies_data(void) {
     basis->basic_vars[0] = 99;
     TEST_ASSERT_EQUAL_INT(2, snap.basisHeader[0]);
 
-    cxf_progress_snapshot_free(&snap);
+    cxf_basis_snapshot_full_free(&snap);
     cxf_basis_free(basis);
 }
 
 void test_snapshot_create_null_args(void) {
     BasisSnapshot snap;
-    int status = cxf_progress_snapshot_create(NULL, &snap, 0);
+    int status = cxf_basis_snapshot_full(NULL, &snap, 0);
     TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT, status);
 
     BasisState *basis = cxf_basis_create(2, 3);
-    status = cxf_progress_snapshot_create(basis, NULL, 0);
+    status = cxf_basis_snapshot_full(basis, NULL, 0);
     TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT, status);
 
     cxf_basis_free(basis);
@@ -77,13 +77,13 @@ void test_snapshot_create_empty_basis(void) {
     BasisState *basis = cxf_basis_create(0, 0);
     BasisSnapshot snap;
 
-    int status = cxf_progress_snapshot_create(basis, &snap, 0);
+    int status = cxf_basis_snapshot_full(basis, &snap, 0);
     TEST_ASSERT_EQUAL_INT(CXF_OK, status);
     TEST_ASSERT_EQUAL_INT(1, snap.valid);
     TEST_ASSERT_EQUAL_INT(0, snap.numConstrs);
     TEST_ASSERT_EQUAL_INT(0, snap.numVars);
 
-    cxf_progress_snapshot_free(&snap);
+    cxf_basis_snapshot_full_free(&snap);
     cxf_basis_free(basis);
 }
 
@@ -99,14 +99,14 @@ void test_snapshot_diff_identical(void) {
     basis->var_status[3] = 2;
 
     BasisSnapshot snap1, snap2;
-    cxf_progress_snapshot_create(basis, &snap1, 0);
-    cxf_progress_snapshot_create(basis, &snap2, 0);
+    cxf_basis_snapshot_full(basis, &snap1, 0);
+    cxf_basis_snapshot_full(basis, &snap2, 0);
 
-    int diff = cxf_progress_snapshot_diff(&snap1, &snap2);
+    int diff = cxf_basis_snapshot_full_diff(&snap1, &snap2);
     TEST_ASSERT_EQUAL_INT(0, diff);
 
-    cxf_progress_snapshot_free(&snap1);
-    cxf_progress_snapshot_free(&snap2);
+    cxf_basis_snapshot_full_free(&snap1);
+    cxf_basis_snapshot_full_free(&snap2);
     cxf_basis_free(basis);
 }
 
@@ -117,17 +117,17 @@ void test_snapshot_diff_one_header_change(void) {
     basis->basic_vars[2] = 3;
 
     BasisSnapshot snap1;
-    cxf_progress_snapshot_create(basis, &snap1, 0);
+    cxf_basis_snapshot_full(basis, &snap1, 0);
 
     basis->basic_vars[1] = 4;
     BasisSnapshot snap2;
-    cxf_progress_snapshot_create(basis, &snap2, 0);
+    cxf_basis_snapshot_full(basis, &snap2, 0);
 
-    int diff = cxf_progress_snapshot_diff(&snap1, &snap2);
+    int diff = cxf_basis_snapshot_full_diff(&snap1, &snap2);
     TEST_ASSERT_EQUAL_INT(1, diff);
 
-    cxf_progress_snapshot_free(&snap1);
-    cxf_progress_snapshot_free(&snap2);
+    cxf_basis_snapshot_full_free(&snap1);
+    cxf_basis_snapshot_full_free(&snap2);
     cxf_basis_free(basis);
 }
 
@@ -140,17 +140,17 @@ void test_snapshot_diff_var_status_change(void) {
     basis->var_status[2] = CXF_VAR_AT_LOWER;
 
     BasisSnapshot snap1;
-    cxf_progress_snapshot_create(basis, &snap1, 0);
+    cxf_basis_snapshot_full(basis, &snap1, 0);
 
     basis->var_status[2] = CXF_VAR_AT_UPPER;
     BasisSnapshot snap2;
-    cxf_progress_snapshot_create(basis, &snap2, 0);
+    cxf_basis_snapshot_full(basis, &snap2, 0);
 
-    int diff = cxf_progress_snapshot_diff(&snap1, &snap2);
+    int diff = cxf_basis_snapshot_full_diff(&snap1, &snap2);
     TEST_ASSERT_EQUAL_INT(1, diff);
 
-    cxf_progress_snapshot_free(&snap1);
-    cxf_progress_snapshot_free(&snap2);
+    cxf_basis_snapshot_full_free(&snap1);
+    cxf_basis_snapshot_full_free(&snap2);
     cxf_basis_free(basis);
 }
 
@@ -159,14 +159,14 @@ void test_snapshot_diff_dimension_mismatch(void) {
     BasisState *basis2 = cxf_basis_create(3, 4);
 
     BasisSnapshot snap1, snap2;
-    cxf_progress_snapshot_create(basis1, &snap1, 0);
-    cxf_progress_snapshot_create(basis2, &snap2, 0);
+    cxf_basis_snapshot_full(basis1, &snap1, 0);
+    cxf_basis_snapshot_full(basis2, &snap2, 0);
 
-    int diff = cxf_progress_snapshot_diff(&snap1, &snap2);
+    int diff = cxf_basis_snapshot_full_diff(&snap1, &snap2);
     TEST_ASSERT_EQUAL_INT(-1, diff);
 
-    cxf_progress_snapshot_free(&snap1);
-    cxf_progress_snapshot_free(&snap2);
+    cxf_basis_snapshot_full_free(&snap1);
+    cxf_basis_snapshot_full_free(&snap2);
     cxf_basis_free(basis1);
     cxf_basis_free(basis2);
 }
@@ -177,10 +177,10 @@ void test_snapshot_diff_null_args(void) {
     snap.numVars = 1;
     snap.numConstrs = 1;
 
-    int diff = cxf_progress_snapshot_diff(NULL, &snap);
+    int diff = cxf_basis_snapshot_full_diff(NULL, &snap);
     TEST_ASSERT_EQUAL_INT(-1, diff);
 
-    diff = cxf_progress_snapshot_diff(&snap, NULL);
+    diff = cxf_basis_snapshot_full_diff(&snap, NULL);
     TEST_ASSERT_EQUAL_INT(-1, diff);
 }
 

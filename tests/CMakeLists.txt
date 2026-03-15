@@ -389,6 +389,10 @@ target_link_libraries(test_eta_count_sync PRIVATE m)
 add_cxf_test(test_phase_one_tol unit/test_phase_one_tol.c)
 target_link_libraries(test_phase_one_tol PRIVATE m)
 
+# Snapshot naming: verify lightweight (spec) vs heavy (extension) coexist
+add_cxf_test(test_snapshot_naming unit/test_snapshot_naming.c)
+target_link_libraries(test_snapshot_naming PRIVATE m)
+
 ################################################################################
 # Integration Tests
 ################################################################################
