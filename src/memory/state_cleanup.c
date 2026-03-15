@@ -59,6 +59,9 @@ void cxf_free_attribute_table(SolverState *ctx) {
     cxf_free(ctx->work_column);
     cxf_free(ctx->work_cB);
 
+    /* Free variable structural flags (V2) */
+    cxf_free(ctx->var_flags);
+
     /* Free saved bounds (B1: EXPAND perturbation) */
     cxf_free(ctx->saved_lb);
     cxf_free(ctx->saved_ub);

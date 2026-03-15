@@ -118,6 +118,17 @@ int cxf_simplex_init(CxfModel *model, SolverState **stateP) {
         }
     }
 
+    /* V2: Per-variable structural flags (solver_state.md Variable Flags).
+     * Zero-initialized: LP-only has no quadratic/SOS flags. */
+    if (total_vars > 0) {
+        ctx->var_flags = (uint32_t *)calloc((size_t)total_vars,
+                                            sizeof(uint32_t));
+        if (ctx->var_flags == NULL) {
+            cxf_simplex_final(ctx);
+            return CXF_ERROR_OUT_OF_MEMORY;
+        }
+    }
+
     /* B1: Saved bounds (copy of initial bounds for EXPAND perturbation) */
     if (total_vars > 0) {
         ctx->saved_lb = (double *)malloc((size_t)total_vars * sizeof(double));
@@ -310,6 +321,9 @@ void cxf_simplex_final(SolverState *state) {
     free(state->work_counter);
     free(state->work_column);
     free(state->work_cB);
+
+    /* Free variable structural flags (V2) */
+    free(state->var_flags);
 
     /* Free saved bounds (B1) */
     free(state->saved_lb);

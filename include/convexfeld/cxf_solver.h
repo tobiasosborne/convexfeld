@@ -152,6 +152,11 @@ struct SolverState {
     double *work_rhs;         /**< RHS working copy [num_constrs] */
     char *work_sense;         /**< Constraint senses working copy [num_constrs] */
 
+    /* Per-variable type flags (V2 solver_state.md Variable Flags).
+     * Bitmask of structural properties for special pivot routing.
+     * Set during init; read-only during simplex iterations. */
+    uint32_t *var_flags;      /**< Variable structural flags [num_vars + num_constrs] */
+
     /* Row/column scaling factors (NULL if no scaling applied).
      * Per matrix_finalization.md Strategy 3 (Ruiz equilibration). */
     double *row_scale;        /**< Row scaling D_r [num_constrs] (NULL = unscaled) */

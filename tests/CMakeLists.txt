@@ -318,6 +318,10 @@ target_link_libraries(test_queue_filter_l0 PRIVATE m)
 add_cxf_test(test_nan_check_v2 unit/test_nan_check_v2.c)
 target_link_libraries(test_nan_check_v2 PRIVATE m)
 
+# V2: cxf_special_check spec compliance (data_validation.md, convexfeld-6oys)
+add_cxf_test(test_special_check_v2 unit/test_special_check_v2.c)
+target_link_libraries(test_special_check_v2 PRIVATE m)
+
 ################################################################################
 # Integration Tests
 ################################################################################

@@ -4,130 +4,112 @@
  *
  * Tests for pivot validation functions:
  * - cxf_validate_pivot_element
- * - cxf_special_check
+ * - cxf_special_check (V2 signature: state, varIdx)
  */
 
 #include "unity.h"
 #include "convexfeld/cxf_types.h"
+#include "convexfeld/cxf_solver.h"
 #include <math.h>
+#include <string.h>
+#include <stdlib.h>
 
-/* Forward declarations for pivot functions */
+/* Forward declarations */
 int cxf_validate_pivot_element(double pivot_elem, double tolerance);
-int cxf_special_check(double lb, double ub, uint32_t flags, double *work_accum);
+int cxf_special_check(SolverState *state, int varIdx);
+
+/* Minimal SolverState helper for special_check tests */
+static SolverState  g_state;
+static double       g_lb[4];
+static double       g_ub[4];
+static uint32_t     g_flags[4];
 
 void setUp(void) {
-    /* Nothing to set up */
+    memset(&g_state, 0, sizeof(g_state));
+    g_state.work_lb   = g_lb;
+    g_state.work_ub   = g_ub;
+    g_state.var_flags = g_flags;
+    g_state.num_vars  = 4;
+    /* Default: bounded [0, 10], no flags */
+    for (int i = 0; i < 4; i++) {
+        g_lb[i]    = 0.0;
+        g_ub[i]    = 10.0;
+        g_flags[i] = 0;
+    }
 }
 
-void tearDown(void) {
-    /* Nothing to tear down */
-}
+void tearDown(void) { /* nothing */ }
 
-/*============================================================================
+/*==========================================================================
  * cxf_validate_pivot_element Tests
- *===========================================================================*/
+ *=========================================================================*/
 
 void test_pivot_check_valid_positive(void) {
-    int result = cxf_validate_pivot_element(1.0, 1e-10);
-    TEST_ASSERT_EQUAL_INT(1, result);
+    TEST_ASSERT_EQUAL_INT(1, cxf_validate_pivot_element(1.0, 1e-10));
 }
-
 void test_pivot_check_valid_negative(void) {
-    int result = cxf_validate_pivot_element(-1.0, 1e-10);
-    TEST_ASSERT_EQUAL_INT(1, result);
+    TEST_ASSERT_EQUAL_INT(1, cxf_validate_pivot_element(-1.0, 1e-10));
 }
-
 void test_pivot_check_valid_small(void) {
-    int result = cxf_validate_pivot_element(1e-8, 1e-10);
-    TEST_ASSERT_EQUAL_INT(1, result);
+    TEST_ASSERT_EQUAL_INT(1, cxf_validate_pivot_element(1e-8, 1e-10));
 }
-
 void test_pivot_check_reject_too_small(void) {
-    int result = cxf_validate_pivot_element(1e-12, 1e-10);
-    TEST_ASSERT_EQUAL_INT(0, result);
+    TEST_ASSERT_EQUAL_INT(0, cxf_validate_pivot_element(1e-12, 1e-10));
 }
-
 void test_pivot_check_reject_zero(void) {
-    int result = cxf_validate_pivot_element(0.0, 1e-10);
-    TEST_ASSERT_EQUAL_INT(0, result);
+    TEST_ASSERT_EQUAL_INT(0, cxf_validate_pivot_element(0.0, 1e-10));
 }
-
 void test_pivot_check_reject_nan(void) {
-    int result = cxf_validate_pivot_element(NAN, 1e-10);
-    TEST_ASSERT_EQUAL_INT(0, result);
+    TEST_ASSERT_EQUAL_INT(0, cxf_validate_pivot_element(NAN, 1e-10));
 }
-
 void test_pivot_check_accept_infinity(void) {
-    /* Infinity has large magnitude, so it passes */
-    int result = cxf_validate_pivot_element(INFINITY, 1e-10);
-    TEST_ASSERT_EQUAL_INT(1, result);
+    TEST_ASSERT_EQUAL_INT(1, cxf_validate_pivot_element(INFINITY, 1e-10));
 }
-
 void test_pivot_check_boundary_exactly_equal(void) {
-    /* Exactly at tolerance - accepted (>= tolerance) */
-    int result = cxf_validate_pivot_element(1e-10, 1e-10);
-    TEST_ASSERT_EQUAL_INT(1, result);
+    TEST_ASSERT_EQUAL_INT(1, cxf_validate_pivot_element(1e-10, 1e-10));
 }
-
 void test_pivot_check_boundary_just_above(void) {
-    int result = cxf_validate_pivot_element(1.1e-10, 1e-10);
-    TEST_ASSERT_EQUAL_INT(1, result);
+    TEST_ASSERT_EQUAL_INT(1, cxf_validate_pivot_element(1.1e-10, 1e-10));
 }
 
-/*============================================================================
- * cxf_special_check Tests
- *===========================================================================*/
+/*==========================================================================
+ * cxf_special_check Tests (V2 signature)
+ *=========================================================================*/
 
 void test_special_check_valid_basic(void) {
-    /* Normal bounded variable with no special flags */
-    int result = cxf_special_check(0.0, 10.0, 0, NULL);
-    TEST_ASSERT_EQUAL_INT(1, result);
+    TEST_ASSERT_EQUAL_INT(1, cxf_special_check(&g_state, 0));
 }
-
 void test_special_check_reject_unbounded_lower(void) {
-    /* Lower bound is beyond negative infinity (-CXF_INFINITY) */
-    int result = cxf_special_check(-2e100, 10.0, 0, NULL);
-    TEST_ASSERT_EQUAL_INT(0, result);
+    g_lb[0] = -2e100;
+    TEST_ASSERT_EQUAL_INT(0, cxf_special_check(&g_state, 0));
 }
-
 void test_special_check_reject_reserved_flags(void) {
-    /* Reserved flag bits set (bit 4 = 0x10 is reserved per mask 0xFFFFFFB0) */
-    int result = cxf_special_check(0.0, 10.0, 0x00000010, NULL);
-    TEST_ASSERT_EQUAL_INT(0, result);
+    g_flags[0] = 0x00000010;
+    TEST_ASSERT_EQUAL_INT(0, cxf_special_check(&g_state, 0));
 }
-
 void test_special_check_upper_finite_flag_valid(void) {
-    /* Upper finite flag with valid bounds */
-    int result = cxf_special_check(0.0, 10.0, 0x04, NULL);
-    TEST_ASSERT_EQUAL_INT(1, result);
+    g_flags[0] = 0x04;
+    TEST_ASSERT_EQUAL_INT(1, cxf_special_check(&g_state, 0));
 }
-
 void test_special_check_reject_quadratic(void) {
-    /* Quadratic flag set - not supported in LP-only */
-    int result = cxf_special_check(0.0, 10.0, 0x08, NULL);
-    TEST_ASSERT_EQUAL_INT(0, result);
+    g_flags[0] = 0x08;
+    TEST_ASSERT_EQUAL_INT(0, cxf_special_check(&g_state, 0));
 }
-
-void test_special_check_work_accum_null(void) {
-    /* Should not crash with NULL work accumulator */
-    int result = cxf_special_check(0.0, 10.0, 0, NULL);
-    TEST_ASSERT_EQUAL_INT(1, result);
+void test_special_check_null_state(void) {
+    TEST_ASSERT_EQUAL_INT(0, cxf_special_check(NULL, 0));
 }
-
 void test_special_check_negative_finite_bound(void) {
-    /* Negative but finite lower bound */
-    int result = cxf_special_check(-100.0, 10.0, 0, NULL);
-    TEST_ASSERT_EQUAL_INT(1, result);
+    g_lb[0] = -100.0;
+    TEST_ASSERT_EQUAL_INT(1, cxf_special_check(&g_state, 0));
 }
 
-/*============================================================================
+/*==========================================================================
  * Main
- *===========================================================================*/
+ *=========================================================================*/
 
 int main(void) {
     UNITY_BEGIN();
-
-    /* cxf_validate_pivot_element tests */
+    /* cxf_validate_pivot_element */
     RUN_TEST(test_pivot_check_valid_positive);
     RUN_TEST(test_pivot_check_valid_negative);
     RUN_TEST(test_pivot_check_valid_small);
@@ -137,15 +119,13 @@ int main(void) {
     RUN_TEST(test_pivot_check_accept_infinity);
     RUN_TEST(test_pivot_check_boundary_exactly_equal);
     RUN_TEST(test_pivot_check_boundary_just_above);
-
-    /* cxf_special_check tests */
+    /* cxf_special_check (V2) */
     RUN_TEST(test_special_check_valid_basic);
     RUN_TEST(test_special_check_reject_unbounded_lower);
     RUN_TEST(test_special_check_reject_reserved_flags);
     RUN_TEST(test_special_check_upper_finite_flag_valid);
     RUN_TEST(test_special_check_reject_quadratic);
-    RUN_TEST(test_special_check_work_accum_null);
+    RUN_TEST(test_special_check_null_state);
     RUN_TEST(test_special_check_negative_finite_bound);
-
     return UNITY_END();
 }
