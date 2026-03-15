@@ -385,6 +385,10 @@ target_link_libraries(test_input_validation PRIVATE m)
 add_cxf_test(test_eta_count_sync unit/test_eta_count_sync.c)
 target_link_libraries(test_eta_count_sync PRIVATE m)
 
+# Phase I setup uses env feasibility_tol (two_phase_method.md, convexfeld-mh2o)
+add_cxf_test(test_phase_one_tol unit/test_phase_one_tol.c)
+target_link_libraries(test_phase_one_tol PRIVATE m)
+
 ################################################################################
 # Integration Tests
 ################################################################################

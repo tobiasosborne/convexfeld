@@ -127,16 +127,21 @@ int cxf_setup_phase_one(SolverState *state) {
     state->num_artificials = 0;  /* repurposed: count of infeasible BVs */
     state->obj_value = 0.0;
 
+    /* Use runtime feasibility tolerance from environment per V2 spec
+     * (two_phase_method.md §Phase I Determination, §Tolerances). */
+    const double feas_tol = (state->model_ref && state->model_ref->env)
+        ? state->model_ref->env->feasibility_tol : CXF_FEASIBILITY_TOL;
+
     for (int i = 0; i < m; i++) {
         int bv = basis->basic_vars[i];
         double x = state->work_x[bv];
         double lb = state->work_lb[bv];
         double ub = state->work_ub[bv];
-        if (x < lb - CXF_FEASIBILITY_TOL) {
+        if (x < lb - feas_tol) {
             state->work_obj[bv] = -1.0;
             state->obj_value += (lb - x);
             state->num_artificials++;
-        } else if (x > ub + CXF_FEASIBILITY_TOL) {
+        } else if (x > ub + feas_tol) {
             state->work_obj[bv] = +1.0;
             state->obj_value += (x - ub);
             state->num_artificials++;
