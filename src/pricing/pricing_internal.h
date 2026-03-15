@@ -17,9 +17,9 @@ struct SolverState;
 void cxf_pricing_free(struct PricingState *ctx);
 
 /* --- Candidate selection (candidates.c) --- */
-int cxf_pricing_candidates(struct PricingState *ctx, const double *rc,
-                           const int *vs, int nv, double tol,
-                           int *out, int max_out);
+int cxf_pricing_candidates_v1(struct PricingState *ctx, const double *rc,
+                              const int *vs, int nv, double tol,
+                              int *out, int max_out);
 
 /* --- Invalidation (invalidate.c) --- */
 void cxf_pricing_invalidate(struct PricingState *ctx, int flags);

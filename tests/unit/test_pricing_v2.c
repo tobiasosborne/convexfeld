@@ -240,7 +240,7 @@ void test_update_queues_promote_pending(void) {
     free_test_state(s);
 }
 
-/*--- cxf_pricing_candidates_v2 tests (P4.5) ---*/
+/*--- cxf_pricing_candidates tests (P4.5) ---*/
 
 void test_candidates_v2_level0_fast_path(void) {
     PricingState *ctx = cxf_pricing_create(5, 3);
@@ -256,7 +256,7 @@ void test_candidates_v2_level0_fast_path(void) {
 
     int count = 0;
     int *cands = NULL;
-    cxf_pricing_candidates_v2(ctx, s, &count, &cands);
+    cxf_pricing_candidates(ctx, s, &count, &cands);
 
     TEST_ASSERT_EQUAL_INT(2, count);
     TEST_ASSERT_NOT_NULL(cands);
@@ -279,7 +279,7 @@ void test_candidates_v2_cache_hit(void) {
 
     int count = 0;
     int *cands = NULL;
-    cxf_pricing_candidates_v2(ctx, s, &count, &cands);
+    cxf_pricing_candidates(ctx, s, &count, &cands);
 
     TEST_ASSERT_EQUAL_INT(3, count);
     TEST_ASSERT_EQUAL_PTR(ctx->var_output_buf[1], cands);
@@ -291,7 +291,7 @@ void test_candidates_v2_cache_hit(void) {
 void test_candidates_v2_null_safety(void) {
     int count = 99;
     int *cands = (int *)1;
-    cxf_pricing_candidates_v2(NULL, NULL, &count, &cands);
+    cxf_pricing_candidates(NULL, NULL, &count, &cands);
     TEST_ASSERT_EQUAL_INT(0, count);
     TEST_ASSERT_NULL(cands);
 }

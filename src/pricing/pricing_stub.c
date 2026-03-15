@@ -6,7 +6,8 @@
  *
  * Implementations moved to dedicated files:
  * - PricingState lifecycle (create/free/init): context.c (M6.1.2)
- * - cxf_pricing_candidates: candidates.c (M6.1.4)
+ * - cxf_pricing_candidates: candidates.c (V2, P4.5)
+ * - cxf_pricing_candidates_v1: candidates_v1.c (M6.1.4)
  * - cxf_pricing_steepest: steepest.c (M6.1.5)
  * - cxf_pricing_invalidate: update.c (M6.1.6)
  * - cxf_pricing_step2: phase.c (M6.1.7)

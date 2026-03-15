@@ -208,6 +208,10 @@ target_link_libraries(test_perturbation PRIVATE m)
 add_cxf_test(test_pricing_v2 unit/test_pricing_v2.c)
 target_link_libraries(test_pricing_v2 PRIVATE m)
 
+# P4.5: cxf_pricing_candidates spec name verification (convexfeld-o8ez)
+add_cxf_test(test_pricing_candidates_rename unit/test_pricing_candidates_rename.c)
+target_link_libraries(test_pricing_candidates_rename PRIVATE m)
+
 # P3.18: V2 Constraint-side pricing tests (convexfeld-ro2u)
 add_cxf_test(test_constr_candidates unit/test_constr_candidates.c)
 target_link_libraries(test_constr_candidates PRIVATE m)

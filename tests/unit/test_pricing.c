@@ -21,7 +21,7 @@ void cxf_pricing_free(PricingState *ctx);
 int cxf_pricing_init(PricingState *ctx, int num_vars, int strategy);
 
 /* Candidate selection */
-int cxf_pricing_candidates(PricingState *ctx, const double *reduced_costs,
+int cxf_pricing_candidates_v1(PricingState *ctx, const double *reduced_costs,
                            const int *var_status, int num_vars, double tolerance,
                            int *candidates, int max_candidates);
 
@@ -124,7 +124,7 @@ void test_pricing_init_small_problem(void) {
 }
 
 /*============================================================================
- * cxf_pricing_candidates Tests
+ * cxf_pricing_candidates_v1 Tests
  *===========================================================================*/
 
 void test_pricing_candidates_finds_negative_rc(void) {
@@ -137,7 +137,7 @@ void test_pricing_candidates_finds_negative_rc(void) {
     int var_status[] = {0, 1, VAR_AT_LOWER, 2, VAR_AT_LOWER};
     int candidates[5] = {0};
 
-    int count = cxf_pricing_candidates(ctx, reduced_costs, var_status, 5,
+    int count = cxf_pricing_candidates_v1(ctx, reduced_costs, var_status, 5,
                                         1e-6, candidates, 5);
     TEST_ASSERT_EQUAL_INT(1, count);
     TEST_ASSERT_EQUAL_INT(2, candidates[0]);
@@ -155,7 +155,7 @@ void test_pricing_candidates_finds_positive_rc_at_upper(void) {
     int var_status[] = {0, 1, 2, VAR_AT_UPPER, VAR_AT_LOWER};
     int candidates[5] = {0};
 
-    int count = cxf_pricing_candidates(ctx, reduced_costs, var_status, 5,
+    int count = cxf_pricing_candidates_v1(ctx, reduced_costs, var_status, 5,
                                         1e-6, candidates, 5);
     TEST_ASSERT_EQUAL_INT(1, count);
     TEST_ASSERT_EQUAL_INT(3, candidates[0]);
@@ -173,7 +173,7 @@ void test_pricing_candidates_skips_basic_vars(void) {
     int var_status[] = {0, 1, 2, VAR_AT_LOWER, VAR_AT_LOWER};  /* 0,1,2 basic */
     int candidates[5] = {0};
 
-    int count = cxf_pricing_candidates(ctx, reduced_costs, var_status, 5,
+    int count = cxf_pricing_candidates_v1(ctx, reduced_costs, var_status, 5,
                                         1e-6, candidates, 5);
     TEST_ASSERT_EQUAL_INT(0, count);  /* No nonbasic attractive vars */
 
@@ -190,7 +190,7 @@ void test_pricing_candidates_optimal(void) {
     int var_status[] = {0, 1, VAR_AT_LOWER, VAR_AT_LOWER, VAR_AT_LOWER};
     int candidates[5] = {0};
 
-    int count = cxf_pricing_candidates(ctx, reduced_costs, var_status, 5,
+    int count = cxf_pricing_candidates_v1(ctx, reduced_costs, var_status, 5,
                                         1e-6, candidates, 5);
     TEST_ASSERT_EQUAL_INT(0, count);  /* Optimal - no attractive vars */
 
@@ -411,7 +411,7 @@ int main(void) {
     RUN_TEST(test_pricing_init_steepest_edge);
     RUN_TEST(test_pricing_init_small_problem);
 
-    /* cxf_pricing_candidates */
+    /* cxf_pricing_candidates_v1 */
     RUN_TEST(test_pricing_candidates_finds_negative_rc);
     RUN_TEST(test_pricing_candidates_finds_positive_rc_at_upper);
     RUN_TEST(test_pricing_candidates_skips_basic_vars);

@@ -2,9 +2,9 @@
  * @file candidates.c
  * @brief V2 adaptive candidate retrieval (P4.5)
  *
- * V2: cxf_pricing_candidates_v2 -- multi-level queue retrieval with
+ * V2: cxf_pricing_candidates -- multi-level queue retrieval with
  *     adaptive strategy (full scan vs partial expansion).
- * V1 (cxf_pricing_candidates) lives in candidates_v1.c.
+ * V1 (cxf_pricing_candidates_v1) lives in candidates_v1.c.
  *
  * Spec: pricing_core.md -- cxf_pricing_candidates (P4.5)
  * Beads: v35i
@@ -31,7 +31,7 @@
 #define COVERAGE_FRACTION     0.5
 #define EXPANSION_WORK_FACTOR 5e-4
 
-void cxf_pricing_candidates_v2(PricingState *ctx, SolverState *state,
+void cxf_pricing_candidates(PricingState *ctx, SolverState *state,
                                int *count_out, int **candidates_out) {
     if (ctx == NULL || state == NULL || count_out == NULL ||
         candidates_out == NULL) {

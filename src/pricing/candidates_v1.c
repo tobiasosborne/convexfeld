@@ -3,7 +3,7 @@
  * @brief V1 candidate retrieval: RC-based scan with section cycling (M6.1.4)
  *
  * Extracted from candidates.c to comply with 200 LOC limit.
- * V1: cxf_pricing_candidates -- full/partial scan sorted by |RC|.
+ * V1: cxf_pricing_candidates_v1 -- full/partial scan sorted by |RC|.
  *
  * Spec: pricing_core.md -- cxf_pricing_candidates (P4.5)
  * Beads: v35i
@@ -52,7 +52,7 @@ static int compare_by_abs_rc_desc(const void *a, const void *b) {
 }
 
 /*============================================================================
- * cxf_pricing_candidates - Full Implementation
+ * cxf_pricing_candidates_v1 - Full Implementation (V1)
  *===========================================================================*/
 
 /**
@@ -76,7 +76,7 @@ static int compare_by_abs_rc_desc(const void *a, const void *b) {
  * @param max_candidates Maximum candidates to return
  * @return Number of candidates found
  */
-int cxf_pricing_candidates(PricingState *ctx, const double *reduced_costs,
+int cxf_pricing_candidates_v1(PricingState *ctx, const double *reduced_costs,
                            const int *var_status, int num_vars, double tolerance,
                            int *candidates, int max_candidates) {
     if (ctx == NULL || reduced_costs == NULL || var_status == NULL ||

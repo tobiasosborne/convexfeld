@@ -289,7 +289,7 @@ static int pricing_and_ftran(SolverState *state, CxfEnv *env,
         } else if (state->pricing) {
             int v2_count = 0;
             int *v2_cands = NULL;
-            cxf_pricing_candidates_v2(state->pricing, state,
+            cxf_pricing_candidates(state->pricing, state,
                                       &v2_count, &v2_cands);
             if (v2_count > 0 && v2_cands != NULL) {
                 for (int k = 0; k < v2_count; k++) {

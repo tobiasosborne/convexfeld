@@ -44,7 +44,7 @@ void cxf_pricing_get_constr_stats(PricingState *ctx, int *count_out,
 /*===========================================================================
  * V2 Adaptive Constraint Candidate Retrieval (P3.18)
  *
- * Mirrors cxf_pricing_candidates_v2 (candidates.c) with var<->constr swap.
+ * Mirrors cxf_pricing_candidates (candidates.c) with var<->constr swap.
  * Level 0: base dirty list (O(1)). Levels 1-2: cached or adaptive.
  * Three threshold checks: expansion multiplier, coverage, work factor.
  *===========================================================================*/

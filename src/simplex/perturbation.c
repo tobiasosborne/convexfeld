@@ -48,7 +48,7 @@ int cxf_simplex_perturbation(SolverState *state, CxfEnv *env) {
     int cand_count = 0;
     int *cand_list = NULL;
     if (state->pricing)
-        cxf_pricing_candidates_v2(state->pricing, state,
+        cxf_pricing_candidates(state->pricing, state,
                                   &cand_count, &cand_list);
 
     /* Phase 2b: Pre-perturbation consistency check (perturbation.md Phase 2).
