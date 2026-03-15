@@ -440,7 +440,27 @@ static int pricing_and_ftran(SolverState *state, CxfEnv *env,
         if (rc != CXF_OK) return rc;
         if (fabs(pivotElement) < CXF_PIVOT_TOL) {
             if (state->use_bland && ci + 1 < num_cand) continue;
-            return CXF_NUMERIC;
+            /* numerical_stability.md §A.4: rejected pivot triggers
+             * refactorization recovery — retry once after fresh factors. */
+            cxf_solver_refactor(state, env);
+            cxf_recompute_xB(state);
+            cxf_recompute_objective(state);
+            cxf_compute_reduced_costs(state);
+            if (state->pricing)
+                cxf_pricing_recompute_weights(state->pricing, state);
+            extract_column_ext(state, entering, column);
+            rc = cxf_ftran(basis, column, pivotCol);
+            if (rc != CXF_OK) return CXF_NUMERIC;
+            rt_status = CXF_RT_NORMAL_PIVOT;
+            rt_theta = 0.0;
+            rt_nflips = 0;
+            rc = cxf_ratio_test(state, env, entering, pivotCol, m,
+                                &leavingRow, &pivotElement, &rt_status,
+                                &rt_theta,
+                                out_flip_rows, MAX_BFRT_FLIPS, &rt_nflips);
+            if (rc != CXF_OK) return rc;
+            if (fabs(pivotElement) < CXF_PIVOT_TOL)
+                return CXF_NUMERIC;
         }
 
         /* Use theta from ratio_test (includes BFRT), cap by entering bound */

@@ -272,6 +272,10 @@ target_compile_definitions(test_mps_solve PRIVATE SOURCE_DIR="${CMAKE_SOURCE_DIR
 add_cxf_test(test_nan_step_guard unit/test_nan_step_guard.c)
 target_link_libraries(test_nan_step_guard PRIVATE m)
 
+# Rejected pivot column recovery (numerical_stability.md §A.4) tests
+add_cxf_test(test_pivot_recovery unit/test_pivot_recovery.c)
+target_link_libraries(test_pivot_recovery PRIVATE m)
+
 # Phase-end constraint cleanup tests (two_phase_method.md Transition Step 4)
 add_cxf_test(test_phase_end unit/test_phase_end.c)
 target_link_libraries(test_phase_end PRIVATE m)
