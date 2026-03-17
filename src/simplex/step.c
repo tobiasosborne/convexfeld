@@ -530,6 +530,17 @@ static void post_pivot_updates(SolverState *state, CxfEnv *env,
         }
         state->obj_value = p1_obj;
         if (leaving >= 0 && leaving < total) state->work_obj[leaving] = 0.0;
+    } else if (num_flips > 0) {
+        /* BFRT flips snap basic vars to bounds, breaking the linear
+         * objective model. Recompute from scratch: obj = c^T x.
+         * Only nonbasic contributions matter (basic c_B absorbed into
+         * reduced costs), but the simplest correct formula is c^T x
+         * over all variables. This is O(n) but only runs when flips
+         * occur (harris_ratio_test.md Stage 3, step 6). */
+        double obj = 0.0;
+        for (int j = 0; j < total; j++)
+            obj += state->work_obj[j] * state->work_x[j];
+        state->obj_value = obj;
     } else {
         state->obj_value += entering_sign * d_entering * stepSize;
     }
@@ -675,6 +686,13 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env) {
             else
                 state->work_x[bv] = state->work_lb[bv];
         }
+        /* harris_ratio_test.md Stage 3, steps 6b-6d (primal simplex):
+         * Flipped vars remain basic — their values are already set above.
+         * (6b) Activity bounds depend on nonbasic ranges, not basic values;
+         *      no explicit update needed (recomputed at refactorization).
+         * (6c) Row negation is a dual simplex operation; not applicable.
+         * (6d) Basic var status is row index, not AT_LOWER/AT_UPPER; no-op.
+         * Objective correction handled in post_pivot_updates Phase 6. */
         if (basis->var_status[entering] == CXF_VAR_AT_LOWER)
             state->work_x[entering] += stepSize;
         else
