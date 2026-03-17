@@ -139,6 +139,22 @@ int cxf_updatemodel(CxfModel *model);
 int cxf_clear_solution(CxfModel *model, int clearHints);
 
 /*******************************************************************************
+ * Pending Buffer Cleanup API
+ ******************************************************************************/
+
+/**
+ * @brief Deep free the pending modifications buffer.
+ *
+ * Frees all sub-structures within the pending buffer and the buffer
+ * itself, then sets *bufferPtr to NULL. No-op if bufferPtr is NULL
+ * or *bufferPtr is NULL.
+ *
+ * @param env       Environment (memory context; may be NULL currently)
+ * @param bufferPtr Pointer to the pending buffer pointer (may be NULL)
+ */
+void cxf_clear_pending_buffer(CxfEnv *env, void **bufferPtr);
+
+/*******************************************************************************
  * Variable API
  ******************************************************************************/
 

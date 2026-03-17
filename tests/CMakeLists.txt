@@ -538,6 +538,9 @@ add_cxf_test(test_env_acquire_lock unit/test_env_acquire_lock.c)
 # Solve lock locale safety (threading_sync.md: acquire/release, convexfeld-duix, convexfeld-8gfk)
 add_cxf_test(test_solve_lock unit/test_solve_lock.c)
 
+# V2 state_cleanup_buffers.md: cxf_clear_pending_buffer (convexfeld-on6h)
+add_cxf_test(test_clear_pending unit/test_clear_pending.c)
+
 ################################################################################
 # Integration Tests
 ################################################################################
