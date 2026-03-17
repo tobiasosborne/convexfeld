@@ -68,6 +68,9 @@ static void cxf_env_init_fields(CxfEnv *env, const char *logfilename, int set_ac
     env->error_buf_locked = 0;
     env->anonymous_mode = 0;
 
+    /* Locale safety */
+    env->saved_locale = NULL;
+
     /* String parameters */
     env->logfile = NULL;
 
@@ -141,6 +144,12 @@ int cxf_startenv(CxfEnv *env) {
 int cxf_freeenv(CxfEnv *env) {
     if (env == NULL) {
         return CXF_ERROR_INVALID_ARGUMENT;
+    }
+
+    /* Free saved locale if still held (abnormal shutdown) */
+    if (env->saved_locale != NULL) {
+        cxf_free(env->saved_locale);
+        env->saved_locale = NULL;
     }
 
     /* Free string parameters */
