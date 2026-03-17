@@ -188,6 +188,7 @@ target_sources(convexfeld PRIVATE
     src/api/solve_lock.c
     src/api/validate_env.c
     src/api/env_lock.c
+    src/api/validate_solution.c
     src/api/mps_parser.c
     src/api/mps_state.c
     src/api/mps_parse.c

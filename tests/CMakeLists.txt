@@ -541,6 +541,10 @@ add_cxf_test(test_solve_lock unit/test_solve_lock.c)
 # V2 state_cleanup_buffers.md: cxf_clear_pending_buffer (convexfeld-on6h)
 add_cxf_test(test_clear_pending unit/test_clear_pending.c)
 
+# V2 data_validation.md: cxf_validate_solution (convexfeld-ru83)
+add_cxf_test(test_validate_solution unit/test_validate_solution.c)
+target_link_libraries(test_validate_solution PRIVATE m)
+
 ################################################################################
 # Integration Tests
 ################################################################################

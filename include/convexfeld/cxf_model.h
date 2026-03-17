@@ -122,6 +122,25 @@ CxfModel *cxf_copymodel(CxfModel *model);
 int cxf_updatemodel(CxfModel *model);
 
 /*******************************************************************************
+ * Solution Validation API
+ ******************************************************************************/
+
+/**
+ * @brief Validate solution against model bounds and constraints.
+ *
+ * Per V2 data_validation.md cxf_validate_solution:
+ * Checks variable bound feasibility and linear constraint satisfaction
+ * within the specified tolerance. Reports total violation count.
+ *
+ * @param model Model to validate against
+ * @param tolerance Feasibility tolerance for all checks
+ * @param num_violations_out Output: total violations (may be NULL)
+ * @return CXF_OK on success, error code otherwise
+ */
+int cxf_validate_solution(CxfModel *model, double tolerance,
+                          int *num_violations_out);
+
+/*******************************************************************************
  * Solution Cleanup API
  ******************************************************************************/
 
