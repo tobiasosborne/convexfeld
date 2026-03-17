@@ -39,6 +39,9 @@ static void cxf_env_init_fields(CxfEnv *env, const char *logfilename, int set_ac
     env->terminate_flag_ptr = NULL;
     env->terminate_flag = 0;
 
+    /* Algorithm selection default: -1 = auto */
+    env->method = -1;
+
     /* Threading defaults: 0 = auto, no license limit */
     env->threads = 0;
     env->license_thread_limit = 0;

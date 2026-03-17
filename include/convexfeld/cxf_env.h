@@ -36,6 +36,9 @@ struct CxfEnv {
     volatile int *terminate_flag_ptr; /**< External termination flag (fastest check) */
     volatile int terminate_flag;      /**< Primary termination flag */
 
+    /* Algorithm selection */
+    int method;               /**< Root LP method: -1=auto, 0=primal, 1=dual, 2=barrier, 3=concurrent, 4=det concurrent, 5=PDHG */
+
     /* Threading */
     int threads;              /**< User Threads parameter: 0=auto, >0=explicit cap */
     int license_thread_limit; /**< License thread limit: 0=unlimited, >0=hard cap */

@@ -509,6 +509,9 @@ target_link_libraries(test_simplex_cleanup_call PRIVATE m)
 # V2 input_validation.md: cxf_check_env two-level sentinel check (convexfeld-2z4l)
 add_cxf_test(test_check_env unit/test_check_env.c)
 
+# V2 parameters_defaults.md §3: Method parameter for algorithm selection (convexfeld-t64j)
+add_cxf_test(test_method_param unit/test_method_param.c)
+
 ################################################################################
 # Integration Tests
 ################################################################################
