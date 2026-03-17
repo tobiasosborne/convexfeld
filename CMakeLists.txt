@@ -92,6 +92,7 @@ target_sources(convexfeld PRIVATE
     src/memory/vectors.c
     src/memory/state_cleanup.c
     src/memory/clear_solution.c
+    src/memory/clear_pending.c
     # Matrix module (M1.3 stubs + M4.1.2 full + M4.1.3 multiply + M4.1.4 vectors + M4.1.5 row_major + M4.1.6 sort)
     src/matrix/sparse_stub.c
     src/matrix/sparse_matrix.c

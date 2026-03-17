@@ -155,7 +155,7 @@ void cxf_freemodel(CxfModel *model) {
     cxf_free(model->pi);
 
     /* Free optional structures */
-    cxf_free(model->pending_buffer);
+    cxf_clear_pending_buffer(model->env, &model->pending_buffer);
     cxf_free(model->solution_data);
     cxf_free(model->sos_data);
     cxf_free(model->gen_constr_data);

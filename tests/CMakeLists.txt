@@ -532,6 +532,9 @@ add_cxf_test(test_clear_solution unit/test_clear_solution.c)
 # Double and string parameter API (convexfeld-dz9y, convexfeld-gtk4)
 add_cxf_test(test_dbl_string_params unit/test_dbl_string_params.c)
 
+# V2 state_cleanup_buffers.md: cxf_clear_pending_buffer (convexfeld-on6h)
+add_cxf_test(test_clear_pending unit/test_clear_pending.c)
+
 ################################################################################
 # Integration Tests
 ################################################################################
