@@ -3,47 +3,65 @@
  * @brief Callback initialization functions (M5.2.3)
  *
  * Implements callback initialization and reset functions:
- * - cxf_init_callback_struct: Initialize 48-byte callback substructure
+ * - cxf_init_callback_struct: Allocate and init mutex per V2 callbacks.md
  * - cxf_reset_callback_state: Reset callback state counters
  *
  * Specs:
- * - docs/specs/functions/callbacks/cxf_init_callback_struct.md
+ * - docs/specs-v2/specs/modules/callbacks.md (cxf_init_callback_struct)
  * - docs/specs/functions/callbacks/cxf_reset_callback_state.md
  */
+
+#define _POSIX_C_SOURCE 199309L
 
 #include "convexfeld/cxf_types.h"
 #include "convexfeld/cxf_env.h"
 #include "convexfeld/cxf_callback.h"
 #include "convexfeld/cxf_timing.h"
+#include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <pthread.h>
+
+/* Internal memory functions */
+void *cxf_malloc(size_t size);
+void  cxf_free(void *ptr);
 
 /*============================================================================
  * cxf_init_callback_struct
  *===========================================================================*/
 
 /**
- * @brief Initialize a 48-byte callback sub-structure.
+ * @brief Allocate and initialize a mutex for callback serialization.
  *
- * Zeros the memory region pointed to by callbackSubStruct. This function
- * is called during CallbackState allocation to ensure clean initial state
- * before the caller sets specific fields.
+ * Per V2 callbacks.md: allocates a pthread_mutex_t, initializes it to
+ * unlocked state, and writes the pointer to *mutex_out. On failure,
+ * *mutex_out is set to NULL and OOM error code is returned.
  *
- * The env parameter is unused but kept for API consistency and future
- * extensibility.
+ * The env parameter is accepted for API consistency but not used.
  *
- * @param env Environment (unused, may be NULL).
- * @param callbackSubStruct Pointer to 48-byte memory region.
- * @return CXF_OK on success, CXF_ERROR_NULL_ARGUMENT if callbackSubStruct is NULL.
+ * @param env  Environment (unused, may be NULL).
+ * @param mutex_out  Output: receives allocated mutex pointer.
+ * @return CXF_OK on success, CXF_ERROR_NULL_ARGUMENT if mutex_out is NULL,
+ *         CXF_ERROR_OUT_OF_MEMORY on allocation failure.
  */
-int cxf_init_callback_struct(CxfEnv *env, void *callbackSubStruct) {
-    (void)env;  /* Unused per spec - kept for future extensibility */
+int cxf_init_callback_struct(CxfEnv *env, void **mutex_out) {
+    pthread_mutex_t *mtx;
+    (void)env;  /* Unused per spec — kept for API consistency */
 
-    if (callbackSubStruct == NULL) {
+    if (mutex_out == NULL) {
         return CXF_ERROR_NULL_ARGUMENT;
     }
 
-    memset(callbackSubStruct, 0, 48);
+    /* V2 spec: set output to NULL first (clean state even on failure) */
+    *mutex_out = NULL;
+
+    mtx = (pthread_mutex_t *)cxf_malloc(sizeof(pthread_mutex_t));
+    if (mtx == NULL) {
+        return CXF_ERROR_OUT_OF_MEMORY;
+    }
+
+    pthread_mutex_init(mtx, NULL);
+    *mutex_out = mtx;
     return CXF_OK;
 }
 

@@ -230,9 +230,9 @@ target_sources(convexfeld PRIVATE
 # Math Library Linking
 ################################################################################
 
-# Link math library on Unix systems
+# Link math library and pthread on Unix systems
 if(UNIX)
-    target_link_libraries(convexfeld PUBLIC m)
+    target_link_libraries(convexfeld PUBLIC m pthread)
 endif()
 
 ################################################################################
