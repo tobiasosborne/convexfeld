@@ -201,6 +201,17 @@ int cxf_set_callback_context(CxfEnv *env, CallbackContext *ctx);
  */
 CallbackContext *cxf_get_callback_context(CxfEnv *env);
 
+/**
+ * @brief Clear error buffer state for a new API operation.
+ *
+ * Per V2 threading_sync.md: resets error_code and error_buffer unless
+ * error_buf_locked is set (nested error handling in progress).
+ * Despite the name, no mutex is acquired.
+ *
+ * @param env Environment to clear (NULL-safe, silent return)
+ */
+void cxf_env_acquire_lock(CxfEnv *env);
+
 /*******************************************************************************
  * Parameter API
  ******************************************************************************/

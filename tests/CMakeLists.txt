@@ -532,6 +532,9 @@ add_cxf_test(test_clear_solution unit/test_clear_solution.c)
 # Double and string parameter API (convexfeld-dz9y, convexfeld-gtk4)
 add_cxf_test(test_dbl_string_params unit/test_dbl_string_params.c)
 
+# V2 threading_sync.md: cxf_env_acquire_lock error buffer clear (convexfeld-jiq7)
+add_cxf_test(test_env_acquire_lock unit/test_env_acquire_lock.c)
+
 ################################################################################
 # Integration Tests
 ################################################################################
