@@ -124,6 +124,18 @@ int cxf_freeenv(CxfEnv *env);
  */
 int cxf_checkenv(CxfEnv *env);
 
+/**
+ * @brief Validate environment pointer with two-level sentinel check.
+ *
+ * Per V2 input_validation.md: checks env non-null, validates primary
+ * sentinel, follows root environment pointer and validates root sentinel.
+ * Both sentinels must match for success.
+ *
+ * @param env Environment to validate
+ * @return CXF_OK if valid, error code otherwise
+ */
+int cxf_check_env(CxfEnv *env);
+
 /*******************************************************************************
  * Environment Accessor API
  ******************************************************************************/
