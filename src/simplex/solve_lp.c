@@ -31,6 +31,7 @@
 #include "../basis/basis_internal.h"
 
 #define STALL_THRESHOLD    50
+#define CUMULATIVE_STALL   200   /* perturbation.md: cumulative degenerate pivot cap */
 
 /* Lifecycle */
 
@@ -185,9 +186,11 @@ int cxf_solve_lp(CxfModel *model) {
              * "if the EXPAND procedure determines that the solver is
              * stalling." Proactive early-iteration perturbation removed
              * per convexfeld-9ksl. */
-            if (stall || state->degenerate_count > STALL_THRESHOLD) {
+            if (stall || state->degenerate_count > STALL_THRESHOLD ||
+                state->cumulative_degenerate > CUMULATIVE_STALL) {
                 cxf_simplex_perturbation(state, env);
                 stall = 0;
+                state->cumulative_degenerate = 0;
             }
 
             /* (5) Main simplex pivot */

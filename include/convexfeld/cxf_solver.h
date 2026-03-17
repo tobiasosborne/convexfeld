@@ -131,6 +131,12 @@ struct SolverState {
     int bounds_propagated;    /**< Bounds propagation counter */
     int flip_count;           /**< Bound flip counter */
 
+    /* B3a: Cumulative stalling detector (perturbation.md anti-cycling).
+     * Unlike degenerate_count (reset on ANY good pivot), this counter
+     * only resets when perturbation actually fires. Detects sustained
+     * cycling that Bland's rule temporarily breaks but doesn't cure. */
+    int cumulative_degenerate;  /**< Total degenerate pivots since last perturbation */
+
     /* B3 extended: counters for V2 basis_operations.md cxf_basis_diff */
     int ineq_to_eq_count;     /**< Inequality-to-equality conversion counter */
     int matrix_transitions;   /**< Matrix status transition counter */
