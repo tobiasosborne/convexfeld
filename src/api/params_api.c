@@ -91,6 +91,16 @@ int cxf_setintparam(CxfEnv *env, const char *paramname, int newvalue) {
         return CXF_OK;
     }
 
+    /* Method: -1=auto, 0=primal, 1=dual, 2=barrier, 3=concurrent,
+     *         4=det concurrent, 5=PDHG (V2 parameters_defaults.md §3) */
+    if (strcasecmp_local(paramname, "Method") == 0) {
+        if (newvalue < -1 || newvalue > 5) {
+            return CXF_ERROR_VALUE_OUT_OF_RANGE;
+        }
+        env->method = newvalue;
+        return CXF_OK;
+    }
+
     /* Unknown parameter */
     return CXF_ERROR_INVALID_ARGUMENT;
 }
@@ -144,6 +154,12 @@ int cxf_getintparam(CxfEnv *env, const char *paramname, int *valueP) {
     /* Threads */
     if (strcasecmp_local(paramname, "Threads") == 0) {
         *valueP = env->threads;
+        return CXF_OK;
+    }
+
+    /* Method */
+    if (strcasecmp_local(paramname, "Method") == 0) {
+        *valueP = env->method;
         return CXF_OK;
     }
 

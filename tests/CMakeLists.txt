@@ -506,6 +506,9 @@ target_link_libraries(test_pricing_invalidate_v2 PRIVATE m)
 add_cxf_test(test_simplex_cleanup_call unit/test_simplex_cleanup_call.c)
 target_link_libraries(test_simplex_cleanup_call PRIVATE m)
 
+# V2 parameters_defaults.md §3: Method parameter for algorithm selection (convexfeld-t64j)
+add_cxf_test(test_method_param unit/test_method_param.c)
+
 ################################################################################
 # Integration Tests
 ################################################################################

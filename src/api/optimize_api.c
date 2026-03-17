@@ -83,11 +83,23 @@ int cxf_optimize_internal(CxfModel *model) {
         return CXF_ERROR_INVALID_ARGUMENT;  /* Callback requested abort */
     }
 
-    /* Delegate to LP solver
-     * Future: dispatch based on problem type (LP/QP/MIP/NLP)
-     * Future: add preprocessing call if needed
-     * Future: check parameters for method selection (primal/dual simplex) */
-    status = cxf_solve_lp(model);
+    /* Method dispatch per V2 parameters_defaults.md §3:
+     * -1=auto, 0=primal simplex, 1-5=not yet implemented */
+    {
+        int method = env->method;
+        if (method == -1 || method == 0) {
+            /* Auto or primal simplex: delegate to LP solver */
+            status = cxf_solve_lp(model);
+        } else {
+            /* Methods 1-5 (dual, barrier, concurrent, det-concurrent, PDHG)
+             * are not yet implemented */
+            cxf_log_printf(env, 0,
+                "Method %d is not supported; only primal simplex "
+                "(Method=0) and automatic (Method=-1) are available", method);
+            env->optimizing = 0;
+            return CXF_ERROR_NOT_SUPPORTED;
+        }
+    }
 
     /* Post-optimization callback */
     (void)cxf_post_optimize_hook(model);
