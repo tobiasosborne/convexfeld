@@ -520,6 +520,9 @@ add_cxf_test(test_check_env unit/test_check_env.c)
 # V2 parameters_defaults.md §3: Method parameter for algorithm selection (convexfeld-t64j)
 add_cxf_test(test_method_param unit/test_method_param.c)
 
+# V2 state_cleanup_buffers.md: cxf_clear_solution (convexfeld-3mgs)
+add_cxf_test(test_clear_solution unit/test_clear_solution.c)
+
 ################################################################################
 # Integration Tests
 ################################################################################

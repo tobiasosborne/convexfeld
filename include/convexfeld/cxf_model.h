@@ -122,6 +122,23 @@ CxfModel *cxf_copymodel(CxfModel *model);
 int cxf_updatemodel(CxfModel *model);
 
 /*******************************************************************************
+ * Solution Cleanup API
+ ******************************************************************************/
+
+/**
+ * @brief Clear all solution data from a model.
+ *
+ * Zeroes solution arrays, resets status to CXF_LOADED, resets obj value.
+ * If clearHints is nonzero, also clears extended data (solution_data,
+ * sos_data, gen_constr_data) and resets the fingerprint.
+ *
+ * @param model Model to clear (NULL is a no-op returning CXF_OK)
+ * @param clearHints If nonzero, also clear warm-start/hint data
+ * @return CXF_OK on success, error code on failure
+ */
+int cxf_clear_solution(CxfModel *model, int clearHints);
+
+/*******************************************************************************
  * Variable API
  ******************************************************************************/
 
