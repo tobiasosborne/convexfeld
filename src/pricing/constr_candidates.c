@@ -18,6 +18,7 @@
 #include "convexfeld/cxf_types.h"
 #include "convexfeld/cxf_pricing.h"
 #include "convexfeld/cxf_solver.h"
+#include "convexfeld/cxf_basis.h"
 #include "pricing_internal.h"
 
 /*===========================================================================
@@ -125,10 +126,16 @@ void cxf_pricing_constr_candidates_v2(PricingState *ctx, SolverState *state,
             use_full_scan = 1;
     }
 
+    /* Constraint status: var_status[num_vars + i] >= 0 means valid */
+    int *var_status = (state->basis) ? state->basis->var_status : NULL;
+    int n_vars = state->num_vars;
+
     if (use_full_scan) {
-        /* Full scan: iterate all constraints, keep all valid indices */
-        for (int i = 0; i < m && result_count < m; i++)
-            out_buf[result_count++] = i;
+        /* Full scan: iterate all constraints, keep valid status */
+        for (int i = 0; i < m && result_count < m; i++) {
+            if (var_status != NULL && var_status[n_vars + i] >= 0)
+                out_buf[result_count++] = i;
+        }
         if (state->work_counter)
             *state->work_counter += (double)m;
     } else {
@@ -167,13 +174,14 @@ void cxf_pricing_constr_candidates_v2(PricingState *ctx, SolverState *state,
             if (result_count >= m) break;
         }
 
-        /* Step 3: Filter -- clear selection flags, keep valid entries */
+        /* Step 3: Filter -- clear selection flags, keep valid status */
         int write = 0;
         for (int i = 0; i < result_count; i++) {
             int ci = out_buf[i];
             if (ci >= 0 && ci < m && ctx->constr_flags != NULL)
                 ctx->constr_flags[ci] &= (uint8_t)~sel_bit;
-            if (ci >= 0 && ci < m)
+            if (ci >= 0 && ci < m &&
+                var_status != NULL && var_status[n_vars + ci] >= 0)
                 out_buf[write++] = ci;
         }
         result_count = write;

@@ -490,6 +490,10 @@ add_cxf_test(test_model_type_qp_socp unit/test_model_type_qp_socp.c)
 add_cxf_test(test_expand_eps_base unit/test_expand_eps_base.c)
 target_link_libraries(test_expand_eps_base PRIVATE m)
 
+# Constraint status validity filtering (pricing_support.md, convexfeld-u1qe, convexfeld-rcul)
+add_cxf_test(test_constr_status_filter unit/test_constr_status_filter.c)
+target_link_libraries(test_constr_status_filter PRIVATE m)
+
 ################################################################################
 # Integration Tests
 ################################################################################
