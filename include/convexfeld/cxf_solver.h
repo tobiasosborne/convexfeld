@@ -316,6 +316,19 @@ int cxf_simplex_unperturb(SolverState *state, CxfEnv *env);
 int cxf_simplex_postsolve(SolverState *state, CxfEnv *env);
 
 /**
+ * @brief Post-solve implied-bound tightening and resource deallocation.
+ *
+ * Per simplex_lifecycle.md, this is step 9 of the solve flow, called
+ * after cxf_simplex_final. Converts tight inequality constraints to
+ * equalities and frees cleanup-specific temporaries.
+ *
+ * @param state Solver context (may be NULL)
+ * @param env   Environment with tolerances (may be NULL)
+ * @return CXF_OK on success, error code otherwise
+ */
+int cxf_simplex_cleanup(SolverState *state, CxfEnv *env);
+
+/**
  * @brief Adjust reduced costs for quadratic programming.
  *
  * Updates reduced costs to include quadratic term contribution (Qx).

@@ -372,6 +372,11 @@ int cxf_solve_lp(CxfModel *model) {
         model->status == CXF_TIME_LIMIT)
         cxf_extract_solution(state, model);
 
+    /* P6.5: Post-solve implied-bound tightening and resource deallocation
+     * (simplex_lifecycle.md step 9: cxf_simplex_cleanup). Must run after
+     * cxf_simplex_final (dual-feasibility fixing) and before env restore. */
+    cxf_simplex_cleanup(state, env);
+
     cxf_simplex_final(state);
 
     /* P6.4: Restore environment parameters */
