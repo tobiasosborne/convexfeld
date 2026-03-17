@@ -136,6 +136,7 @@ struct SolverState {
      * only resets when perturbation actually fires. Detects sustained
      * cycling that Bland's rule temporarily breaks but doesn't cure. */
     int cumulative_degenerate;  /**< Total degenerate pivots since last perturbation */
+    int small_pivot_count;      /**< Consecutive small pivots (numerical_stability.md §A.3) */
 
     /* B3 extended: counters for V2 basis_operations.md cxf_basis_diff */
     int ineq_to_eq_count;     /**< Inequality-to-equality conversion counter */

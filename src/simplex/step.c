@@ -585,6 +585,13 @@ static void post_pivot_updates(SolverState *state, CxfEnv *env,
         }
     }
 
+    /* Phase 8b: Small pivot tracking (numerical_stability.md §A.3).
+     * Reset counter on large pivots; increment on small ones. */
+    if (fabs(pivotElement) >= CXF_SMALL_PIVOT_THRESHOLD)
+        state->small_pivot_count = 0;
+    else
+        state->small_pivot_count++;
+
     /* Phase 9: Refactorization check.
      * Force immediate refactorization on large steps to prevent
      * catastrophic precision loss (numerical_stability.md Section C). */

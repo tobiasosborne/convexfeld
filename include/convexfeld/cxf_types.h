@@ -206,6 +206,9 @@ typedef enum {
 /** @brief Harris pivot tolerance — minimum |element| for ratio test candidacy */
 #define CXF_PIVOT_TOL       1e-9
 
+/** @brief Small pivot threshold for refactorization trigger (§A.3) */
+#define CXF_SMALL_PIVOT_THRESHOLD  1e-7
+
 /** @brief Zero tolerance for numerical comparisons (significant bound change) */
 #define CXF_ZERO_TOL        1e-12
 

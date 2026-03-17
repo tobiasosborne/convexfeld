@@ -28,6 +28,9 @@
 /* Minimum pivot tolerance (Harris pivot threshold from spec) */
 #define MIN_PIVOT_TOL  CXF_PIVOT_TOL  /* 1e-9 */
 
+/* Small pivot detection (numerical_stability.md §A.3) */
+#define SMALL_PIVOT_TRIGGER    5      /* Consecutive count before forced refactor */
+
 /* e2t: Shared eta list clear (eta_pool.c) */
 #define clear_eta_list cxf_eta_list_clear
 
@@ -80,6 +83,7 @@ int cxf_solver_refactor(SolverState *ctx, CxfEnv *env) {
     ctx->total_ftran_time = 0.0;
     ctx->ftran_count = 0;
     ctx->last_refactor_iter = ctx->iteration;
+    ctx->small_pivot_count = 0;
 
     /* For empty basis, nothing to do */
     if (m == 0) {
@@ -195,6 +199,13 @@ int cxf_refactor_check(SolverState *ctx, CxfEnv *env) {
         if (avg_ftran > 3.0 * ctx->baseline_ftran) {
             return 1;  /* Recommended */
         }
+    }
+
+    /* Check consecutive small pivots (numerical_stability.md §A.3).
+     * Small pivots amplify error per eta vector much faster than normal.
+     * Trigger early refactorization regardless of eta count. */
+    if (ctx->small_pivot_count >= SMALL_PIVOT_TRIGGER) {
+        return 2;  /* Required */
     }
 
     return 0;  /* Not needed */
