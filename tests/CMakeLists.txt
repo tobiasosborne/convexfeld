@@ -520,6 +520,9 @@ add_cxf_test(test_check_env unit/test_check_env.c)
 # V2 parameters_defaults.md §3: Method parameter for algorithm selection (convexfeld-t64j)
 add_cxf_test(test_method_param unit/test_method_param.c)
 
+# Double and string parameter API (convexfeld-dz9y, convexfeld-gtk4)
+add_cxf_test(test_dbl_string_params unit/test_dbl_string_params.c)
+
 ################################################################################
 # Integration Tests
 ################################################################################
