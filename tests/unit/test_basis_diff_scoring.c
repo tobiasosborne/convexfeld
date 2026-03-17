@@ -3,12 +3,12 @@
  * @brief Tests for V2 basis_diff scoring formula (convexfeld-3xyi).
  *
  * Validates the 6-term weighted formula per basis_operations.md:
- *   T1: structural (perturb delta) / total_nnz, heavy weight
- *   T2: column reduction / colDenom, unit weight
- *   T3: 4 iteration counters / colDenom, light weight
- *   T4: row stats (rows + props) / rowDenom, unit weight
- *   T5: conversion (ftran) / rowDenom, moderate weight
- *   T6: work (iteration) / rowDenom, own weight
+ *   T1: structural (perturb delta) / total_nnz, heavy weight (4.0)
+ *   T2: column reduction (d_cols - d_nvars) / colDenom, unit weight
+ *   T3: 4 iteration counters / colDenom, light weight (0.25)
+ *   T4: row stats (rows + mtrans + props + ftran) / rowDenom, unit
+ *   T5: conversion (ineq_to_eq) / rowDenom, moderate weight (0.5)
+ *   T6: work (iteration) / rowDenom, own weight (0.1)
  */
 
 #include "unity.h"
@@ -64,6 +64,7 @@ void test_term2_column_reduction(void) {
     s.cols_eliminated = 3;
     double score = cxf_basis_diff(&s, snap);
     double cd = col_denom(20, 0);
+    /* d_nvars=0 so net_col = d_cols = 3 */
     double expected = 1.0 * 3.0 / cd;
     TEST_ASSERT_DOUBLE_WITHIN(1e-10, expected, score);
 }
@@ -90,6 +91,8 @@ void test_term4_row_statistics(void) {
     cxf_progress_snapshot(&s, snap);
     s.rows_eliminated = 3;
     s.bounds_propagated = 5;
+    /* T4 = (d_rows + d_mtrans + d_props + d_ftran) / rowDenom
+     * d_mtrans=0, d_ftran=0 so sum = 3+0+5+0 = 8 */
     double rd = row_denom(10, 0, 0);
     double expected = 1.0 * (3.0 + 5.0) / rd;
     double score = cxf_basis_diff(&s, snap);
@@ -97,10 +100,11 @@ void test_term4_row_statistics(void) {
 }
 
 void test_term5_conversion(void) {
+    /* T5 now uses ineq_to_eq_count, not ftran_count */
     SolverState s = make_state(20, 10, 100);
     int snap[CXF_SNAPSHOT_SIZE];
     cxf_progress_snapshot(&s, snap);
-    s.ftran_count = 6;
+    s.ineq_to_eq_count = 6;
     double rd = row_denom(10, 0, 0);
     double expected = 0.5 * 6.0 / rd;
     double score = cxf_basis_diff(&s, snap);
@@ -134,16 +138,18 @@ void test_all_six_terms_combined(void) {
     s.rows_eliminated = 3;
     s.bounds_propagated = 7;
     s.ftran_count = 9;
+    s.ineq_to_eq_count = 5;
+    s.matrix_transitions = 2;
 
     double nnzD = 200.0;
     double cd = col_denom(40, 0);
     double rd = row_denom(20, 0, 0);
 
     double t1 = 4.0  * 3.0 / nnzD;
-    double t2 = 1.0  * 2.0 / cd;
+    double t2 = 1.0  * 2.0 / cd;   /* d_nvars=0 */
     double t3 = 0.25 * (double)(0 + 12 + 4 + 1) / cd;
-    double t4 = 1.0  * (double)(3 + 7) / rd;
-    double t5 = 0.5  * 9.0 / rd;
+    double t4 = 1.0  * (double)(3 + 2 + 7 + 9) / rd;
+    double t5 = 0.5  * 5.0 / rd;
     double t6 = 0.1  * 12.0 / rd;
     double expected = t1 + t2 + t3 + t4 + t5 + t6;
 
@@ -160,6 +166,8 @@ void test_rowdenom_includes_snapshot_props(void) {
     s.rows_eliminated = 2;
     s.bounds_propagated = 15;
     double rd = row_denom(20, 0, 10);
+    /* T4 = (d_rows + d_mtrans + d_props + d_ftran) / rowDenom
+     * = (2 + 0 + 5 + 0) / rd */
     double expected = 1.0 * (2.0 + 5.0) / rd;
     double score = cxf_basis_diff(&s, snap);
     TEST_ASSERT_DOUBLE_WITHIN(1e-10, expected, score);

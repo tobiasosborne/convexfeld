@@ -25,7 +25,7 @@ void tearDown(void) {}
 
 /* CXF_SNAPSHOT_SIZE must be defined via cxf_basis.h (not cxf_solver.h) */
 void test_snapshot_size_defined_in_basis_header(void) {
-    TEST_ASSERT_EQUAL_INT(10, CXF_SNAPSHOT_SIZE);
+    TEST_ASSERT_EQUAL_INT(16, CXF_SNAPSHOT_SIZE);
 }
 
 /* BasisState must contain progress_snapshot array */

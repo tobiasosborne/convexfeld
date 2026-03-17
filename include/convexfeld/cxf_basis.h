@@ -105,8 +105,11 @@ struct BasisState {
     double *work;             /**< Working array [m] (used as pivotCol) */
     double *work2;            /**< Working array [m] (FTRAN/BTRAN LU temp) */
 
-    /* V2 basis_state.md: progress snapshot for cycling detection */
-#define CXF_SNAPSHOT_SIZE 10
+    /* V2 basis_state.md: progress snapshot for cycling detection.
+     * 16 slots: original 10 iteration counters + 6 spec-required fields
+     * (numVars, numConstrs, sol_status, perturb_expand_active,
+     *  ineq_to_eq_count, matrix_transitions). */
+#define CXF_SNAPSHOT_SIZE 16
     int progress_snapshot[CXF_SNAPSHOT_SIZE]; /**< Snapshot buffer for basis diff */
 
     /* Adaptive Markowitz tolerance (numerical_stability.md §D) */

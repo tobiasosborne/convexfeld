@@ -382,6 +382,10 @@ add_cxf_test(test_get_threads unit/test_get_threads.c)
 add_cxf_test(test_basis_diff_scoring unit/test_basis_diff_scoring.c)
 target_link_libraries(test_basis_diff_scoring PRIVATE m)
 
+# V2 basis_diff spec counters: snapshot fields + 6-term formula (convexfeld-gicm)
+add_cxf_test(test_basis_diff_counters unit/test_basis_diff_counters.c)
+target_link_libraries(test_basis_diff_counters PRIVATE m)
+
 # V2 basis_diff/snapshot signature compliance (convexfeld-67bt)
 add_cxf_test(test_basis_diff_sig unit/test_basis_diff_sig.c)
 target_link_libraries(test_basis_diff_sig PRIVATE m)
