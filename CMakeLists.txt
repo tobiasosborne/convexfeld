@@ -198,6 +198,7 @@ target_sources(convexfeld PRIVATE
     src/pricing/phase.c
     src/pricing/pricing_stub.c
     src/pricing/queue.c
+    src/pricing/end_level.c
     src/pricing/constr_init.c
     src/pricing/queue_insert.c
     src/pricing/update_var.c

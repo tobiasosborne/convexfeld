@@ -97,7 +97,7 @@ int cxf_simplex_perturbation(SolverState *state, CxfEnv *env) {
 
     /*--- Phase 5: Counter update + pricing notification ---*/
     if (state->pricing && perturbed > 0)
-        cxf_pricing_end_level(state->pricing);
+        cxf_pricing_end_level(state->pricing, state);
 
     if (state->work_counter)
         *state->work_counter += (double)(cand_count > 0 ? cand_count : total);
