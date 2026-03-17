@@ -5,6 +5,10 @@
  * Implements internal optimization dispatcher and termination control.
  * This module provides the internal optimization entry point that bridges
  * the public API (cxf_optimize) and the core solver (cxf_solve_lp).
+ *
+ * V2 parameter_system.md: backs up all user-settable parameters before
+ * dispatch and restores them unconditionally afterward, so solver-internal
+ * modifications never leak into the user's parameter state.
  */
 
 #include "convexfeld/cxf_model.h"
@@ -12,32 +16,73 @@
 #include "convexfeld/cxf_types.h"
 #include "convexfeld/cxf_solver.h"
 #include "convexfeld/cxf_callback.h"
+#include <stdint.h>
 
 #include "../simplex/simplex_internal.h"
 
-/* Forward declarations - external functions */
+/*******************************************************************************
+ * Parameter backup/restore (V2 parameter_system.md Phase 5)
+ *
+ * All user-settable parameters on CxfEnv are captured before solver dispatch
+ * and restored afterward, regardless of success or failure.
+ ******************************************************************************/
+
+/** Snapshot of every user-settable parameter on CxfEnv. */
+typedef struct {
+    /* Tolerances */
+    double feasibility_tol;
+    double optimality_tol;
+    double infinity;
+    /* Logging */
+    int output_flag;
+    int verbosity;
+    /* Algorithm selection */
+    int method;
+    /* Threading */
+    int threads;
+    int license_thread_limit;
+    /* Refactorization */
+    int max_eta_count;
+    int64_t max_eta_memory;
+    int refactor_interval;
+} ParamBackup;
+
+/** Save all user-settable parameters from env into backup. */
+static void backup_params(const CxfEnv *env, ParamBackup *bk) {
+    bk->feasibility_tol     = env->feasibility_tol;
+    bk->optimality_tol      = env->optimality_tol;
+    bk->infinity            = env->infinity;
+    bk->output_flag         = env->output_flag;
+    bk->verbosity           = env->verbosity;
+    bk->method              = env->method;
+    bk->threads             = env->threads;
+    bk->license_thread_limit = env->license_thread_limit;
+    bk->max_eta_count       = env->max_eta_count;
+    bk->max_eta_memory      = env->max_eta_memory;
+    bk->refactor_interval   = env->refactor_interval;
+}
+
+/** Restore all user-settable parameters from backup into env. */
+static void restore_params(CxfEnv *env, const ParamBackup *bk) {
+    env->feasibility_tol     = bk->feasibility_tol;
+    env->optimality_tol      = bk->optimality_tol;
+    env->infinity            = bk->infinity;
+    env->output_flag         = bk->output_flag;
+    env->verbosity           = bk->verbosity;
+    env->method              = bk->method;
+    env->threads             = bk->threads;
+    env->license_thread_limit = bk->license_thread_limit;
+    env->max_eta_count       = bk->max_eta_count;
+    env->max_eta_memory      = bk->max_eta_memory;
+    env->refactor_interval   = bk->refactor_interval;
+}
 
 /**
  * @brief Internal optimization dispatcher.
  *
- * This is the internal entry point for optimization, called by cxf_optimize
- * after initial validation. It sets up state, handles various optimization
- * modes, and dispatches to the appropriate solver.
- *
- * Current implementation orchestrates:
- * - Logging of optimization start/end
- * - Pre-optimization callbacks
- * - Optional preprocessing (if cxf_simplex_preprocess available)
- * - Solver dispatch (LP via simplex)
- * - Post-optimization callbacks
- * - Iteration count logging
- *
- * Future enhancements:
- * - Concurrent optimization mode handling
- * - Parameter backup/restoration for multi-environment setups
- * - Non-convex quadratic detection and MIP conversion
- * - Model fingerprinting for reproducibility
- * - Method selection (primal vs dual simplex)
+ * Called by cxf_optimize after initial validation. Backs up all user-settable
+ * parameters before dispatch and restores them unconditionally afterward
+ * (V2 parameter_system.md Phase 5, Restore-on-Error Guarantee).
  *
  * @param model Model to optimize (must be non-NULL and valid)
  * @return CXF_OK on success, error code otherwise
@@ -45,6 +90,7 @@
 int cxf_optimize_internal(CxfModel *model) {
     int status;
     CxfEnv *env;
+    ParamBackup saved;
 
     /* Validate model state */
     status = cxf_checkmodel(model);
@@ -57,6 +103,9 @@ int cxf_optimize_internal(CxfModel *model) {
     if (env == NULL) {
         return CXF_ERROR_NULL_ARGUMENT;
     }
+
+    /* V2 parameter_system.md Phase 5: backup parameters before dispatch */
+    backup_params(env, &saved);
 
     /* Log optimization start */
     cxf_log_printf(env, 0, "Starting optimization for model '%s'", model->name);
@@ -84,6 +133,7 @@ int cxf_optimize_internal(CxfModel *model) {
         cxf_log_printf(env, 0, "Pre-optimization callback requested termination");
         cxf_post_optimize_callback(model);
         env->optimizing = 0;
+        restore_params(env, &saved);
         return CXF_ERROR_INVALID_ARGUMENT;  /* Callback requested abort */
     }
 
@@ -102,6 +152,7 @@ int cxf_optimize_internal(CxfModel *model) {
                 "(Method=0) and automatic (Method=-1) are available", method);
             cxf_post_optimize_callback(model);
             env->optimizing = 0;
+            restore_params(env, &saved);
             return CXF_ERROR_NOT_SUPPORTED;
         }
     }
@@ -122,6 +173,9 @@ int cxf_optimize_internal(CxfModel *model) {
 
     /* Clear optimization flag */
     env->optimizing = 0;
+
+    /* V2 parameter_system.md Phase 5: restore parameters after dispatch */
+    restore_params(env, &saved);
 
     /* V2 solve_entry.md: return 0 on success, non-zero only for errors.
      * Solver outcome codes (OPTIMAL, INFEASIBLE, UNBOUNDED, ITERATION_LIMIT,

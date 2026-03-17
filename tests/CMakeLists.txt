@@ -523,6 +523,9 @@ add_cxf_test(test_check_env unit/test_check_env.c)
 # V2 parameters_defaults.md §3: Method parameter for algorithm selection (convexfeld-t64j)
 add_cxf_test(test_method_param unit/test_method_param.c)
 
+# V2 parameter_system.md Phase 5: parameter backup/restore around optimize (convexfeld-ffz0)
+add_cxf_test(test_param_backup unit/test_param_backup.c)
+
 ################################################################################
 # Integration Tests
 ################################################################################
