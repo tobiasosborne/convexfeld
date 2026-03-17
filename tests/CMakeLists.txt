@@ -529,6 +529,9 @@ add_cxf_test(test_param_backup unit/test_param_backup.c)
 # V2 state_cleanup_buffers.md: cxf_clear_solution (convexfeld-3mgs)
 add_cxf_test(test_clear_solution unit/test_clear_solution.c)
 
+# Double and string parameter API (convexfeld-dz9y, convexfeld-gtk4)
+add_cxf_test(test_dbl_string_params unit/test_dbl_string_params.c)
+
 ################################################################################
 # Integration Tests
 ################################################################################

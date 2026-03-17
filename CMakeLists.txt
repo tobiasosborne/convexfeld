@@ -179,6 +179,7 @@ target_sources(convexfeld PRIVATE
     src/api/api_stub.c
     src/api/attrs_api.c
     src/api/params_api.c
+    src/api/params_dbl_str.c
     src/api/quadratic_api.c
     src/api/optimize_api.c
     src/api/io_api.c

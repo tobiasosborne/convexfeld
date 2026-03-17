@@ -62,6 +62,9 @@ struct CxfEnv {
     int error_buf_locked;     /**< Prevents error buffer overwrites during nested errors */
     int anonymous_mode;       /**< Suppress variable/constraint name tracking */
 
+    /* String parameters */
+    char *logfile;            /**< Log file path (heap-allocated, NULL = none) */
+
     /* Log callback */
     void (*log_callback)(const char *msg, void *data); /**< User log callback */
     void *log_callback_data;  /**< User data for log callback */
@@ -223,5 +226,56 @@ int cxf_setintparam(CxfEnv *env, const char *paramname, int newvalue);
  * @return CXF_OK on success, error code otherwise
  */
 int cxf_getintparam(CxfEnv *env, const char *paramname, int *valueP);
+
+/**
+ * @brief Set a double parameter value.
+ *
+ * Supported: FeasibilityTol (1e-9..1e-2), OptimalityTol (1e-9..1e-2),
+ * Infinity (1e15..1e30). Case-insensitive matching.
+ *
+ * @param env Environment to modify
+ * @param paramname Parameter name (case-insensitive)
+ * @param newvalue New value to set
+ * @return CXF_OK on success, error code otherwise
+ */
+int cxf_setdblparam(CxfEnv *env, const char *paramname, double newvalue);
+
+/**
+ * @brief Get a double parameter value.
+ *
+ * @param env Environment to query
+ * @param paramname Parameter name (case-insensitive)
+ * @param valueP Output pointer for value
+ * @return CXF_OK on success, error code otherwise
+ */
+int cxf_getdblparam(CxfEnv *env, const char *paramname, double *valueP);
+
+/**
+ * @brief Set a string parameter value.
+ *
+ * Supported: LogFile. Case-insensitive matching.
+ * The string is copied internally (caller retains ownership of newvalue).
+ *
+ * @param env Environment to modify
+ * @param paramname Parameter name (case-insensitive)
+ * @param newvalue New value (may be NULL to clear)
+ * @return CXF_OK on success, error code otherwise
+ */
+int cxf_setstringparam(CxfEnv *env, const char *paramname,
+                       const char *newvalue);
+
+/**
+ * @brief Get a string parameter value.
+ *
+ * Copies the current value into the caller's buffer, respecting bufsize.
+ *
+ * @param env Environment to query
+ * @param paramname Parameter name (case-insensitive)
+ * @param valueP Output buffer for value
+ * @param bufsize Size of output buffer in bytes
+ * @return CXF_OK on success, error code otherwise
+ */
+int cxf_getstringparam(CxfEnv *env, const char *paramname,
+                       char *valueP, int bufsize);
 
 #endif /* CXF_ENV_H */

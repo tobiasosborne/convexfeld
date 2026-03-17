@@ -68,6 +68,9 @@ static void cxf_env_init_fields(CxfEnv *env, const char *logfilename, int set_ac
     env->error_buf_locked = 0;
     env->anonymous_mode = 0;
 
+    /* String parameters */
+    env->logfile = NULL;
+
     /* Log callback (none by default) */
     env->log_callback = NULL;
     env->log_callback_data = NULL;
@@ -138,6 +141,12 @@ int cxf_startenv(CxfEnv *env) {
 int cxf_freeenv(CxfEnv *env) {
     if (env == NULL) {
         return CXF_ERROR_INVALID_ARGUMENT;
+    }
+
+    /* Free string parameters */
+    if (env->logfile != NULL) {
+        cxf_free(env->logfile);
+        env->logfile = NULL;
     }
 
     /* Free owned callback context if present */
