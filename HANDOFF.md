@@ -1,6 +1,6 @@
 # Agent Handoff
 
-*Last updated: 2026-03-15*
+*Last updated: 2026-03-17*
 
 ---
 
@@ -36,10 +36,26 @@ sctap1, **sctap2**, **sctap3**, **share1b**, share2b, ship04l, **ship04s**, **sh
 **ship08s**, **ship12l**, **ship12s**, standata, standgub, standmps, stocfor1, **stocfor2**,
 **agg2** (NEW from cumulative stall fix), **agg3** (NEW from cumulative stall fix)
 
-**Still failing:** kb2 (ITER_LIMIT), stair (TIMEOUT), bore3d (TIMEOUT), etamacro (TIMEOUT),
-tuff (obj err 0.16%), grow7 (wrong obj 20.8%), boeing1 (status 10003), boeing2 (wrong obj),
-capri (false UNBOUNDED), sierra (false INFEASIBLE), scsd8 (false UNBOUNDED),
-fit1p (wrong obj 65%), ganges (wrong obj 111%), recipe (ITER_LIMIT), many timeouts on large instances
+**Still failing (partial full-suite run 2026-03-17):**
+
+| Failure mode | Instances |
+|---|---|
+| TIMEOUT (10s) | 25fv47, 80bau3b, bnl2, bore3d, cre-a/b/c/d, cycle, d2q06c, d6cube, degen3, dfl001, etamacro, finnis, fit1d, fit2d, fit2p, forplan, gfrd-pnc, greenbea/b, ken-07/11/13/18, maros-r7, modszk1, nesm, osa-07/14/30/60, pds-02/06/10/20, perold, pilot.ja/.we/4/87/nov, qap8/12/15, stair, seba, shell, truss, wood1p, woodw |
+| ITER_LIMIT (cycling) | kb2, recipe |
+| Wrong objective | boeing2 (629%), grow7 (20.8%), fit1p (65%), ganges (111%), tuff (0.16%) |
+| False UNBOUNDED | capri, scsd8 |
+| False INFEASIBLE | sierra, maros |
+| UNKNOWN status | boeing1, grow15, grow22 |
+
+**Root cause analysis of main failure categories:**
+- **Cycling/TIMEOUT**: Perturbation fires (cumulative detector works) but doesn't fully break cycling; needs stronger anti-degeneracy (EXPAND, pricing changes, or perturbation magnitude)
+- **Wrong objectives**: Likely Phase I convergence to wrong basis, or pricing selecting wrong entering variable
+- **False UNBOUNDED/INFEASIBLE**: Likely bound propagation bug (convexfeld-zuat structural deviations) or pricing missing candidates
+
+**Next priority issues (solver-core):**
+1. convexfeld-zuat (P1): cxf_propagate_bounds structural deviations — likely root of false UNBOUNDED/INFEASIBLE
+2. convexfeld-8ogg (P1): cxf_simplex_final is destructor not variable fixer — post-solve quality
+3. Investigate why tuff (0.16% err) doesn't pass — closest to threshold
 
 ### V2 Spec Compliance Sprint (2026-03-15)
 
