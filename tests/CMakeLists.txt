@@ -526,6 +526,9 @@ add_cxf_test(test_method_param unit/test_method_param.c)
 # V2 parameter_system.md Phase 5: parameter backup/restore around optimize (convexfeld-ffz0)
 add_cxf_test(test_param_backup unit/test_param_backup.c)
 
+# V2 state_cleanup_buffers.md: cxf_clear_solution (convexfeld-3mgs)
+add_cxf_test(test_clear_solution unit/test_clear_solution.c)
+
 ################################################################################
 # Integration Tests
 ################################################################################
