@@ -131,6 +131,11 @@ struct SolverState {
     int bounds_propagated;    /**< Bounds propagation counter */
     int flip_count;           /**< Bound flip counter */
 
+    /* B3 extended: counters for V2 basis_operations.md cxf_basis_diff */
+    int ineq_to_eq_count;     /**< Inequality-to-equality conversion counter */
+    int matrix_transitions;   /**< Matrix status transition counter */
+    int constr_scan_count;    /**< Per-constraint activity scan counter */
+
     /* Crash basis state (v2 simplex phases — P2.5) */
     int *row_status;          /**< Per-row crash status [num_constrs]:
                                    0 = unassigned, >0 = candidate,
