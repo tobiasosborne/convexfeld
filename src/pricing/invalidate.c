@@ -1,12 +1,13 @@
 /**
  * @file invalidate.c
- * @brief Pricing cache invalidation (M6.1.6)
+ * @brief Pricing invalidation: single-var dirty marker + cache reset
  *
- * cxf_pricing_invalidate: reset cached candidates/weights on demand.
- * Spec: docs/specs/functions/pricing/cxf_pricing_invalidate.md
+ * cxf_pricing_invalidate: V2 spec single-variable dirty marker
+ *   (pricing_core.md §cxf_pricing_invalidate).
+ * cxf_pricing_invalidate_cache: cache/weight reset (legacy, renamed).
  *
  * Split from update.c to keep files under 200 LOC.
- * Beads: pt31
+ * Beads: pt31, convexfeld-u82g
  */
 
 #include "convexfeld/cxf_types.h"
@@ -14,15 +15,40 @@
 #include "pricing_internal.h"
 
 /**
- * @brief Invalidate cached pricing information.
+ * @brief Mark a single variable as dirty in both L1 and L2 queues.
  *
- * Sets flags indicating what pricing data needs recomputation.
- * The next pricing operation checks these flags and recomputes as needed.
+ * V2 spec (pricing_core.md §cxf_pricing_invalidate):
+ * Direct dirty marking producer — adds varIndex to both level-1 and
+ * level-2 variable queues using the flag-based O(1) duplicate protocol.
+ * Also sets the V1 dirty flag for backward compatibility.
  *
- * @param ctx Pricing context
+ * @param ctx  Pricing state
+ * @param varIndex  Index of the variable to mark dirty
+ */
+void cxf_pricing_invalidate(PricingState *ctx, int varIndex) {
+    if (ctx == NULL || varIndex < 0) return;
+    if (varIndex >= ctx->num_vars) return;
+
+    /* V1: boolean dirty flag (used by step2/step3/perturbation) */
+    if (ctx->var_dirty != NULL && !ctx->var_dirty[varIndex]) {
+        ctx->var_dirty[varIndex] = 1;
+        ctx->num_dirty++;
+    }
+
+    /* V2: 4-bit flag insertion into levels 1-2 */
+    v2_insert_var(ctx, varIndex);
+}
+
+/**
+ * @brief Invalidate cached pricing information (cache reset).
+ *
+ * Resets cached candidate counts and/or weights. Called at phase
+ * transitions and after refactorization.
+ *
+ * @param ctx   Pricing context
  * @param flags Bitmask of CXF_INVALID_* flags
  */
-void cxf_pricing_invalidate(PricingState *ctx, int flags) {
+void cxf_pricing_invalidate_cache(PricingState *ctx, int flags) {
     if (ctx == NULL) {
         return;
     }
@@ -37,10 +63,7 @@ void cxf_pricing_invalidate(PricingState *ctx, int flags) {
 
     /* Invalidate weights - mark for full recomputation */
     if (flags & CXF_INVALID_WEIGHTS) {
-        /* Full weight recomputation will happen on next SE pricing call.
-         * For now, weights array remains allocated but values are stale. */
         if (ctx->weights != NULL && ctx->num_vars > 0) {
-            /* Reset to 1.0 as safe default */
             for (int i = 0; i < ctx->num_vars; i++) {
                 ctx->weights[i] = 1.0;
             }

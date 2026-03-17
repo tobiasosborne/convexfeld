@@ -490,6 +490,10 @@ add_cxf_test(test_model_type_qp_socp unit/test_model_type_qp_socp.c)
 add_cxf_test(test_expand_eps_base unit/test_expand_eps_base.c)
 target_link_libraries(test_expand_eps_base PRIVATE m)
 
+# V2 cxf_pricing_invalidate: single-var dirty marker (pricing_core.md, convexfeld-u82g)
+add_cxf_test(test_pricing_invalidate_v2 unit/test_pricing_invalidate_v2.c)
+target_link_libraries(test_pricing_invalidate_v2 PRIVATE m)
+
 ################################################################################
 # Integration Tests
 ################################################################################

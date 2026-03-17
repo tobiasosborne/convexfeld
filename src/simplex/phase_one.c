@@ -256,7 +256,7 @@ int cxf_transition_to_phase_two(SolverState *state, CxfModel *model) {
 
     /* Reset pricing state at Phase I→II boundary */
     if (state->pricing) {
-        cxf_pricing_invalidate(state->pricing, CXF_INVALID_ALL);
+        cxf_pricing_invalidate_cache(state->pricing, CXF_INVALID_ALL);
         cxf_pricing_set_level(state->pricing, 0);
     }
 

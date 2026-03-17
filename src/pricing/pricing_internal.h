@@ -22,7 +22,8 @@ int cxf_pricing_candidates_v1(struct PricingState *ctx, const double *rc,
                               int *out, int max_out);
 
 /* --- Invalidation (invalidate.c) --- */
-void cxf_pricing_invalidate(struct PricingState *ctx, int flags);
+void cxf_pricing_invalidate(struct PricingState *ctx, int varIndex);
+void cxf_pricing_invalidate_cache(struct PricingState *ctx, int flags);
 
 /* --- Queue insertion (queue_insert.c) --- */
 void v2_insert_var(struct PricingState *ctx, int var_idx);

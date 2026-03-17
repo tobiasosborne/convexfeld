@@ -31,7 +31,7 @@ int cxf_pricing_steepest(PricingState *ctx, const double *reduced_costs,
                          int num_vars, double tolerance);
 
 /* Cache management */
-void cxf_pricing_invalidate(PricingState *ctx, int flags);
+void cxf_pricing_invalidate_cache(PricingState *ctx, int flags);
 
 /* Two-phase pricing */
 int cxf_pricing_step2(PricingState *ctx, const double *reduced_costs,
@@ -268,7 +268,7 @@ void test_pricing_steepest_handles_zero_weight(void) {
 }
 
 /*============================================================================
- * cxf_pricing_invalidate Tests
+ * cxf_pricing_invalidate_cache Tests (renamed from cxf_pricing_invalidate)
  *===========================================================================*/
 
 void test_pricing_invalidate_candidates(void) {
@@ -276,7 +276,7 @@ void test_pricing_invalidate_candidates(void) {
     TEST_ASSERT_NOT_NULL(ctx);
     cxf_pricing_init(ctx, 5, 1);
 
-    cxf_pricing_invalidate(ctx, CXF_INVALID_CANDIDATES);
+    cxf_pricing_invalidate_cache(ctx, CXF_INVALID_CANDIDATES);
     /* After invalidation, cached_counts should be -1 (invalid) */
     TEST_ASSERT_EQUAL_INT(-1, ctx->cached_counts[0]);
 
@@ -288,7 +288,7 @@ void test_pricing_invalidate_all(void) {
     TEST_ASSERT_NOT_NULL(ctx);
     cxf_pricing_init(ctx, 5, 1);
 
-    cxf_pricing_invalidate(ctx, CXF_INVALID_ALL);
+    cxf_pricing_invalidate_cache(ctx, CXF_INVALID_ALL);
     /* All cached counts should be -1 */
     for (int i = 0; i < ctx->max_levels; i++) {
         TEST_ASSERT_EQUAL_INT(-1, ctx->cached_counts[i]);
@@ -298,7 +298,7 @@ void test_pricing_invalidate_all(void) {
 }
 
 void test_pricing_invalidate_null_safe(void) {
-    cxf_pricing_invalidate(NULL, CXF_INVALID_ALL);  /* Should not crash */
+    cxf_pricing_invalidate_cache(NULL, CXF_INVALID_ALL);  /* Should not crash */
     TEST_PASS();
 }
 
@@ -423,7 +423,7 @@ int main(void) {
     RUN_TEST(test_pricing_steepest_optimal_returns_minus_one);
     RUN_TEST(test_pricing_steepest_handles_zero_weight);
 
-    /* cxf_pricing_invalidate */
+    /* cxf_pricing_invalidate_cache (renamed from cxf_pricing_invalidate) */
     RUN_TEST(test_pricing_invalidate_candidates);
     RUN_TEST(test_pricing_invalidate_all);
     RUN_TEST(test_pricing_invalidate_null_safe);
