@@ -135,6 +135,7 @@ target_sources(convexfeld PRIVATE
     src/simplex/perturbation_candidates.c
     src/simplex/expand.c
     src/simplex/cleanup.c
+    src/simplex/simplex_cleanup.c
     src/simplex/quadratic.c
     src/simplex/pivot_special.c
     src/simplex/pivot_update.c

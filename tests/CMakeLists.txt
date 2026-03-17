@@ -490,6 +490,10 @@ add_cxf_test(test_model_type_qp_socp unit/test_model_type_qp_socp.c)
 add_cxf_test(test_expand_eps_base unit/test_expand_eps_base.c)
 target_link_libraries(test_expand_eps_base PRIVATE m)
 
+# V2 simplex_lifecycle.md step 9: cxf_simplex_cleanup call (convexfeld-gekg)
+add_cxf_test(test_simplex_cleanup_call unit/test_simplex_cleanup_call.c)
+target_link_libraries(test_simplex_cleanup_call PRIVATE m)
+
 ################################################################################
 # Integration Tests
 ################################################################################
