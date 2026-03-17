@@ -6,14 +6,8 @@
  * Delegates actual solving to cxf_solve_lp() in simplex module.
  */
 
-#include <locale.h>
-#include <string.h>
 #include "convexfeld/cxf_model.h"
 #include "convexfeld/cxf_env.h"
-
-/* Max length for saved locale name (stack buffer, no heap allocation) */
-#define CXF_LOCALE_BUF_SIZE 128
-
 
 /* Forward declaration - implemented in src/api/optimize_api.c */
 
@@ -29,9 +23,6 @@
  */
 int cxf_optimize(CxfModel *model) {
     int status;
-    char saved_locale[CXF_LOCALE_BUF_SIZE];
-    const char *cur_locale;
-    int have_saved = 0;
 
     if (model == NULL) {
         return CXF_ERROR_NULL_ARGUMENT;
@@ -40,16 +31,8 @@ int cxf_optimize(CxfModel *model) {
     /* Step 3 (solve_entry.md): Acquire locale safety state.
      * Save the calling thread's LC_NUMERIC locale and switch to "C"
      * to ensure consistent decimal point formatting throughout
-     * optimization (e.g., MPS parsing uses '.' not ',').
-     * Use a stack buffer to avoid heap allocation that the solver's
-     * internal allocator might interfere with. */
-    cur_locale = setlocale(LC_NUMERIC, NULL);
-    if (cur_locale != NULL) {
-        strncpy(saved_locale, cur_locale, CXF_LOCALE_BUF_SIZE - 1);
-        saved_locale[CXF_LOCALE_BUF_SIZE - 1] = '\0';
-        have_saved = 1;
-    }
-    setlocale(LC_NUMERIC, "C");
+     * optimization (e.g., MPS parsing uses '.' not ','). */
+    cxf_acquire_solve_lock(model->env);
 
     /* Step 4 (solve_entry.md): Set modification_blocked to prevent
      * concurrent modifications during optimization */
@@ -63,9 +46,7 @@ int cxf_optimize(CxfModel *model) {
 
     /* Step 12 (solve_entry.md): Release locale safety state.
      * Restore the original LC_NUMERIC locale. */
-    if (have_saved) {
-        setlocale(LC_NUMERIC, saved_locale);
-    }
+    cxf_release_solve_lock(model->env);
 
     return status;
 }

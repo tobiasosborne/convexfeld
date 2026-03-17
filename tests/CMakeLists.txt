@@ -535,6 +535,9 @@ add_cxf_test(test_dbl_string_params unit/test_dbl_string_params.c)
 # V2 threading_sync.md: cxf_env_acquire_lock error buffer clear (convexfeld-jiq7)
 add_cxf_test(test_env_acquire_lock unit/test_env_acquire_lock.c)
 
+# Solve lock locale safety (threading_sync.md: acquire/release, convexfeld-duix, convexfeld-8gfk)
+add_cxf_test(test_solve_lock unit/test_solve_lock.c)
+
 ################################################################################
 # Integration Tests
 ################################################################################

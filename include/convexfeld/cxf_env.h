@@ -62,6 +62,9 @@ struct CxfEnv {
     int error_buf_locked;     /**< Prevents error buffer overwrites during nested errors */
     int anonymous_mode;       /**< Suppress variable/constraint name tracking */
 
+    /* Locale safety (threading_sync.md) */
+    char *saved_locale;       /**< Saved LC_NUMERIC locale string (heap, NULL when not held) */
+
     /* String parameters */
     char *logfile;            /**< Log file path (heap-allocated, NULL = none) */
 
@@ -211,6 +214,33 @@ CallbackContext *cxf_get_callback_context(CxfEnv *env);
  * @param env Environment to clear (NULL-safe, silent return)
  */
 void cxf_env_acquire_lock(CxfEnv *env);
+
+/*******************************************************************************
+ * Locale Safety API (threading_sync.md)
+ ******************************************************************************/
+
+/**
+ * @brief Save current LC_NUMERIC locale and switch to "C".
+ *
+ * Ensures consistent decimal point formatting during optimization.
+ * Stores the saved locale string on env->saved_locale via strdup.
+ * If already in "C" locale or env is NULL, this is a no-op.
+ *
+ * @param env Environment to modify
+ * @return CXF_OK on success, error code on failure
+ */
+int cxf_acquire_solve_lock(CxfEnv *env);
+
+/**
+ * @brief Restore the saved LC_NUMERIC locale from the environment.
+ *
+ * Restores the locale saved by cxf_acquire_solve_lock, frees the
+ * saved string, and clears the pointer. No-op if nothing was saved.
+ *
+ * @param env Environment to restore
+ * @return CXF_OK on success, error code on failure
+ */
+int cxf_release_solve_lock(CxfEnv *env);
 
 /*******************************************************************************
  * Parameter API
