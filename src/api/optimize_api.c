@@ -75,10 +75,14 @@ int cxf_optimize_internal(CxfModel *model) {
     /* Mark optimization as in progress */
     env->optimizing = 1;
 
-    /* Pre-optimization callback */
+    /* V2 lifecycle hook: lock error buffer (first-error preservation) */
+    cxf_pre_optimize_callback(model);
+
+    /* Pre-optimization user callback */
     status = cxf_pre_optimize_hook(model);
     if (status != 0) {
         cxf_log_printf(env, 0, "Pre-optimization callback requested termination");
+        cxf_post_optimize_callback(model);
         env->optimizing = 0;
         return CXF_ERROR_INVALID_ARGUMENT;  /* Callback requested abort */
     }
@@ -96,13 +100,17 @@ int cxf_optimize_internal(CxfModel *model) {
             cxf_log_printf(env, 0,
                 "Method %d is not supported; only primal simplex "
                 "(Method=0) and automatic (Method=-1) are available", method);
+            cxf_post_optimize_callback(model);
             env->optimizing = 0;
             return CXF_ERROR_NOT_SUPPORTED;
         }
     }
 
-    /* Post-optimization callback */
+    /* Post-optimization user callback */
     (void)cxf_post_optimize_hook(model);
+
+    /* V2 lifecycle hook: unlock error buffer (restore normal reporting) */
+    cxf_post_optimize_callback(model);
 
     /* Log optimization completion */
     if (status == CXF_OPTIMAL) {

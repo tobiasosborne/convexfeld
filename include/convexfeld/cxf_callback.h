@@ -97,4 +97,30 @@ int cxf_callback_validate(const CallbackContext *ctx);
  */
 int cxf_callback_reset_stats(CallbackContext *ctx);
 
+/*******************************************************************************
+ * Optimization Lifecycle Hooks (P3.13)
+ ******************************************************************************/
+
+/**
+ * @brief Lock error buffer before optimization (internal lifecycle hook).
+ *
+ * Per V2 callbacks.md: validates model, sets env->error_buf_locked = 1.
+ * Preserves pre-existing error messages during the solve.
+ * NOT a user callback. NULL-safe (returns silently).
+ *
+ * @param model Model about to be optimized (may be NULL).
+ */
+void cxf_pre_optimize_callback(CxfModel *model);
+
+/**
+ * @brief Unlock error buffer after optimization (internal lifecycle hook).
+ *
+ * Per V2 callbacks.md: validates model, clears env->error_buf_locked = 0.
+ * Restores normal error reporting. Idempotent.
+ * NOT a user callback. NULL-safe (returns silently).
+ *
+ * @param model Model that was optimized (may be NULL).
+ */
+void cxf_post_optimize_callback(CxfModel *model);
+
 #endif /* CXF_CALLBACK_H */

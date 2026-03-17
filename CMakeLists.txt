@@ -209,6 +209,7 @@ target_sources(convexfeld PRIVATE
     src/callbacks/context.c
     src/callbacks/init.c
     src/callbacks/invoke.c
+    src/callbacks/optimize_hooks.c
     src/callbacks/terminate.c
     # Validation module (M2.3.2)
     src/validation/arrays.c

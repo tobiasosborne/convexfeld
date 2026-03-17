@@ -169,6 +169,9 @@ add_cxf_test(test_callback_ownership unit/test_callback_ownership.c)
 add_cxf_test(test_callback_init_mutex unit/test_callback_init_mutex.c)
 target_link_libraries(test_callback_init_mutex PRIVATE pthread)
 
+# V2: cxf_pre/post_optimize_callback error buffer lock lifecycle (convexfeld-aqa5, convexfeld-trfq)
+add_cxf_test(test_optimize_callbacks unit/test_optimize_callbacks.c)
+
 # M7.1.2: Simplex Tests - Iteration
 add_cxf_test(test_simplex_iteration unit/test_simplex_iteration.c)
 
