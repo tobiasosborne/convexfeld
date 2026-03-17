@@ -4,22 +4,42 @@
 
 ---
 
-## STATUS: 130/130 tests pass. 22/26 Netlib pass (+4 new). 82 V2 spec compliance issues closed this session (19 triage, 63 code fixes). ~232 remain. Master clean and pushed.
+## STATUS: 146/146 tests pass. 46 Netlib pass (+24 new). 24 V2 issues closed this session. ~183 remain. Master clean and pushed.
+
+### Session 2026-03-17: V2 Compliance Sprint + Solver-Core Fixes
+
+**24 issues closed across 4 batches + 3 solver-core fixes:**
+
+**Batch 1 (5 issues):** constr_candidates status filters (u1qe, rcul), pricing_invalidate
+semantics (u82g), basis_diff counters (gicm), simplex_cleanup call (gekg)
+
+**Batch 2 (5 issues):** pricing_end_level SolverState param + queue filtering (au3b, 8nlv),
+cxf_check_env validation (2z4l), Method parameter (t64j), callback mutex (ughp)
+
+**Batch 3 (6 issues):** pre/post optimize callbacks (aqa5, trfq), param backup/restore (ffz0),
+setdblparam + string params (dz9y, gtk4), clear_solution (3mgs)
+
+**Batch 4 (5 issues):** locale save/restore (duix, 8gfk), env_acquire_lock (jiq7),
+validate_solution (ru83), clear_pending_buffer (on6h)
+
+**Solver-core fixes (3 issues):**
+- **BFRT objective recomputation** (2rnc): Phase II obj recomputed from scratch when flips occur
+- **Cumulative degenerate pivot detector** (98bt): Bypasses Bland's reset-at-50 dead end; fires perturbation at 200 cumulative degenerate pivots → unlocked agg2, agg3
+- **Consecutive small pivot refactorization** (4llu): Forces refactorization after 5 consecutive small pivots (|α| < 1e-7) per numerical_stability.md §A.3
 
 ### Netlib Results (2026-03-15, post V2 sprint)
 
-**22 PASS** (was 18): afiro, sc50b, sc105, share2b, israel, adlittle, blend, lotfi,
-beaconfd, stocfor1, ship04l, standata, standgub, standmps, scagr7, sctap1,
-scorpion, e226, **brandy** (NEW), **bandm** (NEW), **scfxm1** (NEW), **scsd1** (NEW)
-
-**4 new passes from V2 fixes:**
-- brandy: was TIMEOUT (cycling) → PASS 0.26s — reactive perturbation + Phase I→II refactorize
-- bandm: was ITER_LIMIT (Phase I cycling) → PASS 0.29s — same fixes
-- scfxm1: was TIMEOUT — PASS 0.10s — eps_base mid-range scaling
-- scsd1: was cycling (all-equality) → PASS 0.006s — perturbation/tolerance fixes
+**46 PASS** (was 22): afiro, adlittle, **agg**, bandm, beaconfd, blend, **bnl1**, brandy,
+**czprob**, **degen2**, e226, **fffff800**, israel, lotfi, sc50a, sc50b, sc105, **sc205**,
+**scagr25**, scagr7, scfxm1, **scfxm2**, **scfxm3**, scorpion, **scrs8**, scsd1, **scsd6**,
+sctap1, **sctap2**, **sctap3**, **share1b**, share2b, ship04l, **ship04s**, **ship08l**,
+**ship08s**, **ship12l**, **ship12s**, standata, standgub, standmps, stocfor1, **stocfor2**,
+**agg2** (NEW from cumulative stall fix), **agg3** (NEW from cumulative stall fix)
 
 **Still failing:** kb2 (ITER_LIMIT), stair (TIMEOUT), bore3d (TIMEOUT), etamacro (TIMEOUT),
-tuff (obj err 0.16%), grow7 (wrong obj 20.8%), boeing1 (status 10003), boeing2 (wrong obj)
+tuff (obj err 0.16%), grow7 (wrong obj 20.8%), boeing1 (status 10003), boeing2 (wrong obj),
+capri (false UNBOUNDED), sierra (false INFEASIBLE), scsd8 (false UNBOUNDED),
+fit1p (wrong obj 65%), ganges (wrong obj 111%), recipe (ITER_LIMIT), many timeouts on large instances
 
 ### V2 Spec Compliance Sprint (2026-03-15)
 
