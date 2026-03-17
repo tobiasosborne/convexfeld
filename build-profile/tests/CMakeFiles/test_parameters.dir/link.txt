@@ -1,0 +1,1 @@
+/usr/bin/cc -O2 -g -fno-omit-frame-pointer -O2 -g -DNDEBUG CMakeFiles/test_parameters.dir/unit/test_parameters.c.o -o test_parameters  libunity.a ../libconvexfeld.a -lm 

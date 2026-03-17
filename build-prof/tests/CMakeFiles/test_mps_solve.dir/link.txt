@@ -1,0 +1,1 @@
+/usr/bin/cc -O2 -g -fno-omit-frame-pointer -O2 -g -DNDEBUG CMakeFiles/test_mps_solve.dir/unit/test_mps_solve.c.o -o test_mps_solve  libunity.a ../libconvexfeld.a -lm 

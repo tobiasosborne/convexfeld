@@ -1,0 +1,1 @@
+/usr/bin/cc -O2 -g -fno-omit-frame-pointer -O2 -g -DNDEBUG CMakeFiles/test_lu_factors.dir/unit/test_lu_factors.c.o -o test_lu_factors  libunity.a ../libconvexfeld.a -lm 

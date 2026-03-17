@@ -1,0 +1,1 @@
+/usr/bin/cc -O2 -g -fno-omit-frame-pointer -O2 -g -DNDEBUG CMakeFiles/test_threading.dir/unit/test_threading.c.o -o test_threading  libunity.a ../libconvexfeld.a -lm 

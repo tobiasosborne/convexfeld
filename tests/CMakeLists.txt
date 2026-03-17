@@ -494,6 +494,10 @@ target_link_libraries(test_expand_eps_base PRIVATE m)
 add_cxf_test(test_constr_status_filter unit/test_constr_status_filter.c)
 target_link_libraries(test_constr_status_filter PRIVATE m)
 
+# V2 cxf_pricing_invalidate: single-var dirty marker (pricing_core.md, convexfeld-u82g)
+add_cxf_test(test_pricing_invalidate_v2 unit/test_pricing_invalidate_v2.c)
+target_link_libraries(test_pricing_invalidate_v2 PRIVATE m)
+
 ################################################################################
 # Integration Tests
 ################################################################################

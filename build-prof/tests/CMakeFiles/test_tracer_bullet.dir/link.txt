@@ -1,0 +1,1 @@
+/usr/bin/cc -O2 -g -fno-omit-frame-pointer -O2 -g -DNDEBUG CMakeFiles/test_tracer_bullet.dir/integration/test_tracer_bullet.c.o -o test_tracer_bullet  libunity.a ../libconvexfeld.a -lm 

@@ -1,0 +1,1 @@
+/usr/bin/cc -O2 -g -fno-omit-frame-pointer -O2 -g -DNDEBUG CMakeFiles/test_pivot_eta.dir/unit/test_pivot_eta.c.o -o test_pivot_eta  libunity.a ../libconvexfeld.a -lm 

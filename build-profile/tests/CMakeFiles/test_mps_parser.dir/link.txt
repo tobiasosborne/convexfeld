@@ -1,0 +1,1 @@
+/usr/bin/cc -O2 -g -fno-omit-frame-pointer -O2 -g -DNDEBUG CMakeFiles/test_mps_parser.dir/unit/test_mps_parser.c.o -o test_mps_parser  libunity.a ../libconvexfeld.a -lm 

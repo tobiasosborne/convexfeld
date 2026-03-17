@@ -92,6 +92,12 @@ struct PricingState {
  * V2 Pricing Queue API (F1)
  ******************************************************************************/
 
+/** Mark a single variable dirty in both L1 and L2 queues (V2 spec). */
+void cxf_pricing_invalidate(PricingState *ctx, int varIndex);
+
+/** Reset cached candidates/weights (cache management, not dirty marking). */
+void cxf_pricing_invalidate_cache(PricingState *ctx, int flags);
+
 /** Mark a variable as needing repricing after bound/status change. */
 void cxf_pricing_mark_dirty(PricingState *ctx, int var_idx);
 

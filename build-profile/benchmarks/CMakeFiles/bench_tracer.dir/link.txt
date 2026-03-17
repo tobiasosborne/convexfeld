@@ -1,0 +1,1 @@
+/usr/bin/cc -O2 -g -fno-omit-frame-pointer -O2 -g -DNDEBUG CMakeFiles/bench_tracer.dir/bench_tracer.c.o -o bench_tracer  ../libconvexfeld.a -lm 

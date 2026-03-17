@@ -1,0 +1,1 @@
+/usr/bin/cc -O2 -g -fno-omit-frame-pointer -O2 -g -DNDEBUG CMakeFiles/test_api_constrs.dir/unit/test_api_constrs.c.o -o test_api_constrs  libunity.a ../libconvexfeld.a -lm 

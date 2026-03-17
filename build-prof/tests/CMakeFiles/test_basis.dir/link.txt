@@ -1,0 +1,1 @@
+/usr/bin/cc -O2 -g -fno-omit-frame-pointer -O2 -g -DNDEBUG CMakeFiles/test_basis.dir/unit/test_basis.c.o -o test_basis  libunity.a ../libconvexfeld.a -lm 

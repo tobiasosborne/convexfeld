@@ -1,0 +1,1 @@
+/usr/bin/cc -O2 -g -fno-omit-frame-pointer -O2 -g -DNDEBUG CMakeFiles/test_constraint_satisfaction.dir/integration/test_constraint_satisfaction.c.o -o test_constraint_satisfaction  libunity.a ../libconvexfeld.a -lm 

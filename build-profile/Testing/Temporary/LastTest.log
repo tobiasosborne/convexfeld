@@ -1,0 +1,1408 @@
+Start testing: Jan 29 21:19 CET
+----------------------------------------------------------
+1/36 Testing: test_smoke
+1/36 Test: test_smoke
+Command: "/home/tobiasosborne/Projects/convexfeld/build-profile/tests/test_smoke"
+Directory: /home/tobiasosborne/Projects/convexfeld/build-profile/tests
+"test_smoke" start time: Jan 29 21:19 CET
+Output:
+----------------------------------------------------------
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_smoke.c:30:test_unity_works:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_smoke.c:31:test_integer_equality:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_smoke.c:32:test_double_comparison:PASS
+
+-----------------------
+3 Tests 0 Failures 0 Ignored 
+OK
+<end of output>
+Test time =   0.00 sec
+----------------------------------------------------------
+Test Passed.
+"test_smoke" end time: Jan 29 21:19 CET
+"test_smoke" time elapsed: 00:00:00
+----------------------------------------------------------
+
+2/36 Testing: test_memory
+2/36 Test: test_memory
+Command: "/home/tobiasosborne/Projects/convexfeld/build-profile/tests/test_memory"
+Directory: /home/tobiasosborne/Projects/convexfeld/build-profile/tests
+"test_memory" start time: Jan 29 21:19 CET
+Output:
+----------------------------------------------------------
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_memory.c:168:test_cxf_malloc_basic:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_memory.c:169:test_cxf_malloc_zero_size:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_memory.c:170:test_cxf_malloc_large_size:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_memory.c:173:test_cxf_calloc_zeroed:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_memory.c:174:test_cxf_calloc_zero_count:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_memory.c:175:test_cxf_calloc_zero_size:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_memory.c:178:test_cxf_realloc_grow:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_memory.c:179:test_cxf_realloc_shrink:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_memory.c:180:test_cxf_realloc_null_ptr:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_memory.c:181:test_cxf_realloc_zero_size:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_memory.c:184:test_cxf_free_null_safe:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_memory.c:185:test_cxf_free_after_malloc:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_memory.c:188:test_free_solver_state_null_safe:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_memory.c:189:test_free_basis_state_null_safe:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_memory.c:190:test_free_callback_state_null_safe:PASS
+
+-----------------------
+15 Tests 0 Failures 0 Ignored 
+OK
+<end of output>
+Test time =   0.00 sec
+----------------------------------------------------------
+Test Passed.
+"test_memory" end time: Jan 29 21:19 CET
+"test_memory" time elapsed: 00:00:00
+----------------------------------------------------------
+
+3/36 Testing: test_matrix
+3/36 Test: test_matrix
+Command: "/home/tobiasosborne/Projects/convexfeld/build-profile/tests/test_matrix"
+Directory: /home/tobiasosborne/Projects/convexfeld/build-profile/tests
+"test_matrix" start time: Jan 29 21:19 CET
+Output:
+----------------------------------------------------------
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_matrix.c:405:test_sparse_create_returns_valid_matrix:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_matrix.c:406:test_sparse_free_null_safe:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_matrix.c:407:test_sparse_init_csc_basic:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_matrix.c:408:test_sparse_init_csc_empty_matrix:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_matrix.c:409:test_sparse_init_csc_null_arg:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_matrix.c:412:test_matrix_multiply_simple_2x2:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_matrix.c:413:test_matrix_multiply_accumulate_mode:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_matrix.c:414:test_matrix_multiply_sparse_column:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_matrix.c:415:test_matrix_multiply_zero_x_skipped:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_matrix.c:418:test_dot_product_basic:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_matrix.c:419:test_dot_product_single_element:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_matrix.c:420:test_dot_product_orthogonal:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_matrix.c:421:test_dot_product_self:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_matrix.c:422:test_dot_product_sparse_dense:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_matrix.c:423:test_dot_product_sparse_empty:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_matrix.c:426:test_vector_norm_l1:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_matrix.c:427:test_vector_norm_l2:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_matrix.c:428:test_vector_norm_linf:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_matrix.c:429:test_vector_norm_zero_vector:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_matrix.c:430:test_vector_norm_single_element:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_matrix.c:433:test_row_major_full_pipeline:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_matrix.c:434:test_prepare_row_data_null_returns_error:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_matrix.c:435:test_build_row_major_without_prepare_returns_error:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_matrix.c:436:test_row_major_empty_matrix:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_matrix.c:439:test_sort_indices_basic:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_matrix.c:440:test_sort_indices_already_sorted:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_matrix.c:441:test_sort_indices_reverse:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_matrix.c:442:test_sort_indices_single:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_matrix.c:443:test_sort_indices_values_sync:PASS
+
+-----------------------
+29 Tests 0 Failures 0 Ignored 
+OK
+<end of output>
+Test time =   0.00 sec
+----------------------------------------------------------
+Test Passed.
+"test_matrix" end time: Jan 29 21:19 CET
+"test_matrix" time elapsed: 00:00:00
+----------------------------------------------------------
+
+4/36 Testing: test_basis
+4/36 Test: test_basis
+Command: "/home/tobiasosborne/Projects/convexfeld/build-profile/tests/test_basis"
+Directory: /home/tobiasosborne/Projects/convexfeld/build-profile/tests
+"test_basis" start time: Jan 29 21:19 CET
+Output:
+----------------------------------------------------------
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:953:test_basis_create_returns_valid_struct:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:954:test_basis_free_null_safe:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:955:test_basis_create_zero_constraints:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:956:test_basis_init_sets_arrays:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:959:test_eta_create_type1:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:960:test_eta_create_type2:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:961:test_eta_free_null_safe:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:962:test_eta_create_empty:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:965:test_ftran_identity_basis:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:966:test_ftran_zero_column:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:967:test_ftran_unit_vector:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:968:test_ftran_null_args:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:971:test_btran_identity_basis:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:972:test_btran_last_row:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:973:test_btran_single_constraint:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:974:test_btran_invalid_row:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:977:test_btran_vec_identity_basis:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:978:test_btran_vec_zero_input:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:979:test_btran_vec_single_constraint:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:980:test_btran_vec_null_args:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:981:test_btran_vec_empty_basis:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:984:test_basis_refactor_clears_eta_list:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:985:test_basis_refactor_identity_basis:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:986:test_basis_refactor_null_arg:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:989:test_basis_snapshot_returns_copy:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:990:test_basis_diff_identical:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:991:test_basis_diff_one_change:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:992:test_basis_diff_all_different:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:993:test_basis_equal_true:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:994:test_basis_equal_false:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:997:test_snapshot_create_copies_data:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:998:test_snapshot_create_null_args:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:999:test_snapshot_create_empty_basis:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:1000:test_snapshot_diff_identical:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:1001:test_snapshot_diff_one_header_change:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:1002:test_snapshot_diff_var_status_change:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:1003:test_snapshot_diff_dimension_mismatch:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:1004:test_snapshot_diff_null_args:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:1005:test_snapshot_equal_true:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:1006:test_snapshot_equal_false:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:1007:test_snapshot_free_null_safe:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:1008:test_snapshot_free_clears_valid:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:1011:test_basis_validate_valid_basis:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:1012:test_basis_validate_duplicate_vars:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:1013:test_basis_validate_null_arg:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:1014:test_basis_validate_empty_basis:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:1015:test_basis_validate_out_of_bounds:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:1016:test_basis_validate_negative_index:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:1017:test_basis_validate_ex_check_count:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:1018:test_basis_validate_ex_check_all:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:1019:test_basis_validate_ex_no_flags:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:1022:test_basis_warm_loads_basis:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:1023:test_basis_warm_clears_eta_list:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:1024:test_basis_warm_null_args:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:1025:test_basis_warm_size_mismatch:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:1026:test_basis_warm_resets_pivot_count:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:1027:test_basis_warm_snapshot_copies_basis:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:1028:test_basis_warm_snapshot_null_args:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:1029:test_basis_warm_snapshot_invalid_snap:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:1030:test_basis_warm_snapshot_dimension_mismatch:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_basis.c:1031:test_basis_warm_snapshot_clears_etas:PASS
+
+-----------------------
+61 Tests 0 Failures 0 Ignored 
+OK
+<end of output>
+Test time =   0.00 sec
+----------------------------------------------------------
+Test Passed.
+"test_basis" end time: Jan 29 21:19 CET
+"test_basis" time elapsed: 00:00:00
+----------------------------------------------------------
+
+5/36 Testing: test_lu_factors
+5/36 Test: test_lu_factors
+Command: "/home/tobiasosborne/Projects/convexfeld/build-profile/tests/test_lu_factors"
+Directory: /home/tobiasosborne/Projects/convexfeld/build-profile/tests
+"test_lu_factors" start time: Jan 29 21:19 CET
+Output:
+----------------------------------------------------------
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_lu_factors.c:151:test_lu_create_returns_valid_struct:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_lu_factors.c:152:test_lu_create_initializes_permutations_to_identity:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_lu_factors.c:153:test_lu_create_zero_m_returns_null:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_lu_factors.c:154:test_lu_create_negative_m_returns_null:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_lu_factors.c:155:test_lu_create_small_nnz_estimates_adjusted:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_lu_factors.c:156:test_lu_create_large_dimensions:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_lu_factors.c:159:test_lu_free_null_safe:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_lu_factors.c:162:test_lu_clear_resets_state:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_lu_factors.c:163:test_lu_clear_null_safe:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_lu_factors.c:166:test_basis_with_lu_field:PASS
+
+-----------------------
+10 Tests 0 Failures 0 Ignored 
+OK
+<end of output>
+Test time =   0.00 sec
+----------------------------------------------------------
+Test Passed.
+"test_lu_factors" end time: Jan 29 21:19 CET
+"test_lu_factors" time elapsed: 00:00:00
+----------------------------------------------------------
+
+6/36 Testing: test_pricing
+6/36 Test: test_pricing
+Command: "/home/tobiasosborne/Projects/convexfeld/build-profile/tests/test_pricing"
+Directory: /home/tobiasosborne/Projects/convexfeld/build-profile/tests
+"test_pricing" start time: Jan 29 21:19 CET
+Output:
+----------------------------------------------------------
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pricing.c:394:test_pricing_create_basic:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pricing.c:395:test_pricing_create_null_on_zero_vars:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pricing.c:396:test_pricing_create_single_level:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pricing.c:397:test_pricing_free_null_safe:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pricing.c:400:test_pricing_init_basic:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pricing.c:401:test_pricing_init_null_context:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pricing.c:402:test_pricing_init_steepest_edge:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pricing.c:403:test_pricing_init_small_problem:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pricing.c:406:test_pricing_candidates_finds_negative_rc:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pricing.c:407:test_pricing_candidates_finds_positive_rc_at_upper:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pricing.c:408:test_pricing_candidates_skips_basic_vars:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pricing.c:409:test_pricing_candidates_optimal:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pricing.c:412:test_pricing_steepest_basic:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pricing.c:413:test_pricing_steepest_considers_weight:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pricing.c:414:test_pricing_steepest_optimal_returns_minus_one:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pricing.c:415:test_pricing_steepest_handles_zero_weight:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pricing.c:418:test_pricing_update_basic:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pricing.c:419:test_pricing_update_null_context:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pricing.c:422:test_pricing_invalidate_candidates:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pricing.c:423:test_pricing_invalidate_all:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pricing.c:424:test_pricing_invalidate_null_safe:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pricing.c:427:test_pricing_step2_finds_after_partial_miss:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pricing.c:428:test_pricing_step2_confirms_optimal:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pricing.c:431:test_pricing_statistics_tracked:PASS
+
+-----------------------
+24 Tests 0 Failures 0 Ignored 
+OK
+<end of output>
+Test time =   0.00 sec
+----------------------------------------------------------
+Test Passed.
+"test_pricing" end time: Jan 29 21:19 CET
+"test_pricing" time elapsed: 00:00:00
+----------------------------------------------------------
+
+7/36 Testing: test_api_env
+7/36 Test: test_api_env
+Command: "/home/tobiasosborne/Projects/convexfeld/build-profile/tests/test_api_env"
+Directory: /home/tobiasosborne/Projects/convexfeld/build-profile/tests
+"test_api_env" start time: Jan 29 21:19 CET
+Output:
+----------------------------------------------------------
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_env.c:235:test_loadenv_basic_creation:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_env.c:236:test_loadenv_null_envp_returns_error:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_env.c:237:test_loadenv_sets_magic_number:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_env.c:238:test_loadenv_sets_active_flag:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_env.c:239:test_loadenv_sets_default_tolerances:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_env.c:240:test_loadenv_sets_default_verbosity:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_env.c:241:test_loadenv_sets_ref_count_to_one:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_env.c:242:test_loadenv_clears_error_buffer:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_env.c:243:test_loadenv_multiple_envs:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_env.c:244:test_loadenv_initializes_new_fields:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_env.c:247:test_freeenv_null_is_safe:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_env.c:248:test_freeenv_clears_magic:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_env.c:251:test_emptyenv_creates_inactive:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_env.c:252:test_emptyenv_null_envp_returns_error:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_env.c:255:test_startenv_activates_inactive_env:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_env.c:256:test_startenv_null_returns_error:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_env.c:257:test_startenv_already_active_returns_error:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_env.c:260:test_terminate_sets_flag:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_env.c:261:test_terminate_null_returns_error:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_env.c:262:test_reset_terminate_clears_flag:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_env.c:265:test_geterrormsg_returns_empty_initially:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_env.c:266:test_geterrormsg_null_returns_empty:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_env.c:267:test_clearerrormsg_works:PASS
+
+-----------------------
+23 Tests 0 Failures 0 Ignored 
+OK
+<end of output>
+Test time =   0.00 sec
+----------------------------------------------------------
+Test Passed.
+"test_api_env" end time: Jan 29 21:19 CET
+"test_api_env" time elapsed: 00:00:00
+----------------------------------------------------------
+
+8/36 Testing: test_api_model
+8/36 Test: test_api_model
+Command: "/home/tobiasosborne/Projects/convexfeld/build-profile/tests/test_api_model"
+Directory: /home/tobiasosborne/Projects/convexfeld/build-profile/tests
+"test_api_model" start time: Jan 29 21:19 CET
+Output:
+----------------------------------------------------------
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_model.c:420:test_newmodel_basic_creation:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_model.c:421:test_newmodel_null_env_returns_error:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_model.c:422:test_newmodel_null_modelp_returns_error:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_model.c:423:test_newmodel_null_name_allowed:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_model.c:424:test_newmodel_sets_magic_number:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_model.c:425:test_newmodel_links_to_env:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_model.c:426:test_newmodel_initializes_dimensions_to_zero:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_model.c:427:test_newmodel_initializes_status:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_model.c:428:test_newmodel_allocates_variable_arrays:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_model.c:429:test_newmodel_copies_name:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_model.c:430:test_newmodel_multiple_models:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_model.c:431:test_newmodel_initializes_var_capacity:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_model.c:432:test_newmodel_initializes_extended_fields:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_model.c:433:test_newmodel_primary_model_points_to_self:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_model.c:434:test_newmodel_self_ptr_null_initially:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_model.c:435:test_newmodel_initializes_bookkeeping:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_model.c:438:test_freemodel_null_is_safe:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_model.c:439:test_freemodel_clears_magic:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_model.c:442:test_addvar_basic:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_model.c:443:test_addvar_null_model_returns_error:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_model.c:444:test_addvar_stores_bounds_and_obj:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_model.c:445:test_addvar_multiple_variables:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_model.c:446:test_addvar_initializes_solution_to_zero:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_model.c:447:test_addvar_null_name_allowed:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_model.c:450:test_checkmodel_null_returns_error:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_model.c:451:test_checkmodel_valid_model_returns_ok:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_model.c:454:test_model_is_blocked_null_returns_error:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_model.c:455:test_model_is_blocked_initially_not_blocked:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_model.c:456:test_model_is_blocked_when_blocked:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_model.c:459:test_copymodel_basic:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_model.c:460:test_copymodel_null_returns_null:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_model.c:461:test_copymodel_copies_variables:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_model.c:462:test_copymodel_copies_status:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_model.c:463:test_copymodel_independent_modification:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_model.c:466:test_updatemodel_null_returns_error:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_model.c:467:test_updatemodel_valid_model_returns_ok:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_model.c:468:test_updatemodel_idempotent:PASS
+
+-----------------------
+37 Tests 0 Failures 0 Ignored 
+OK
+<end of output>
+Test time =   0.00 sec
+----------------------------------------------------------
+Test Passed.
+"test_api_model" end time: Jan 29 21:19 CET
+"test_api_model" time elapsed: 00:00:00
+----------------------------------------------------------
+
+9/36 Testing: test_api_vars
+9/36 Test: test_api_vars
+Command: "/home/tobiasosborne/Projects/convexfeld/build-profile/tests/test_api_vars"
+Directory: /home/tobiasosborne/Projects/convexfeld/build-profile/tests
+"test_api_vars" start time: Jan 29 21:19 CET
+Output:
+----------------------------------------------------------
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_vars.c:312:test_addvar_binary_variable:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_vars.c:313:test_addvar_integer_variable:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_vars.c:314:test_addvar_unbounded_variable:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_vars.c:315:test_addvar_negative_bounds:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_vars.c:318:test_addvars_basic_batch:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_vars.c:319:test_addvars_null_model_returns_error:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_vars.c:320:test_addvars_zero_vars_succeeds:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_vars.c:321:test_addvars_stores_correct_values:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_vars.c:322:test_addvars_null_arrays_use_defaults:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_vars.c:325:test_addvar_exceeds_initial_capacity:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_vars.c:326:test_addvars_batch_exceeds_capacity:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_vars.c:327:test_addvar_grows_capacity:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_vars.c:330:test_delvars_basic:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_vars.c:331:test_delvars_null_model_returns_error:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_vars.c:332:test_delvars_zero_count_succeeds:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_vars.c:333:test_delvars_null_ind_with_nonzero_count_fails:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_vars.c:334:test_delvars_invalid_index_fails:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_vars.c:335:test_delvars_multiple_vars:PASS
+
+-----------------------
+18 Tests 0 Failures 0 Ignored 
+OK
+<end of output>
+Test time =   0.00 sec
+----------------------------------------------------------
+Test Passed.
+"test_api_vars" end time: Jan 29 21:19 CET
+"test_api_vars" time elapsed: 00:00:00
+----------------------------------------------------------
+
+10/36 Testing: test_memory_vectors
+10/36 Test: test_memory_vectors
+Command: "/home/tobiasosborne/Projects/convexfeld/build-profile/tests/test_memory_vectors"
+Directory: /home/tobiasosborne/Projects/convexfeld/build-profile/tests
+"test_memory_vectors" start time: Jan 29 21:19 CET
+Output:
+----------------------------------------------------------
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_memory_vectors.c:294:test_vector_free_null:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_memory_vectors.c:295:test_vector_free_empty_vector:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_memory_vectors.c:296:test_vector_free_indices_only:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_memory_vectors.c:297:test_vector_free_full_vector:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_memory_vectors.c:300:test_eta_buffer_init_basic:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_memory_vectors.c:301:test_eta_buffer_init_custom_size:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_memory_vectors.c:304:test_alloc_eta_null_buffer:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_memory_vectors.c:305:test_alloc_eta_first_allocation:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_memory_vectors.c:306:test_alloc_eta_fast_path:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_memory_vectors.c:307:test_alloc_eta_slow_path_new_chunk:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_memory_vectors.c:308:test_alloc_eta_large_allocation:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_memory_vectors.c:309:test_alloc_eta_exponential_growth:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_memory_vectors.c:310:test_alloc_eta_max_chunk_size:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_memory_vectors.c:313:test_eta_buffer_free_empty:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_memory_vectors.c:314:test_eta_buffer_free_with_chunks:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_memory_vectors.c:317:test_eta_buffer_reset_basic:PASS
+
+-----------------------
+16 Tests 0 Failures 0 Ignored 
+OK
+<end of output>
+Test time =   0.00 sec
+----------------------------------------------------------
+Test Passed.
+"test_memory_vectors" end time: Jan 29 21:19 CET
+"test_memory_vectors" time elapsed: 00:00:00
+----------------------------------------------------------
+
+11/36 Testing: test_error
+11/36 Test: test_error
+Command: "/home/tobiasosborne/Projects/convexfeld/build-profile/tests/test_error"
+Directory: /home/tobiasosborne/Projects/convexfeld/build-profile/tests
+"test_error" start time: Jan 29 21:19 CET
+Output:
+----------------------------------------------------------
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_error.c:366:test_error_basic_message:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_error.c:367:test_error_formatted_message:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_error.c:368:test_error_null_env_safe:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_error.c:369:test_error_empty_message:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_error.c:370:test_geterrormsg_null_env:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_error.c:373:test_errorlog_null_env:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_error.c:374:test_errorlog_null_message:PASS
+Test log message
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_error.c:375:test_errorlog_basic:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_error.c:378:test_check_nan_clean_array:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_error.c:379:test_check_nan_with_nan:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_error.c:380:test_check_nan_empty_array:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_error.c:381:test_check_nan_null_array:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_error.c:382:test_check_nan_inf_not_detected:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_error.c:385:test_check_nan_or_inf_clean_array:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_error.c:386:test_check_nan_or_inf_with_nan:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_error.c:387:test_check_nan_or_inf_with_inf:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_error.c:388:test_check_nan_or_inf_with_neg_inf:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_error.c:389:test_check_nan_or_inf_null_array:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_error.c:392:test_checkenv_valid:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_error.c:393:test_checkenv_null:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_error.c:394:test_checkenv_invalid_magic:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_error.c:397:test_pivot_check_valid:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_error.c:398:test_pivot_check_too_small:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_error.c:399:test_pivot_check_zero:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_error.c:400:test_pivot_check_negative:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_error.c:401:test_pivot_check_nan:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_error.c:404:test_check_model_flags1_null_model:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_error.c:405:test_check_model_flags1_pure_continuous:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_error.c:406:test_check_model_flags1_with_binary:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_error.c:407:test_check_model_flags1_with_integer:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_error.c:408:test_check_model_flags1_empty_model:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_error.c:411:test_check_model_flags2_null_model:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_error.c:412:test_check_model_flags2_pure_linear:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_error.c:413:test_check_model_flags2_empty_model:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_error.c:416:test_check_terminate_null_env:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_error.c:417:test_check_terminate_not_set:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_error.c:418:test_check_terminate_after_terminate:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_error.c:419:test_check_terminate_after_clear:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_error.c:420:test_terminate_null_env_safe:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_error.c:421:test_clear_terminate_null_env_safe:PASS
+
+-----------------------
+40 Tests 0 Failures 0 Ignored 
+OK
+<end of output>
+Test time =   0.00 sec
+----------------------------------------------------------
+Test Passed.
+"test_error" end time: Jan 29 21:19 CET
+"test_error" time elapsed: 00:00:00
+----------------------------------------------------------
+
+12/36 Testing: test_timing
+12/36 Test: test_timing
+Command: "/home/tobiasosborne/Projects/convexfeld/build-profile/tests/test_timing"
+Directory: /home/tobiasosborne/Projects/convexfeld/build-profile/tests
+"test_timing" start time: Jan 29 21:19 CET
+Output:
+----------------------------------------------------------
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_timing.c:447:test_get_timestamp_returns_positive:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_timing.c:448:test_get_timestamp_monotonic:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_timing.c:449:test_get_timestamp_elapsed_reasonable:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_timing.c:452:test_timing_start_records_timestamp:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_timing.c:453:test_timing_start_null_safe:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_timing.c:454:test_timing_start_overwrites_previous:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_timing.c:457:test_timing_end_calculates_elapsed:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_timing.c:458:test_timing_end_null_safe:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_timing.c:459:test_timing_end_updates_section_stats:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_timing.c:460:test_timing_end_invalid_section_safe:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_timing.c:463:test_timing_update_accumulates_time:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_timing.c:464:test_timing_update_multiple_accumulations:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_timing.c:465:test_timing_update_computes_average:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_timing.c:466:test_timing_update_null_safe:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_timing.c:467:test_timing_update_invalid_category_safe:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_timing.c:468:test_timing_update_stores_last_elapsed:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_timing.c:469:test_timing_update_different_categories:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_timing.c:472:test_timing_pivot_null_safe:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_timing.c:473:test_timing_pivot_updates_work_counter:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_timing.c:474:test_timing_pivot_scales_work:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_timing.c:475:test_timing_pivot_updates_timing_stats:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_timing.c:476:test_timing_pivot_accumulates_multiple_calls:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_timing.c:479:test_timing_refactor_null_state:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_timing.c:480:test_timing_refactor_null_env:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_timing.c:481:test_timing_refactor_not_needed:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_timing.c:482:test_timing_refactor_required_eta_count:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_timing.c:483:test_timing_refactor_required_eta_memory:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_timing.c:484:test_timing_refactor_recommended_iterations:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_timing.c:485:test_timing_refactor_recommended_ftran_degradation:PASS
+
+-----------------------
+29 Tests 0 Failures 0 Ignored 
+OK
+<end of output>
+Test time =   0.01 sec
+----------------------------------------------------------
+Test Passed.
+"test_timing" end time: Jan 29 21:19 CET
+"test_timing" time elapsed: 00:00:00
+----------------------------------------------------------
+
+13/36 Testing: test_analysis
+13/36 Test: test_analysis
+Command: "/home/tobiasosborne/Projects/convexfeld/build-profile/tests/test_analysis"
+Directory: /home/tobiasosborne/Projects/convexfeld/build-profile/tests
+"test_analysis" start time: Jan 29 21:19 CET
+Output:
+----------------------------------------------------------
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_analysis.c:226:test_is_mip_null_model:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_analysis.c:227:test_is_mip_empty_model:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_analysis.c:228:test_is_mip_all_continuous:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_analysis.c:229:test_is_mip_with_binary:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_analysis.c:230:test_is_mip_with_integer:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_analysis.c:231:test_is_mip_with_semi_continuous:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_analysis.c:232:test_is_mip_with_semi_integer:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_analysis.c:235:test_is_quadratic_null_model:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_analysis.c:236:test_is_quadratic_linear_model:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_analysis.c:239:test_is_socp_null_model:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_analysis.c:240:test_is_socp_linear_model:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_analysis.c:243:test_presolve_stats_null_model:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_analysis.c:244:test_presolve_stats_empty_model:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_analysis.c:245:test_presolve_stats_with_vars:PASS
+
+-----------------------
+14 Tests 0 Failures 0 Ignored 
+OK
+<end of output>
+Test time =   0.00 sec
+----------------------------------------------------------
+Test Passed.
+"test_analysis" end time: Jan 29 21:19 CET
+"test_analysis" time elapsed: 00:00:00
+----------------------------------------------------------
+
+14/36 Testing: test_api_constrs
+14/36 Test: test_api_constrs
+Command: "/home/tobiasosborne/Projects/convexfeld/build-profile/tests/test_api_constrs"
+Directory: /home/tobiasosborne/Projects/convexfeld/build-profile/tests
+"test_api_constrs" start time: Jan 29 21:19 CET
+Output:
+----------------------------------------------------------
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_constrs.c:327:test_addconstr_null_model_fails:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_constrs.c:328:test_addconstr_basic_le_constraint:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_constrs.c:329:test_addconstr_equality_constraint:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_constrs.c:330:test_addconstr_ge_constraint:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_constrs.c:331:test_addconstr_empty_constraint:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_constrs.c:332:test_addconstr_negative_rhs:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_constrs.c:333:test_addconstr_validates_sense:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_constrs.c:334:test_addconstr_validates_indices:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_constrs.c:335:test_addconstr_validates_finite:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_constrs.c:338:test_addconstrs_null_model_fails:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_constrs.c:339:test_addconstrs_zero_count_succeeds:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_constrs.c:340:test_addconstrs_basic_batch:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_constrs.c:341:test_addconstrs_null_rhs_uses_zero:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_constrs.c:344:test_addqconstr_returns_not_supported:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_constrs.c:347:test_addgenconstr_indicator_returns_not_supported:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_constrs.c:350:test_chgcoeffs_null_model_fails:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_constrs.c:351:test_chgcoeffs_empty_is_ok:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_constrs.c:352:test_chgcoeffs_basic:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_constrs.c:353:test_chgcoeffs_validates_indices:PASS
+
+-----------------------
+19 Tests 0 Failures 0 Ignored 
+OK
+<end of output>
+Test time =   0.00 sec
+----------------------------------------------------------
+Test Passed.
+"test_api_constrs" end time: Jan 29 21:19 CET
+"test_api_constrs" time elapsed: 00:00:00
+----------------------------------------------------------
+
+15/36 Testing: test_api_optimize
+15/36 Test: test_api_optimize
+Command: "/home/tobiasosborne/Projects/convexfeld/build-profile/tests/test_api_optimize"
+Directory: /home/tobiasosborne/Projects/convexfeld/build-profile/tests
+"test_api_optimize" start time: Jan 29 21:19 CET
+Output:
+----------------------------------------------------------
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_optimize.c:170:test_optimize_null_model_fails:PASS
+Starting optimization for model 'test'
+Model: 0 variables, 0 constraints
+Optimization completed successfully
+Objective value: 0.000000
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_optimize.c:171:test_optimize_empty_model:PASS
+Starting optimization for model 'test'
+Model: 1 variables, 0 constraints
+Optimization completed successfully
+Objective value: 0.000000
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_optimize.c:172:test_optimize_single_variable:PASS
+Starting optimization for model 'test'
+Model: 3 variables, 0 constraints
+Optimization completed successfully
+Objective value: 0.000000
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_optimize.c:173:test_optimize_multiple_variables:PASS
+Starting optimization for model 'test'
+Model: 2 variables, 1 constraints
+Optimization completed successfully
+Objective value: 0.000000
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_optimize.c:174:test_optimize_with_constraints:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_optimize.c:177:test_terminate_flag_initially_false:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_optimize.c:178:test_terminate_sets_flag:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_optimize.c:179:test_clear_terminate_resets_flag:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_optimize.c:180:test_terminate_null_env_safe:PASS
+Starting optimization for model 'test'
+Model: 1 variables, 0 constraints
+Optimization completed successfully
+Objective value: 0.000000
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_optimize.c:183:test_status_after_optimize:PASS
+Starting optimization for model 'test'
+Model: 1 variables, 0 constraints
+Optimization completed successfully
+Objective value: 0.000000
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_optimize.c:184:test_objval_available_after_optimize:PASS
+
+-----------------------
+11 Tests 0 Failures 0 Ignored 
+OK
+<end of output>
+Test time =   0.00 sec
+----------------------------------------------------------
+Test Passed.
+"test_api_optimize" end time: Jan 29 21:19 CET
+"test_api_optimize" time elapsed: 00:00:00
+----------------------------------------------------------
+
+16/36 Testing: test_api_query
+16/36 Test: test_api_query
+Command: "/home/tobiasosborne/Projects/convexfeld/build-profile/tests/test_api_query"
+Directory: /home/tobiasosborne/Projects/convexfeld/build-profile/tests
+"test_api_query" start time: Jan 29 21:19 CET
+Output:
+----------------------------------------------------------
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_query.c:219:test_getintattr_null_model_fails:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_query.c:220:test_getintattr_null_attrname_fails:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_query.c:221:test_getintattr_null_value_fails:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_query.c:222:test_getintattr_numvars:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_query.c:223:test_getintattr_numconstrs:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_query.c:224:test_getintattr_status:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_query.c:225:test_getintattr_invalid_attr:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_query.c:228:test_getdblattr_null_model_fails:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_query.c:229:test_getdblattr_objval:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_query.c:230:test_getdblattr_invalid_attr:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_query.c:233:test_getconstrs_null_model_fails:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_query.c:234:test_getconstrs_null_numnz_fails:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_query.c:235:test_getconstrs_empty_model:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_query.c:238:test_getcoeff_null_model_fails:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_query.c:239:test_getcoeff_null_valP_fails:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_api_query.c:240:test_getcoeff_no_constraints:PASS
+
+-----------------------
+16 Tests 0 Failures 0 Ignored 
+OK
+<end of output>
+Test time =   0.00 sec
+----------------------------------------------------------
+Test Passed.
+"test_api_query" end time: Jan 29 21:19 CET
+"test_api_query" time elapsed: 00:00:00
+----------------------------------------------------------
+
+17/36 Testing: test_logging
+17/36 Test: test_logging
+Command: "/home/tobiasosborne/Projects/convexfeld/build-profile/tests/test_logging"
+Directory: /home/tobiasosborne/Projects/convexfeld/build-profile/tests
+"test_logging" start time: Jan 29 21:19 CET
+Output:
+----------------------------------------------------------
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_logging.c:261:test_log10_wrapper_one:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_logging.c:262:test_log10_wrapper_ten:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_logging.c:263:test_log10_wrapper_hundred:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_logging.c:264:test_log10_wrapper_fraction:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_logging.c:265:test_log10_wrapper_zero_returns_neg_inf:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_logging.c:266:test_log10_wrapper_negative_returns_nan:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_logging.c:267:test_log10_wrapper_nan_returns_nan:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_logging.c:268:test_log10_wrapper_positive_inf_returns_inf:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_logging.c:269:test_log10_wrapper_very_small:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_logging.c:270:test_log10_wrapper_very_large:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_logging.c:273:test_snprintf_wrapper_basic_string:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_logging.c:274:test_snprintf_wrapper_format_int:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_logging.c:275:test_snprintf_wrapper_format_double:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_logging.c:276:test_snprintf_wrapper_truncation:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_logging.c:277:test_snprintf_wrapper_zero_size_returns_error:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_logging.c:278:test_snprintf_wrapper_null_buffer_returns_error:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_logging.c:281:test_log_printf_null_env_safe:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_logging.c:282:test_log_printf_null_format_safe:PASS
+hello world
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_logging.c:283:test_log_printf_with_callback:PASS
+value=42, pi=3.14
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_logging.c:284:test_log_printf_format_args:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_logging.c:285:test_log_printf_verbosity_filtered:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_logging.c:286:test_log_printf_output_flag_disabled:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_logging.c:289:test_register_log_callback_success:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_logging.c:290:test_register_log_callback_null_env:PASS
+first
+second
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_logging.c:291:test_register_log_callback_unregister:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_logging.c:294:test_get_logical_processors_returns_positive:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_logging.c:295:test_get_logical_processors_returns_at_least_one:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_logging.c:296:test_get_logical_processors_reasonable_range:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_logging.c:297:test_get_logical_processors_consistent:PASS
+
+-----------------------
+29 Tests 0 Failures 0 Ignored 
+OK
+<end of output>
+Test time =   0.00 sec
+----------------------------------------------------------
+Test Passed.
+"test_logging" end time: Jan 29 21:19 CET
+"test_logging" time elapsed: 00:00:00
+----------------------------------------------------------
+
+18/36 Testing: test_pivot_check
+18/36 Test: test_pivot_check
+Command: "/home/tobiasosborne/Projects/convexfeld/build-profile/tests/test_pivot_check"
+Directory: /home/tobiasosborne/Projects/convexfeld/build-profile/tests
+"test_pivot_check" start time: Jan 29 21:19 CET
+Output:
+----------------------------------------------------------
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pivot_check.c:131:test_pivot_check_valid_positive:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pivot_check.c:132:test_pivot_check_valid_negative:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pivot_check.c:133:test_pivot_check_valid_small:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pivot_check.c:134:test_pivot_check_reject_too_small:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pivot_check.c:135:test_pivot_check_reject_zero:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pivot_check.c:136:test_pivot_check_reject_nan:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pivot_check.c:137:test_pivot_check_accept_infinity:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pivot_check.c:138:test_pivot_check_boundary_exactly_equal:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pivot_check.c:139:test_pivot_check_boundary_just_above:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pivot_check.c:142:test_special_check_valid_basic:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pivot_check.c:143:test_special_check_reject_unbounded_lower:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pivot_check.c:144:test_special_check_reject_reserved_flags:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pivot_check.c:145:test_special_check_upper_finite_flag_valid:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pivot_check.c:146:test_special_check_reject_quadratic:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pivot_check.c:147:test_special_check_work_accum_null:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pivot_check.c:148:test_special_check_negative_finite_bound:PASS
+
+-----------------------
+16 Tests 0 Failures 0 Ignored 
+OK
+<end of output>
+Test time =   0.00 sec
+----------------------------------------------------------
+Test Passed.
+"test_pivot_check" end time: Jan 29 21:19 CET
+"test_pivot_check" time elapsed: 00:00:00
+----------------------------------------------------------
+
+19/36 Testing: test_parameters
+19/36 Test: test_parameters
+Command: "/home/tobiasosborne/Projects/convexfeld/build-profile/tests/test_parameters"
+Directory: /home/tobiasosborne/Projects/convexfeld/build-profile/tests
+"test_parameters" start time: Jan 29 21:19 CET
+Output:
+----------------------------------------------------------
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_parameters.c:196:test_feasibility_tol_returns_default:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_parameters.c:197:test_feasibility_tol_null_env_returns_default:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_parameters.c:198:test_feasibility_tol_positive:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_parameters.c:199:test_feasibility_tol_in_valid_range:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_parameters.c:200:test_feasibility_tol_idempotent:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_parameters.c:203:test_optimality_tol_returns_default:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_parameters.c:204:test_optimality_tol_null_env_returns_default:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_parameters.c:205:test_optimality_tol_positive:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_parameters.c:206:test_optimality_tol_in_valid_range:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_parameters.c:207:test_optimality_tol_idempotent:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_parameters.c:210:test_infinity_returns_constant:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_parameters.c:211:test_infinity_is_positive:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_parameters.c:212:test_infinity_is_finite:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_parameters.c:213:test_infinity_idempotent:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_parameters.c:214:test_infinity_usable_in_comparisons:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_parameters.c:217:test_getdblparam_feasibility_tol:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_parameters.c:218:test_getdblparam_optimality_tol:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_parameters.c:219:test_getdblparam_infinity:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_parameters.c:220:test_getdblparam_case_insensitive:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_parameters.c:221:test_getdblparam_null_env:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_parameters.c:222:test_getdblparam_null_paramname:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_parameters.c:223:test_getdblparam_null_valueP:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_parameters.c:224:test_getdblparam_unknown_param:PASS
+
+-----------------------
+23 Tests 0 Failures 0 Ignored 
+OK
+<end of output>
+Test time =   0.00 sec
+----------------------------------------------------------
+Test Passed.
+"test_parameters" end time: Jan 29 21:19 CET
+"test_parameters" time elapsed: 00:00:00
+----------------------------------------------------------
+
+20/36 Testing: test_simplex_basic
+20/36 Test: test_simplex_basic
+Command: "/home/tobiasosborne/Projects/convexfeld/build-profile/tests/test_simplex_basic"
+Directory: /home/tobiasosborne/Projects/convexfeld/build-profile/tests
+"test_simplex_basic" start time: Jan 29 21:19 CET
+Output:
+----------------------------------------------------------
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_basic.c:243:test_simplex_init_creates_state:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_basic.c:244:test_simplex_init_null_model_fails:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_basic.c:245:test_simplex_init_null_stateout_fails:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_basic.c:246:test_simplex_init_empty_model:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_basic.c:247:test_simplex_init_primal_mode:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_basic.c:248:test_simplex_init_dual_mode:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_basic.c:251:test_simplex_final_frees_state:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_basic.c:252:test_simplex_final_null_safe:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_basic.c:255:test_simplex_setup_basic:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_basic.c:256:test_simplex_setup_null_state_fails:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_basic.c:257:test_simplex_setup_null_env_fails:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_basic.c:260:test_simplex_get_status_initial:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_basic.c:261:test_simplex_get_status_null_returns_error:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_basic.c:262:test_simplex_get_iteration_initial:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_basic.c:263:test_simplex_get_iteration_null_returns_error:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_basic.c:264:test_simplex_get_phase_after_setup:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_basic.c:265:test_simplex_get_phase_null_returns_error:PASS
+
+-----------------------
+17 Tests 0 Failures 0 Ignored 
+OK
+<end of output>
+Test time =   0.00 sec
+----------------------------------------------------------
+Test Passed.
+"test_simplex_basic" end time: Jan 29 21:19 CET
+"test_simplex_basic" time elapsed: 00:00:00
+----------------------------------------------------------
+
+21/36 Testing: test_callbacks
+21/36 Test: test_callbacks
+Command: "/home/tobiasosborne/Projects/convexfeld/build-profile/tests/test_callbacks"
+Directory: /home/tobiasosborne/Projects/convexfeld/build-profile/tests
+"test_callbacks" start time: Jan 29 21:19 CET
+Output:
+----------------------------------------------------------
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_callbacks.c:395:test_callback_create_returns_non_null:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_callbacks.c:396:test_callback_create_sets_magic:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_callbacks.c:397:test_callback_create_initializes_fields:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_callbacks.c:398:test_callback_create_best_obj_is_infinity:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_callbacks.c:399:test_callback_free_null_safe:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_callbacks.c:400:test_callback_validate_returns_ok_for_valid:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_callbacks.c:401:test_callback_validate_null_returns_error:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_callbacks.c:402:test_callback_validate_bad_magic_returns_error:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_callbacks.c:403:test_callback_validate_bad_safety_magic_returns_error:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_callbacks.c:404:test_callback_reset_stats_clears_counters:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_callbacks.c:405:test_callback_reset_stats_preserves_registration:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_callbacks.c:406:test_callback_reset_stats_null_returns_error:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_callbacks.c:407:test_callback_reset_stats_invalid_magic_returns_error:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_callbacks.c:410:test_init_callback_struct_zeroes_memory:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_callbacks.c:411:test_init_callback_struct_null_pointer_returns_error:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_callbacks.c:412:test_init_callback_struct_null_env_succeeds:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_callbacks.c:415:test_set_terminate_sets_flag:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_callbacks.c:416:test_set_terminate_null_env_safe:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_callbacks.c:417:test_set_terminate_idempotent:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_callbacks.c:420:test_check_terminate_returns_zero_when_clear:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_callbacks.c:421:test_check_terminate_returns_one_when_set:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_callbacks.c:422:test_check_terminate_null_env_returns_zero:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_callbacks.c:425:test_callback_terminate_sets_env_flag:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_callbacks.c:426:test_callback_terminate_null_model_safe:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_callbacks.c:429:test_reset_callback_state_null_env_safe:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_callbacks.c:430:test_reset_callback_state_no_callback_state_safe:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_callbacks.c:431:test_reset_callback_state_clears_statistics:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_callbacks.c:434:test_pre_optimize_callback_null_env_returns_success:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_callbacks.c:435:test_pre_optimize_callback_no_callback_returns_success:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_callbacks.c:438:test_post_optimize_callback_null_env_returns_success:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_callbacks.c:439:test_post_optimize_callback_no_callback_returns_success:PASS
+
+-----------------------
+31 Tests 0 Failures 0 Ignored 
+OK
+<end of output>
+Test time =   0.00 sec
+----------------------------------------------------------
+Test Passed.
+"test_callbacks" end time: Jan 29 21:19 CET
+"test_callbacks" time elapsed: 00:00:00
+----------------------------------------------------------
+
+22/36 Testing: test_simplex_iteration
+22/36 Test: test_simplex_iteration
+Command: "/home/tobiasosborne/Projects/convexfeld/build-profile/tests/test_simplex_iteration"
+Directory: /home/tobiasosborne/Projects/convexfeld/build-profile/tests
+"test_simplex_iteration" start time: Jan 29 21:19 CET
+Output:
+----------------------------------------------------------
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_iteration.c:200:test_simplex_iterate_null_args_fail:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_iteration.c:201:test_simplex_iterate_returns_valid_status:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_iteration.c:202:test_simplex_iterate_increments_iteration:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_iteration.c:204:test_phase_end_null_args_fail:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_iteration.c:205:test_phase_end_transitions_to_phase2:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_iteration.c:206:test_phase_end_infeasible_returns_error:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_iteration.c:208:test_post_iterate_null_state_fails:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_iteration.c:209:test_post_iterate_returns_continue_or_refactor:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_iteration.c:211:test_get_objval_null_returns_nan:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_iteration.c:212:test_get_objval_returns_current_objective:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_iteration.c:214:test_set_iteration_limit_null_fails:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_iteration.c:215:test_set_iteration_limit_negative_fails:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_iteration.c:216:test_set_iteration_limit_valid:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_iteration.c:217:test_get_iteration_limit_null_returns_error:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_iteration.c:218:test_get_iteration_limit_returns_current:PASS
+
+-----------------------
+15 Tests 0 Failures 0 Ignored 
+OK
+<end of output>
+Test time =   0.00 sec
+----------------------------------------------------------
+Test Passed.
+"test_simplex_iteration" end time: Jan 29 21:19 CET
+"test_simplex_iteration" time elapsed: 00:00:00
+----------------------------------------------------------
+
+23/36 Testing: test_validation
+23/36 Test: test_validation
+Command: "/home/tobiasosborne/Projects/convexfeld/build-profile/tests/test_validation"
+Directory: /home/tobiasosborne/Projects/convexfeld/build-profile/tests
+"test_validation" start time: Jan 29 21:19 CET
+Output:
+----------------------------------------------------------
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_validation.c:324:test_cxf_validate_array_valid:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_validation.c:325:test_cxf_validate_array_null_array:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_validation.c:326:test_cxf_validate_array_zero_count:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_validation.c:327:test_cxf_validate_array_negative_count:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_validation.c:328:test_cxf_validate_array_nan:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_validation.c:329:test_cxf_validate_array_nan_first:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_validation.c:330:test_cxf_validate_array_nan_last:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_validation.c:331:test_cxf_validate_array_all_nan:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_validation.c:332:test_cxf_validate_array_inf:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_validation.c:333:test_cxf_validate_array_single_element:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_validation.c:334:test_cxf_validate_array_single_nan:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_validation.c:337:test_cxf_validate_vartypes_null_model:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_validation.c:338:test_cxf_validate_vartypes_all_continuous:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_validation.c:339:test_cxf_validate_vartypes_all_valid_types:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_validation.c:340:test_cxf_validate_vartypes_invalid_type:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_validation.c:341:test_cxf_validate_vartypes_lowercase_invalid:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_validation.c:342:test_cxf_validate_vartypes_null_vtype:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_validation.c:343:test_cxf_validate_vartypes_binary_clamps_lb:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_validation.c:344:test_cxf_validate_vartypes_binary_clamps_ub:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_validation.c:345:test_cxf_validate_vartypes_binary_valid_bounds:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_validation.c:346:test_cxf_validate_vartypes_binary_infeasible:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_validation.c:347:test_cxf_validate_vartypes_zero_vars:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_validation.c:348:test_cxf_validate_vartypes_mixed_with_binary_clamp:PASS
+
+-----------------------
+23 Tests 0 Failures 0 Ignored 
+OK
+<end of output>
+Test time =   0.00 sec
+----------------------------------------------------------
+Test Passed.
+"test_validation" end time: Jan 29 21:19 CET
+"test_validation" time elapsed: 00:00:00
+----------------------------------------------------------
+
+24/36 Testing: test_threading
+24/36 Test: test_threading
+Command: "/home/tobiasosborne/Projects/convexfeld/build-profile/tests/test_threading"
+Directory: /home/tobiasosborne/Projects/convexfeld/build-profile/tests
+"test_threading" start time: Jan 29 21:19 CET
+Output:
+----------------------------------------------------------
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_threading.c:152:test_get_logical_processors_positive:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_threading.c:153:test_get_logical_processors_consistent:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_threading.c:156:test_get_physical_cores_positive:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_threading.c:157:test_get_physical_cores_not_more_than_logical:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_threading.c:158:test_get_physical_cores_consistent:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_threading.c:161:test_set_thread_count_success:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_threading.c:162:test_set_thread_count_null_env:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_threading.c:163:test_set_thread_count_invalid:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_threading.c:164:test_set_thread_count_caps_at_logical:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_threading.c:167:test_get_threads_null_env_returns_zero:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_threading.c:168:test_get_threads_default:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_threading.c:171:test_env_lock_null_safe:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_threading.c:172:test_env_lock_acquire_release:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_threading.c:173:test_env_lock_recursive:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_threading.c:176:test_generate_seed_non_negative:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_threading.c:177:test_generate_seed_varies:PASS
+
+-----------------------
+16 Tests 0 Failures 0 Ignored 
+OK
+<end of output>
+Test time =   0.00 sec
+----------------------------------------------------------
+Test Passed.
+"test_threading" end time: Jan 29 21:19 CET
+"test_threading" time elapsed: 00:00:00
+----------------------------------------------------------
+
+25/36 Testing: test_simplex_edge
+25/36 Test: test_simplex_edge
+Command: "/home/tobiasosborne/Projects/convexfeld/build-profile/tests/test_simplex_edge"
+Directory: /home/tobiasosborne/Projects/convexfeld/build-profile/tests
+"test_simplex_edge" start time: Jan 29 21:19 CET
+Output:
+----------------------------------------------------------
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_edge.c:168:test_perturbation_null_args:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_edge.c:169:test_perturbation_basic:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_edge.c:170:test_unperturb_null_args:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_edge.c:72:test_unperturb_sequence:FAIL: Expected 1 Was 0
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_edge.c:173:test_solve_unbounded_simple:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_edge.c:174:test_unbounded_with_constraint:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_edge.c:176:test_solve_infeasible_bounds:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_edge.c:177:test_infeasible_constraints:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_edge.c:179:test_small_coefficients:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_edge.c:180:test_large_coefficient_range:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_edge.c:181:test_fixed_variable:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_edge.c:183:test_solve_empty_model:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_edge.c:184:test_solve_trivial:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_edge.c:185:test_solve_all_fixed:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_edge.c:186:test_solve_free_variable:PASS
+
+-----------------------
+15 Tests 1 Failures 0 Ignored 
+FAIL
+<end of output>
+Test time =   0.00 sec
+----------------------------------------------------------
+Test Failed.
+"test_simplex_edge" end time: Jan 29 21:19 CET
+"test_simplex_edge" time elapsed: 00:00:00
+----------------------------------------------------------
+
+26/36 Testing: test_pivot_eta
+26/36 Test: test_pivot_eta
+Command: "/home/tobiasosborne/Projects/convexfeld/build-profile/tests/test_pivot_eta"
+Directory: /home/tobiasosborne/Projects/convexfeld/build-profile/tests
+"test_pivot_eta" start time: Jan 29 21:19 CET
+Output:
+----------------------------------------------------------
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pivot_eta.c:303:test_pivot_eta_null_basis_returns_error:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pivot_eta.c:304:test_pivot_eta_null_column_returns_error:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pivot_eta.c:307:test_pivot_eta_negative_row_returns_error:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pivot_eta.c:308:test_pivot_eta_row_too_large_returns_error:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pivot_eta.c:309:test_pivot_eta_row_equals_m_returns_error:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pivot_eta.c:312:test_pivot_eta_zero_pivot_returns_minus_one:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pivot_eta.c:313:test_pivot_eta_tiny_pivot_returns_minus_one:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pivot_eta.c:314:test_pivot_eta_pivot_at_tolerance_returns_minus_one:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pivot_eta.c:315:test_pivot_eta_negative_large_pivot_succeeds:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pivot_eta.c:318:test_pivot_eta_basic_pivot_succeeds:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pivot_eta.c:319:test_pivot_eta_updates_basic_vars:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pivot_eta.c:320:test_pivot_eta_updates_var_status:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pivot_eta.c:321:test_pivot_eta_increments_eta_count:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pivot_eta.c:322:test_pivot_eta_increments_pivots_since_refactor:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pivot_eta.c:323:test_pivot_eta_creates_eta_head:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pivot_eta.c:324:test_pivot_eta_sets_eta_type_to_2:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pivot_eta.c:325:test_pivot_eta_sets_eta_pivot_row:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pivot_eta.c:326:test_pivot_eta_sets_eta_pivot_var:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pivot_eta.c:327:test_pivot_eta_sets_eta_multiplier:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pivot_eta.c:330:test_pivot_eta_sparse_column_counts_nnz:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pivot_eta.c:331:test_pivot_eta_dense_column_counts_nnz:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pivot_eta.c:332:test_pivot_eta_computes_eta_values:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pivot_eta.c:333:test_pivot_eta_identity_column_has_zero_nnz:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pivot_eta.c:336:test_pivot_eta_first_row_pivot:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pivot_eta.c:337:test_pivot_eta_last_row_pivot:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pivot_eta.c:338:test_pivot_eta_middle_row_pivot:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_pivot_eta.c:341:test_pivot_eta_multiple_pivots_chain_etas:PASS
+
+-----------------------
+27 Tests 0 Failures 0 Ignored 
+OK
+<end of output>
+Test time =   0.00 sec
+----------------------------------------------------------
+Test Passed.
+"test_pivot_eta" end time: Jan 29 21:19 CET
+"test_pivot_eta" time elapsed: 00:00:00
+----------------------------------------------------------
+
+27/36 Testing: test_simplex_setup
+27/36 Test: test_simplex_setup
+Command: "/home/tobiasosborne/Projects/convexfeld/build-profile/tests/test_simplex_setup"
+Directory: /home/tobiasosborne/Projects/convexfeld/build-profile/tests
+"test_simplex_setup" start time: Jan 29 21:19 CET
+Output:
+----------------------------------------------------------
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_setup.c:294:test_setup_null_state_fails:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_setup.c:295:test_setup_null_env_fails:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_setup.c:296:test_setup_empty_model:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_setup.c:297:test_setup_initializes_reduced_costs:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_setup.c:298:test_setup_initializes_dual_values_to_zero:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_setup.c:299:test_setup_resets_iteration_counter:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_setup.c:300:test_setup_determines_phase_2_for_feasible_bounds:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_setup.c:301:test_setup_determines_phase_1_for_infeasible_bounds:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_setup.c:302:test_setup_initializes_pricing_context:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_setup.c:303:test_setup_sets_tolerance_from_env:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_setup.c:306:test_preprocess_null_state_fails:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_setup.c:307:test_preprocess_null_env_fails:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_setup.c:308:test_preprocess_skip_flag:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_setup.c:309:test_preprocess_empty_model:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_setup.c:310:test_preprocess_feasible_bounds:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_setup.c:311:test_preprocess_detects_infeasible_bounds:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_setup.c:312:test_preprocess_multiple_vars_one_infeasible:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_simplex_setup.c:315:test_setup_and_preprocess_sequence:PASS
+
+-----------------------
+18 Tests 0 Failures 0 Ignored 
+OK
+<end of output>
+Test time =   0.00 sec
+----------------------------------------------------------
+Test Passed.
+"test_simplex_setup" end time: Jan 29 21:19 CET
+"test_simplex_setup" time elapsed: 00:00:00
+----------------------------------------------------------
+
+28/36 Testing: test_solver_state
+28/36 Test: test_solver_state
+Command: "/home/tobiasosborne/Projects/convexfeld/build-profile/tests/test_solver_state"
+Directory: /home/tobiasosborne/Projects/convexfeld/build-profile/tests
+"test_solver_state" start time: Jan 29 21:19 CET
+Output:
+----------------------------------------------------------
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_solver_state.c:234:test_solver_context_structure_exists:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_solver_state.c:235:test_solver_context_has_model_reference:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_solver_state.c:236:test_solver_context_has_working_arrays:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_solver_state.c:237:test_solver_context_has_subcomponents:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_solver_state.c:240:test_simplex_init_null_model_fails:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_solver_state.c:241:test_simplex_init_null_state_pointer_fails:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_solver_state.c:242:test_simplex_init_returns_non_null_state:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_solver_state.c:243:test_simplex_init_sets_model_reference:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_solver_state.c:244:test_simplex_init_copies_dimensions:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_solver_state.c:245:test_simplex_init_sets_initial_phase_zero:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_solver_state.c:246:test_simplex_init_allocates_working_arrays:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_solver_state.c:247:test_simplex_init_initializes_iteration_counters:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_solver_state.c:250:test_simplex_final_null_safe:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_solver_state.c:251:test_simplex_final_frees_state:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_solver_state.c:252:test_simplex_final_idempotent:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_solver_state.c:255:test_init_final_cycle:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_solver_state.c:256:test_init_empty_model:PASS
+
+-----------------------
+17 Tests 0 Failures 0 Ignored 
+OK
+<end of output>
+Test time =   0.00 sec
+----------------------------------------------------------
+Test Passed.
+"test_solver_state" end time: Jan 29 21:19 CET
+"test_solver_state" time elapsed: 00:00:00
+----------------------------------------------------------
+
+29/36 Testing: test_attrs_api
+29/36 Test: test_attrs_api
+Command: "/home/tobiasosborne/Projects/convexfeld/build-profile/tests/test_attrs_api"
+Directory: /home/tobiasosborne/Projects/convexfeld/build-profile/tests
+"test_attrs_api" start time: Jan 29 21:19 CET
+Output:
+----------------------------------------------------------
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_attrs_api.c:181:test_getintattr_null_model:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_attrs_api.c:182:test_getintattr_null_attrname:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_attrs_api.c:183:test_getintattr_null_value:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_attrs_api.c:184:test_getintattr_invalid_attribute:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_attrs_api.c:185:test_getintattr_status:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_attrs_api.c:186:test_getintattr_numvars:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_attrs_api.c:187:test_getintattr_numconstrs:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_attrs_api.c:188:test_getintattr_modelsense:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_attrs_api.c:189:test_getintattr_ismip:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_attrs_api.c:192:test_getdblattr_null_model:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_attrs_api.c:193:test_getdblattr_null_attrname:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_attrs_api.c:194:test_getdblattr_null_value:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_attrs_api.c:195:test_getdblattr_invalid_attribute:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_attrs_api.c:196:test_getdblattr_objval:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_attrs_api.c:197:test_getdblattr_runtime:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_attrs_api.c:198:test_getdblattr_objbound:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_attrs_api.c:199:test_getdblattr_objboundc:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_attrs_api.c:200:test_getdblattr_maxcoeff:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_attrs_api.c:201:test_getdblattr_mincoeff:PASS
+
+-----------------------
+19 Tests 0 Failures 0 Ignored 
+OK
+<end of output>
+Test time =   0.00 sec
+----------------------------------------------------------
+Test Passed.
+"test_attrs_api" end time: Jan 29 21:19 CET
+"test_attrs_api" time elapsed: 00:00:00
+----------------------------------------------------------
+
+30/36 Testing: test_params_api
+30/36 Test: test_params_api
+Command: "/home/tobiasosborne/Projects/convexfeld/build-profile/tests/test_params_api"
+Directory: /home/tobiasosborne/Projects/convexfeld/build-profile/tests
+"test_params_api" start time: Jan 29 21:19 CET
+Output:
+----------------------------------------------------------
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_params_api.c:259:test_setintparam_null_env_returns_error:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_params_api.c:260:test_setintparam_null_paramname_returns_error:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_params_api.c:261:test_setintparam_unknown_parameter_returns_error:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_params_api.c:262:test_setintparam_output_flag_valid_values:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_params_api.c:263:test_setintparam_output_flag_invalid_values:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_params_api.c:264:test_setintparam_verbosity_valid_values:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_params_api.c:265:test_setintparam_verbosity_invalid_values:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_params_api.c:266:test_setintparam_refactor_interval_valid_values:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_params_api.c:267:test_setintparam_refactor_interval_invalid_values:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_params_api.c:268:test_setintparam_max_eta_count_valid_values:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_params_api.c:269:test_setintparam_max_eta_count_invalid_values:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_params_api.c:272:test_getintparam_null_env_returns_error:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_params_api.c:273:test_getintparam_null_paramname_returns_error:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_params_api.c:274:test_getintparam_null_valuep_returns_error:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_params_api.c:275:test_getintparam_unknown_parameter_returns_error:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_params_api.c:276:test_getintparam_output_flag_returns_default:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_params_api.c:277:test_getintparam_verbosity_returns_default:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_params_api.c:278:test_getintparam_refactor_interval_returns_default:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_params_api.c:279:test_getintparam_max_eta_count_returns_default:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_params_api.c:280:test_getintparam_returns_set_value:PASS
+
+-----------------------
+20 Tests 0 Failures 0 Ignored 
+OK
+<end of output>
+Test time =   0.00 sec
+----------------------------------------------------------
+Test Passed.
+"test_params_api" end time: Jan 29 21:19 CET
+"test_params_api" time elapsed: 00:00:00
+----------------------------------------------------------
+
+31/36 Testing: test_info_api
+31/36 Test: test_info_api
+Command: "/home/tobiasosborne/Projects/convexfeld/build-profile/tests/test_info_api"
+Directory: /home/tobiasosborne/Projects/convexfeld/build-profile/tests
+"test_info_api" start time: Jan 29 21:19 CET
+Output:
+----------------------------------------------------------
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_info_api.c:184:test_version_all_pointers_valid:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_info_api.c:185:test_version_only_major_requested:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_info_api.c:186:test_version_only_minor_requested:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_info_api.c:187:test_version_only_patch_requested:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_info_api.c:188:test_version_all_null_pointers:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_info_api.c:191:test_geterrormsg_null_env_returns_empty:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_info_api.c:192:test_geterrormsg_invalid_magic_returns_buffer:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_info_api.c:193:test_geterrormsg_valid_env_empty_buffer:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_info_api.c:194:test_geterrormsg_valid_env_with_error:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_info_api.c:195:test_geterrormsg_never_returns_null:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_info_api.c:198:test_setcallbackfunc_null_model_returns_error:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_info_api.c:199:test_setcallbackfunc_null_callback_is_valid:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_info_api.c:200:test_setcallbackfunc_valid_callback_returns_ok:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_info_api.c:201:test_setcallbackfunc_with_userdata:PASS
+
+-----------------------
+14 Tests 0 Failures 0 Ignored 
+OK
+<end of output>
+Test time =   0.00 sec
+----------------------------------------------------------
+Test Passed.
+"test_info_api" end time: Jan 29 21:19 CET
+"test_info_api" time elapsed: 00:00:00
+----------------------------------------------------------
+
+32/36 Testing: test_quadratic
+32/36 Test: test_quadratic
+Command: "/home/tobiasosborne/Projects/convexfeld/build-profile/tests/test_quadratic"
+Directory: /home/tobiasosborne/Projects/convexfeld/build-profile/tests
+"test_quadratic" start time: Jan 29 21:19 CET
+Output:
+----------------------------------------------------------
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_quadratic.c:113:test_quadratic_null_state:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_quadratic.c:114:test_quadratic_all_variables:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_quadratic.c:115:test_quadratic_single_variable:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_quadratic.c:116:test_quadratic_invalid_index:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_quadratic.c:117:test_quadratic_multiple_calls:PASS
+
+-----------------------
+5 Tests 0 Failures 0 Ignored 
+OK
+<end of output>
+Test time =   0.00 sec
+----------------------------------------------------------
+Test Passed.
+"test_quadratic" end time: Jan 29 21:19 CET
+"test_quadratic" time elapsed: 00:00:00
+----------------------------------------------------------
+
+33/36 Testing: test_mps_parser
+33/36 Test: test_mps_parser
+Command: "/home/tobiasosborne/Projects/convexfeld/build-profile/tests/test_mps_parser"
+Directory: /home/tobiasosborne/Projects/convexfeld/build-profile/tests
+"test_mps_parser" start time: Jan 29 21:19 CET
+Output:
+----------------------------------------------------------
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_mps_parser.c:182:test_parse_simple_mps:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_mps_parser.c:183:test_parse_mps_with_bounds:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_mps_parser.c:184:test_parse_netlib_afiro:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_mps_parser.c:185:test_parse_nonexistent_file:PASS
+
+-----------------------
+4 Tests 0 Failures 0 Ignored 
+OK
+<end of output>
+Test time =   0.00 sec
+----------------------------------------------------------
+Test Passed.
+"test_mps_parser" end time: Jan 29 21:19 CET
+"test_mps_parser" time elapsed: 00:00:00
+----------------------------------------------------------
+
+34/36 Testing: test_mps_solve
+34/36 Test: test_mps_solve
+Command: "/home/tobiasosborne/Projects/convexfeld/build-profile/tests/test_mps_solve"
+Directory: /home/tobiasosborne/Projects/convexfeld/build-profile/tests
+"test_mps_solve" start time: Jan 29 21:19 CET
+Output:
+----------------------------------------------------------
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_mps_solve.c:98:test_parse_afiro_dimensions:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_mps_solve.c:99:test_parse_sc50b_dimensions:PASS
+/home/tobiasosborne/Projects/convexfeld/tests/unit/test_mps_solve.c:100:test_parse_sc105_dimensions:PASS
+
+-----------------------
+3 Tests 0 Failures 0 Ignored 
+OK
+<end of output>
+Test time =   0.00 sec
+----------------------------------------------------------
+Test Passed.
+"test_mps_solve" end time: Jan 29 21:19 CET
+"test_mps_solve" time elapsed: 00:00:00
+----------------------------------------------------------
+
+35/36 Testing: test_tracer_bullet
+35/36 Test: test_tracer_bullet
+Command: "/home/tobiasosborne/Projects/convexfeld/build-profile/tests/test_tracer_bullet"
+Directory: /home/tobiasosborne/Projects/convexfeld/build-profile/tests
+"test_tracer_bullet" start time: Jan 29 21:19 CET
+Output:
+----------------------------------------------------------
+Starting optimization for model 'tracer'
+Model: 1 variables, 0 constraints
+Optimization completed successfully
+Objective value: 0.000000
+/home/tobiasosborne/Projects/convexfeld/tests/integration/test_tracer_bullet.c:85:test_tracer_bullet_1var_lp:PASS
+
+-----------------------
+1 Tests 0 Failures 0 Ignored 
+OK
+<end of output>
+Test time =   0.00 sec
+----------------------------------------------------------
+Test Passed.
+"test_tracer_bullet" end time: Jan 29 21:19 CET
+"test_tracer_bullet" time elapsed: 00:00:00
+----------------------------------------------------------
+
+36/36 Testing: test_constrained_lp
+36/36 Test: test_constrained_lp
+Command: "/home/tobiasosborne/Projects/convexfeld/build-profile/tests/test_constrained_lp"
+Directory: /home/tobiasosborne/Projects/convexfeld/build-profile/tests
+"test_constrained_lp" start time: Jan 29 21:19 CET
+Output:
+----------------------------------------------------------
+Starting optimization for model 'test_lp'
+Model: 2 variables, 3 constraints
+Optimization completed successfully
+Objective value: -4.000000
+/home/tobiasosborne/Projects/convexfeld/tests/integration/test_constrained_lp.c:132:test_constrained_lp_2var:PASS
+Starting optimization for model 'test_lp'
+Model: 1 variables, 1 constraints
+Optimization completed successfully
+Objective value: -5.000000
+/home/tobiasosborne/Projects/convexfeld/tests/integration/test_constrained_lp.c:133:test_single_constraint_lp:PASS
+
+-----------------------
+2 Tests 0 Failures 0 Ignored 
+OK
+<end of output>
+Test time =   0.00 sec
+----------------------------------------------------------
+Test Passed.
+"test_constrained_lp" end time: Jan 29 21:19 CET
+"test_constrained_lp" time elapsed: 00:00:00
+----------------------------------------------------------
+
+End testing: Jan 29 21:19 CET
