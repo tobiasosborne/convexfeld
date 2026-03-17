@@ -165,6 +165,10 @@ add_cxf_test(test_callback_terminate_v2 unit/test_callback_terminate_v2.c)
 # V2: callback_func ownership on Environment (convexfeld-vd3h)
 add_cxf_test(test_callback_ownership unit/test_callback_ownership.c)
 
+# V2: cxf_init_callback_struct mutex allocation (convexfeld-ughp)
+add_cxf_test(test_callback_init_mutex unit/test_callback_init_mutex.c)
+target_link_libraries(test_callback_init_mutex PRIVATE pthread)
+
 # M7.1.2: Simplex Tests - Iteration
 add_cxf_test(test_simplex_iteration unit/test_simplex_iteration.c)
 

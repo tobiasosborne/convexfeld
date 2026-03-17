@@ -25,7 +25,7 @@
  * Forward declarations for callback functions (to be implemented)
  ******************************************************************************/
 
-int cxf_init_callback_struct(CxfEnv *env, void *callbackSubStruct);
+int cxf_init_callback_struct(CxfEnv *env, void **mutex_out);
 void cxf_set_terminate(CxfEnv *env);
 int cxf_check_terminate(CxfEnv *env);
 int cxf_callback_terminate(CxfModel *model);
@@ -205,17 +205,17 @@ void test_callback_reset_stats_invalid_magic_returns_error(void) {
 }
 
 /*******************************************************************************
- * cxf_init_callback_struct Tests
+ * cxf_init_callback_struct Tests (V2: allocates mutex)
  ******************************************************************************/
 
-void test_init_callback_struct_zeroes_memory(void) {
-    char buffer[48];
-    memset(buffer, 0xFF, sizeof(buffer));  /* Fill with non-zero */
-    int status = cxf_init_callback_struct(env, buffer);
+void cxf_free(void *ptr);  /* for cleanup */
+
+void test_init_callback_struct_allocates_mutex(void) {
+    void *mutex = (void *)0xDEAD;
+    int status = cxf_init_callback_struct(env, &mutex);
     TEST_ASSERT_EQUAL_INT(CXF_OK, status);
-    for (int i = 0; i < 48; i++) {
-        TEST_ASSERT_EQUAL_UINT8(0, buffer[i]);
-    }
+    TEST_ASSERT_NOT_NULL(mutex);
+    cxf_free(mutex);
 }
 
 void test_init_callback_struct_null_pointer_returns_error(void) {
@@ -224,9 +224,11 @@ void test_init_callback_struct_null_pointer_returns_error(void) {
 }
 
 void test_init_callback_struct_null_env_succeeds(void) {
-    char buffer[48];
-    int status = cxf_init_callback_struct(NULL, buffer);
+    void *mutex = NULL;
+    int status = cxf_init_callback_struct(NULL, &mutex);
     TEST_ASSERT_EQUAL_INT(CXF_OK, status);  /* env unused per spec */
+    TEST_ASSERT_NOT_NULL(mutex);
+    cxf_free(mutex);
 }
 
 /*******************************************************************************
@@ -399,8 +401,8 @@ int main(void) {
     RUN_TEST(test_callback_reset_stats_null_returns_error);
     RUN_TEST(test_callback_reset_stats_invalid_magic_returns_error);
 
-    /* cxf_init_callback_struct tests */
-    RUN_TEST(test_init_callback_struct_zeroes_memory);
+    /* cxf_init_callback_struct tests (V2: mutex allocation) */
+    RUN_TEST(test_init_callback_struct_allocates_mutex);
     RUN_TEST(test_init_callback_struct_null_pointer_returns_error);
     RUN_TEST(test_init_callback_struct_null_env_succeeds);
 
