@@ -335,7 +335,7 @@ static int pricing_and_ftran(SolverState *state, CxfEnv *env,
         }
         if (num_cand > 0) break;
         if (state->pricing) {
-            cxf_pricing_end_level(state->pricing);
+            cxf_pricing_end_level(state->pricing, state);
             state->pricing->level_escalations++;
         }
     }

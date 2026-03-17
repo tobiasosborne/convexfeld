@@ -109,8 +109,10 @@ void cxf_pricing_mark_constr_dirty(PricingState *ctx, int constr_idx);
 void cxf_pricing_cascade_update(PricingState *ctx,
                                 struct SolverState *state, int var_idx);
 
-/** Complete current pricing level (promote/demote candidates). */
-void cxf_pricing_end_level(PricingState *ctx);
+/** Complete current pricing level (promote/demote candidates).
+ *  V2 spec: filters queues using status arrays from SolverState.
+ *  @param state May be NULL (skips queue filtering, only does cache work). */
+void cxf_pricing_end_level(PricingState *ctx, struct SolverState *state);
 
 /** Set active pricing level. */
 void cxf_pricing_set_level(PricingState *ctx, int level);

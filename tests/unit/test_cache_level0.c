@@ -44,7 +44,7 @@ void test_end_level_level0_preserves_caches(void) {
     ctx->cached_constr_count2[0] = 50;
     ctx->cached_constr_count3[0] = 60;
 
-    cxf_pricing_end_level(ctx);
+    cxf_pricing_end_level(ctx, NULL);
 
     /* All 6 slots at level 0 must be preserved (NOT set to -1) */
     TEST_ASSERT_EQUAL_INT(10, ctx->cached_var_count[0]);
@@ -77,7 +77,7 @@ void test_end_level_level1_invalidates_caches(void) {
     ctx->cached_constr_count2[1] = 50;
     ctx->cached_constr_count3[1] = 60;
 
-    cxf_pricing_end_level(ctx);
+    cxf_pricing_end_level(ctx, NULL);
 
     /* All 6 slots at level 1 must be invalidated (-1) */
     TEST_ASSERT_EQUAL_INT(-1, ctx->cached_var_count[1]);
@@ -106,7 +106,7 @@ void test_end_level_level0_does_not_touch_other_levels(void) {
     ctx->cached_var_count[1] = 77;
     ctx->cached_constr_count[2] = 88;
 
-    cxf_pricing_end_level(ctx);
+    cxf_pricing_end_level(ctx, NULL);
 
     /* Other levels' caches must be untouched */
     TEST_ASSERT_EQUAL_INT(77, ctx->cached_var_count[1]);
@@ -130,7 +130,7 @@ void test_end_level_level0_inactive_activates_only(void) {
     ctx->cached_var_count[0] = 99;
     ctx->cached_constr_count[0] = 42;
 
-    cxf_pricing_end_level(ctx);
+    cxf_pricing_end_level(ctx, NULL);
 
     /* Should just activate, not invalidate */
     TEST_ASSERT_EQUAL_INT(1, ctx->level_active[0]);

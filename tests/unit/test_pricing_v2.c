@@ -316,7 +316,7 @@ void test_end_level_lazy_activation(void) {
     ctx->var_dirty[2] = 1;
     ctx->num_dirty = 2;
 
-    cxf_pricing_end_level(ctx);
+    cxf_pricing_end_level(ctx, NULL);
 
     /* Level should now be active */
     TEST_ASSERT_EQUAL_INT(1, ctx->level_active[1]);
@@ -352,7 +352,7 @@ void test_end_level_caches_invalidated_after_active(void) {
     ctx->var_dirty[1] = 1;
     ctx->num_dirty = 1;
 
-    cxf_pricing_end_level(ctx);
+    cxf_pricing_end_level(ctx, NULL);
 
     /* All 6 V2 cache slots at level 1 should be invalidated */
     TEST_ASSERT_EQUAL_INT(-1, ctx->cached_var_count[1]);

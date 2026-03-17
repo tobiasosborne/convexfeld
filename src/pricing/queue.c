@@ -72,55 +72,7 @@ void cxf_pricing_cascade_update(PricingState *ctx, SolverState *state,
         cxf_pricing_mark_constr_dirty(ctx, state->csc_row_idx[k]);
 }
 
-/**
- * @brief Complete current pricing level (P4.6: V2 queue compaction).
- *
- * V1: Clears dirty flags, invalidates V1 caches.
- * V2: Delegates to cxf_pricing_update for flag-based
- *     promote/demote and cache invalidation at levels 1-2.
- */
-void cxf_pricing_end_level(PricingState *ctx) {
-    if (ctx == NULL) return;
-
-    int level = ctx->current_level;
-    if (level < 0 || level >= CXF_MAX_PRICING_LEVELS) return;
-
-    /* V2 spec: Lazy activation guard (pricing_support.md).
-     * First call at this level just marks it active and returns.
-     * This ensures the first batch of dirty entries is treated correctly. */
-    if (!ctx->level_active[level]) {
-        ctx->level_active[level] = 1;
-        return;
-    }
-
-    /* V1: Invalidate V1 caches */
-    if (ctx->cached_counts != NULL) {
-        for (int i = 0; i < ctx->max_levels; i++)
-            ctx->cached_counts[i] = -1;
-    }
-
-    /* V1: Clear dirty flags */
-    if (ctx->var_dirty != NULL && ctx->num_vars > 0) {
-        memset(ctx->var_dirty, 0, (size_t)ctx->num_vars * sizeof(int));
-        ctx->num_dirty = 0;
-    }
-
-    /* V2 (P4.6): Queue filtering is handled by cxf_pricing_update
-     * (update.c) which has access to SolverState for status-based filtering.
-     * That function is called by step.c before pricing. Here we invalidate
-     * V2 caches AFTER filtering, per pricing_core.md Phase 3.
-     *
-     * No cache invalidation at level 0: level 0 returns the base dirty list
-     * directly without caching (pricing_core.md §Caching Behavior). */
-    if (level > 0) {
-        ctx->cached_var_count[level] = -1;
-        ctx->cached_var_count2[level] = -1;
-        ctx->cached_var_count3[level] = -1;
-        ctx->cached_constr_count[level] = -1;
-        ctx->cached_constr_count2[level] = -1;
-        ctx->cached_constr_count3[level] = -1;
-    }
-}
+/* cxf_pricing_end_level is in end_level.c (extracted for 200 LOC limit) */
 
 /**
  * @brief Set active pricing level.
