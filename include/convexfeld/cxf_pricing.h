@@ -146,6 +146,10 @@ void cxf_pricing_candidates(PricingState *ctx,
                             struct SolverState *state,
                             int *count_out, int **candidates_out);
 
+/** P3.18: Get committed variable stats at current level. */
+void cxf_pricing_get_var_stats(PricingState *ctx, int *count_out,
+                               int **queue_out);
+
 /** P3.18: Get committed constraint stats at current level. */
 void cxf_pricing_get_constr_stats(PricingState *ctx, int *count_out,
                                   int **queue_out);

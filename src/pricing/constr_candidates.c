@@ -22,6 +22,27 @@
 #include "pricing_internal.h"
 
 /*===========================================================================
+ * Variable Stats Accessor (P3.18) — symmetric mirror of constr_stats
+ *===========================================================================*/
+
+void cxf_pricing_get_var_stats(PricingState *ctx, int *count_out,
+                               int **queue_out) {
+    if (!ctx || !count_out || !queue_out) {
+        if (count_out) *count_out = 0;
+        if (queue_out) *queue_out = NULL;
+        return;
+    }
+    int level = ctx->current_level;
+    if (level < 0 || level >= CXF_MAX_PRICING_LEVELS) {
+        *count_out = 0;
+        *queue_out = NULL;
+        return;
+    }
+    *count_out = ctx->var_q_committed[level];
+    *queue_out = ctx->var_queue[level];
+}
+
+/*===========================================================================
  * Constraint Stats Accessor (P3.18)
  *===========================================================================*/
 
