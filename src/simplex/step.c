@@ -375,6 +375,12 @@ static int pricing_and_ftran(SolverState *state, CxfEnv *env,
             }
         }
 
+        /* Phase 3.4: Free variable handling (simplex_iteration.md).
+         * Free/superbasic entering variables with infinite bounds are handled
+         * by the standard ratio test: if no basic variable blocks the step,
+         * ratio_test returns UNBOUNDED; otherwise it finds the leaving var.
+         * This is functionally equivalent to the spec's "direct" path. */
+
         extract_column_ext(state, entering, column);
         rc = cxf_ftran(basis, column, pivotCol);
 

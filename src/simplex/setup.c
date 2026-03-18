@@ -17,6 +17,8 @@
 #include <string.h>
 #include <math.h>
 
+#include "../basis/basis_internal.h"
+
 /* Default parameters */
 #define DEFAULT_FEASIBILITY_TOL 1e-6
 
@@ -226,6 +228,35 @@ int cxf_simplex_preprocess(SolverState *state, CxfEnv *env) {
                          lb[j] : ub[j];
             }
             if (state->work_x != NULL) state->work_x[j] = target;
+            /* V2 simplex_phases.md Step 4.5: adjust objective for fixed var */
+            if (state->work_obj != NULL)
+                state->obj_value += state->work_obj[j] * target;
+            /* V2 simplex_phases.md: create VARIABLE_FIX eta record */
+            if (state->basis != NULL) {
+                EtaVector *eta;
+                if (state->basis->eta_pool != NULL)
+                    eta = (EtaVector *)cxf_eta_pool_alloc(
+                        state->basis->eta_pool, sizeof(EtaVector));
+                else
+                    eta = (EtaVector *)calloc(1, sizeof(EtaVector));
+                if (eta != NULL) {
+                    eta->type = CXF_ETA_VARIABLE_FIX;
+                    eta->pivot_row = -1;
+                    eta->entering_var = j;
+                    eta->leaving_var = -1;
+                    eta->pivot_elem = target;
+                    eta->reduced_cost = state->work_obj[j];
+                    eta->direction = 0;
+                    eta->status = state->basis->var_status[j];
+                    eta->nnz = 0;
+                    eta->indices = NULL;
+                    eta->values = NULL;
+                    eta->next = state->basis->eta_head;
+                    state->basis->eta_head = eta;
+                    state->basis->eta_count++;
+                    state->eta_count = state->basis->eta_count;
+                }
+            }
             lb[j] = target;
             ub[j] = target;
             state->cols_eliminated++;
