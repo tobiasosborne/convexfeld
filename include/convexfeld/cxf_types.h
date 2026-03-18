@@ -355,6 +355,9 @@ typedef struct EtaBuffer EtaBuffer;
 /** @brief Eta type: quadratic warm-start record */
 #define CXF_ETA_WARM_START    4
 
+/** @brief Eta type: bound-change record (step2/step3 propagation) */
+#define CXF_ETA_BOUND_CHANGE  5
+
 /*******************************************************************************
  * Eta Buffer Size Constants
  ******************************************************************************/

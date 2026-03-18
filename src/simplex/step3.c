@@ -18,8 +18,10 @@
 #include "convexfeld/cxf_pricing.h"
 #include "convexfeld/cxf_types.h"
 #include <math.h>
+#include <stdlib.h>
 
 #include "simplex_internal.h"
+#include "../basis/basis_internal.h"
 
 
 /**
@@ -58,6 +60,34 @@ static int tighten_bound(SolverState *state, int var, double new_val,
     }
     if (state->pricing)
         cxf_pricing_mark_dirty(state->pricing, var);
+
+    /* V2 simplex_iteration.md: create lightweight BOUND_CHANGE eta record */
+    if (state->basis != NULL) {
+        EtaVector *eta;
+        if (state->basis->eta_pool != NULL)
+            eta = (EtaVector *)cxf_eta_pool_alloc(state->basis->eta_pool,
+                                                    sizeof(EtaVector));
+        else
+            eta = (EtaVector *)calloc(1, sizeof(EtaVector));
+        if (eta != NULL) {
+            eta->type = CXF_ETA_BOUND_CHANGE;
+            eta->pivot_row = -1;
+            eta->entering_var = var;
+            eta->leaving_var = -1;
+            eta->pivot_elem = new_val;
+            eta->reduced_cost = old;  /* previous bound value */
+            eta->direction = is_lb ? 1 : -1;
+            eta->status = is_lb ? CXF_VAR_AT_LOWER : CXF_VAR_AT_UPPER;
+            eta->nnz = 0;
+            eta->indices = NULL;
+            eta->values = NULL;
+            eta->next = state->basis->eta_head;
+            state->basis->eta_head = eta;
+            state->basis->eta_count++;
+            state->eta_count = state->basis->eta_count;
+        }
+    }
+
     return 1;
 }
 
@@ -178,6 +208,16 @@ int cxf_simplex_step3(SolverState *state, CxfEnv *env) {
                     double impl = lb + (rhs_i - min_act) / a;
                     tightened += tighten_bound(state, j, impl, 0, tol);
                 }
+            }
+
+            /* V2 simplex_iteration.md: if propagation fixed this variable,
+             * eliminate via cxf_pivot_bound (eta + pricing + activity). */
+            if (state->work_ub[j] - state->work_lb[j] < CXF_BOUND_EQUALITY_TOL
+                && state->basis && state->basis->var_status[j] < 0) {
+                double fix = 0.5 * (state->work_lb[j] + state->work_ub[j]);
+                int ret = cxf_pivot_bound(env, state, j, fix,
+                                          state->work_ub[j], 0);
+                if (ret != CXF_OK) return ret;
             }
         }
     }
