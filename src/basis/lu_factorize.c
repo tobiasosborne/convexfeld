@@ -93,6 +93,8 @@ int cxf_lu_factorize(LUFactors *lu, SolverState *ctx) {
             Ui[Uc] = step;
             Uj[Uc] = pr_cols[p];  /* Original column, converted later */
             Uv[Uc] = pr_vals[p];
+            /* QA: track max_u from ALL U entries, not just diagonal */
+            if (fabs(pr_vals[p]) > max_u) max_u = fabs(pr_vals[p]);
             Uc++;
         }
 
@@ -134,6 +136,8 @@ int cxf_lu_factorize(LUFactors *lu, SolverState *ctx) {
                 if (d_celim[jj] || jj == dc) continue;
                 double uval = D[dr * dn + jj];
                 if (fabs(uval) < MIN_PIVOT) continue;
+                /* QA: track max_u from ALL U entries, not just diagonal */
+                if (fabs(uval) > max_u) max_u = fabs(uval);
                 if (Uc >= Ucap) {
                     int nc = Ucap * 2;
                     int *ni = realloc(Ui, (size_t)nc * sizeof(int));

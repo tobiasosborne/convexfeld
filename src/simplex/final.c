@@ -224,6 +224,17 @@ int cxf_simplex_final(SolverState *state, CxfEnv *env, double *workOut) {
     if (state->pricing != NULL)
         cxf_pricing_update(state->pricing, state);
 
+    /* QA Q9: Post-fixing objective recomputation diagnostic.
+     * Catch accumulated drift from incremental updates. */
+    {
+        double recomputed = 0.0;
+        for (int j = 0; j < total; j++)
+            recomputed += state->work_obj[j] * state->work_x[j];
+        double thr = 1e-6 * (1.0 + fabs(recomputed));
+        if (fabs(recomputed - state->obj_value) > thr)
+            state->obj_value = recomputed;  /* Correct drift */
+    }
+
     free(target);
     free(affected);
     free(visited);
