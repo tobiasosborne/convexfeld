@@ -60,6 +60,9 @@ static int has_improving_direction(SolverState *state, double opt_tol) {
         if (state->basis->var_status[j] == CXF_VAR_AT_UPPER &&
             state->work_dj[j] > opt_tol)
             return 1;
+        if (state->basis->var_status[j] == CXF_VAR_SUPERBASIC &&
+            fabs(state->work_dj[j]) > opt_tol)
+            return 1;
     }
     return 0;
 }

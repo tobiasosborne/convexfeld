@@ -145,17 +145,18 @@ int cxf_simplex_phase_end(SolverState *state, CxfEnv *env, int doScan) {
 
     /*--- Phase 1: Constraint candidate processing ---*/
 
-    /* 1a. Free variable dual feasibility check — both phases.
-     * P1.2 (fiyt): removed phase==2 guard. In Phase I, a free variable
-     * with nonzero RC in the surrogate objective certifies infeasibility. */
-    if (basis->var_status && state->work_dj)
+    /* 1a. Free variable dual feasibility check — Phase II only.
+     * In Phase I, a free variable with nonzero RC has an IMPROVING direction
+     * (the simplex should select it as entering variable). Declaring
+     * INFEASIBLE during Phase I is wrong — it prevents finding feasibility.
+     * Only in Phase II does a free-variable RC violation signal true dual
+     * infeasibility (revised_simplex.md Step 8, two_phase_method.md §3). */
+    if (state->phase != 1 && basis->var_status && state->work_dj)
     for (int j = 0; j < total; j++) {
         if (basis->var_status[j] != CXF_VAR_SUPERBASIC) continue;
 
         double rc = state->work_dj[j];
         if (fabs(rc) > opt_tol) {
-            /* Free variable with significant reduced cost:
-             * dual infeasibility — problem may be infeasible */
             state->problem_var_index = j;
             free(modified);
             return CXF_INFEASIBLE;

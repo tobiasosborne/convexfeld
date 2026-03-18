@@ -73,6 +73,9 @@ static int ftran_apply_etas(BasisState *basis, int m, double *result) {
     /* Oldest to newest: etas[0] = newest (head), iterate count-1 down to 0 */
     for (int i = count - 1; i >= 0; i--) {
         EtaVector *eta = etas[i];
+        /* Skip non-pivot etas (VARIABLE_FIX, BOUND_CHANGE, WARM_START) —
+         * these are metadata records, not basis transformations. */
+        if (eta->type != CXF_ETA_PIVOT) continue;
         rc = eta_validate(eta, m);
         if (rc != CXF_OK) { eta_collect_free(etas, stack_buf); return rc; }
 

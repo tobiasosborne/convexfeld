@@ -279,11 +279,14 @@ static int pricing_and_ftran(SolverState *state, CxfEnv *env,
             for (int j = 0; j < total; j++) {
                 if (basis->var_status[j] >= 0) continue;
                 if (state->work_ub[j] <=
-                    state->work_lb[j] + CXF_FEASIBILITY_TOL) continue;
+                    state->work_lb[j] + CXF_BOUND_EQUALITY_TOL) continue;
                 double rc = state->work_dj[j];
                 if (basis->var_status[j] == CXF_VAR_AT_LOWER && rc < -pricing_tol)
                     candidates[num_cand++] = j;
                 else if (basis->var_status[j] == CXF_VAR_AT_UPPER && rc > pricing_tol)
+                    candidates[num_cand++] = j;
+                else if (basis->var_status[j] == CXF_VAR_SUPERBASIC &&
+                         fabs(rc) > pricing_tol)
                     candidates[num_cand++] = j;
             }
         } else if (state->pricing) {
@@ -297,10 +300,11 @@ static int pricing_and_ftran(SolverState *state, CxfEnv *env,
                     if (j < 0 || j >= total) continue;
                     if (basis->var_status[j] >= 0) continue;
                     if (state->work_ub[j] <=
-                        state->work_lb[j] + CXF_FEASIBILITY_TOL) continue;
+                        state->work_lb[j] + CXF_BOUND_EQUALITY_TOL) continue;
                     double rc = state->work_dj[j];
                     if ((basis->var_status[j] == CXF_VAR_AT_LOWER && rc < -pricing_tol) ||
-                        (basis->var_status[j] == CXF_VAR_AT_UPPER && rc > pricing_tol)) {
+                        (basis->var_status[j] == CXF_VAR_AT_UPPER && rc > pricing_tol) ||
+                        (basis->var_status[j] == CXF_VAR_SUPERBASIC && fabs(rc) > pricing_tol)) {
                         candidates[num_cand++] = j;
                     }
                 }
@@ -310,12 +314,14 @@ static int pricing_and_ftran(SolverState *state, CxfEnv *env,
                 for (int j = 0; j < total; j++) {
                     if (basis->var_status[j] >= 0) continue;
                     if (state->work_ub[j] <=
-                        state->work_lb[j] + CXF_FEASIBILITY_TOL) continue;
+                        state->work_lb[j] + CXF_BOUND_EQUALITY_TOL) continue;
                     double rc = state->work_dj[j];
                     if (basis->var_status[j] == CXF_VAR_AT_LOWER && rc < best) {
                         best = rc; candidates[0] = j; num_cand = 1;
                     } else if (basis->var_status[j] == CXF_VAR_AT_UPPER && -rc < best) {
                         best = -rc; candidates[0] = j; num_cand = 1;
+                    } else if (basis->var_status[j] == CXF_VAR_SUPERBASIC && -fabs(rc) < best) {
+                        best = -fabs(rc); candidates[0] = j; num_cand = 1;
                     }
                 }
             }
@@ -324,7 +330,7 @@ static int pricing_and_ftran(SolverState *state, CxfEnv *env,
             for (int j = 0; j < total; j++) {
                 if (basis->var_status[j] >= 0) continue;
                 if (state->work_ub[j] <=
-                    state->work_lb[j] + CXF_FEASIBILITY_TOL) continue;
+                    state->work_lb[j] + CXF_BOUND_EQUALITY_TOL) continue;
                 double rc = state->work_dj[j];
                 if (basis->var_status[j] == CXF_VAR_AT_LOWER && rc < best) {
                     best = rc; candidates[0] = j; num_cand = 1;
@@ -695,7 +701,10 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env) {
         for (int f = 0; f < num_flips; f++) {
             int row = flipped_rows[f];
             int bv = basis->basic_vars[row];
-            if (entering_sign * pivotCol[row] > 0)
+            /* pivotCol[row] > 0 → x_B decreased → reached lb → flip to ub
+             * pivotCol[row] < 0 → x_B increased → reached ub → flip to lb
+             * Direction depends on pivotCol sign only, NOT entering_sign. */
+            if (pivotCol[row] > 0)
                 state->work_x[bv] = state->work_ub[bv];
             else
                 state->work_x[bv] = state->work_lb[bv];

@@ -105,6 +105,8 @@ int btran_apply_etas(BasisState *basis, int m, double *result) {
     /* Apply newest to oldest (etas[0] = newest) */
     for (int i = 0; i < count; i++) {
         EtaVector *eta = etas[i];
+        /* Skip non-pivot etas (VARIABLE_FIX, BOUND_CHANGE, WARM_START) */
+        if (eta->type != CXF_ETA_PIVOT) continue;
         rc = eta_validate(eta, m);
         if (rc != CXF_OK) { eta_collect_free(etas, stack_buf); return rc; }
 
