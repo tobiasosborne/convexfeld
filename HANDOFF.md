@@ -4,7 +4,32 @@
 
 ---
 
-## STATUS: 147/147 tests pass. 43 Netlib pass. 36+ V2 issues closed + 5 critical bugs fixed. 11 QA issues filed from cleanroom_implementation_qa.md. Master pushed.
+## STATUS: 147/147 tests pass. 43/114 Netlib. 30 NEW critical bugs found via source comparison. Master pushed.
+
+### !! CRITICAL: Source Comparison Report (2026-03-18) !!
+
+**`docs/convexfeld_source_comparison.md`** — 8-agent comparison of cleanroom vs decompiled source
+found **3 catastrophic algorithm misidentifications** and **27 critical/high-severity bugs**.
+
+**The spec V2 compliance work was chasing the WRONG targets.** The cleanroom specs
+misidentified three core algorithms. No amount of spec-compliance fixes will help:
+
+1. **step2 is BFRT post-processing, NOT FBBT** (T1.1) — Requires full rewrite
+2. **step3 is constraint elimination, NOT FBBT** (T1.2) — Requires full rewrite
+3. **Ratio test is steepest-edge weighted single-pass, NOT Harris two-pass** (T1.3) — Requires full rewrite
+
+**30 beads issues created** (3 P0 wrong-algorithm, 9 P0 critical, 7 P1 critical, 12 P2 high).
+
+**Recommended fix order (from comparison doc):**
+- P0 surgical (trivial effort, ~60+ Netlib): pricing polarity fix, simplex_final filter inversion,
+  Phase I obj floor removal, remove fabricated step3 infeasibility, pivot_special 5 errors
+- P1 medium (medium effort, ~80+ Netlib): perturbation rewrite, Phase I fixes, step2/step3 rewrite
+- P2 high (high effort, ~100+ Netlib): ratio test rewrite, simplex_cleanup full implementation
+
+**Key insight:** The previous session's "spec V2 compliance" work was fixing code to match
+specs that THEMSELVES were wrong about the algorithm. The specs described FBBT for step2/step3
+when the binary actually does BFRT post-processing and constraint elimination. The specs
+described Harris two-pass ratio test when the binary uses steepest-edge weighted single-pass.
 
 ### Session 2026-03-18 (continued): Cleanroom Q&A Analysis
 
