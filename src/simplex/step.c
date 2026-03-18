@@ -400,8 +400,10 @@ static int pricing_and_ftran(SolverState *state, CxfEnv *env,
                 for (int ri = 0; ri < m; ri++)
                     if (!isfinite(pivotCol[ri])) { need_refactor = 1; break; }
 
-            if (!need_refactor && state->eta_count > 10 &&
-                state->iteration % 20 == 0) {
+            /* QA Q1: FTRAN residual monitoring EVERY iteration (not periodic).
+             * "The most robust trigger because it directly measures the
+             * accuracy of the linear system solution." O(nnz) cost. */
+            if (!need_refactor && state->eta_count > 0) {
                 double residual = cxf_ftran_residual(state, column, pivotCol);
                 if (residual > 10.0 * env->feasibility_tol) {
                     need_refactor = 1;

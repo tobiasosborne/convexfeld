@@ -45,7 +45,11 @@
 
 /* Phase I helpers */
 
-#define MAX_OUTER_ROUNDS    100
+/* QA Q17: primal simplex uses 5 outer rounds, not 100.
+ * Each round: snapshot → inner iteration loop → convergence check →
+ * perturbation if stalled. With 5 rounds the solver terminates faster
+ * on intractable problems. Spec: cvx_solve_lp/part3_main_loop.c:69-88. */
+#define MAX_OUTER_ROUNDS    5
 #define CONVERGENCE_BASE    0.01
 
 int cxf_solve_lp(CxfModel *model) {
@@ -190,7 +194,9 @@ int cxf_solve_lp(CxfModel *model) {
                 state->cumulative_degenerate > CUMULATIVE_STALL) {
                 cxf_simplex_perturbation(state, env);
                 stall = 0;
-                state->cumulative_degenerate = 0;
+                /* QA Q16: cumulative counter is NEVER reset — original adds
+                 * perturbedCount cumulatively. Removing reset makes the
+                 * second perturbation fire sooner on persistent degeneracy. */
             }
 
             /* (5) Main simplex pivot */
@@ -245,7 +251,20 @@ int cxf_solve_lp(CxfModel *model) {
                     cxf_compute_reduced_costs(state);
                     continue;
                 }
-                model->status = CXF_UNBOUNDED; terminated = 1; break;
+                /* QA Q14: Probe before accepting UNBOUNDED.
+                 * Refactorize + recompute to rule out stale reduced costs
+                 * from degraded basis representation. */
+                cxf_solver_refactor(state, env);
+                cxf_recompute_xB(state);
+                cxf_recompute_objective(state);
+                cxf_compute_reduced_costs(state);
+                /* Re-run step with fresh data — if still UNBOUNDED, confirm */
+                status = cxf_simplex_step(state, env);
+                if (status == ITERATE_UNBOUNDED) {
+                    model->status = CXF_UNBOUNDED; terminated = 1; break;
+                }
+                /* False alarm — keep iterating with fresh basis */
+                continue;
             }
             if (status == ITERATE_INFEASIBLE) {
                 model->status = CXF_INFEASIBLE; terminated = 1; break;
