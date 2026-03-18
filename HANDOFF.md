@@ -4,7 +4,7 @@
 
 ---
 
-## STATUS: 147/147 tests pass. 46 Netlib pass. 3 V2 issues closed this session (8ogg, 7e8p, l9lp). ~181 remain. Master clean and pushed.
+## STATUS: 147/147 tests pass. 46 Netlib pass. 15 V2 issues closed this session. ~169 remain. Master clean and pushed.
 
 ### Session 2026-03-18: Solver-Core V2 Compliance (Convergence Focus)
 
@@ -26,8 +26,26 @@
    and pricing state became stale. Fixed var_status constants to use CXF_VAR_AT_LOWER/
    CXF_VAR_AT_UPPER.
 
+4. **convexfeld-hx6u CLOSED** (P2): Added `cxf_pivot_bound` call in step2.c and step3.c
+   when bound propagation tightens a variable to effectively fixed (ub-lb < BOUND_EQUALITY_TOL).
+   Prevents degenerate pivots on near-fixed variables during iteration.
+
+5. **convexfeld-rrc5 CLOSED** (P2): Added `CXF_ETA_BOUND_CHANGE` (type 5) eta records
+   in `tighten_bound()` for both step2.c and step3.c per simplex_iteration.md.
+   Records variable index, old/new bound, direction.
+
+6. **convexfeld-35wl CLOSED** (P2): Implemented `cxf_pricing_get_var_stats` —
+   symmetric mirror of `cxf_pricing_get_constr_stats`. Completes pricing accessor API.
+
+**7 false-missing issues closed** (audit searched src/basis/ only, functions exist in src/simplex/):
+l22c (pivot_bound), z5co (pivot_special), lmgu (pivot_primal), ubky (pivot_update),
+gkmp (simplex_iterate), iwwh (pivot_check), 7jhe (simplex_cleanup).
+
+**2 structural issues closed**: zgwv (cascade update — functionally implemented via
+separate calls), fm7g (selfPtr — handled by arena allocator internally).
+
 **Analysis finding:** `cxf_propagate_bounds` (convexfeld-zuat) is DEAD CODE — zero callers.
-`cxf_simplex_cleanup` stubs Phases 1-8. The HANDOFF claim that zuat causes false
+`cxf_simplex_cleanup` stubs Phases 1-8. Previous HANDOFF claim that zuat causes false
 UNBOUNDED/INFEASIBLE was incorrect — those are iteration-time failures, not post-solve.
 Issue deferred until simplex_cleanup wiring is implemented.
 
