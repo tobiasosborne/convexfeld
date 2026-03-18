@@ -48,7 +48,7 @@ void test_simplex_iterate_with_state(void) {
     /* Must not crash; exercises log throttle + callback path */
     cxf_simplex_iterate(model, state);
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 /* Test 3: iteration counter is unchanged after logging call */
@@ -61,7 +61,7 @@ void test_simplex_iterate_no_side_effect_on_iteration(void) {
     cxf_simplex_iterate(model, state);
     TEST_ASSERT_EQUAL_INT(before, state->iteration);
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 int main(void) {

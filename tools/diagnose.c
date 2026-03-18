@@ -32,7 +32,7 @@
 
 /* Internal functions we call directly */
 extern int cxf_simplex_init(CxfModel *model, SolverState **stateP);
-extern void cxf_simplex_final(SolverState *state);
+extern void cxf_state_free(SolverState *state);
 extern int cxf_extract_solution(SolverState *state, CxfModel *model);
 extern int cxf_simplex_crash(SolverState *state, CxfEnv *env);
 extern int cxf_setup_phase_one(SolverState *state);
@@ -499,7 +499,7 @@ int main(int argc, char **argv) {
         }
     }
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
     cxf_freemodel(model);
     cxf_freeenv(env);
     return 0;

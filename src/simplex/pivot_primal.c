@@ -5,25 +5,25 @@
  * Implements cxf_pivot_primal as specified in:
  * docs/specs-v2/specs/modules/pivot_operations.md
  *
- * Current implementation includes:
- * - Bound feasibility checking
- * - Pivot value determination based on objective direction
- * - Objective value and coefficient updates
- * - Variable status updates
- * - Working RHS updates (propagates pivot to all affected constraints via work_rhs)
- *
- * Deferred for future implementation:
- * - Eta vector creation for basis representation
- * - Piecewise linear objective handling
- * - Quadratic objective handling
- * - Pricing state updates
+ * 7-step implementation:
+ * 1. Bound feasibility check
+ * 2. Pivot value determination from objective direction
+ * 3. Objective value and coefficient update
+ * 4. Variable status update (AT_LOWER/AT_UPPER)
+ * 5. Working RHS propagation (CSC column scan)
+ * 6. Eta vector creation for basis update chain
+ * 7. Pricing notification (mark dirty + update var)
  */
 
 #include "convexfeld/cxf_solver.h"
 #include "convexfeld/cxf_env.h"
 #include "convexfeld/cxf_basis.h"
+#include "convexfeld/cxf_pricing.h"
 #include "convexfeld/cxf_types.h"
 #include <math.h>
+#include <stdlib.h>
+
+#include "../basis/basis_internal.h"
 
 /** @brief Threshold for determining if objective coefficient is significant */
 #define TINY_THRESHOLD 1e-8
@@ -169,10 +169,10 @@ int cxf_pivot_primal(void *env, void *state, int var, double tolerance) {
     if (ctx->basis != NULL && ctx->basis->var_status != NULL) {
         if (fabs(pivotValue - lb) < fabs(pivotValue - ub)) {
             /* Closer to lower bound */
-            ctx->basis->var_status[var] = -1;  /* AT_LOWER */
+            ctx->basis->var_status[var] = CXF_VAR_AT_LOWER;
         } else {
             /* Closer to upper bound */
-            ctx->basis->var_status[var] = -2;  /* AT_UPPER */
+            ctx->basis->var_status[var] = CXF_VAR_AT_UPPER;
         }
     }
 
@@ -208,23 +208,47 @@ int cxf_pivot_primal(void *env, void *state, int var, double tolerance) {
     }
 
     /*
-     * TODO: Additional functionality for full implementation:
+     * Step 6: Eta vector creation (V2 pivot_operations.md)
      *
-     * 1. Eta vector creation:
-     *    Call cxf_pivot_with_eta to update basis representation
-     *    (Deferred - cxf_pivot_with_eta handles standard basis exchange)
-     *
-     * 2. Piecewise linear objective handling:
-     *    If variable has PWL flag, determine active segment and
-     *    update objective slope accordingly
-     *
-     * 3. Quadratic objective handling:
-     *    Update neighbor objective coefficients:
-     *      obj[j] += Q[var,j] * pivotValue for all neighbors j
-     *
-     * 4. Pricing state update:
-     *    Invalidate pricing cache and update steepest edge weights
+     * Record the variable elimination in the basis update chain.
+     * Type CXF_ETA_VARIABLE_FIX documents the fixing operation.
      */
+    if (ctx->basis != NULL) {
+        EtaVector *eta;
+        if (ctx->basis->eta_pool != NULL)
+            eta = (EtaVector *)cxf_eta_pool_alloc(ctx->basis->eta_pool,
+                                                    sizeof(EtaVector));
+        else
+            eta = (EtaVector *)calloc(1, sizeof(EtaVector));
+        if (eta != NULL) {
+            eta->type = CXF_ETA_VARIABLE_FIX;
+            eta->pivot_row = -1;
+            eta->entering_var = var;
+            eta->leaving_var = -1;
+            eta->pivot_elem = pivotValue;
+            eta->reduced_cost = c;
+            eta->direction = 0;
+            eta->status = ctx->basis->var_status[var];
+            eta->nnz = 0;
+            eta->indices = NULL;
+            eta->values = NULL;
+            eta->next = ctx->basis->eta_head;
+            ctx->basis->eta_head = eta;
+            ctx->basis->eta_count++;
+            ctx->eta_count = ctx->basis->eta_count;
+        }
+    }
+
+    /*
+     * Step 7: Pricing notification (V2 pricing_support.md)
+     *
+     * Mark the eliminated variable dirty so the pricing subsystem
+     * refreshes reduced costs and candidate lists.
+     */
+    if (ctx->pricing != NULL) {
+        cxf_pricing_update_var(ctx->pricing, ctx, var);
+        cxf_pricing_mark_dirty(ctx->pricing, var);
+    }
 
     return 0;  /* CXF_OK */
 }

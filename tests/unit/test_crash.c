@@ -92,7 +92,7 @@ static void free_crash_state(SolverState *state) {
     /* state is freed by freemodel -> final chain, but we allocated
      * extra arrays. The simplex_final should handle row_status/col_nz_count
      * since they're now part of the struct cleanup. */
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 /*******************************************************************************

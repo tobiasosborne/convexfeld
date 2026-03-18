@@ -9,7 +9,7 @@
 #include "convexfeld/cxf_mps.h"
 
 extern int cxf_simplex_init(CxfModel *model, SolverState **stateP);
-extern void cxf_simplex_final(SolverState *state);
+extern void cxf_state_free(SolverState *state);
 extern int cxf_simplex_crash(SolverState *state, CxfEnv *env);
 extern int cxf_setup_phase_one(SolverState *state);
 extern int cxf_compute_reduced_costs(SolverState *state);
@@ -106,6 +106,6 @@ int main(int argc, char **argv) {
         }
         if (rc != 0) break;
     }
-    cxf_simplex_final(state); cxf_freemodel(model); cxf_freeenv(env);
+    cxf_state_free(state); cxf_freemodel(model); cxf_freeenv(env);
     return 0;
 }

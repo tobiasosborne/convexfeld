@@ -79,7 +79,7 @@ void test_no_perturb_on_nonstalling_early_iters(void) {
     TEST_ASSERT_FALSE(should_perturb);
     TEST_ASSERT_EQUAL_INT(0, state->perturb_count);
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
     cxf_freemodel(model);
 }
 
@@ -97,7 +97,7 @@ void test_no_perturb_at_iter_2_round_0(void) {
                           state->degenerate_count > STALL_THRESHOLD);
     TEST_ASSERT_FALSE(should_perturb);
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
     cxf_freemodel(model);
 }
 
@@ -119,7 +119,7 @@ void test_perturb_fires_on_degeneracy(void) {
     cxf_simplex_perturbation(state, env);
     TEST_ASSERT_TRUE(state->perturb_count >= before);
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
     cxf_freemodel(model);
 }
 
@@ -140,7 +140,7 @@ void test_perturb_fires_on_stall_flag(void) {
     cxf_simplex_perturbation(state, env);
     TEST_ASSERT_TRUE(state->perturb_count >= before);
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
     cxf_freemodel(model);
 }
 
@@ -157,7 +157,7 @@ void test_no_perturb_at_exact_threshold(void) {
                           state->degenerate_count > STALL_THRESHOLD);
     TEST_ASSERT_FALSE(should_perturb);
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
     cxf_freemodel(model);
 }
 

@@ -45,7 +45,7 @@ void test_perturbation_null_args(void) {
     SolverState *state = NULL;
     cxf_simplex_init(model, &state);
     TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT, cxf_simplex_perturbation(state, NULL));
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 void test_perturbation_basic(void) {
@@ -58,7 +58,7 @@ void test_perturbation_basic(void) {
     TEST_ASSERT_EQUAL_INT(CXF_OK, cxf_simplex_perturbation(state, env));
     /* Clean up static perturbation state so subsequent tests start fresh */
     cxf_simplex_unperturb(state, env);
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 void test_unperturb_null_args(void) {
@@ -76,7 +76,7 @@ void test_unperturb_sequence(void) {
      * So unperturb still returns 1 since perturb_count stays 0. */
     cxf_simplex_perturbation(state, env);
     TEST_ASSERT_EQUAL_INT(1, cxf_simplex_unperturb(state, env));
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 /* Unbounded problem detection tests */
@@ -122,7 +122,7 @@ void test_small_coefficients(void) {
     cxf_addvar(model, 0, NULL, NULL, 1e-12, 0.0, 10.0, 'C', "x");
     SolverState *state = NULL;
     TEST_ASSERT_EQUAL_INT(CXF_OK, cxf_simplex_init(model, &state));
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 void test_large_coefficient_range(void) {
@@ -130,14 +130,14 @@ void test_large_coefficient_range(void) {
     cxf_addvar(model, 0, NULL, NULL, 1e8, 0.0, 1e-10, 'C', "y");
     SolverState *state = NULL;
     TEST_ASSERT_EQUAL_INT(CXF_OK, cxf_simplex_init(model, &state));
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 void test_fixed_variable(void) {
     cxf_addvar(model, 0, NULL, NULL, 1.0, 5.0, 5.0, 'C', "x_fixed");
     SolverState *state = NULL;
     TEST_ASSERT_EQUAL_INT(CXF_OK, cxf_simplex_init(model, &state));
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 /* Empty/trivial problem tests */

@@ -131,7 +131,7 @@ void test_perturb_removes_degenerate_nonbasic(void) {
     TEST_ASSERT_EQUAL_INT(CXF_VAR_AT_LOWER, basis->var_status[1]);
     TEST_ASSERT_TRUE(state->perturb_count >= 1);
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
     cxf_freemodel(model);
 }
 
@@ -159,7 +159,7 @@ void test_perturb_infeasible_equality(void) {
     /* V2: problem_var_index = slack variable index n = 2 (not row 0) */
     TEST_ASSERT_EQUAL_INT(n, state->problem_var_index);
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
     cxf_freemodel(model);
 }
 
@@ -183,7 +183,7 @@ void test_unperturb_restores_bounds(void) {
     TEST_ASSERT_DOUBLE_WITHIN(1e-15, 10.0, state->work_ub[1]);
     TEST_ASSERT_EQUAL_INT(0, state->perturb_count);
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
     cxf_freemodel(model);
 }
 
@@ -199,7 +199,7 @@ void test_unperturb_noop(void) {
     int rc = cxf_simplex_unperturb(state, env);
     TEST_ASSERT_EQUAL_INT(1, rc);
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
     cxf_freemodel(model);
 }
 
@@ -254,7 +254,7 @@ void test_mechanism_b_requires_a_first(void) {
     TEST_ASSERT_EQUAL_INT(CXF_OK, rc);
     TEST_ASSERT_EQUAL_INT(1, state->perturb_expand_active);
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
     cxf_freemodel(model);
 }
 
@@ -303,7 +303,7 @@ void test_diagnostic_mode_restores_bounds(void) {
     /* Phase 3 should have restored saved bounds into working arrays */
     TEST_ASSERT_DOUBLE_WITHIN(1e-15, orig_lb0, state->work_lb[0]);
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
     cxf_freemodel(model);
 }
 
@@ -350,7 +350,7 @@ void test_standard_mode_no_bound_restoration(void) {
     /* Phase 3 should NOT have restored bounds — lb stays corrupted */
     TEST_ASSERT_DOUBLE_WITHIN(1e-15, -999.0, state->work_lb[0]);
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
     cxf_freemodel(model);
 }
 
@@ -390,7 +390,7 @@ void test_diagnostic_mode_skipped_first_call(void) {
      * This is correct: no prior perturbations means no drift to prevent. */
     TEST_ASSERT_TRUE(state->perturb_count >= 0);
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
     cxf_freemodel(model);
 }
 

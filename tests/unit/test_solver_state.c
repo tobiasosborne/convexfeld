@@ -103,7 +103,7 @@ void test_simplex_init_returns_non_null_state(void) {
     int status = cxf_simplex_init(model, &state);
     TEST_ASSERT_EQUAL_INT(CXF_OK, status);
     TEST_ASSERT_NOT_NULL(state);
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 void test_simplex_init_sets_model_reference(void) {
@@ -112,7 +112,7 @@ void test_simplex_init_sets_model_reference(void) {
     cxf_simplex_init(model, &state);
     TEST_ASSERT_NOT_NULL(state);
     TEST_ASSERT_EQUAL_PTR(model, state->model_ref);
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 void test_simplex_init_copies_dimensions(void) {
@@ -126,7 +126,7 @@ void test_simplex_init_copies_dimensions(void) {
     TEST_ASSERT_EQUAL_INT(3, state->num_vars);
     /* num_constrs should be 0 for unconstrained model */
     TEST_ASSERT_EQUAL_INT(0, state->num_constrs);
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 void test_simplex_init_sets_initial_phase_zero(void) {
@@ -136,7 +136,7 @@ void test_simplex_init_sets_initial_phase_zero(void) {
     TEST_ASSERT_NOT_NULL(state);
     /* Phase should be 0 (setup) after init, before setup() call */
     TEST_ASSERT_EQUAL_INT(0, state->phase);
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 void test_simplex_init_allocates_working_arrays(void) {
@@ -152,7 +152,7 @@ void test_simplex_init_allocates_working_arrays(void) {
     TEST_ASSERT_NOT_NULL(state->work_x);
     TEST_ASSERT_NOT_NULL(state->work_dj);
     /* work_pi may be NULL if no constraints */
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 void test_simplex_init_initializes_iteration_counters(void) {
@@ -162,7 +162,7 @@ void test_simplex_init_initializes_iteration_counters(void) {
     TEST_ASSERT_NOT_NULL(state);
     TEST_ASSERT_EQUAL_INT(0, state->iteration);
     TEST_ASSERT_EQUAL_INT(0, state->eta_count);
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 /*******************************************************************************
@@ -171,7 +171,7 @@ void test_simplex_init_initializes_iteration_counters(void) {
 
 void test_simplex_final_null_safe(void) {
     /* Should not crash */
-    cxf_simplex_final(NULL);
+    cxf_state_free(NULL);
     TEST_PASS();
 }
 
@@ -180,7 +180,7 @@ void test_simplex_final_frees_state(void) {
     SolverState *state = NULL;
     cxf_simplex_init(model, &state);
     TEST_ASSERT_NOT_NULL(state);
-    cxf_simplex_final(state);
+    cxf_state_free(state);
     /* After free, we can't verify state is freed, but test shouldn't leak */
     TEST_PASS();
 }
@@ -188,8 +188,8 @@ void test_simplex_final_frees_state(void) {
 void test_simplex_final_idempotent(void) {
     /* Note: This test is conceptually correct but practically dangerous.
      * In real code, never call free twice. This test verifies NULL safety. */
-    cxf_simplex_final(NULL);
-    cxf_simplex_final(NULL);
+    cxf_state_free(NULL);
+    cxf_state_free(NULL);
     TEST_PASS();
 }
 
@@ -204,12 +204,12 @@ void test_init_final_cycle(void) {
     SolverState *state1 = NULL;
     cxf_simplex_init(model, &state1);
     TEST_ASSERT_NOT_NULL(state1);
-    cxf_simplex_final(state1);
+    cxf_state_free(state1);
 
     SolverState *state2 = NULL;
     cxf_simplex_init(model, &state2);
     TEST_ASSERT_NOT_NULL(state2);
-    cxf_simplex_final(state2);
+    cxf_state_free(state2);
 }
 
 void test_init_empty_model(void) {
@@ -220,7 +220,7 @@ void test_init_empty_model(void) {
     TEST_ASSERT_NOT_NULL(state);
     TEST_ASSERT_EQUAL_INT(0, state->num_vars);
     TEST_ASSERT_EQUAL_INT(0, state->num_constrs);
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 /*******************************************************************************

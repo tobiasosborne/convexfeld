@@ -42,7 +42,7 @@ void test_init_default_minus_one(void) {
 
     TEST_ASSERT_EQUAL_INT(-1, state->problem_var_index);
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
     cxf_freemodel(model);
 }
 
@@ -88,7 +88,7 @@ void test_crash_sets_var_index_not_row(void) {
     /* Must NOT be a row index */
     TEST_ASSERT_TRUE(state->problem_var_index >= n);
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
     cxf_freemodel(model);
 }
 
@@ -124,7 +124,7 @@ void test_crash_equality_sets_var_index(void) {
     /* Variable index = n + 0 = 1 (slack for row 0) */
     TEST_ASSERT_EQUAL_INT(n, state->problem_var_index);
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
     cxf_freemodel(model);
 }
 
@@ -165,7 +165,7 @@ void test_phase_end_sets_var_index(void) {
     /* problem_var_index should be 0 (the free variable) */
     TEST_ASSERT_EQUAL_INT(0, state->problem_var_index);
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
     cxf_freemodel(model);
 }
 

@@ -45,7 +45,7 @@ void test_setup_empty_model(void) {
      * still be allocated (possibly NULL for empty model, but no crash) */
     TEST_ASSERT_EQUAL_INT(0, state->num_constrs);
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 void test_setup_computes_activity_bounds(void) {
@@ -66,7 +66,7 @@ void test_setup_computes_activity_bounds(void) {
     /* Phase should NOT be set by setup */
     TEST_ASSERT_EQUAL_INT(0, state->phase);
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 void test_setup_initializes_dual_values_to_zero(void) {
@@ -80,7 +80,7 @@ void test_setup_initializes_dual_values_to_zero(void) {
     /* Dual values should be zero (no constraints in this model) */
     TEST_ASSERT_EQUAL_INT(0, state->num_constrs);
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 void test_setup_does_not_reset_iteration_counter(void) {
@@ -99,7 +99,7 @@ void test_setup_does_not_reset_iteration_counter(void) {
     TEST_ASSERT_EQUAL_INT(100, state->iteration);
     TEST_ASSERT_EQUAL_INT(50, state->eta_count);
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 void test_setup_does_not_set_phase(void) {
@@ -117,7 +117,7 @@ void test_setup_does_not_set_phase(void) {
     /* Phase should still be 0 — setup only computes activity bounds */
     TEST_ASSERT_EQUAL_INT(0, state->phase);
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 void test_setup_does_not_initialize_pricing(void) {
@@ -131,7 +131,7 @@ void test_setup_does_not_initialize_pricing(void) {
     /* Setup no longer initializes pricing — that is init's responsibility */
     /* Pricing state depends on init, not setup */
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 /*******************************************************************************
@@ -151,7 +151,7 @@ void test_preprocess_null_env_fails(void) {
     int status = cxf_simplex_preprocess(state, NULL);
     TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT, status);
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 void test_preprocess_empty_model(void) {
@@ -161,7 +161,7 @@ void test_preprocess_empty_model(void) {
     int status = cxf_simplex_preprocess(state, env);
     TEST_ASSERT_EQUAL_INT(CXF_OK, status);
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 void test_preprocess_feasible_bounds(void) {
@@ -174,7 +174,7 @@ void test_preprocess_feasible_bounds(void) {
     int status = cxf_simplex_preprocess(state, env);
     TEST_ASSERT_EQUAL_INT(CXF_OK, status);
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 void test_preprocess_detects_infeasible_bounds(void) {
@@ -187,7 +187,7 @@ void test_preprocess_detects_infeasible_bounds(void) {
     int status = cxf_simplex_preprocess(state, env);
     TEST_ASSERT_EQUAL_INT(CXF_INFEASIBLE, status);
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 void test_preprocess_multiple_vars_one_infeasible(void) {
@@ -201,7 +201,7 @@ void test_preprocess_multiple_vars_one_infeasible(void) {
     int status = cxf_simplex_preprocess(state, env);
     TEST_ASSERT_EQUAL_INT(CXF_INFEASIBLE, status);
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 /*******************************************************************************
@@ -231,7 +231,7 @@ void test_setup_and_preprocess_sequence(void) {
     /* Phase should NOT be set by setup */
     TEST_ASSERT_EQUAL_INT(0, state->phase);
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 /*******************************************************************************

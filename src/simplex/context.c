@@ -82,7 +82,7 @@ int cxf_simplex_init(CxfModel *model, SolverState **stateP) {
         if (ctx->work_lb == NULL || ctx->work_ub == NULL ||
             ctx->work_obj == NULL || ctx->work_x == NULL ||
             ctx->work_dj == NULL) {
-            cxf_simplex_final(ctx);
+            cxf_state_free(ctx);
             return CXF_ERROR_OUT_OF_MEMORY;
         }
 
@@ -105,7 +105,7 @@ int cxf_simplex_init(CxfModel *model, SolverState **stateP) {
     if (m > 0) {
         ctx->work_pi = (double *)calloc((size_t)m, sizeof(double));
         if (ctx->work_pi == NULL) {
-            cxf_simplex_final(ctx);
+            cxf_state_free(ctx);
             return CXF_ERROR_OUT_OF_MEMORY;
         }
 
@@ -113,7 +113,7 @@ int cxf_simplex_init(CxfModel *model, SolverState **stateP) {
         ctx->work_column = (double *)malloc((size_t)m * sizeof(double));
         ctx->work_cB = (double *)malloc((size_t)m * sizeof(double));
         if (ctx->work_column == NULL || ctx->work_cB == NULL) {
-            cxf_simplex_final(ctx);
+            cxf_state_free(ctx);
             return CXF_ERROR_OUT_OF_MEMORY;
         }
     }
@@ -124,7 +124,7 @@ int cxf_simplex_init(CxfModel *model, SolverState **stateP) {
         ctx->var_flags = (uint32_t *)calloc((size_t)total_vars,
                                             sizeof(uint32_t));
         if (ctx->var_flags == NULL) {
-            cxf_simplex_final(ctx);
+            cxf_state_free(ctx);
             return CXF_ERROR_OUT_OF_MEMORY;
         }
     }
@@ -134,7 +134,7 @@ int cxf_simplex_init(CxfModel *model, SolverState **stateP) {
         ctx->saved_lb = (double *)malloc((size_t)total_vars * sizeof(double));
         ctx->saved_ub = (double *)malloc((size_t)total_vars * sizeof(double));
         if (ctx->saved_lb == NULL || ctx->saved_ub == NULL) {
-            cxf_simplex_final(ctx);
+            cxf_state_free(ctx);
             return CXF_ERROR_OUT_OF_MEMORY;
         }
         memcpy(ctx->saved_lb, ctx->work_lb, (size_t)total_vars * sizeof(double));
@@ -149,7 +149,7 @@ int cxf_simplex_init(CxfModel *model, SolverState **stateP) {
         ctx->posUnbdCount = (int *)calloc((size_t)m, sizeof(int));
         if (ctx->min_activity == NULL || ctx->max_activity == NULL ||
             ctx->negUnbdCount == NULL || ctx->posUnbdCount == NULL) {
-            cxf_simplex_final(ctx);
+            cxf_state_free(ctx);
             return CXF_ERROR_OUT_OF_MEMORY;
         }
     }
@@ -169,14 +169,14 @@ int cxf_simplex_init(CxfModel *model, SolverState **stateP) {
     if (m > 0) {
         ctx->row_status = (int *)calloc((size_t)m, sizeof(int));
         if (ctx->row_status == NULL) {
-            cxf_simplex_final(ctx);
+            cxf_state_free(ctx);
             return CXF_ERROR_OUT_OF_MEMORY;
         }
     }
     if (total_vars > 0) {
         ctx->col_nz_count = (int *)calloc((size_t)total_vars, sizeof(int));
         if (ctx->col_nz_count == NULL) {
-            cxf_simplex_final(ctx);
+            cxf_state_free(ctx);
             return CXF_ERROR_OUT_OF_MEMORY;
         }
         /* col_nz_count populated after CSC copy below */
@@ -193,7 +193,7 @@ int cxf_simplex_init(CxfModel *model, SolverState **stateP) {
         if (mat->col_ptr != NULL && n > 0) {
             ctx->csc_col_ptr = (int64_t *)malloc((size_t)(n + 1) * sizeof(int64_t));
             if (ctx->csc_col_ptr == NULL) {
-                cxf_simplex_final(ctx); return CXF_ERROR_OUT_OF_MEMORY;
+                cxf_state_free(ctx); return CXF_ERROR_OUT_OF_MEMORY;
             }
             memcpy(ctx->csc_col_ptr, mat->col_ptr,
                    (size_t)(n + 1) * sizeof(int64_t));
@@ -201,14 +201,14 @@ int cxf_simplex_init(CxfModel *model, SolverState **stateP) {
         if (mat->row_idx != NULL && nnz > 0) {
             ctx->csc_row_idx = (int *)malloc((size_t)nnz * sizeof(int));
             if (ctx->csc_row_idx == NULL) {
-                cxf_simplex_final(ctx); return CXF_ERROR_OUT_OF_MEMORY;
+                cxf_state_free(ctx); return CXF_ERROR_OUT_OF_MEMORY;
             }
             memcpy(ctx->csc_row_idx, mat->row_idx, (size_t)nnz * sizeof(int));
         }
         if (mat->values != NULL && nnz > 0) {
             ctx->csc_values = (double *)malloc((size_t)nnz * sizeof(double));
             if (ctx->csc_values == NULL) {
-                cxf_simplex_final(ctx); return CXF_ERROR_OUT_OF_MEMORY;
+                cxf_state_free(ctx); return CXF_ERROR_OUT_OF_MEMORY;
             }
             memcpy(ctx->csc_values, mat->values, (size_t)nnz * sizeof(double));
         }
@@ -217,7 +217,7 @@ int cxf_simplex_init(CxfModel *model, SolverState **stateP) {
         if (mat->row_ptr != NULL && m > 0) {
             ctx->csr_row_ptr = (int64_t *)malloc((size_t)(m + 1) * sizeof(int64_t));
             if (ctx->csr_row_ptr == NULL) {
-                cxf_simplex_final(ctx); return CXF_ERROR_OUT_OF_MEMORY;
+                cxf_state_free(ctx); return CXF_ERROR_OUT_OF_MEMORY;
             }
             memcpy(ctx->csr_row_ptr, mat->row_ptr,
                    (size_t)(m + 1) * sizeof(int64_t));
@@ -225,14 +225,14 @@ int cxf_simplex_init(CxfModel *model, SolverState **stateP) {
         if (mat->col_idx != NULL && nnz > 0) {
             ctx->csr_col_idx = (int *)malloc((size_t)nnz * sizeof(int));
             if (ctx->csr_col_idx == NULL) {
-                cxf_simplex_final(ctx); return CXF_ERROR_OUT_OF_MEMORY;
+                cxf_state_free(ctx); return CXF_ERROR_OUT_OF_MEMORY;
             }
             memcpy(ctx->csr_col_idx, mat->col_idx, (size_t)nnz * sizeof(int));
         }
         if (mat->row_values != NULL && nnz > 0) {
             ctx->csr_values = (double *)malloc((size_t)nnz * sizeof(double));
             if (ctx->csr_values == NULL) {
-                cxf_simplex_final(ctx); return CXF_ERROR_OUT_OF_MEMORY;
+                cxf_state_free(ctx); return CXF_ERROR_OUT_OF_MEMORY;
             }
             memcpy(ctx->csr_values, mat->row_values,
                    (size_t)nnz * sizeof(double));
@@ -242,14 +242,14 @@ int cxf_simplex_init(CxfModel *model, SolverState **stateP) {
         if (mat->rhs != NULL && m > 0) {
             ctx->work_rhs = (double *)malloc((size_t)m * sizeof(double));
             if (ctx->work_rhs == NULL) {
-                cxf_simplex_final(ctx); return CXF_ERROR_OUT_OF_MEMORY;
+                cxf_state_free(ctx); return CXF_ERROR_OUT_OF_MEMORY;
             }
             memcpy(ctx->work_rhs, mat->rhs, (size_t)m * sizeof(double));
         }
         if (mat->sense != NULL && m > 0) {
             ctx->work_sense = (char *)malloc((size_t)m * sizeof(char));
             if (ctx->work_sense == NULL) {
-                cxf_simplex_final(ctx); return CXF_ERROR_OUT_OF_MEMORY;
+                cxf_state_free(ctx); return CXF_ERROR_OUT_OF_MEMORY;
             }
             memcpy(ctx->work_sense, mat->sense, (size_t)m * sizeof(char));
         }
@@ -271,7 +271,7 @@ int cxf_simplex_init(CxfModel *model, SolverState **stateP) {
     /* Create basis state with space for artificial variables */
     ctx->basis = cxf_basis_create(m, total_vars);
     if (ctx->basis == NULL && (m > 0 || total_vars > 0)) {
-        cxf_simplex_final(ctx);
+        cxf_state_free(ctx);
         return CXF_ERROR_OUT_OF_MEMORY;
     }
 
@@ -300,13 +300,12 @@ int cxf_simplex_init(CxfModel *model, SolverState **stateP) {
 /**
  * @brief Free solver context and all resources.
  *
- * P6.2: Before freeing, performs dual-feasibility variable fixing
- * (complementary slackness) for nonbasic variables. This ensures
- * the solution satisfies CS conditions before extraction.
+ * Renamed from cxf_simplex_final per V2 spec: cxf_simplex_final is now
+ * the 5-phase variable fixer (final.c), and this is the destructor.
  *
  * @param state Context to free (may be NULL)
  */
-void cxf_simplex_final(SolverState *state) {
+void cxf_state_free(SolverState *state) {
     if (state == NULL) {
         return;
     }

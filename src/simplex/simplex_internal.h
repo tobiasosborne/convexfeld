@@ -110,6 +110,9 @@ int cxf_expand_widen_bounds(SolverState *state, CxfEnv *env,
                             double feas_tol, BasisState *basis,
                             int m, int total);
 
+/* --- Post-solve variable fixing (final.c) --- */
+int cxf_simplex_final(SolverState *state, CxfEnv *env, double *workOut);
+
 /* --- Solve driver (solve_lp.c) --- */
 int cxf_solve_lp(CxfModel *model);
 

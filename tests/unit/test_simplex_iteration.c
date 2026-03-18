@@ -44,7 +44,7 @@ void test_simplex_iterate_null_args_fail(void) {
     cxf_simplex_init(model, &state);
     cxf_simplex_setup(state, env, 0, NULL);
     TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT, cxf_simplex_step(state, NULL));
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 void test_simplex_iterate_returns_valid_status(void) {
@@ -58,7 +58,7 @@ void test_simplex_iterate_returns_valid_status(void) {
     TEST_ASSERT_TRUE(status == 0 || status == 1 || status == 2 ||
                      status == 3 || status == 12);
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 void test_simplex_iterate_increments_iteration(void) {
@@ -71,7 +71,7 @@ void test_simplex_iterate_increments_iteration(void) {
     cxf_simplex_step(state, env);
     TEST_ASSERT_EQUAL_INT(iter_before + 1, state->iteration);
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 /* Phase transition tests */
@@ -85,7 +85,7 @@ void test_phase_end_null_args_fail(void) {
     state->phase = 1;
     TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT,
                           cxf_simplex_phase_end(state, NULL, 0));
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 void test_phase_end_transitions_to_phase2(void) {
@@ -103,7 +103,7 @@ void test_phase_end_transitions_to_phase2(void) {
     TEST_ASSERT_EQUAL_INT(CXF_OK, status);
     TEST_ASSERT_EQUAL_INT(1, state->phase);  /* Still Phase I */
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 void test_phase_end_infeasible_returns_error(void) {
@@ -120,7 +120,7 @@ void test_phase_end_infeasible_returns_error(void) {
     TEST_ASSERT_EQUAL_INT(CXF_OK, status);
     TEST_ASSERT_EQUAL_INT(1, state->phase);  /* Still Phase I */
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 /* Termination condition tests */
@@ -141,7 +141,7 @@ void test_post_iterate_returns_continue_or_refactor(void) {
     int status = cxf_simplex_post_iterate(model, state, &stall);
     TEST_ASSERT_TRUE(status == 0 || status == 1);
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 /* Objective value tracking tests */
@@ -159,7 +159,7 @@ void test_get_objval_returns_current_objective(void) {
     double val = cxf_simplex_get_objval(state);
     TEST_ASSERT_DOUBLE_WITHIN(1e-10, 42.0, val);
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 /* Iteration limit tests */
@@ -172,7 +172,7 @@ void test_set_iteration_limit_negative_fails(void) {
     SolverState *state = NULL;
     cxf_simplex_init(model, &state);
     TEST_ASSERT_EQUAL_INT(CXF_ERROR_INVALID_ARGUMENT, cxf_simplex_set_iteration_limit(state, -1));
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 void test_set_iteration_limit_valid(void) {
@@ -184,7 +184,7 @@ void test_set_iteration_limit_valid(void) {
     TEST_ASSERT_EQUAL_INT(CXF_OK, status);
     TEST_ASSERT_EQUAL_INT(5000, state->max_iterations);
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 void test_get_iteration_limit_null_returns_error(void) {
@@ -200,7 +200,7 @@ void test_get_iteration_limit_returns_current(void) {
     int limit = cxf_simplex_get_iteration_limit(state);
     TEST_ASSERT_EQUAL_INT(3000, limit);
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 int main(void) {

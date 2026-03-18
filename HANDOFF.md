@@ -1,10 +1,35 @@
 # Agent Handoff
 
-*Last updated: 2026-03-17*
+*Last updated: 2026-03-18*
 
 ---
 
-## STATUS: 146/146 tests pass. 46 Netlib pass (+24 new). 24 V2 issues closed this session. ~183 remain. Master clean and pushed.
+## STATUS: 147/147 tests pass. 46 Netlib pass. 3 V2 issues closed this session (8ogg, 7e8p, l9lp). ~181 remain. Master clean and pushed.
+
+### Session 2026-03-18: Solver-Core V2 Compliance (Convergence Focus)
+
+**3 issues closed, 1 new test file, surgical spec-compliant fixes:**
+
+1. **convexfeld-8ogg CLOSED** (P1): `cxf_simplex_final` rewritten from destructor to 5-phase
+   dual-feasibility variable fixer per simplex_lifecycle.md. Destructor renamed to
+   `cxf_state_free`. All 30+ callers updated. Phase 5 uses `cxf_pivot_bound` with
+   objective adjustment to avoid double-counting after `cxf_recompute_objective`.
+   New file: `src/simplex/final.c` (~200 LOC). Test: `test_simplex_final_fix.c`.
+
+2. **convexfeld-7e8p CLOSED** (P1): Not a bug — issue claim was outdated. The current code
+   DOES filter constraint entries by slack variable status (`var_status[num_vars+idx]`),
+   which is the standard revised simplex convention for constraint status.
+
+3. **convexfeld-l9lp CLOSED** (P2): Added eta vector creation (Step 6) and pricing
+   notification (Step 7) to `cxf_pivot_primal`. Previously, tight-bound variable
+   elimination created no eta record and didn't notify pricing — basis update chain
+   and pricing state became stale. Fixed var_status constants to use CXF_VAR_AT_LOWER/
+   CXF_VAR_AT_UPPER.
+
+**Analysis finding:** `cxf_propagate_bounds` (convexfeld-zuat) is DEAD CODE — zero callers.
+`cxf_simplex_cleanup` stubs Phases 1-8. The HANDOFF claim that zuat causes false
+UNBOUNDED/INFEASIBLE was incorrect — those are iteration-time failures, not post-solve.
+Issue deferred until simplex_cleanup wiring is implemented.
 
 ### Session 2026-03-17: V2 Compliance Sprint + Solver-Core Fixes
 

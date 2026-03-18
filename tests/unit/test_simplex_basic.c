@@ -58,7 +58,7 @@ void test_simplex_init_creates_state(void) {
     TEST_ASSERT_EQUAL_PTR(model, state->model_ref);
     TEST_ASSERT_EQUAL_INT(1, state->num_vars);
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 void test_simplex_init_null_model_fails(void) {
@@ -86,7 +86,7 @@ void test_simplex_init_empty_model(void) {
     TEST_ASSERT_EQUAL_INT(0, state->num_vars);
     TEST_ASSERT_EQUAL_INT(0, state->num_constrs);
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 void test_simplex_init_primal_mode(void) {
@@ -99,7 +99,7 @@ void test_simplex_init_primal_mode(void) {
     TEST_ASSERT_NOT_NULL(state);
     TEST_ASSERT_EQUAL_INT(0, state->solve_mode);  /* 0=primal default */
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 void test_simplex_init_dual_mode(void) {
@@ -113,7 +113,7 @@ void test_simplex_init_dual_mode(void) {
     /* Mode would be set later via setup or config, defaults to primal (0) */
     TEST_ASSERT_EQUAL_INT(0, state->solve_mode);
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 /*******************************************************************************
@@ -127,12 +127,12 @@ void test_simplex_final_frees_state(void) {
     cxf_simplex_init(model, &state);
     TEST_ASSERT_NOT_NULL(state);
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
     /* state is now freed - no crash = success */
 }
 
 void test_simplex_final_null_safe(void) {
-    cxf_simplex_final(NULL);
+    cxf_state_free(NULL);
     /* Should not crash - success */
 }
 
@@ -154,7 +154,7 @@ void test_simplex_setup_basic(void) {
     TEST_ASSERT_NOT_NULL(state->work_lb);
     TEST_ASSERT_NOT_NULL(state->work_ub);
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 /*******************************************************************************
@@ -171,7 +171,7 @@ void test_simplex_get_status_initial(void) {
     /* Initial status should be 0 (not yet solved) or CXF_OK */
     TEST_ASSERT_TRUE(status >= 0);
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 void test_simplex_get_status_null_returns_error(void) {
@@ -188,7 +188,7 @@ void test_simplex_get_iteration_initial(void) {
     int iter = cxf_simplex_get_iteration(state);
     TEST_ASSERT_EQUAL_INT(0, iter);  /* No iterations yet */
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 void test_simplex_get_iteration_null_returns_error(void) {
@@ -207,7 +207,7 @@ void test_simplex_get_phase_after_setup(void) {
     /* Setup no longer sets phase — phase remains 0 (unset) */
     TEST_ASSERT_EQUAL_INT(0, phase);
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 void test_simplex_get_phase_null_returns_error(void) {

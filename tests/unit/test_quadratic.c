@@ -40,7 +40,7 @@ void setUp(void) {
 
 void tearDown(void) {
     if (state != NULL) {
-        cxf_simplex_final(state);
+        cxf_state_free(state);
         state = NULL;
     }
     if (model != NULL) {

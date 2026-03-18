@@ -78,7 +78,7 @@ void test_ftran_nan_in_matrix_returns_numeric(void) {
         rc == CXF_NUMERIC || rc == 1 /* ITERATE_OPTIMAL */,
         "NaN in CSC must produce CXF_NUMERIC or OPTIMAL, not crash");
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 /*============================================================================
@@ -97,7 +97,7 @@ void test_ftran_inf_in_matrix_returns_numeric(void) {
         rc == CXF_NUMERIC || rc == 1 /* ITERATE_OPTIMAL */,
         "Inf in CSC must produce CXF_NUMERIC or OPTIMAL, not crash");
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 /*============================================================================
@@ -115,7 +115,7 @@ void test_ftran_neg_inf_in_matrix_returns_numeric(void) {
         rc == CXF_NUMERIC || rc == 1,
         "-Inf in CSC must produce CXF_NUMERIC or OPTIMAL, not crash");
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 /*============================================================================
@@ -131,7 +131,7 @@ void test_ftran_clean_model_no_numeric_error(void) {
         rc != CXF_NUMERIC,
         "Clean model must not trigger FTRAN NaN guard");
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 /*============================================================================

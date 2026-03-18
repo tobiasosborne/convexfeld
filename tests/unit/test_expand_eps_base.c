@@ -98,7 +98,7 @@ void test_default_tol_gives_mid_range(void) {
     TEST_ASSERT_TRUE_MESSAGE(shift >= 1e-7,
         "shift must be at least eps_base");
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
     cxf_freemodel(model);
 }
 
@@ -128,7 +128,7 @@ void test_small_tol_clamps_to_floor(void) {
     TEST_ASSERT_TRUE_MESSAGE(shift < 2.5e-8,
         "shift must reflect 1e-8 eps_base floor");
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
     cxf_freemodel(model);
 }
 
@@ -159,7 +159,7 @@ void test_large_tol_clamps_to_ceiling(void) {
     TEST_ASSERT_TRUE_MESSAGE(shift < 2.5e-6,
         "shift must reflect 1e-6 eps_base ceiling");
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
     cxf_freemodel(model);
 }
 
@@ -189,7 +189,7 @@ void test_mid_tol_scales_correctly(void) {
     TEST_ASSERT_TRUE_MESSAGE(shift < 2.5e-8,
         "shift must reflect 1e-8 eps_base");
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
     cxf_freemodel(model);
 }
 

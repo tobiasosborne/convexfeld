@@ -79,7 +79,7 @@ static SolverState *make_csr_state(int n, int m, double *rhs, char *sense,
 
 static void free_csr_state(SolverState *state) {
     cxf_freemodel(state->model_ref);
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 /*******************************************************************************

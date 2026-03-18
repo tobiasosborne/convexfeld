@@ -45,7 +45,7 @@ void test_preprocess_two_arg_signature(void) {
     int rc = cxf_simplex_preprocess(state, env);
     TEST_ASSERT_EQUAL_INT(CXF_OK, rc);
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 /** NULL state returns error (two-arg call). */
@@ -63,7 +63,7 @@ void test_preprocess_null_env_two_arg(void) {
     int rc = cxf_simplex_preprocess(state, NULL);
     TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT, rc);
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 /** Infeasible bounds detected without flags parameter. */
@@ -75,7 +75,7 @@ void test_preprocess_infeasible_two_arg(void) {
     int rc = cxf_simplex_preprocess(state, env);
     TEST_ASSERT_EQUAL_INT(CXF_INFEASIBLE, rc);
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 /** Function pointer matches expected two-arg signature. */

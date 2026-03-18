@@ -59,7 +59,7 @@ void test_nearly_fixed_var_snaps_to_midpoint(void) {
                                   state->work_x[0]);
     }
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 /**
@@ -78,7 +78,7 @@ void test_exactly_fixed_var_stays_at_bound(void) {
     TEST_ASSERT_DOUBLE_WITHIN(1e-15, val, state->work_lb[0]);
     TEST_ASSERT_DOUBLE_WITHIN(1e-15, val, state->work_ub[0]);
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 /**
@@ -103,7 +103,7 @@ void test_wider_gap_snaps_to_bound_not_midpoint(void) {
     TEST_ASSERT_TRUE(fabs(target - lo) < 1e-12 ||
                      fabs(target - hi) < 1e-12);
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 /**
@@ -130,7 +130,7 @@ void test_gap_at_tolerance_boundary_no_midpoint(void) {
                      fabs(target - hi) < 1e-12);
     (void)mid;
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 /**
@@ -158,7 +158,7 @@ void test_mixed_vars_only_nearly_fixed_snaps(void) {
     TEST_ASSERT_DOUBLE_WITHIN(1e-15, expected, state->work_lb[1]);
     TEST_ASSERT_DOUBLE_WITHIN(1e-15, expected, state->work_ub[1]);
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 int main(void) {

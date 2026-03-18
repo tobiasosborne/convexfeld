@@ -189,10 +189,25 @@ struct SolverState {
 int cxf_simplex_init(CxfModel *model, SolverState **stateP);
 
 /**
+ * @brief Dual-feasibility-based variable fixing (simplex_lifecycle.md).
+ *
+ * Performs 5-phase post-solve variable fixing: target determination,
+ * equality verification, activity propagation, constraint feasibility,
+ * and application via cxf_pivot_bound.  Must be called after the
+ * iteration loop terminates, before cxf_simplex_cleanup.
+ *
+ * @param state   Solver state with dual values, bounds, status, matrix
+ * @param env     Environment with tolerances
+ * @param workOut Optional work estimation accumulator (NULL to disable)
+ * @return CXF_OK on success, error code on failure
+ */
+int cxf_simplex_final(SolverState *state, CxfEnv *env, double *workOut);
+
+/**
  * @brief Free solver context and all resources.
  * @param state Context to free (may be NULL)
  */
-void cxf_simplex_final(SolverState *state);
+void cxf_state_free(SolverState *state);
 
 /**
  * @brief Set up solver context for iteration.

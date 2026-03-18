@@ -131,6 +131,7 @@ target_sources(convexfeld PRIVATE
     src/simplex/bfrt.c
     src/simplex/crash.c
     src/simplex/context.c
+    src/simplex/final.c
     src/simplex/setup.c
     src/simplex/pivot_primal.c
     src/simplex/perturbation.c

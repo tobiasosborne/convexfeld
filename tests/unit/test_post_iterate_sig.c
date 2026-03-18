@@ -41,7 +41,7 @@ void test_post_iterate_takes_model(void) {
     TEST_ASSERT_TRUE(rc == 0 || rc == CXF_ITERATION_LIMIT);
     TEST_ASSERT_TRUE(stall == 0 || stall == 1 || stall == -1);
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 /* V2 spec: null model returns CXF_ERROR_NULL_ARGUMENT */
@@ -54,7 +54,7 @@ void test_post_iterate_null_model(void) {
     int rc = cxf_simplex_post_iterate(NULL, state, NULL);
     TEST_ASSERT_EQUAL_INT(CXF_ERROR_NULL_ARGUMENT, rc);
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 /* V2 spec: null state returns CXF_ERROR_NULL_ARGUMENT */
@@ -82,7 +82,7 @@ void test_post_iterate_derives_env(void) {
     /* Stagnation: delta_z == 0 < opt_tol => iteration_mode set */
     TEST_ASSERT_EQUAL_INT(1, state->iteration_mode);
 
-    cxf_simplex_final(state);
+    cxf_state_free(state);
 }
 
 int main(void) {
