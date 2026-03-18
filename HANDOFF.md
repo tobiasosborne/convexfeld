@@ -4,7 +4,7 @@
 
 ---
 
-## STATUS: 147/147 tests pass. 46 Netlib pass. 36 V2 issues closed this session. ~147 remain (all infrastructure). Master clean and pushed. ALL SOLVER-CORE SPEC V2 ISSUES RESOLVED.
+## STATUS: 147/147 tests pass. 43 Netlib pass (post-bugfix). 36+ V2 issues closed. ~147 infrastructure remain. 5 critical solver bugs fixed. Master clean and pushed.
 
 ### Session 2026-03-18: Solver-Core V2 Compliance (Convergence Focus)
 
