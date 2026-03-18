@@ -95,7 +95,15 @@ int cxf_simplex_post_iterate(CxfModel *model, SolverState *state,
     if (state->iteration >= state->max_iterations)
         return CXF_ITERATION_LIMIT;
 
-    /* Check 4: User interrupt (placeholder) */
+    /* Check 4: User interrupt (simplex_iteration.md Check 4).
+     * Check environment termination flag set by Ctrl+C handler or
+     * cxf_terminate API call. */
+    if (state->model_ref != NULL && state->model_ref->env != NULL) {
+        CxfEnv *env = state->model_ref->env;
+        if (env->terminate_flag ||
+            (env->terminate_flag_ptr != NULL && *env->terminate_flag_ptr))
+            return CXF_ITERATION_LIMIT;  /* Graceful termination */
+    }
 
     return 0;
 }
