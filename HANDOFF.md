@@ -4,7 +4,30 @@
 
 ---
 
-## STATUS: 147/147 tests pass. 43 Netlib pass (post-bugfix). 36+ V2 issues closed. ~147 infrastructure remain. 5 critical solver bugs fixed. Master clean and pushed.
+## STATUS: 147/147 tests pass. 43 Netlib pass. 36+ V2 issues closed + 5 critical bugs fixed. 11 QA issues filed from cleanroom_implementation_qa.md. Master pushed.
+
+### Session 2026-03-18 (continued): Cleanroom Q&A Analysis
+
+**cleanroom_implementation_qa.md** analyzed — answers to 18 questions from source code holder.
+11 new beads issues created mapping QA findings to specific fixes:
+
+| ID | Pri | Fix | Expected Impact |
+|----|-----|-----|-----------------|
+| ke87 | P0 | FTRAN residual refactorization trigger | False UNBOUNDED, obj drift |
+| 3d05 | P0 | Perturbation formula: eps*(1+|bound|)*(1+hash(i)) | kb2/recipe cycling |
+| zqsd | P0 | Perturbation counter cumulative, not reset | Second perturbation fires sooner |
+| 74df | P1 | Unbounded confirmation probe | scsd8/shell false UNBOUNDED |
+| x5tq | P1 | Outer loop limits: primal=5 not 100 | Faster termination |
+| xmvx | P1 | Small pivot accumulation trigger | Numerical edge cases |
+| ahgw | P1 | Adaptive refactorization interval | Long-running problems |
+| 2gje | P2 | Post-fixing obj recomputation diagnostic | boeing2/vtp wrong obj |
+| cq7p | P2 | Replace Bland trigger with outer loop limits | Cycling |
+| sbeo | P2 | Verify Level 0 pricing is O(dirty-set) | 57 TIMEOUTs |
+| 6k38 | P2 | Growth factor: track all U entries | tuff/vtp numerical |
+
+**Key insight from Q&A:** The 57 TIMEOUTs are NOT from missing spec compliance — they're from
+Level 0 pricing not being fast enough (should be O(dirty-set), handling >90% of iterations).
+The 3-level pricing infrastructure EXISTS but may bypass Level 0 with full scans.
 
 ### Session 2026-03-18: Solver-Core V2 Compliance (Convergence Focus)
 
