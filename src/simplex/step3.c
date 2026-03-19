@@ -1,15 +1,18 @@
 /**
  * @file step3.c
- * @brief Constraint-side bound propagation — cxf_simplex_step3 (v2 P3.20)
+ * @brief Constraint elimination — cxf_simplex_step3
  *
- * For each dirty constraint, scan its CSR row and compute implied bounds
- * on each variable from the constraint's activity bounds. Tighten where
- * the implied bound is stronger than the current bound.
+ * For each candidate constraint, pre-screen whether all nonbasic
+ * variables have small range * coefficient products. If so, fix
+ * every eligible nonbasic variable at the appropriate bound and
+ * mark the row as eliminated (basic_vars = -2).
  *
- * This is the standard implied-bound technique from LP presolve
- * (Savelsbergh, 1994), applied iteratively during the simplex solve.
- *
- * Spec: docs/specs-v2/specs/modules/simplex_iteration.md
+ * Matches binary constraint-elimination algorithm (T1.2):
+ *   1. Get constraint candidates from pricing queue
+ *   2. Pre-screen: skip if ANY variable has |range*coeff| >= threshold
+ *   3. Create Type 8 eta with full row data
+ *   4. Fix each eligible nonbasic variable via cxf_pivot_bound
+ *   5. Set basic_vars[row] = -2 (eliminated sentinel)
  */
 
 #include "convexfeld/cxf_solver.h"
@@ -23,170 +26,155 @@
 #include "simplex_internal.h"
 #include "../basis/basis_internal.h"
 
+/* Type 8 eta: constraint elimination record with full row data */
+#ifndef CXF_ETA_CONSTRAINT_ELIM
+#define CXF_ETA_CONSTRAINT_ELIM 8
+#endif
 
 /**
- * @brief Tighten one variable bound and propagate.
+ * @brief Pre-screen a constraint row for elimination eligibility.
  *
- * Updates the bound, adjusts activity bounds via cxf_pivot_update,
- * and marks the variable dirty in the pricing subsystem.
- *
- * @return 1 if tightened, 0 if no change
+ * A constraint is eligible only if ALL nonbasic variables in its row
+ * have |range * coeff| < threshold. Returns 1 if eligible, 0 if not.
  */
-static int tighten_bound(SolverState *state, int var, double new_val,
-                         int is_lb, double tol) {
-    double *bound = is_lb ? state->work_lb : state->work_ub;
-    double old = bound[var];
+static int row_eligible(const SolverState *state, int row, double thresh) {
+    int64_t rs = state->csr_row_ptr[row];
+    int64_t re = state->csr_row_ptr[row + 1];
+    int total = state->num_vars + state->num_constrs;
 
-    if (is_lb) {
-        if (new_val <= old + tol) return 0;
-    } else {
-        if (new_val >= old - tol) return 0;
+    for (int64_t k = rs; k < re; k++) {
+        int j = state->csr_col_idx[k];
+        if (j < 0 || j >= total) continue;
+        if (state->basis->var_status[j] >= 0) continue; /* basic */
+
+        double range = state->work_ub[j] - state->work_lb[j];
+        if (range >= CXF_INFINITY) return 0;
+
+        if (fabs(range * state->csr_values[k]) >= thresh) return 0;
     }
-
-    /* Check that tightening doesn't make bounds infeasible */
-    if (is_lb && new_val > state->work_ub[var] + tol) return 0;
-    if (!is_lb && new_val < state->work_lb[var] - tol) return 0;
-
-    /* Capture old bounds before mutation */
-    double old_lb = state->work_lb[var];
-    double old_ub = state->work_ub[var];
-    bound[var] = new_val;
-
-    if (var < state->num_vars) {
-        double new_lb = is_lb ? new_val : old_lb;
-        double new_ub = is_lb ? old_ub : new_val;
-        cxf_pivot_update(state, var, old_lb, new_lb, old_ub, new_ub,
-                         CXF_INFINITY);
-    }
-    if (state->pricing)
-        cxf_pricing_mark_dirty(state->pricing, var);
-
-    /* V2 simplex_iteration.md: create lightweight BOUND_CHANGE eta record */
-    if (state->basis != NULL) {
-        EtaVector *eta;
-        if (state->basis->eta_pool != NULL)
-            eta = (EtaVector *)cxf_eta_pool_alloc(state->basis->eta_pool,
-                                                    sizeof(EtaVector));
-        else
-            eta = (EtaVector *)calloc(1, sizeof(EtaVector));
-        if (eta != NULL) {
-            eta->type = CXF_ETA_BOUND_CHANGE;
-            eta->pivot_row = -1;
-            eta->entering_var = var;
-            eta->leaving_var = -1;
-            eta->pivot_elem = new_val;
-            eta->reduced_cost = old;  /* previous bound value */
-            eta->direction = is_lb ? 1 : -1;
-            eta->status = is_lb ? CXF_VAR_AT_LOWER : CXF_VAR_AT_UPPER;
-            eta->nnz = 0;
-            eta->indices = NULL;
-            eta->values = NULL;
-            eta->next = state->basis->eta_head;
-            state->basis->eta_head = eta;
-            state->basis->eta_count++;
-            state->eta_count = state->basis->eta_count;
-        }
-    }
-
     return 1;
 }
 
+/**
+ * @brief Create a Type 8 eta recording the eliminated row.
+ *
+ * Stores full row data (indices + values) for post-solve reversal.
+ */
+static int create_row_eta(SolverState *state, int row) {
+    BasisState *basis = state->basis;
+    int64_t rs = state->csr_row_ptr[row];
+    int64_t re = state->csr_row_ptr[row + 1];
+    int nnz = (int)(re - rs);
+    if (nnz <= 0) return 0;
+
+    EtaVector *eta;
+    if (basis->eta_pool)
+        eta = (EtaVector *)cxf_eta_pool_alloc(basis->eta_pool,
+                                               sizeof(EtaVector));
+    else
+        eta = (EtaVector *)calloc(1, sizeof(EtaVector));
+    if (!eta) return -1;
+
+    int *idx = NULL;
+    double *val = NULL;
+    if (basis->eta_pool) {
+        idx = (int *)cxf_eta_pool_alloc(basis->eta_pool,
+                                         (size_t)nnz * sizeof(int));
+        val = (double *)cxf_eta_pool_alloc(basis->eta_pool,
+                                            (size_t)nnz * sizeof(double));
+    } else {
+        idx = (int *)malloc((size_t)nnz * sizeof(int));
+        val = (double *)malloc((size_t)nnz * sizeof(double));
+    }
+    if (!idx || !val) {
+        if (!basis->eta_pool) { free(idx); free(val); free(eta); }
+        return -1;
+    }
+
+    for (int i = 0; i < nnz; i++) {
+        idx[i] = state->csr_col_idx[rs + i];
+        val[i] = state->csr_values[rs + i];
+    }
+
+    eta->type = CXF_ETA_CONSTRAINT_ELIM;
+    eta->pivot_row = row;
+    eta->entering_var = -1;
+    eta->leaving_var = basis->basic_vars[row];
+    eta->pivot_elem = 0.0;
+    eta->reduced_cost = 0.0;
+    eta->direction = 0;
+    eta->status = 0;
+    eta->nnz = nnz;
+    eta->indices = idx;
+    eta->values = val;
+    eta->next = basis->eta_head;
+    basis->eta_head = eta;
+    basis->eta_count++;
+    state->eta_count = basis->eta_count;
+    return 0;
+}
+
 /*---------------------------------------------------------------------------
- * cxf_simplex_step3 — Constraint-side bound propagation (v2 P3.20, LP only)
+ * cxf_simplex_step3 — Constraint elimination
  *
- * For each dirty constraint, scan its CSR row and compute implied bounds
- * on each variable from the constraint's activity bounds. Tighten where
- * the implied bound is stronger than the current bound.
- *
- * This is the standard implied-bound technique from LP presolve
- * (Savelsbergh, 1994), applied iteratively during the simplex solve.
+ * For each dirty constraint candidate:
+ *   1. Pre-screen: skip if any nonbasic var has |range*coeff| >= threshold
+ *   2. Create Type 8 eta with full row data
+ *   3. Fix all eligible nonbasic vars at appropriate bounds
+ *   4. Mark row eliminated: basic_vars[row] = -2
  *---------------------------------------------------------------------------*/
 
 int cxf_simplex_step3(SolverState *state, CxfEnv *env) {
     if (!state || !env) return 0;
-    if (!state->pricing) return 0;
-    if (!state->min_activity || !state->max_activity) return 0;
-
+    if (!state->pricing || !state->basis) return 0;
     if (!state->csr_row_ptr || !state->csr_col_idx || !state->csr_values)
         return 0;
 
-    double tol = env->feasibility_tol;
+    double thresh = env->feasibility_tol;
     int m = state->num_constrs;
-    int n = state->num_vars;
-    int tightened = 0;
+    int total = state->num_vars + m;
 
-    /* Get dirty constraint candidates (V2 adaptive) */
     int num_cand = 0;
     int *candidates = NULL;
     cxf_pricing_constr_candidates_v2(state->pricing, state,
                                      &num_cand, &candidates);
-    if (num_cand == 0 || candidates == NULL) return 0;
+    if (num_cand == 0 || !candidates) return 0;
 
     for (int ci = 0; ci < num_cand; ci++) {
         int row = candidates[ci];
         if (row < 0 || row >= m) continue;
-
-        double min_act = state->min_activity[row];
-        double max_act = state->max_activity[row];
-        if (min_act <= -CXF_INFINITY || max_act >= CXF_INFINITY) continue;
+        if (state->basis->basic_vars[row] == -2) continue; /* eliminated */
 
         char sense = (state->work_sense) ? state->work_sense[row] : '<';
+        if (sense == '=' || sense == 'E') continue; /* can't eliminate */
 
-        /* Scan CSR row for implied bounds */
+        if (!row_eligible(state, row, thresh)) continue;
+
+        if (create_row_eta(state, row) < 0) continue;
+
+        /* Fix all eligible nonbasic vars at appropriate bounds.
+         * <= constraint: positive coeff → lb, negative → ub.
+         * >= constraint: positive coeff → ub, negative → lb. */
+        int is_ge = (sense == '>' || sense == 'G');
         int64_t rs = state->csr_row_ptr[row];
         int64_t re = state->csr_row_ptr[row + 1];
 
         for (int64_t k = rs; k < re; k++) {
             int j = state->csr_col_idx[k];
-            if (j < 0 || j >= n) continue;
-
-            /* Skip basic or fixed variables */
-            if (state->basis && state->basis->var_status[j] >= 0) continue;
-            double lb = state->work_lb[j];
-            double ub = state->work_ub[j];
-            if (ub - lb < tol) continue;
+            if (j < 0 || j >= total) continue;
+            if (state->basis->var_status[j] >= 0) continue;
 
             double a = state->csr_values[k];
-            if (fabs(a) < CXF_MIN_PIVOT) continue;
+            double ub = state->work_ub[j];
+            double fix = is_ge ? ((a > 0.0) ? ub : state->work_lb[j])
+                               : ((a > 0.0) ? state->work_lb[j] : ub);
 
-            /* Implied bounds from constraint activity (Savelsbergh 1994).
-             * x_k <= l_k + (b_i - L_act_i) / a_ik  (for <= with a > 0)
-             * x_k >= u_k + (b_i - U_act_i) / a_ik  (for <= with a < 0)
-             * where L_act_i / U_act_i include variable k's contribution. */
-            double rhs_i = (state->work_rhs) ? state->work_rhs[row] : 0.0;
-            if (sense == '<' || sense == 'L' ||
-                sense == '=' || sense == 'E') {
-                if (a > 0) {
-                    double impl = lb + (rhs_i - min_act) / a;
-                    tightened += tighten_bound(state, j, impl, 0, tol);
-                } else {
-                    double impl = ub + (rhs_i - max_act) / a;
-                    tightened += tighten_bound(state, j, impl, 1, tol);
-                }
-            }
-            if (sense == '>' || sense == 'G' ||
-                sense == '=' || sense == 'E') {
-                if (a > 0) {
-                    double impl = ub + (rhs_i - max_act) / a;
-                    tightened += tighten_bound(state, j, impl, 1, tol);
-                } else {
-                    double impl = lb + (rhs_i - min_act) / a;
-                    tightened += tighten_bound(state, j, impl, 0, tol);
-                }
-            }
-
-            /* V2 simplex_iteration.md: if propagation fixed this variable,
-             * eliminate via cxf_pivot_bound (eta + pricing + activity). */
-            if (state->work_ub[j] - state->work_lb[j] < CXF_BOUND_EQUALITY_TOL
-                && state->basis && state->basis->var_status[j] < 0) {
-                double fix = 0.5 * (state->work_lb[j] + state->work_ub[j]);
-                int ret = cxf_pivot_bound(env, state, j, fix,
-                                          state->work_ub[j], 0);
-                if (ret != CXF_OK) return ret;
-            }
+            cxf_pivot_bound(env, state, j, fix, ub, 0);
         }
+
+        state->basis->basic_vars[row] = -2;
+        state->rows_eliminated++;
     }
 
-    state->bounds_propagated += tightened;
     return 0;
 }

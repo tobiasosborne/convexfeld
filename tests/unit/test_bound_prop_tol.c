@@ -46,6 +46,9 @@ static SolverState *make_state(double a, char sense, double rhs,
     s->work_ub = calloc(total, sizeof(double));
     s->work_lb[0] = lb;  s->work_ub[0] = ub;
     s->work_lb[1] = -CXF_INFINITY;  s->work_ub[1] = CXF_INFINITY;
+    s->work_obj = calloc(total, sizeof(double));
+    s->work_x = calloc(total, sizeof(double));
+    s->work_dj = calloc(total, sizeof(double));
 
     s->work_rhs = calloc(m, sizeof(double));
     s->work_rhs[0] = rhs;
@@ -93,6 +96,7 @@ static void free_state(SolverState *s) {
     cxf_basis_free(s->basis);
     cxf_pricing_free(s->pricing);
     free(s->work_lb);    free(s->work_ub);
+    free(s->work_obj);   free(s->work_x);   free(s->work_dj);
     free(s->work_rhs);   free(s->work_sense);
     free(s->min_activity); free(s->max_activity);
     free(s->csr_row_ptr);  free(s->csr_col_idx);  free(s->csr_values);
@@ -104,21 +108,17 @@ void setUp(void) {}
 void tearDown(void) {}
 
 /**
- * step3: coefficient 1e-10 (between 1e-13 and 1e-9).
- * 1e-10 * x <= 5e-10, x in [0, 100].
- * Acts: min=0, max=1e-8. Implied ub = 0 + (5e-10 - 0) / 1e-10 = 5.
- * Old code skipped this (|1e-10| < 1e-9). Now it should tighten.
+ * step3 (constraint elimination): small range*coeff → row eliminated.
+ * coeff=0.01, range=1e-8, |0.01*1e-8|=1e-10 < 1e-6 → eligible.
+ * Variable fixed at lb (positive coeff, <= constraint).
  */
 void test_step3_small_coeff_processed(void) {
     CxfEnv env = {0};
-    env.feasibility_tol = 1e-8;
-    double a = 1e-10;
-    SolverState *s = make_state(a, '<', 5e-10, 0.0, 100.0);
-    double orig_ub = s->work_ub[0];
+    env.feasibility_tol = 1e-6;
+    SolverState *s = make_state(0.01, '<', 0.0, 5.0, 5.0 + 1e-8);
     int rc = cxf_simplex_step3(s, &env);
     TEST_ASSERT_EQUAL_INT(0, rc);
-    TEST_ASSERT(s->work_ub[0] < orig_ub - 1.0);
-    TEST_ASSERT_DOUBLE_WITHIN(1e-4, 5.0, s->work_ub[0]);
+    TEST_ASSERT_EQUAL_INT(-2, s->basis->basic_vars[0]); /* eliminated */
     free_state(s);
 }
 
@@ -141,18 +141,17 @@ void test_step2_small_coeff_processed(void) {
 }
 
 /**
- * Coefficients below CXF_MIN_PIVOT (1e-13) must still be skipped.
- * 1e-14 * x <= 1e-14, x in [0, 100].
- * Should NOT tighten (coefficient too small).
+ * step3: large range*coeff → NOT eliminated.
+ * coeff=2.0, range=100, |2*100|=200 >= 1e-6 → not eligible.
  */
 void test_step3_below_min_pivot_skipped(void) {
     CxfEnv env = {0};
-    env.feasibility_tol = 1e-8;
-    double a = 1e-14;
-    SolverState *s = make_state(a, '<', 1e-14, 0.0, 100.0);
+    env.feasibility_tol = 1e-6;
+    SolverState *s = make_state(2.0, '<', 0.0, 0.0, 100.0);
     int rc = cxf_simplex_step3(s, &env);
     TEST_ASSERT_EQUAL_INT(0, rc);
-    TEST_ASSERT_DOUBLE_WITHIN(1e-12, 100.0, s->work_ub[0]);
+    TEST_ASSERT_NOT_EQUAL(-2, s->basis->basic_vars[0]);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-12, 100.0, s->work_ub[0]); /* unchanged */
     free_state(s);
 }
 
@@ -171,19 +170,15 @@ void test_step2_below_min_pivot_skipped(void) {
 }
 
 /**
- * Coefficients at exactly CXF_PIVOT_TOL (1e-9) — above threshold,
- * processed under both old and new code. Sanity check.
- * 1e-9 * x <= 5e-9, x in [0, 100].
- * Implied ub = 0 + (5e-9 - 0) / 1e-9 = 5.
+ * step3: returns 0 always (never CXF_INFEASIBLE).
  */
 void test_step3_at_old_threshold_still_works(void) {
     CxfEnv env = {0};
-    env.feasibility_tol = 1e-8;
-    double a = 1e-9;
-    SolverState *s = make_state(a, '<', 5e-9, 0.0, 100.0);
+    env.feasibility_tol = 1e-6;
+    SolverState *s = make_state(2.0, '<', 10.0, 0.0, 100.0);
     int rc = cxf_simplex_step3(s, &env);
     TEST_ASSERT_EQUAL_INT(0, rc);
-    TEST_ASSERT_DOUBLE_WITHIN(1e-4, 5.0, s->work_ub[0]);
+    TEST_ASSERT_NOT_EQUAL(CXF_INFEASIBLE, rc);
     free_state(s);
 }
 

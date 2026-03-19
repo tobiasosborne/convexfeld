@@ -1,11 +1,12 @@
 /**
  * @file test_step3_implied_bound.c
- * @brief Tests for step3.c implied bound formula (Savelsbergh 1994).
+ * @brief Tests for step3 constraint elimination (T1.2 rewrite).
  *
- * Validates cxf_simplex_step3 uses: x_k <= l_k + (b_i - MinAct) / a_ik
- * The previous code omitted the RHS term, computing: l_k - MinAct / a_ik
- *
- * Beads: convexfeld-cm5w
+ * Validates the constraint elimination algorithm:
+ *   - Pre-screening: constraints with large range*coeff are skipped
+ *   - Row elimination: basic_vars[row] = -2 after elimination
+ *   - Variable fixing: nonbasic vars fixed at lb or ub by coeff sign
+ *   - Equality constraints: never eliminated
  */
 
 #include "unity.h"
@@ -16,7 +17,6 @@
 #include "convexfeld/cxf_pricing.h"
 #include <stdlib.h>
 #include <string.h>
-#include <math.h>
 
 extern BasisState *cxf_basis_create(int m, int n);
 extern void cxf_basis_free(BasisState *basis);
@@ -26,11 +26,7 @@ extern int cxf_pricing_init(PricingState *ctx, int num_vars, int strategy);
 extern int cxf_pricing_init_constrs(PricingState *ctx, int num_constrs);
 extern int cxf_simplex_step3(SolverState *state, CxfEnv *env);
 
-/**
- * Build a 1-constraint, 1-variable state. Activity bounds are computed
- * consistently from variable bounds to avoid triggering infeasibility
- * recomputation.
- */
+/* Build a 1-constraint, 1-variable state for constraint elimination tests. */
 static SolverState *make_state(double a, char sense, double rhs,
                                double lb, double ub) {
     int n = 1, m = 1, total = n + m;
@@ -47,17 +43,14 @@ static SolverState *make_state(double a, char sense, double rhs,
     s->work_ub = calloc(total, sizeof(double));
     s->work_lb[0] = lb;  s->work_ub[0] = ub;
     s->work_lb[1] = -CXF_INFINITY;  s->work_ub[1] = CXF_INFINITY;
+    s->work_obj = calloc(total, sizeof(double));
+    s->work_x = calloc(total, sizeof(double));
+    s->work_dj = calloc(total, sizeof(double));
 
     s->work_rhs = calloc(m, sizeof(double));
     s->work_rhs[0] = rhs;
     s->work_sense = calloc(m, sizeof(char));
     s->work_sense[0] = sense;
-
-    double v0 = a * lb, v1 = a * ub;
-    s->min_activity = calloc(m, sizeof(double));
-    s->max_activity = calloc(m, sizeof(double));
-    s->min_activity[0] = (v0 < v1) ? v0 : v1;
-    s->max_activity[0] = (v0 > v1) ? v0 : v1;
 
     s->csr_row_ptr = calloc(m + 1, sizeof(int64_t));
     s->csr_row_ptr[0] = 0;  s->csr_row_ptr[1] = 1;
@@ -89,8 +82,8 @@ static void free_state(SolverState *s) {
     cxf_basis_free(s->basis);
     cxf_pricing_free(s->pricing);
     free(s->work_lb);    free(s->work_ub);
+    free(s->work_obj);   free(s->work_x);   free(s->work_dj);
     free(s->work_rhs);   free(s->work_sense);
-    free(s->min_activity); free(s->max_activity);
     free(s->csr_row_ptr);  free(s->csr_col_idx);  free(s->csr_values);
     free(s->csc_col_ptr);  free(s->csc_row_idx);  free(s->csc_values);
     free(s);
@@ -99,82 +92,71 @@ static void free_state(SolverState *s) {
 void setUp(void) {}
 void tearDown(void) {}
 
-/**
- * 2*x <= 10, x in [0,100]. Acts: min=0, max=200.
- * New: impl_ub = 0 + (10-0)/2 = 5. Old: 0 - 0/2 = 0 (wrong).
- */
-void test_leq_positive_coeff_ub_tightened(void) {
+/* Pre-screen: small range*coeff → constraint is eliminated */
+void test_small_range_eliminated(void) {
     CxfEnv env = {0};
-    env.feasibility_tol = 1e-8;
+    env.feasibility_tol = 1e-6;
+    /* coeff=0.1, range=1e-8 → |0.1*1e-8| = 1e-9 < 1e-6 → eligible */
+    SolverState *s = make_state(0.1, '<', 0.0, 5.0, 5.0 + 1e-8);
+    int rc = cxf_simplex_step3(s, &env);
+    TEST_ASSERT_EQUAL_INT(0, rc);
+    TEST_ASSERT_EQUAL_INT(-2, s->basis->basic_vars[0]); /* eliminated */
+    free_state(s);
+}
+
+/* Pre-screen: large range*coeff → constraint NOT eliminated */
+void test_large_range_not_eliminated(void) {
+    CxfEnv env = {0};
+    env.feasibility_tol = 1e-6;
+    /* coeff=2.0, range=100 → |2.0*100| = 200 >= 1e-6 → not eligible */
     SolverState *s = make_state(2.0, '<', 10.0, 0.0, 100.0);
     int rc = cxf_simplex_step3(s, &env);
     TEST_ASSERT_EQUAL_INT(0, rc);
-    TEST_ASSERT_DOUBLE_WITHIN(1e-6, 5.0, s->work_ub[0]);
+    TEST_ASSERT_NOT_EQUAL(-2, s->basis->basic_vars[0]); /* NOT eliminated */
     free_state(s);
 }
 
-/**
- * 4*x >= 20, x in [0,100]. Acts: min=0, max=400.
- * New: impl_lb = 100 + (20-400)/4 = 5. Old: 100 - 400/4 = 0 (wrong).
- */
-void test_geq_positive_coeff_lb_tightened(void) {
+/* Equality constraints are never eliminated */
+void test_equality_not_eliminated(void) {
     CxfEnv env = {0};
-    env.feasibility_tol = 1e-8;
-    SolverState *s = make_state(4.0, '>', 20.0, 0.0, 100.0);
+    env.feasibility_tol = 1e-6;
+    /* Small range but equality → skip */
+    SolverState *s = make_state(0.1, '=', 0.0, 5.0, 5.0 + 1e-8);
     int rc = cxf_simplex_step3(s, &env);
     TEST_ASSERT_EQUAL_INT(0, rc);
-    TEST_ASSERT_DOUBLE_WITHIN(1e-6, 5.0, s->work_lb[0]);
+    TEST_ASSERT_NOT_EQUAL(-2, s->basis->basic_vars[0]);
     free_state(s);
 }
 
-/**
- * 5*x <= 25, x in [0,100]. Acts: min=0, max=500.
- * New: impl_ub = 0 + (25-0)/5 = 5. Old: 0 - 0/5 = 0 (wrong).
- */
-void test_nonzero_rhs_discriminates(void) {
+/* Positive coeff in <= → variable fixed at lb */
+void test_leq_positive_fixes_at_lb(void) {
     CxfEnv env = {0};
-    env.feasibility_tol = 1e-8;
-    SolverState *s = make_state(5.0, '<', 25.0, 0.0, 100.0);
+    env.feasibility_tol = 1e-6;
+    SolverState *s = make_state(0.01, '<', 0.0, 3.0, 3.0 + 1e-8);
     int rc = cxf_simplex_step3(s, &env);
     TEST_ASSERT_EQUAL_INT(0, rc);
-    TEST_ASSERT_DOUBLE_WITHIN(1e-6, 5.0, s->work_ub[0]);
+    /* Variable should be fixed at lb=3.0 (positive coeff in <=) */
+    TEST_ASSERT_DOUBLE_WITHIN(1e-6, 3.0, s->work_lb[0]);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-6, 3.0, s->work_ub[0]);
     free_state(s);
 }
 
-/**
- * 3*x <= -6, x in [-100,100]. Acts: min=-300, max=300.
- * New: impl_ub = -100 + (-6-(-300))/3 = -2. Old: -100 - (-300)/3 = 0 (wrong).
- */
-void test_negative_rhs(void) {
+/* Never returns CXF_INFEASIBLE (T1.2: fabricated infeasibility removed) */
+void test_never_returns_infeasible(void) {
     CxfEnv env = {0};
-    env.feasibility_tol = 1e-8;
-    SolverState *s = make_state(3.0, '<', -6.0, -100.0, 100.0);
+    env.feasibility_tol = 1e-6;
+    SolverState *s = make_state(2.0, '<', 10.0, 0.0, 100.0);
     int rc = cxf_simplex_step3(s, &env);
-    TEST_ASSERT_EQUAL_INT(0, rc);
-    TEST_ASSERT_DOUBLE_WITHIN(1e-6, -2.0, s->work_ub[0]);
-    free_state(s);
-}
-
-/**
- * 5*x <= 0, x in [-10,10]. Acts: min=-50, max=50.
- * New: -10 + (0-(-50))/5 = 0. Old: -10 - (-50)/5 = 0. Same (rhs=0).
- */
-void test_zero_rhs_both_agree(void) {
-    CxfEnv env = {0};
-    env.feasibility_tol = 1e-8;
-    SolverState *s = make_state(5.0, '<', 0.0, -10.0, 10.0);
-    int rc = cxf_simplex_step3(s, &env);
-    TEST_ASSERT_EQUAL_INT(0, rc);
-    TEST_ASSERT_DOUBLE_WITHIN(1e-6, 0.0, s->work_ub[0]);
+    TEST_ASSERT_NOT_EQUAL(CXF_INFEASIBLE, rc);
     free_state(s);
 }
 
 int main(void) {
     UNITY_BEGIN();
-    RUN_TEST(test_leq_positive_coeff_ub_tightened);
-    RUN_TEST(test_geq_positive_coeff_lb_tightened);
-    RUN_TEST(test_nonzero_rhs_discriminates);
-    RUN_TEST(test_negative_rhs);
-    RUN_TEST(test_zero_rhs_both_agree);
+    RUN_TEST(test_small_range_eliminated);
+    RUN_TEST(test_large_range_not_eliminated);
+    RUN_TEST(test_equality_not_eliminated);
+    RUN_TEST(test_leq_positive_fixes_at_lb);
+    RUN_TEST(test_never_returns_infeasible);
     return UNITY_END();
 }
