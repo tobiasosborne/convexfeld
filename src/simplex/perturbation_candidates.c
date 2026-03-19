@@ -62,13 +62,17 @@ static int process_one_candidate(SolverState *state, int j, int status,
                 return -1;
             }
         }
-        if (state->pricing)
-            cxf_pricing_mark_dirty(state->pricing, j);
+        /* T2.2: Do NOT call mark_dirty — that re-queues the degenerate
+         * variable for immediate repricing, defeating anti-cycling.
+         * Binary removes from pricing pool (varStatus=-1). Not dirtying
+         * achieves similar effect: variable won't appear in next scan. */
         return 1;
     }
 
     if (status >= 0) {
-        /* Case B: Basic variable -- implied bound analysis */
+        /* Case B: Basic variable — implied bound analysis.
+         * Binary strips entire row from pricing. Minimal fix: detect
+         * degeneracy but do not re-queue via mark_dirty. */
         int row = status;
         if (row < 0 || row >= m) return 0;
         if (j >= n) return 0;  /* skip auxiliaries */
@@ -79,8 +83,7 @@ static int process_one_candidate(SolverState *state, int j, int status,
             return -1;
         }
         if (result == 1) {
-            if (state->pricing)
-                cxf_pricing_mark_dirty(state->pricing, j);
+            /* T2.2: Do not re-queue — return 1 so caller counts it. */
             return 1;
         }
     }

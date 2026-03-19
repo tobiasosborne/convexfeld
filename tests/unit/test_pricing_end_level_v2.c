@@ -4,7 +4,7 @@
  *
  * Verifies the spec-compliant behavior from pricing_support.md:
  * - Signature: (PricingState*, SolverState*)
- * - L0: status-based compaction (non-negative retained)
+ * - L0: status-based compaction (nonbasic retained, basic discarded)
  * - L1-L2: flag-based promote/demote
  * - Work counter incremented with pre-compaction sizes
  * - Lazy activation on first call
@@ -56,7 +56,7 @@ void tearDown(void) {}
 /*--- Level 0: status-based compaction ---*/
 
 void test_l0_var_queue_filters_invalid(void) {
-    /* L0 var queue: retain entries with non-negative status (basic). */
+    /* L0 var queue: retain nonbasic entries (status < 0). */
     PricingState *ctx = cxf_pricing_create(5, 3);
     cxf_pricing_init(ctx, 5, 1);
     cxf_pricing_init_constrs(ctx, 3);
@@ -80,11 +80,11 @@ void test_l0_var_queue_filters_invalid(void) {
 
     cxf_pricing_end_level(ctx, st);
 
-    /* Only vars 0, 2 have non-negative status -> retained */
+    /* Only vars 1, 3 are nonbasic (status < 0) -> retained */
     TEST_ASSERT_EQUAL_INT(2, ctx->var_q_total[0]);
     TEST_ASSERT_EQUAL_INT(2, ctx->var_q_committed[0]);
-    TEST_ASSERT_EQUAL_INT(0, ctx->var_queue[0][0]);
-    TEST_ASSERT_EQUAL_INT(2, ctx->var_queue[0][1]);
+    TEST_ASSERT_EQUAL_INT(1, ctx->var_queue[0][0]);
+    TEST_ASSERT_EQUAL_INT(3, ctx->var_queue[0][1]);
 
     free_state(st);
     cxf_pricing_free(ctx);
@@ -135,8 +135,8 @@ void test_l1_promote_pending(void) {
     cxf_pricing_init_constrs(ctx, 3);
 
     SolverState *st = make_state(4, 3);
-    /* Make var 0 basic (non-negative) so it's not status-discarded */
-    st->basis->var_status[0] = 0;
+    /* Make var 0 nonbasic so it's not status-discarded */
+    st->basis->var_status[0] = CXF_VAR_AT_LOWER;
 
     ctx->current_level = 1;
     ctx->level_active[1] = 1;
@@ -164,7 +164,7 @@ void test_l1_demote_stale(void) {
     cxf_pricing_init_constrs(ctx, 3);
 
     SolverState *st = make_state(4, 3);
-    st->basis->var_status[1] = 0;  /* basic (valid) */
+    st->basis->var_status[1] = CXF_VAR_AT_LOWER;  /* nonbasic (survives status) */
 
     ctx->current_level = 1;
     ctx->level_active[1] = 1;
@@ -185,13 +185,13 @@ void test_l1_demote_stale(void) {
 }
 
 void test_l1_discard_invalid_status(void) {
-    /* L1: entry with negative status -> discarded regardless of flags. */
+    /* L1: entry with basic status (>= 0) -> discarded regardless of flags. */
     PricingState *ctx = cxf_pricing_create(4, 3);
     cxf_pricing_init(ctx, 4, 1);
     cxf_pricing_init_constrs(ctx, 3);
 
     SolverState *st = make_state(4, 3);
-    st->basis->var_status[2] = CXF_VAR_AT_LOWER;  /* -1, nonbasic */
+    st->basis->var_status[2] = 0;  /* basic -> should be discarded */
 
     ctx->current_level = 1;
     ctx->level_active[1] = 1;

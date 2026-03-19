@@ -67,12 +67,13 @@ void cxf_pricing_end_level(PricingState *ctx, SolverState *state) {
 
         if (level == 0) {
             /* Level 0: simple status-based compaction.
-             * Retain entries whose status is non-negative. */
+             * Retain nonbasic variables (status < 0) — basic vars
+             * cannot enter the basis and are ineligible for pricing. */
             if (ctx->var_queue[0] != NULL && vs != NULL) {
                 int w = 0;
                 for (int i = 0; i < ctx->var_q_total[0]; i++) {
                     int idx = ctx->var_queue[0][i];
-                    if (idx >= 0 && idx < total_st && vs[idx] >= 0)
+                    if (idx >= 0 && idx < total_st && vs[idx] < 0)
                         ctx->var_queue[0][w++] = idx;
                 }
                 ctx->var_q_committed[0] = w;
@@ -101,7 +102,7 @@ void cxf_pricing_end_level(PricingState *ctx, SolverState *state) {
                 for (int i = 0; i < ctx->var_q_total[level]; i++) {
                     int idx = ctx->var_queue[level][i];
                     if (idx < 0 || idx >= ctx->num_vars) continue;
-                    if (vs != NULL && idx < total_st && vs[idx] < 0) {
+                    if (vs != NULL && idx < total_st && vs[idx] >= 0) {
                         ctx->var_flags[idx] &= (uint8_t)~lm;
                         continue;
                     }

@@ -132,41 +132,6 @@ int cxf_simplex_step3(SolverState *state, CxfEnv *env) {
 
         char sense = (state->work_sense) ? state->work_sense[row] : '<';
 
-        /* Two-stage infeasibility check (simplex_iteration.md).
-         * Stage 1: preliminary — activity bounds indicate violation.
-         * Stage 2: confirmation — recompute activity from scratch.
-         * Prevents false infeasibility from accumulated numerical noise
-         * in incrementally-maintained min/max activity. */
-        {
-            int stage1 = 0;
-            if ((sense == '<' || sense == 'L') && min_act > tol)
-                stage1 = 1;
-            if ((sense == '>' || sense == 'G') && max_act < -tol)
-                stage1 = 1;
-            if ((sense == '=' || sense == 'E') &&
-                (min_act > tol || max_act < -tol))
-                stage1 = 1;
-            if (stage1) {
-                /* Stage 2: recompute activity from scratch */
-                cxf_compute_activity_bounds(state, 1, &row);
-                double fresh_min = state->min_activity[row];
-                double fresh_max = state->max_activity[row];
-                int confirmed = 0;
-                if ((sense == '<' || sense == 'L') && fresh_min > tol)
-                    confirmed = 1;
-                if ((sense == '>' || sense == 'G') && fresh_max < -tol)
-                    confirmed = 1;
-                if ((sense == '=' || sense == 'E') &&
-                    (fresh_min > tol || fresh_max < -tol))
-                    confirmed = 1;
-                if (confirmed)
-                    return CXF_INFEASIBLE;
-                /* Confirmation failed — continue processing */
-                min_act = fresh_min;
-                max_act = fresh_max;
-            }
-        }
-
         /* Scan CSR row for implied bounds */
         int64_t rs = state->csr_row_ptr[row];
         int64_t re = state->csr_row_ptr[row + 1];

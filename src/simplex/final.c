@@ -65,7 +65,7 @@ int cxf_simplex_final(SolverState *state, CxfEnv *env, double *workOut) {
     int abort_early = 0;
     for (int j = 0; j < total; j++) {
         target[j] = NO_TARGET;
-        if (var_status[j] >= 0) continue; /* skip basic/fixed */
+        if (var_status[j] < 0) continue; /* skip nonbasic */
 
         /* Spec: abort if variable has special flags */
         if (state->var_flags != NULL && state->var_flags[j] != 0) {

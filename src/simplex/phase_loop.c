@@ -79,11 +79,9 @@ int cxf_check_phase_one_end(SolverState *state, CxfModel *model, CxfEnv *env) {
 
     /* Compute Phase I objective fresh to guard against drift */
     double fresh_obj = compute_phase1_objective(state);
-    double phase1_obj = (fresh_obj > state->obj_value)
-                        ? fresh_obj : state->obj_value;
     state->obj_value = fresh_obj;
 
-    if (phase1_obj <= tol) {
+    if (fresh_obj <= tol) {
         /* Phase I objective is zero — feasible, transition to Phase II */
         int rc = cxf_transition_to_phase_two(state, model);
         if (rc != CXF_OK) return rc;
@@ -108,17 +106,6 @@ int cxf_check_phase_one_end(SolverState *state, CxfModel *model, CxfEnv *env) {
     }
     cxf_compute_reduced_costs(state);
     if (has_improving_direction(state, env->optimality_tol)) return 1;
-
-    /* Phase I near-feasibility: try tighter pricing tolerance.
-     * Spec: two_phase_method.md line 142 — "solver may attempt
-     * additional iterations with tighter tolerances."
-     * Use a local tighter tolerance — never mutate env. */
-    if (phase1_obj < 100.0 * tol) {
-        double tight_tol = env->optimality_tol * 0.01;
-        cxf_compute_reduced_costs(state);
-        int found = has_improving_direction(state, tight_tol);
-        if (found) return 1;
-    }
 
     /* No improving direction → truly infeasible */
     return CXF_INFEASIBLE;

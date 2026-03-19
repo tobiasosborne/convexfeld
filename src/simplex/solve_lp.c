@@ -5,14 +5,13 @@
  * V2 iteration sequence (per P3.20 Module-Level Notes):
  *   1. progress_snapshot
  *   2. simplex_iterate
- *   3. phase_end (pre-pivot)
- *   4. perturbation (if stalling)
- *   5. step (main pivot + BFRT)
- *   6. step2 (variable-side bound propagation)
- *   7. step3 (constraint-side bound propagation)
- *   8. phase_end (post-pivot)
- *   9. basis_diff (convergence detection)
- *  10. post_iterate (stall, stagnation, termination)
+ *   3. perturbation (if stalling)
+ *   4. step (main pivot + BFRT)
+ *   5. step2 (variable-side bound propagation)
+ *   6. step3 (constraint-side bound propagation)
+ *   7. phase_end (post-pivot only — T2.10)
+ *   8. basis_diff (convergence detection)
+ *   9. post_iterate (stall, stagnation, termination)
  *
  * Spec: docs/specs-v2/specs/modules/solve_lp_core.md
  */
@@ -45,11 +44,16 @@
 
 /* Phase I helpers */
 
-/* QA Q17: primal simplex uses 5 outer rounds, not 100.
- * Each round: snapshot → inner iteration loop → convergence check →
- * perturbation if stalled. With 5 rounds the solver terminates faster
- * on intractable problems. Spec: cvx_solve_lp/part3_main_loop.c:69-88. */
-#define MAX_OUTER_ROUNDS    5
+/* Outer round limit is mode-dependent (binary part3_main_loop.c:69-88):
+ *   primal (0)      →  5 rounds
+ *   dual/auto (1,-1) → 100 rounds
+ *   crossover (3,4)  →  10 rounds
+ *   other            → 100 rounds (conservative default) */
+static int max_outer_rounds(int method) {
+    if (method == 0) return 5;
+    if (method == 3 || method == 4) return 10;
+    return 100;
+}
 #define CONVERGENCE_BASE    0.01
 
 int cxf_solve_lp(CxfModel *model) {
@@ -160,30 +164,22 @@ int cxf_solve_lp(CxfModel *model) {
     int stall = 0;
     int snap_buf[CXF_SNAPSHOT_SIZE];
 
-    for (int round = 0; round < MAX_OUTER_ROUNDS && !terminated; round++) {
+    int max_rounds = max_outer_rounds(env->method);
+    for (int round = 0; round < max_rounds && !terminated; round++) {
         cxf_progress_snapshot(state, snap_buf);
         int inner_checks = 0;  /* convergence check count within this round */
 
         while (state->iteration < state->max_iterations) {
-            /* P5.4: Bland's rule is last resort, after perturbation fails.
-             * Only activate if perturbation has been tried (perturb_count > 0)
-             * AND we still have excessive degenerate pivots. */
-            if (!state->use_bland &&
-                state->perturb_count > 0 &&
-                state->degenerate_count > 3 * state->num_constrs)
-                state->use_bland = 1;
+            /* Bland's rule removed — not in binary (T3.1).
+             * Binary relies on perturbation + pricing escalation. */
 
             /* (1) Progress snapshot — taken at round start */
             /* (2) Progress logging + callback */
             cxf_simplex_iterate(model, state);
 
-            /* (3) Pre-pivot phase_end — runs unconditionally per spec
-             * P1.2 (fiyt): removed phase==2 guard. Spec simplex_iteration.md
-             * item 7 calls phase_end in both phases. */
-            int status = cxf_simplex_phase_end(state, env, 0);
-            if (status == CXF_INFEASIBLE) {
-                model->status = CXF_INFEASIBLE; terminated = 1; break;
-            }
+            /* Pre-pivot phase_end removed — binary calls phase_end once,
+             * post-pivot only (T2.10). */
+            int status;
 
             /* (4) Perturbation — reactive on stall/degeneracy only.
              * V2 solve_lp_core.md Phase 6 step 4: apply perturbation only
@@ -292,14 +288,11 @@ int cxf_solve_lp(CxfModel *model) {
                 model->status = CXF_INFEASIBLE; terminated = 1; break;
             }
 
-            /* (9) Basis diff — convergence detection (spec: perturbation.md).
-             * Threshold = max(0, k - k_0) * tau where k = inner check count,
-             * k_0 = 5 (grace period), tau = CONVERGENCE_BASE.
-             * First 5 checks: threshold=0 → any nonneg progress continues.
-             * After grace: threshold grows linearly → increasingly impatient. */
-            if (state->iteration_mode == 1 &&
-                state->iteration > 0 &&
-                state->iteration % (state->num_constrs + 1) == 0) {
+            /* (8) Basis diff — convergence detection (T3.2: modulo removed).
+             * Binary checks every pass when stagnation detected.
+             * iteration_mode set by post_iterate at refactor boundaries.
+             * Threshold = max(0, k - k_0) * tau; k_0=5 grace period. */
+            if (state->iteration_mode == 1) {
                 inner_checks++;
                 double progress = cxf_basis_diff(state, snap_buf);
                 int grace = inner_checks - 5;
@@ -322,6 +315,14 @@ int cxf_solve_lp(CxfModel *model) {
             if (CXF_IS_ERROR(status)) {
                 model->status = status; terminated = 1; break;
             }
+        }
+
+        /* Outer-loop convergence (T3.2): if inner loop exited normally
+         * and basis made no progress since round start, stop. */
+        if (!terminated && state->iteration < state->max_iterations) {
+            double round_progress = cxf_basis_diff(state, snap_buf);
+            if (round_progress <= 0.0)
+                terminated = 1;
         }
 
         if (!terminated && state->iteration >= state->max_iterations) {

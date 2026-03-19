@@ -677,8 +677,6 @@ int cxf_simplex_step(SolverState *state, CxfEnv *env) {
     if (stepSize < 1e-8) {
         state->degenerate_count++;
         state->cumulative_degenerate++;  /* Never resets on good pivots */
-        if (!state->use_bland && state->degenerate_count > 50)
-            state->use_bland = 1;
     } else {
         state->degenerate_count = 0;
         state->mechanism_a_applied = 0;  /* Reset: stalling episode ended */

@@ -254,10 +254,9 @@ int cxf_transition_to_phase_two(SolverState *state, CxfModel *model) {
             basis->var_status[j] = CXF_VAR_AT_LOWER;
     }
 
-    /* Reset pricing state at Phase I→II boundary */
+    /* Invalidate pricing cache at Phase I→II boundary; carry forward level */
     if (state->pricing) {
         cxf_pricing_invalidate_cache(state->pricing, CXF_INVALID_ALL);
-        cxf_pricing_set_level(state->pricing, 0);
     }
 
     /* Step 4: Recompute activity bounds for clean Phase II start.

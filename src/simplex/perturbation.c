@@ -83,17 +83,8 @@ int cxf_simplex_perturbation(SolverState *state, CxfEnv *env) {
     }
     perturbed = phase4;
 
-    /* V2 perturbation.md lines 224-225: first stalling → A only.
-     * Mechanism B fires only when A was already applied (stalling persists). */
-    int widened = 0;
-    if (state->mechanism_a_applied) {
-        widened = cxf_expand_widen_bounds(state, env, feas_tol,
-                                          basis, m, total);
-        perturbed += widened;
-    }
-
-    /* Mark that Mechanism A has been applied in this stalling episode */
-    state->mechanism_a_applied = 1;
+    /* T2.12: Binary has no Mechanism B (EXPAND bound widening is fabricated).
+     * Only pricing exclusion (Mechanism A) exists in the binary. */
 
     /*--- Phase 5: Counter update + pricing notification ---*/
     if (state->pricing && perturbed > 0)

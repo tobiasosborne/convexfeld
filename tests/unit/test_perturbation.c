@@ -228,31 +228,18 @@ void test_mechanism_b_requires_a_first(void) {
     state->work_dj[n] = 0.0;
     state->iteration = 1;
 
-    /* Pre-condition: Mechanism B activation conditions met EXCEPT mechanism_a */
+    /* T2.12: Binary has no Mechanism B (EXPAND bound widening).
+     * Test that perturbation runs without modifying bounds (Mechanism A only). */
     state->degenerate_count = 200;
     state->perturb_count = 1;
-    state->mechanism_a_applied = 0;  /* A not yet applied */
 
-    /* Save bounds so EXPAND can reference them */
-    if (state->saved_lb && state->saved_ub) {
-        memcpy(state->saved_lb, state->work_lb, (size_t)total * sizeof(double));
-        memcpy(state->saved_ub, state->work_ub, (size_t)total * sizeof(double));
-    }
-
-    /* Record lb before perturbation for comparison */
+    /* Record bounds before perturbation */
     double lb_before = state->work_lb[n];
 
-    /* First call: Mechanism A runs but B should NOT (mechanism_a_applied was 0) */
     int rc = cxf_simplex_perturbation(state, env);
     TEST_ASSERT_EQUAL_INT(CXF_OK, rc);
-    TEST_ASSERT_EQUAL_INT(1, state->mechanism_a_applied);
-    /* B did NOT fire: work_lb unchanged for basic var */
+    /* Bounds should NOT be widened (no Mechanism B) */
     TEST_ASSERT_DOUBLE_WITHIN(1e-15, lb_before, state->work_lb[n]);
-
-    /* Second call: Now mechanism_a_applied=1, B should fire */
-    rc = cxf_simplex_perturbation(state, env);
-    TEST_ASSERT_EQUAL_INT(CXF_OK, rc);
-    TEST_ASSERT_EQUAL_INT(1, state->perturb_expand_active);
 
     cxf_state_free(state);
     cxf_freemodel(model);

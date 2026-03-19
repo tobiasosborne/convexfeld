@@ -129,20 +129,25 @@ void test_invalid_var_too_large(void) {
 /*=== Phase II: unboundedness should be reported ===*/
 
 void test_phase2_unbounded_increase(void) {
-    /* var2: obj=-1 (increase improves), ub=1e30 > ub_limit=1e20 → unbounded.
-     * Note: ub must be finite (< CXF_INFINITY) for can_increase check. */
+    /* UNBOUNDED fires on RC magnitude: obj_coeff < -ub_limit (T2.5 error 4).
+     * Column coefficients must not block can_increase (use positive only). */
     test_state.phase = 2;
-    work_ub[2] = 1e30;
+    work_obj[2] = -2e20;   /* Very negative RC exceeds -ub_limit (-1e20) */
+    work_ub[2] = 1e30;     /* Finite ub for can_increase initial check */
+    csc_values[2] = 3.0;   /* positive → blocks can_decrease only */
+    csc_values[3] = 2.0;   /* positive → blocks can_decrease only */
     int rc = cxf_pivot_special(&test_env, &test_state, 2, 1e20, 1e20);
     TEST_ASSERT_EQUAL_INT(CXF_UNBOUNDED, rc);
 }
 
 void test_phase2_unbounded_decrease(void) {
-    /* var2: obj=+1 (decrease improves), lb=-1e30 < -lb_limit → unbounded.
-     * Note: lb must be finite (> -CXF_INFINITY) for can_decrease check. */
+    /* can_decrease requires obj_coeff > 1e30 (asymmetric threshold, T2.5 error 2).
+     * UNBOUNDED fires when obj_coeff > lb_limit. Column needs negative coeffs. */
     test_state.phase = 2;
-    work_obj[2] = 1.0;
-    work_lb[2] = -1e30;
+    work_obj[2] = 2e30;    /* Very positive RC exceeds both 1e30 and lb_limit */
+    work_lb[2] = -1e30;    /* Finite lb for can_decrease initial check */
+    csc_values[2] = -3.0;  /* negative → blocks can_increase only */
+    csc_values[3] = -2.0;  /* negative → blocks can_increase only */
     int rc = cxf_pivot_special(&test_env, &test_state, 2, 1e20, 1e20);
     TEST_ASSERT_EQUAL_INT(CXF_UNBOUNDED, rc);
 }
@@ -153,17 +158,23 @@ void test_phase1_suppress_unbounded_increase(void) {
     /* Same setup as phase2_unbounded_increase, but Phase I →
      * must return CXF_OK, NOT CXF_UNBOUNDED (spec line 247). */
     test_state.phase = 1;
-    work_ub[2] = 1e30;
+    work_obj[2] = -2e20;   /* Very negative RC exceeds -ub_limit */
+    work_ub[2] = 1e30;     /* Finite ub for can_increase */
+    csc_values[2] = 3.0;   /* positive → blocks can_decrease only */
+    csc_values[3] = 2.0;   /* positive → blocks can_decrease only */
     int rc = cxf_pivot_special(&test_env, &test_state, 2, 1e20, 1e20);
     TEST_ASSERT_EQUAL_INT(CXF_OK, rc);
 }
 
 void test_phase1_suppress_unbounded_decrease(void) {
-    /* var2: obj=+1 (decrease improves), lb=-1e30 (exceeds limit), Phase I →
-     * must return CXF_OK, NOT CXF_UNBOUNDED (spec line 247). */
+    /* can_decrease needs obj_coeff > 1e30 (asymmetric threshold).
+     * Column needs negative coefficients to not block can_decrease.
+     * Phase I → must return CXF_OK, NOT CXF_UNBOUNDED. */
     test_state.phase = 1;
-    work_obj[2] = 1.0;
-    work_lb[2] = -1e30;
+    work_obj[2] = 2e30;    /* Exceeds 1e30 threshold for can_decrease */
+    work_lb[2] = -1e30;    /* Finite lb for can_decrease initial check */
+    csc_values[2] = -3.0;  /* negative → blocks can_increase only */
+    csc_values[3] = -2.0;  /* negative → blocks can_increase only */
     int rc = cxf_pivot_special(&test_env, &test_state, 2, 1e20, 1e20);
     TEST_ASSERT_EQUAL_INT(CXF_OK, rc);
 }

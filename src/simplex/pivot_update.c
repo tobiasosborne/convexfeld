@@ -14,9 +14,9 @@
 #include "convexfeld/cxf_types.h"
 #include <math.h>
 
-/* Conservative rounding factors (numerical_stability.md Section B) */
-#define CANCEL_WIDEN_MIN  (1.0 + 1e-12)
-#define CANCEL_WIDEN_MAX  (1.0 - 1e-12)
+/* Conservative rounding factors (binary uses 1e-6, not 1e-12) */
+#define CANCEL_WIDEN_MIN  (1.0 + 1e-6)
+#define CANCEL_WIDEN_MAX  (1.0 - 1e-6)
 
 /**
  * Apply cancellation-safe incremental update to an activity bound.

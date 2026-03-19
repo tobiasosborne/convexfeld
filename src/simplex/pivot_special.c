@@ -148,7 +148,7 @@ int cxf_pivot_special(void *env, void *state, int var, double lb_limit,
     double lb = ctx->work_lb[var];
     double ub = ctx->work_ub[var];
 
-    int can_decrease = (obj_coeff > 1e-10 && lb > -CXF_INFINITY);
+    int can_decrease = (obj_coeff > 1e30 && lb > -CXF_INFINITY);
     int can_increase = (obj_coeff < -1e-10 && ub < CXF_INFINITY);
 
     if (!can_decrease && !can_increase)
@@ -156,22 +156,29 @@ int cxf_pivot_special(void *env, void *state, int var, double lb_limit,
 
     /* Phase 2: Special constraint flags — SOS/indicator (LP-only: no-op) */
 
-    /* Phase 3: Equality constraint column scan (pivot_operations.md Phase 3).
-     * If the variable appears in ANY equality constraint, it cannot be
-     * eliminated by bound-fixing — the equality requires algebraic
-     * substitution. Return CXF_OK to let normal simplex handle it.
+    /* Phase 3: Column coefficient scan (binary cvx_pivot_special).
+     * For each constraint the variable participates in:
+     *   - Equality row: return CXF_OK (cannot eliminate by bound-fixing)
+     *   - Inequality row: positive coeff blocks can_decrease,
+     *     negative coeff blocks can_increase
      * Only structural variables (var < n) have CSC columns. */
     if (var < n && ctx->csc_col_ptr != NULL && ctx->work_sense != NULL) {
         int64_t col_start = ctx->csc_col_ptr[var];
         int64_t col_end   = ctx->csc_col_ptr[var + 1];
         for (int64_t k = col_start; k < col_end; k++) {
             int row = ctx->csc_row_idx[k];
-            if (row >= 0 && row < ctx->num_constrs) {
-                char sense = ctx->work_sense[row];
-                if (sense == '=' || sense == 'E')
-                    return CXF_OK;
+            if (row < 0 || row >= ctx->num_constrs) continue;
+            char sense = ctx->work_sense[row];
+            if (sense == '=' || sense == 'E')
+                return CXF_OK;
+            if (ctx->csc_values != NULL) {
+                double coeff = ctx->csc_values[k];
+                if (coeff > 0.0) can_decrease = 0;
+                if (coeff < 0.0) can_increase = 0;
             }
         }
+        if (!can_decrease && !can_increase)
+            return CXF_OK;
     }
 
     /* Phase 4+5: Unboundedness check + bound flip.
@@ -179,7 +186,7 @@ int cxf_pivot_special(void *env, void *state, int var, double lb_limit,
      * "A special mode flag on the solver state can disable unboundedness
      * detection; this is used during Phase I of two-phase simplex." */
     if (can_increase) {
-        if (ub >= ub_limit) {
+        if (obj_coeff < -ub_limit) {
             if (ctx->phase == 1) return CXF_OK;
             return CXF_UNBOUNDED;
         }
@@ -187,11 +194,11 @@ int cxf_pivot_special(void *env, void *state, int var, double lb_limit,
     }
 
     if (can_decrease) {
-        if (lb <= -lb_limit) {
+        if (obj_coeff > lb_limit) {
             if (ctx->phase == 1) return CXF_OK;
             return CXF_UNBOUNDED;
         }
-        return cxf_pivot_bound(env, state, var, lb, ub, 0);
+        return cxf_pivot_bound(env, state, var, ub, ub, 0);
     }
 
     return CXF_OK;
