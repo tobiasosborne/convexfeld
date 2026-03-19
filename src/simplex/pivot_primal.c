@@ -203,33 +203,35 @@ int cxf_pivot_primal(void *env, void *state, int var, double tolerance) {
      * For each row i with coefficient a_ij:
      *   work_rhs[i] = work_rhs[i] - a_ij * pivotValue
      */
-    if (ctx->csc_col_ptr != NULL && ctx->csc_row_idx != NULL &&
-        ctx->csc_values != NULL && ctx->work_rhs != NULL) {
+    /* Only structural vars (var < n) have CSC columns */
+    if (var < n && ctx->csc_col_ptr != NULL && ctx->csc_row_idx != NULL &&
+        ctx->csc_values != NULL) {
 
-        /* Get column range for this variable in working CSC */
         int64_t col_start = ctx->csc_col_ptr[var];
         int64_t col_end = ctx->csc_col_ptr[var + 1];
 
-        /* Iterate through all non-zeros in this variable's column */
-        for (int64_t k = col_start; k < col_end; k++) {
-            int row = ctx->csc_row_idx[k];
-            double coeff = ctx->csc_values[k];
-
-            /* Bounds check: ensure row index is valid */
-            if (row >= 0 && row < ctx->num_constrs) {
-                /* Update working RHS: work_rhs[i] -= a_ij * pivotValue */
-                ctx->work_rhs[row] -= coeff * pivotValue;
+        /* RHS update */
+        if (ctx->work_rhs != NULL) {
+            for (int64_t k = col_start; k < col_end; k++) {
+                int row = ctx->csc_row_idx[k];
+                double coeff = ctx->csc_values[k];
+                if (row >= 0 && row < ctx->num_constrs)
+                    ctx->work_rhs[row] -= coeff * pivotValue;
             }
         }
 
-        /* T2.13: Invalidate CSC entries (binary Phase 9: marks as -1) */
+        /* T2.13: Activity update BEFORE CSC invalidation (reviewer fix) */
+        cxf_pivot_update(ctx, var, lb, pivotValue, ub, pivotValue,
+                         CXF_INFINITY);
+
+        /* T2.13: Invalidate CSC entries AFTER activity update */
         for (int64_t k = col_start; k < col_end; k++)
             ctx->csc_row_idx[k] = -1;
+    } else {
+        /* Slack var or no CSC: activity update only */
+        cxf_pivot_update(ctx, var, lb, pivotValue, ub, pivotValue,
+                         CXF_INFINITY);
     }
-
-    /* T2.13: Activity bound propagation (binary Phase 9).
-     * Variable fixed at pivotValue: bounds collapse from [lb,ub] to point. */
-    cxf_pivot_update(ctx, var, lb, pivotValue, ub, pivotValue, CXF_INFINITY);
 
     /*
      * Step 6: Eta vector creation (V2 pivot_operations.md)
