@@ -4,7 +4,43 @@
 
 ---
 
-## STATUS: 147/147 tests. 30/30 source comparison fixes COMPLETE. Master pushed.
+## STATUS: 149/149 tests. T2.8 + T3.7 implemented. Master pushed.
+
+### Session 2026-03-19 (continued): T2.8 Cleanup Propagation + T3.7 Eta-Mode Pricing
+
+**T2.8 (convexfeld-5q42 CLOSED):** Rewrote cleanup_propagate.c to iterative
+2-pass conservative+aggressive fixing with Kahan summation.
+- Phase 3: Variable classification (SKIP/BOUNDED/SEMIFREE/FREE)
+- Phase 4: Savelsbergh implied bounds via CSR row scan (unchanged formulas)
+- Phase 7: Kahan activity recompute per pass (new file: cleanup_kahan.c, 104 LOC)
+- Phase 8 Pass 1 (conservative): Fix where both implied bounds converge (gap < ftol)
+- Phase 8 Pass 2 (aggressive): Fix free/semi-free vars. FREE vars with both
+  finite implied bounds fixed at midpoint. SEMIFREE vars with tight single bound.
+- Iterative: up to K_MAX=10 passes, stops when no fixings in a pass
+- cleanup_propagate.c: 200 LOC, cleanup_kahan.c: 104 LOC
+- 8 new tests (test_cleanup_propagate.c)
+- Reviewer: formulas CORRECT, aggressive FREE var fix confirmed working,
+  missing: worklist-driven approach (simple full-pass loop instead, correct results)
+
+**T3.7 (convexfeld-gfvr CLOSED):** Added eta-mode expansion in pricing.
+Three files modified:
+- update_var.c (97 LOC): After CSC scan, traverses eta linked list. For etas
+  where entering_var or leaving_var matches, inserts pivot_row + all indices[]
+  into constraint queue.
+- update_constr.c (106 LOC): After CSR scan, traverses eta linked list. For etas
+  where pivot_row or indices[] matches constraint, inserts entering_var + leaving_var
+  into variable queue.
+- candidates.c (196 LOC): Eta cost estimation in Check 3 + Step 2b eta-mode
+  expansion after CSR expansion. Finds dynamic pivot neighbors with dedup.
+- 4 new tests (test_pricing_eta_expansion.c)
+- Reviewer: PARTIALLY CORRECT. Additive mode (runs both matrix+eta) instead of
+  spec's exclusive mode selection. Functionally safe (superset of neighbors).
+  Asymmetric indices[] matching in candidates.c (mitigated by producers).
+
+### Remaining gap issues (from review)
+- T2.2 (convexfeld-8fnv): Perturbation varStatus=-1 for anti-cycling — STILL OPEN
+- T2.8 Phase 5: Full worklist-driven FBBT (current is simple loop) — deferred
+- T3.7 refinement: exclusive mode flag, indices[] matching in candidates.c — minor
 
 ### Session 2026-03-19 (continued): T1.3 Ratio Test Rewrite + T2.3 Proactive Perturbation
 

@@ -257,6 +257,14 @@ add_cxf_test(test_mps_parser unit/test_mps_parser.c)
 target_link_libraries(test_mps_parser PRIVATE m)
 target_compile_definitions(test_mps_parser PRIVATE SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 
+# Cleanup propagation (iterative 2-pass implied bounds, T2.8)
+add_cxf_test(test_cleanup_propagate unit/test_cleanup_propagate.c)
+target_link_libraries(test_cleanup_propagate PRIVATE m)
+
+# Pricing eta-mode expansion (T3.7)
+add_cxf_test(test_pricing_eta_expansion unit/test_pricing_eta_expansion.c)
+target_link_libraries(test_pricing_eta_expansion PRIVATE m)
+
 # Simplex final (5-phase dual-feasibility variable fixing)
 add_cxf_test(test_simplex_final_fix unit/test_simplex_final_fix.c)
 target_link_libraries(test_simplex_final_fix PRIVATE m)

@@ -140,6 +140,7 @@ target_sources(convexfeld PRIVATE
     src/simplex/cleanup.c
     src/simplex/simplex_cleanup.c
     src/simplex/cleanup_propagate.c
+    src/simplex/cleanup_kahan.c
     src/simplex/quadratic.c
     src/simplex/pivot_special.c
     src/simplex/pivot_update.c

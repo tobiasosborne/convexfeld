@@ -1,13 +1,7 @@
 /**
  * @file candidates.c
- * @brief V2 adaptive candidate retrieval (P4.5)
- *
- * V2: cxf_pricing_candidates -- multi-level queue retrieval with
- *     adaptive strategy (full scan vs partial expansion).
- * V1 (cxf_pricing_candidates_v1) lives in candidates_v1.c.
- *
- * Spec: pricing_core.md -- cxf_pricing_candidates (P4.5)
- * Beads: v35i
+ * @brief V2 adaptive candidate retrieval with eta-mode expansion (P4.5).
+ * Spec: pricing_core.md. V1 in candidates_v1.c. Beads: v35i
  */
 
 #include <stdlib.h>
@@ -17,14 +11,6 @@
 #include "convexfeld/cxf_solver.h"
 #include "convexfeld/cxf_basis.h"
 #include "pricing_internal.h"
-
-/*===========================================================================
- * V2 Adaptive Candidate Retrieval (P4.5)
- *
- * Returns pre-populated dirty variable queue at current level.
- * Level 0: base dirty list (O(1)). Levels 1-2: cached or adaptive.
- * Three threshold checks: expansion multiplier, coverage, work factor.
- *===========================================================================*/
 
 /* Adaptive strategy thresholds (pricing_core.md) */
 #define EXPANSION_MULTIPLIER  2.0
@@ -98,6 +84,17 @@ void cxf_pricing_candidates(PricingState *ctx, SolverState *state,
                                  state->csr_row_ptr[ci];
             }
         }
+        /* Eta-mode cost: each pivot eta adds potential neighbors */
+        int eta_count = 0;
+        if (state->basis != NULL) {
+            EtaVector *e = state->basis->eta_head;
+            while (e != NULL) {
+                if (e->type == CXF_ETA_PIVOT) eta_count++;
+                e = e->next;
+            }
+        }
+        est_neighbors += (int64_t)eta_count * cq_n;
+
         int var_total = ctx->var_q_total[level];
         if (est_neighbors + (int64_t)(var_total * EXPANSION_WORK_FACTOR) >=
             (int64_t)n)
@@ -128,7 +125,7 @@ void cxf_pricing_candidates(PricingState *ctx, SolverState *state,
             }
         }
 
-        /* Step 2: Expand via cross-queue (constraint queue -> CSR rows) */
+        /* Step 2a: Expand via cross-queue (constraint queue -> CSR rows) */
         int *cq = ctx->constr_queue[level];
         int cq_n = ctx->constr_q_committed[level];
         for (int i = 0; i < cq_n; i++) {
@@ -147,6 +144,34 @@ void cxf_pricing_candidates(PricingState *ctx, SolverState *state,
                 if (result_count >= n) break;
             }
             if (result_count >= n) break;
+        }
+
+        /* Step 2b: Eta-mode expansion -- add dynamic neighbors from etas */
+        if (result_count < n && state->basis != NULL) {
+            EtaVector *eta = state->basis->eta_head;
+            while (eta != NULL && result_count < n) {
+                if (eta->type == CXF_ETA_PIVOT) {
+                    for (int i = 0; i < cq_n; i++) {
+                        if (cq[i] == eta->pivot_row) {
+                            int ev = eta->entering_var;
+                            if (ev >= 0 && ev < n &&
+                                !(ctx->var_flags[ev] & sel_bit)) {
+                                out_buf[result_count++] = ev;
+                                ctx->var_flags[ev] |= sel_bit;
+                            }
+                            int lv = eta->leaving_var;
+                            if (lv >= 0 && lv < n &&
+                                result_count < n &&
+                                !(ctx->var_flags[lv] & sel_bit)) {
+                                out_buf[result_count++] = lv;
+                                ctx->var_flags[lv] |= sel_bit;
+                            }
+                            break;
+                        }
+                    }
+                }
+                eta = eta->next;
+            }
         }
 
         /* Step 3: Filter -- clear selection flags, keep valid status */
