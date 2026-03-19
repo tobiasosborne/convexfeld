@@ -176,7 +176,12 @@ int cxf_pivot_special(void *env, void *state, int var, double lb_limit,
     int can_decrease = (obj_coeff > 1e30 && lb > -CXF_INFINITY);
     int can_increase = (obj_coeff < -1e-10 && ub < CXF_INFINITY);
 
-    if (!can_decrease && !can_increase)
+    /* T2.5e5: free/semi-free vars with moderate RC need row elimination */
+    int free_moderate = (!can_decrease && !can_increase &&
+                         fabs(obj_coeff) > 1e-10 &&
+                         (lb <= -CXF_INFINITY || ub >= CXF_INFINITY));
+
+    if (!can_decrease && !can_increase && !free_moderate)
         return CXF_OK;
 
     /* Phase 2: Special constraint flags — SOS/indicator (LP-only: no-op) */
@@ -206,10 +211,28 @@ int cxf_pivot_special(void *env, void *state, int var, double lb_limit,
             return CXF_OK;
     }
 
-    /* Phase 4+5: Unboundedness check + bound flip.
-     * Phase I suppression (pivot_operations.md line 247):
-     * "A special mode flag on the solver state can disable unboundedness
-     * detection; this is used during Phase I of two-phase simplex." */
+    /* T2.5e5: Row elimination for free vars with moderate RC.
+     * Binary fixes at current value and marks all constraint rows eliminated. */
+    if (free_moderate && !can_decrease && !can_increase) {
+        double fix_val = ctx->work_x[var];
+        int rc = cxf_pivot_bound(env, state, var, fix_val, ub, 0);
+        if (rc != CXF_OK) return rc;
+        if (var < n && ctx->csc_col_ptr != NULL) {
+            int64_t cs = ctx->csc_col_ptr[var];
+            int64_t ce = ctx->csc_col_ptr[var + 1];
+            for (int64_t k = cs; k < ce; k++) {
+                int row = ctx->csc_row_idx[k];
+                if (row >= 0 && row < ctx->num_constrs &&
+                    ctx->basis->basic_vars[row] != -2) {
+                    ctx->basis->basic_vars[row] = -2;
+                    ctx->rows_eliminated++;
+                }
+            }
+        }
+        return CXF_OK;
+    }
+
+    /* Phase 4+5: Unboundedness check + bound flip. */
     if (can_increase) {
         if (obj_coeff < -ub_limit) {
             if (ctx->phase == 1) return CXF_OK;
