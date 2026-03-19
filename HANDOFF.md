@@ -4,7 +4,7 @@
 
 ---
 
-## STATUS: 147/147 tests. 25 fixes from source comparison (16 surgical + 6 medium + 3 full rewrites). Master pushed.
+## STATUS: 147/147 tests. 30/30 source comparison fixes COMPLETE. Master pushed.
 
 ### Session 2026-03-19 (continued): T1.3 Ratio Test Rewrite + T2.3 Proactive Perturbation
 
@@ -32,11 +32,21 @@ and `matrix_transitions` were declared but never incremented. Now incremented
 in step2, step3, simplex_cleanup, and pivot_bound. Progress score no longer
 under-counts, reducing false-positive stall detection.
 
-**Remaining convergence items (not yet fixed):**
-- T2.5 error 5: Row elimination path in pivot_special (needs infrastructure)
-- T2.8: simplex_cleanup 8/11 phases stubbed (high effort)
-- T3.9: simplex_final missing AT_LOWER_BOUND_MARKER
-- T3.12: simplex_cleanup uses stale activity bounds
+**T3.6 (work counter scale):** `scale_factor` was 0.0 from memset, making
+pivot_update and timing work counter contributions zero. Initialized to 1.0.
+
+**T3.9 (AT_LOWER_BOUND_MARKER):** Zero-RC vars at a zero bound now get
+fixed at 0.0 in simplex_final Phase 1. Guards: both bounds finite, one is
+zero, variable already within feasTol of zero.
+
+**T3.12 (stale activity bounds):** Added `cxf_compute_activity_bounds()`
+call before Phase 9 tight constraint check. Activity bounds were stale
+after simplex_final fixings; now fresh.
+
+**All 30 source comparison items addressed.** Remaining high-effort items:
+- T2.5 error 5: Row elimination path in pivot_special (needs column elimination infrastructure)
+- T2.8: simplex_cleanup Phases 1-8 (implied bound propagation engine — very high effort)
+- T3.7: Eta-mode expansion in pricing (needs linked-list traversal mode)
 
 ### Session 2026-03-19: Source Comparison P0/P1 Surgical Fixes
 
