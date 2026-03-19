@@ -93,6 +93,12 @@ int cxf_simplex_cleanup(SolverState *state, CxfEnv *env) {
      * implementation. In pure LP mode (var_flags all zero), Phase 1
      * (basis index adjustment) and Phase 6 (restoration) are no-ops. */
 
+    /* T3.12: Recompute activity bounds AFTER simplex_final fixings.
+     * Previous activity bounds are stale — simplex_final changed
+     * variable values via pivot_bound. Fresh bounds detect constraints
+     * that became tight from fixings. */
+    cxf_compute_activity_bounds(state, 0, NULL);
+
     /* Phase 9: Constraint conversion */
     convert_tight_constraints(state, feas_tol);
 
