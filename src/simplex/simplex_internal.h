@@ -113,6 +113,9 @@ int cxf_expand_widen_bounds(SolverState *state, CxfEnv *env,
                             double feas_tol, BasisState *basis,
                             int m, int total);
 
+/* --- Cleanup propagation (cleanup_propagate.c) --- */
+int cxf_cleanup_propagate(SolverState *state, CxfEnv *env);
+
 /* --- Post-solve variable fixing (final.c) --- */
 int cxf_simplex_final(SolverState *state, CxfEnv *env, double *workOut);
 
