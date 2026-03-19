@@ -4,7 +4,7 @@
 
 ---
 
-## STATUS: 149/149 tests. T2.8 + T3.7 implemented. Master pushed.
+## STATUS: 150/150 tests. T2.2 + T2.8 + T3.7 — all 3 high-impact gaps CLOSED.
 
 ### Session 2026-03-19 (continued): T2.8 Cleanup Propagation + T3.7 Eta-Mode Pricing
 
@@ -37,10 +37,20 @@ Three files modified:
   spec's exclusive mode selection. Functionally safe (superset of neighbors).
   Asymmetric indices[] matching in candidates.c (mitigated by producers).
 
+**T2.2 (convexfeld-8fnv CLOSED):** Active pricing pool removal in perturbation.
+- Added PRICING_EXCLUDED flag (0x20) in PricingState.var_flags
+- Case A (nonbasic degenerate): sets flag → pricing skips variable
+- Case B (basic degenerate): row stripping — marks basic var + ALL CSR
+  row columns as excluded. Binary iterates columns, removes each from pricing.
+- candidates.c: 3 filter points (full scan, seed, post-filter) skip excluded vars
+- unperturb: clears all PRICING_EXCLUDED bits
+- 5 new tests (test_perturbation_removal.c)
+- Reviewer: PASS. Minor: L0 fast path doesn't filter (benign in practice).
+
 ### Remaining gap issues (from review)
-- T2.2 (convexfeld-8fnv): Perturbation varStatus=-1 for anti-cycling — STILL OPEN
 - T2.8 Phase 5: Full worklist-driven FBBT (current is simple loop) — deferred
 - T3.7 refinement: exclusive mode flag, indices[] matching in candidates.c — minor
+- T2.2 refinement: L0 fast path exclusion filter — minor
 
 ### Session 2026-03-19 (continued): T1.3 Ratio Test Rewrite + T2.3 Proactive Perturbation
 

@@ -102,9 +102,10 @@ void cxf_pricing_candidates(PricingState *ctx, SolverState *state,
     }
 
     if (use_full_scan) {
-        /* Full scan: iterate all variables, keep nonbasic */
+        /* Full scan: iterate all variables, keep nonbasic + not excluded */
         for (int j = 0; j < n && result_count < n; j++) {
-            if (var_status != NULL && var_status[j] < 0)
+            if (var_status != NULL && var_status[j] < 0 &&
+                !(ctx->var_flags && (ctx->var_flags[j] & PRICING_EXCLUDED)))
                 out_buf[result_count++] = j;
         }
         if (state->work_counter)
@@ -114,12 +115,13 @@ void cxf_pricing_candidates(PricingState *ctx, SolverState *state,
         /* Use var_flags as temporary selection marker (bit 4, unused) */
         uint8_t sel_bit = 0x10;
 
-        /* Step 1: Seed from variable queue */
+        /* Step 1: Seed from variable queue (skip excluded) */
         int *vq = ctx->var_queue[level];
         int vq_n = ctx->var_q_committed[level];
         for (int i = 0; i < vq_n; i++) {
             int vi = vq[i];
-            if (vi >= 0 && vi < n && ctx->var_flags != NULL) {
+            if (vi >= 0 && vi < n && ctx->var_flags != NULL &&
+                !(ctx->var_flags[vi] & PRICING_EXCLUDED)) {
                 out_buf[result_count++] = vi;
                 ctx->var_flags[vi] |= sel_bit;
             }
@@ -174,13 +176,14 @@ void cxf_pricing_candidates(PricingState *ctx, SolverState *state,
             }
         }
 
-        /* Step 3: Filter -- clear selection flags, keep valid status */
+        /* Step 3: Filter -- clear selection flags, keep valid + not excluded */
         int write = 0;
         for (int i = 0; i < result_count; i++) {
             int vi = out_buf[i];
             if (vi >= 0 && vi < n && ctx->var_flags != NULL)
                 ctx->var_flags[vi] &= (uint8_t)~sel_bit;
-            if (var_status != NULL && var_status[vi] < 0)
+            if (var_status != NULL && var_status[vi] < 0 &&
+                !(ctx->var_flags && (ctx->var_flags[vi] & PRICING_EXCLUDED)))
                 out_buf[write++] = vi;
         }
         result_count = write;

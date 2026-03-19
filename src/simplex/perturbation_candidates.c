@@ -15,6 +15,7 @@
 #include "convexfeld/cxf_pricing.h"
 #include "convexfeld/cxf_env.h"
 #include "convexfeld/cxf_types.h"
+#include "../pricing/pricing_internal.h"
 #include <math.h>
 
 #include "simplex_internal.h"
@@ -62,10 +63,11 @@ static int process_one_candidate(SolverState *state, int j, int status,
                 return -1;
             }
         }
-        /* T2.2: Do NOT call mark_dirty — that re-queues the degenerate
-         * variable for immediate repricing, defeating anti-cycling.
-         * Binary removes from pricing pool (varStatus=-1). Not dirtying
-         * achieves similar effect: variable won't appear in next scan. */
+        /* T2.2: Set PRICING_EXCLUDED so pricing candidates.c skips it.
+         * Binary removes from pricing pool (varStatus=-1). */
+        if (state->pricing && state->pricing->var_flags &&
+            j < state->pricing->num_vars)
+            state->pricing->var_flags[j] |= PRICING_EXCLUDED;
         return 1;
     }
 
@@ -83,7 +85,23 @@ static int process_one_candidate(SolverState *state, int j, int status,
             return -1;
         }
         if (result == 1) {
-            /* T2.2: Do not re-queue — return 1 so caller counts it. */
+            /* T2.2: Strip entire row — mark basic var and all CSR
+             * columns as excluded from pricing. */
+            if (state->pricing && state->pricing->var_flags) {
+                PricingState *pr = state->pricing;
+                if (j < pr->num_vars)
+                    pr->var_flags[j] |= PRICING_EXCLUDED;
+                if (state->csr_row_ptr && state->csr_col_idx &&
+                    row < state->num_constrs) {
+                    int64_t rs = state->csr_row_ptr[row];
+                    int64_t re = state->csr_row_ptr[row + 1];
+                    for (int64_t k = rs; k < re; k++) {
+                        int col = state->csr_col_idx[k];
+                        if (col >= 0 && col < pr->num_vars)
+                            pr->var_flags[col] |= PRICING_EXCLUDED;
+                    }
+                }
+            }
             return 1;
         }
     }

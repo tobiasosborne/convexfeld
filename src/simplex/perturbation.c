@@ -15,6 +15,7 @@
 #include "convexfeld/cxf_pricing.h"
 #include "convexfeld/cxf_env.h"
 #include "convexfeld/cxf_types.h"
+#include "../pricing/pricing_internal.h"
 #include <string.h>
 
 #include "simplex_internal.h"
@@ -118,6 +119,15 @@ int cxf_simplex_unperturb(SolverState *state, CxfEnv *env) {
             memcpy(state->work_lb, model->lb, (size_t)n * sizeof(double));
         if (state->work_ub && model->ub)
             memcpy(state->work_ub, model->ub, (size_t)n * sizeof(double));
+    }
+
+    /* T2.2: Clear PRICING_EXCLUDED flags so all variables re-enter
+     * the pricing pool after perturbation is removed. */
+    if (state->pricing && state->pricing->var_flags) {
+        int nv = state->pricing->num_vars;
+        uint8_t *vf = state->pricing->var_flags;
+        for (int i = 0; i < nv; i++)
+            vf[i] &= (uint8_t)~PRICING_EXCLUDED;
     }
 
     state->perturb_count = 0;

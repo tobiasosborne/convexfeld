@@ -43,6 +43,9 @@ void v2_insert_constr(struct PricingState *ctx, int constr_idx);
 #define L2_PENDING   0x08
 #define L2_MASK      0x0C
 
+/* Pricing exclusion flag (T2.2: perturbation removes degenerate vars) */
+#define PRICING_EXCLUDED 0x20
+
 /* Minimum weight for SE/Devex (shared between steepest.c and weight_update.c) */
 #define CXF_MIN_WEIGHT 1e-10
 

@@ -265,6 +265,10 @@ target_link_libraries(test_cleanup_propagate PRIVATE m)
 add_cxf_test(test_pricing_eta_expansion unit/test_pricing_eta_expansion.c)
 target_link_libraries(test_pricing_eta_expansion PRIVATE m)
 
+# Perturbation pricing removal (T2.2)
+add_cxf_test(test_perturbation_removal unit/test_perturbation_removal.c)
+target_link_libraries(test_perturbation_removal PRIVATE m)
+
 # Simplex final (5-phase dual-feasibility variable fixing)
 add_cxf_test(test_simplex_final_fix unit/test_simplex_final_fix.c)
 target_link_libraries(test_simplex_final_fix PRIVATE m)
