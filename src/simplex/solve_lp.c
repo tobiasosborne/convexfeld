@@ -317,9 +317,13 @@ int cxf_solve_lp(CxfModel *model) {
             }
         }
 
-        /* Outer-loop convergence (T3.2): if inner loop exited normally
-         * and basis made no progress since round start, stop. */
-        if (!terminated && state->iteration < state->max_iterations) {
+        /* Outer-loop convergence (T3.2): if convergence was actively
+         * tested this round (inner_checks > 0) and the basis still shows
+         * no progress since round start, stop. The inner_checks guard
+         * prevents premature termination during perturbation setup rounds
+         * where the convergence path hasn't fired yet. */
+        if (!terminated && inner_checks > 0 &&
+            state->iteration < state->max_iterations) {
             double round_progress = cxf_basis_diff(state, snap_buf);
             if (round_progress <= 0.0)
                 terminated = 1;
