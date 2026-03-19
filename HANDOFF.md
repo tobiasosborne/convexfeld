@@ -4,7 +4,39 @@
 
 ---
 
-## STATUS: 147/147 tests. 23 fixes from source comparison (15 surgical + 6 medium + 2 full rewrites). Master pushed.
+## STATUS: 147/147 tests. 25 fixes from source comparison (16 surgical + 6 medium + 3 full rewrites). Master pushed.
+
+### Session 2026-03-19 (continued): T1.3 Ratio Test Rewrite + T2.3 Proactive Perturbation
+
+**T1.3 (convexfeld-xvm6 CLOSED):** Rewrote ratio_test.c from Harris two-pass to
+single-pass SE-weighted algorithm. Key changes:
+- Single pass with `score = ratio * dir / sqrt(weight)` selection
+- Soft degenerate direction filter (`rc * d_i > 0` → 2x penalty)
+- Equality constraint path (bound-based detection)
+- Phase I dual-bound checking (both bounds per direction)
+- Inline single-flip BFRT (extracted next-blocker into bfrt.c)
+- ratio_test.c 185 LOC, bfrt.c 98 LOC (both under 200)
+- Reviewer confirmed: 8/8 items CORRECT or PARTIALLY CORRECT, no crash bugs
+
+**T2.3 (convexfeld-ulvu CLOSED):** Added proactive perturbation in round 0.
+Binary fires perturbation on first 2 iterations of outer round 0 regardless
+of stalling (crash basis typically degenerate). Added `PROACTIVE_ITERS` define
+and `round_iter` counter. One-file change to solve_lp.c.
+
+**T3.10 (CSR/CSC cleanup):** Added `purge_matrix_entries()` to Phase 7 of
+`cxf_pivot_bound`. Walks CSC column, marks entries with sentinel -1, zeros
+matching CSR entries. Fixed variables now invisible to row/column scans.
+
+**T3.5 (stall detection counters):** `bounds_propagated`, `ineq_to_eq_count`,
+and `matrix_transitions` were declared but never incremented. Now incremented
+in step2, step3, simplex_cleanup, and pivot_bound. Progress score no longer
+under-counts, reducing false-positive stall detection.
+
+**Remaining convergence items (not yet fixed):**
+- T2.5 error 5: Row elimination path in pivot_special (needs infrastructure)
+- T2.8: simplex_cleanup 8/11 phases stubbed (high effort)
+- T3.9: simplex_final missing AT_LOWER_BOUND_MARKER
+- T3.12: simplex_cleanup uses stale activity bounds
 
 ### Session 2026-03-19: Source Comparison P0/P1 Surgical Fixes
 
