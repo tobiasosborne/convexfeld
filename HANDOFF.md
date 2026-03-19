@@ -4,7 +4,7 @@
 
 ---
 
-## STATUS: 147/147 tests. 21 fixes from source comparison (15 surgical + 6 medium). Master pushed.
+## STATUS: 147/147 tests. 23 fixes from source comparison (15 surgical + 6 medium + 2 full rewrites). Master pushed.
 
 ### Session 2026-03-19: Source Comparison P0/P1 Surgical Fixes
 
@@ -45,10 +45,15 @@
 | T2.11 | qyst CLOSED | simplex_final: partial fixing path |
 | T3.8 | — | simplex_final: skip slacks in Phase 1 |
 
+**Full rewrites completed (Batch 3):**
+
+| Fix | Issue | Description |
+|-----|-------|-------------|
+| T1.1 | lz1g CLOSED | step2 rewritten: BFRT deferred bound-flip processing |
+| T1.2 | 6g5e CLOSED | step3 rewritten: constraint elimination |
+
 **Remaining issues (not yet fixed):**
-- T1.1 (P0): step2 implements FBBT, should be BFRT post-processing — full rewrite
-- T1.2 full (P0): step3 constraint elimination — full rewrite
-- T1.3 (P0): Ratio test algorithm mismatch — full rewrite
+- T1.3 (P0): Ratio test algorithm mismatch — full rewrite (session-scale)
 - T2.3 (P1): Proactive perturbation in first outer round
 - T2.5 error 5: Row elimination path in pivot_special
 - T2.8 (P2): simplex_cleanup 8/11 phases stubbed
