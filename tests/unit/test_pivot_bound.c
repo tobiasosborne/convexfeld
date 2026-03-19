@@ -78,7 +78,11 @@ void setUp(void) {
     test_state.negUnbdCount = neg_unbd;
     test_state.posUnbdCount = pos_unbd;
 
-    /* CSC data */
+    /* CSC data — reset row_idx/values since purge_matrix_entries mutates them */
+    csc_row_idx[0] = 0; csc_row_idx[1] = 1;
+    csc_row_idx[2] = 0; csc_row_idx[3] = 1;
+    csc_values[0] = 2.0; csc_values[1] = -1.0;
+    csc_values[2] = 3.0; csc_values[3] = -2.0;
     test_state.csc_col_ptr = csc_col_ptr;
     test_state.csc_row_idx = csc_row_idx;
     test_state.csc_values = csc_values;

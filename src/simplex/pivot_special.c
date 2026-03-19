@@ -23,6 +23,31 @@
 
 /* Arena allocator (eta_pool.c) */
 
+/* T3.10: Lazy-delete fixed variable from CSC and CSR matrices */
+static void purge_matrix_entries(SolverState *ctx, int var) {
+    if (var >= ctx->num_vars) return;  /* slacks have no CSC column */
+    if (ctx->csc_col_ptr == NULL || ctx->csc_row_idx == NULL) return;
+    int64_t cs = ctx->csc_col_ptr[var];
+    int64_t ce = ctx->csc_col_ptr[var + 1];
+    for (int64_t k = cs; k < ce; k++) {
+        int row = ctx->csc_row_idx[k];
+        /* CSR cleanup: zero the matching entry in this row */
+        if (row >= 0 && row < ctx->num_constrs &&
+            ctx->csr_row_ptr != NULL && ctx->csr_col_idx != NULL) {
+            int64_t rs = ctx->csr_row_ptr[row];
+            int64_t re = ctx->csr_row_ptr[row + 1];
+            for (int64_t j = rs; j < re; j++) {
+                if (ctx->csr_col_idx[j] == var) {
+                    ctx->csr_col_idx[j] = -1;
+                    if (ctx->csr_values) ctx->csr_values[j] = 0.0;
+                    break;
+                }
+            }
+        }
+        ctx->csc_row_idx[k] = -1;  /* mark CSC entry inactive */
+    }
+}
+
 /* pivot_update.c — cancellation-safe activity bound update */
 
 /**
@@ -102,13 +127,12 @@ int cxf_pivot_bound(void *env, void *state, int var, double new_value,
     cxf_pivot_update(ctx, var, old_lb, new_value, old_ub, new_value,
                           CXF_INFINITY);
 
-    /* Phase 7: Matrix cleanup */
+    /* Phase 7: Matrix cleanup — fix bounds, mark status, purge CSR/CSC */
     ctx->work_lb[var] = new_value;
     ctx->work_ub[var] = new_value;
-    if (basis != NULL && basis->var_status != NULL) {
+    if (basis != NULL && basis->var_status != NULL)
         basis->var_status[var] = CXF_VAR_FIXED;
-    }
-
+    purge_matrix_entries(ctx, var);
     return CXF_OK;
 }
 
