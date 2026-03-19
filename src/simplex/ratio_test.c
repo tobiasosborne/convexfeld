@@ -1,87 +1,37 @@
-/**
- * @file ratio_test.c
- * @brief Harris two-pass ratio test for simplex pivot selection.
- *
- * Implements cxf_ratio_test per harris_ratio_test.md (Maros 2003 Ch. 8).
- *
- * Pass 1: find theta_max = min { (slack + band) / |d_i| } over all rows.
- * Pass 2: among strict ratios <= theta_max, select largest pivot (or
- *          smallest index under Bland's rule).
- *
- * Stage 3 (BFRT bound flips) is in bfrt.c.
- */
+/* ratio_test.c — Single-pass SE-weighted ratio test (T1.3) */
 
 #include "convexfeld/cxf_solver.h"
 #include "convexfeld/cxf_env.h"
 #include "convexfeld/cxf_basis.h"
+#include "convexfeld/cxf_pricing.h"
 #include "convexfeld/cxf_types.h"
 #include "simplex_internal.h"
 #include <math.h>
 
-/**
- * @brief Compute Harris ratio for one basic variable against its bounds.
- *
- * Returns the minimum ratio to any active bound.  When band > 0 the
- * feasibility window is widened (Harris relaxation, Pass 1); band = 0
- * gives the strict ratio (Pass 2).
- */
-static double row_ratio(double x, double lb, double ub, double sd,
-                        double band, double feasTol, double inf) {
-    double r, ratio = inf;
+/* Strict theta: min non-negative ratio to any bound (both for Phase I) */
+static double strict_theta(double x, double lb, double ub, double sd,
+                           double feasTol, double inf) {
+    double theta = inf;
     if (sd > 0) {
         if (lb > -inf) {
-            r = (x - lb + band) / sd;
-            if (r >= -feasTol && r < ratio) ratio = r;
+            double r = (x - lb) / sd;
+            if (r >= 0 && r < theta) theta = r;
         }
         if (ub < inf && x > ub + feasTol) {
-            r = (x - ub + band) / sd;
-            if (r >= -feasTol && r < ratio) ratio = r;
+            double r = (x - ub) / sd;
+            if (r >= 0 && r < theta) theta = r;
         }
-    } else {
+    } else if (sd < 0) {
         if (ub < inf) {
-            r = (x - ub - band) / sd;
-            if (r >= -feasTol && r < ratio) ratio = r;
+            double r = (x - ub) / sd;
+            if (r >= 0 && r < theta) theta = r;
         }
         if (lb > -inf && x < lb - feasTol) {
-            r = (x - lb - band) / sd;
-            if (r >= -feasTol && r < ratio) ratio = r;
-        }
-    }
-    return ratio;
-}
-
-/** @brief Compute initial step length theta for the Stage 2 blocker.
- *
- * Similar to row_ratio but uses strict non-negative check (r >= 0)
- * instead of row_ratio's relaxed check (r >= -feasTol), because theta
- * must be non-negative for step computation.
- */
-static double compute_theta(int lv, int total, int s, double feasTol,
-                             double inf, const double *pivotColumn,
-                             int finalRow, const double *wx,
-                             const double *wlb, const double *wub) {
-    double theta = inf;
-    double sd = s * pivotColumn[finalRow];
-    if (lv >= 0 && lv < total) {
-        if (sd > 0 && wlb[lv] > -inf) {
-            double r = (wx[lv] - wlb[lv]) / sd;
-            if (r >= 0 && r < theta) theta = r;
-        }
-        if (sd > 0 && wub[lv] < inf && wx[lv] > wub[lv] + feasTol) {
-            double r = (wx[lv] - wub[lv]) / sd;
-            if (r >= 0 && r < theta) theta = r;
-        }
-        if (sd < 0 && wub[lv] < inf) {
-            double r = (wx[lv] - wub[lv]) / sd;
-            if (r >= 0 && r < theta) theta = r;
-        }
-        if (sd < 0 && wlb[lv] > -inf && wx[lv] < wlb[lv] - feasTol) {
-            double r = (wx[lv] - wlb[lv]) / sd;
+            double r = (x - lb) / sd;
             if (r >= 0 && r < theta) theta = r;
         }
     }
-    if (theta >= inf) theta = 0;
-    if (theta < 0) theta = 0;
+    if (theta >= inf) theta = 0.0;
     return theta;
 }
 
@@ -97,7 +47,6 @@ int cxf_ratio_test(SolverState *state, CxfEnv *env, int enteringVar,
 
     const double feasTol = env->feasibility_tol;
     const double inf     = env->infinity;
-    const double band    = feasTol;           /* V2 harris_ratio_test.md */
     const int m     = state->num_constrs;
     const int total = state->num_vars + m;
     const int *bv   = state->basis->basic_vars;
@@ -105,78 +54,132 @@ int cxf_ratio_test(SolverState *state, CxfEnv *env, int enteringVar,
     const double *wlb = state->work_lb;
     const double *wub = state->work_ub;
 
-    /* Entering direction */
+    const double *weights = (state->pricing && state->pricing->weights)
+                            ? state->pricing->weights : NULL;
+    int num_wt = weights ? state->pricing->num_vars : 0;
+
     int s = 1;
     if (state->basis && enteringVar >= 0) {
         int vs = state->basis->var_status[enteringVar];
-        if (vs == CXF_VAR_AT_UPPER)
-            s = -1;
+        if (vs == CXF_VAR_AT_UPPER) s = -1;
         else if (vs == CXF_VAR_SUPERBASIC && state->work_dj &&
-                 state->work_dj[enteringVar] > 0.0)
-            s = -1;
+                 state->work_dj[enteringVar] > 0.0) s = -1;
     }
+    double rc_enter = (state->work_dj && enteringVar >= 0 &&
+                       enteringVar < total)
+                      ? state->work_dj[enteringVar] : 0.0;
 
-    /* V2: pre-check bound validity */
-    for (int i = 0; i < m; i++) {
-        if (fabs(pivotColumn[i]) <= CXF_PIVOT_TOL) continue;
-        int j = bv[i];
-        if (j < 0 || j >= total) continue;
-        if (wlb[j] > wub[j] + feasTol)
-            return CXF_INFEASIBLE;
-    }
+    int bestRow = -1;
+    double bestScore = inf, bestPivot = 0.0;
+    int blandBest = total + 1;
 
-    /* --- Pass 1: theta_max = min relaxed ratio --- */
-    double minRatio = inf;
-    int minRow = -1;
     for (int i = 0; i < m; i++) {
         double d_i = pivotColumn[i];
         if (fabs(d_i) <= CXF_PIVOT_TOL) continue;
+
         int j = bv[i];
         if (j < 0 || j >= total) continue;
-        double ratio = row_ratio(wx[j], wlb[j], wub[j],
-                                 s * d_i, band, feasTol, inf);
-        if (ratio < minRatio) { minRatio = ratio; minRow = i; }
+
+        if (wlb[j] > wub[j] + feasTol) return CXF_INFEASIBLE;
+        double sd = s * d_i, ratio = inf;
+        int is_eq = (wlb[j] > -inf && wub[j] < inf &&
+                     wub[j] - wlb[j] <= CXF_BOUND_EQUALITY_TOL);
+        if (is_eq) {
+            double r = fabs(wx[j] - wlb[j]) / fabs(sd);
+            if (r < ratio) ratio = r;
+        } else if (sd > 0) {
+            if (wlb[j] > -inf) {
+                double r = (wx[j] - wlb[j] + feasTol) / sd;
+                if (r >= 0 && r < ratio) ratio = r;
+            }
+            if (wub[j] < inf && wx[j] > wub[j] + feasTol) {
+                double r = (wx[j] - wub[j] + feasTol) / sd;
+                if (r >= 0 && r < ratio) ratio = r;
+            }
+        } else {
+            if (wub[j] < inf) {
+                double r = (wub[j] - wx[j] + feasTol) / (-sd);
+                if (r >= 0 && r < ratio) ratio = r;
+            }
+            if (wlb[j] > -inf && wx[j] < wlb[j] - feasTol) {
+                double r = (wlb[j] - wx[j] + feasTol) / (-sd);
+                if (r >= 0 && r < ratio) ratio = r;
+            }
+        }
+        if (ratio >= inf) continue;
+
+        double w = (weights && j < num_wt && weights[j] > 1e-10)
+                   ? sqrt(weights[j]) : 1.0;
+        double dir = (fabs(rc_enter) > feasTol && rc_enter * d_i > 0)
+                     ? 2.0 : 1.0;
+        double score = ratio * dir / w;
+        int better = 0;
+        if (state->use_bland) {
+            if (score < bestScore - feasTol)
+                better = 1;
+            else if (score <= bestScore + feasTol && j < blandBest)
+                better = 1;
+        } else {
+            if (score < bestScore - feasTol)
+                better = 1;
+            else if (score <= bestScore + feasTol &&
+                     fabs(d_i) > bestPivot)
+                better = 1;
+        }
+
+        if (better) {
+            bestRow = i;
+            bestScore = score;
+            bestPivot = fabs(d_i);
+            blandBest = j;
+        }
     }
-    if (minRow == -1) {
+
+    if (bestRow == -1) {
         if (status_out) *status_out = CXF_RT_UNBOUNDED;
         return CXF_UNBOUNDED;
     }
 
-    /* --- Pass 2: best pivot among strict ratios <= theta_max --- */
-    double maxPivot = fabs(pivotColumn[minRow]);
-    int finalRow = minRow;
-    int blandBest = bv[minRow];
-    for (int i = 0; i < m; i++) {
-        double d_i = pivotColumn[i];
-        if (fabs(d_i) <= CXF_PIVOT_TOL) continue;
-        int j = bv[i];
-        if (j < 0 || j >= total) continue;
-        double ratio = row_ratio(wx[j], wlb[j], wub[j],
-                                 s * d_i, 0.0, feasTol, inf);
-        if (ratio > minRatio) continue;
-        if (state->use_bland) {
-            if (j < blandBest) { blandBest = j; finalRow = i; }
-        } else {
-            if (fabs(d_i) > maxPivot) { maxPivot = fabs(d_i); finalRow = i; }
+    /* Strict (unrelaxed) theta for the leaving row */
+    int lv = bv[bestRow];
+    double sd_best = s * pivotColumn[bestRow];
+    double theta = strict_theta(wx[lv], wlb[lv], wub[lv], sd_best, feasTol, inf);
+
+    /* === Single-flip BFRT === */
+    int nflips = 0;
+    if (!state->use_bland && flip_rows_out && max_flips > 0 &&
+        lv >= 0 && lv < total &&
+        wlb[lv] > -inf && wub[lv] < inf &&
+        (wub[lv] - wlb[lv]) > feasTol) {
+        /* Blocking variable can flip — record and extend theta */
+        flip_rows_out[0] = bestRow;
+        nflips = 1;
+        double flip_ext = (wub[lv] - wlb[lv]) / fabs(sd_best);
+        theta += flip_ext;
+
+        /* Find next blocker after the flip (in bfrt.c) */
+        int nextRow = -1;
+        double nextRatio = inf;
+        nextRow = cxf_bfrt_next_blocker(state, pivotColumn, s,
+                                         bestRow, feasTol, &nextRatio);
+        if (nextRow >= 0 && nextRatio <= theta) {
+            theta = nextRatio;
+            bestRow = nextRow;
         }
     }
 
-    *leavingRow_out  = finalRow;
-    *pivotElement_out = pivotColumn[finalRow];
-
-    /* Compute initial theta for Stage 2 blocker */
-    double theta = compute_theta(bv[finalRow], total, s, feasTol, inf,
-                                 pivotColumn, finalRow, wx, wlb, wub);
-
-    /* --- Stage 3: BFRT (bfrt.c) --- */
-    int nflips = 0;
-    cxf_bfrt_extend_step(state, pivotColumn, s, state->use_bland, feasTol,
-                          inf, &finalRow, &theta,
-                          leavingRow_out, pivotElement_out,
-                          flip_rows_out, max_flips, &nflips);
-    if (num_flips_out) *num_flips_out = nflips;
+    *leavingRow_out  = bestRow;
+    *pivotElement_out = pivotColumn[bestRow];
     if (theta_out) *theta_out = theta;
-    cxf_bfrt_set_status(nflips, flip_rows_out, finalRow, theta, feasTol,
-                         status_out);
+    if (num_flips_out) *num_flips_out = nflips;
+
+    /* Status determination */
+    if (status_out) {
+        if (nflips > 0 && bestRow == flip_rows_out[0])
+            *status_out = CXF_RT_BOUND_FLIP_ONLY;
+        else
+            *status_out = (theta <= feasTol) ? CXF_RT_DEGENERATE_PIVOT
+                                              : CXF_RT_NORMAL_PIVOT;
+    }
     return CXF_OK;
 }

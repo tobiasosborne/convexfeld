@@ -341,13 +341,13 @@ void test_ratio_test_theta_degenerate(void) {
 /* --- BFRT: bound flips returned from ratio_test (V2 Stage 3) --- */
 
 void test_ratio_test_bfrt_flip(void) {
-    /* Both slacks doubly-bounded [0,10]. slack0 at x=0 (at lb), slack1 at x=5.
+    /* Single-flip BFRT (T1.3): slack0 at x=0 (at lb), slack1 at x=5.
      * Entering var0 from lb, pivotCol = [2.0, 1.0], s=+1.
-     * Stage 2: row 0, theta = 0 (degenerate).
-     * BFRT iter 1: row 0 flips (gap=10, delta=10/2=5, theta=5).
-     *   Next blocker: row 1, ratio=5. theta=min(5,5)=5.
-     * BFRT iter 2: row 1 flips (gap=10, delta=10/1=10, theta=15).
-     *   No more blockers. All flipped → BOUND_FLIP_ONLY. */
+     * Best leaving row: row 0 (theta=0, degenerate).
+     * BFRT: row 0 has finite bounds [0,10], can flip.
+     *   flip_rows[0] = 0, theta += 10/2 = 5.
+     *   Next blocker: row 1 at ratio 5. 5 <= 5 → becomes leaving row.
+     * Result: 1 flip, lr=1, theta=5, NORMAL_PIVOT. */
     work_x[2] = 0.0;  /* slack0 at lower bound */
     work_x[3] = 5.0;  /* slack1 at midpoint */
     double pivotCol[2] = {2.0, 1.0};
@@ -359,11 +359,11 @@ void test_ratio_test_bfrt_flip(void) {
                             &lr, &pe, &status, &theta,
                             flip_rows, 10, &nflips);
     TEST_ASSERT_EQUAL_INT(CXF_OK, rc);
-    TEST_ASSERT_EQUAL_INT(2, nflips);        /* both rows flip */
-    TEST_ASSERT_EQUAL_INT(0, flip_rows[0]);  /* row 0 flipped first */
-    TEST_ASSERT_EQUAL_INT(1, flip_rows[1]);  /* row 1 flipped second */
-    TEST_ASSERT_DOUBLE_WITHIN(1e-9, 15.0, theta);
-    TEST_ASSERT_EQUAL_INT(CXF_RT_BOUND_FLIP_ONLY, status);
+    TEST_ASSERT_EQUAL_INT(1, nflips);        /* single flip */
+    TEST_ASSERT_EQUAL_INT(0, flip_rows[0]);  /* row 0 flipped */
+    TEST_ASSERT_EQUAL_INT(1, lr);            /* row 1 is leaving */
+    TEST_ASSERT_DOUBLE_WITHIN(1e-9, 5.0, theta);
+    TEST_ASSERT_EQUAL_INT(CXF_RT_NORMAL_PIVOT, status);
 }
 
 void test_ratio_test_bfrt_no_flip_infinite_bound(void) {

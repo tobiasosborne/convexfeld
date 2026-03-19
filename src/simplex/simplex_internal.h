@@ -56,7 +56,10 @@ int cxf_ratio_test(SolverState *state, CxfEnv *env, int enteringVar,
                    int *flip_rows_out, int max_flips,
                    int *num_flips_out);
 
-/* --- BFRT Stage 3 (bfrt.c) --- */
+/* --- BFRT (bfrt.c) --- */
+int cxf_bfrt_next_blocker(SolverState *state, const double *pivotCol,
+                           int s, int skipRow, double feasTol,
+                           double *out_ratio);
 void cxf_bfrt_extend_step(SolverState *state, const double *pivotColumn,
                            int s, int use_bland, double feasTol,
                            double inf,
