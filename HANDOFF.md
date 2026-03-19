@@ -4,7 +4,7 @@
 
 ---
 
-## STATUS: 147/147 tests. 15 surgical fixes from source comparison applied. Master pushed.
+## STATUS: 147/147 tests. 21 fixes from source comparison (15 surgical + 6 medium). Master pushed.
 
 ### Session 2026-03-19: Source Comparison P0/P1 Surgical Fixes
 
@@ -34,16 +34,25 @@
 - step3 infeasibility removal → sierra, maros
 - pivot_special → capri, scsd8
 
-**Remaining high-impact issues (not yet fixed):**
+**Medium-effort fixes also applied (Batch 2):**
+
+| Fix | Issue | Description |
+|-----|-------|-------------|
+| T2.15 | 44tz CLOSED | pivot_primal: dynamic tolerance (2*tol >= range) |
+| T2.14 | 4ks4 CLOSED | pivot_primal: max-coeff feasibility guard |
+| T2.13 | jo1l CLOSED | pivot_primal: activity update + CSC invalidation |
+| T2.7 | me2m CLOSED | simplex_final: fix Phase 5 obj double-counting |
+| T2.11 | qyst CLOSED | simplex_final: partial fixing path |
+| T3.8 | — | simplex_final: skip slacks in Phase 1 |
+
+**Remaining issues (not yet fixed):**
 - T1.1 (P0): step2 implements FBBT, should be BFRT post-processing — full rewrite
 - T1.2 full (P0): step3 constraint elimination — full rewrite
 - T1.3 (P0): Ratio test algorithm mismatch — full rewrite
 - T2.3 (P1): Proactive perturbation in first outer round
 - T2.5 error 5: Row elimination path in pivot_special
-- T2.7 (P2): simplex_final Phase 5 objective double-counting
 - T2.8 (P2): simplex_cleanup 8/11 phases stubbed
-- T2.11 (P2): simplex_final missing partial fixing path
-- T2.13-T2.15 (P2): pivot_primal matrix cleanup + guards
+- T3.5-T3.7, T3.9-T3.10, T3.12: Various Tier 3 issues
 
 ### !! CRITICAL: Source Comparison Report (2026-03-18) !!
 
