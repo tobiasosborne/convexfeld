@@ -1388,6 +1388,29 @@ instances, not just the failing ones. Aggressive EXPAND is worse than no EXPAND.
 
 ---
 
+### Source Comparison Reveals Spec V2 Was Wrong About Algorithms (2026-03-19)
+
+**FAILURE:** V2 spec compliance sprint fixed code to match specs that THEMSELVES
+misidentified the algorithms. step2/step3 described FBBT; binary does BFRT
+post-processing/constraint elimination. Ratio test described Harris two-pass;
+binary uses steepest-edge weighted single-pass.
+
+**15 surgical P0 fixes applied from source comparison review:**
+Most impactful: pricing polarity fix (end_level.c kept basic vars instead of
+nonbasic — every pricing did a full scan), outer loop 5→100, Bland's removal,
+simplex_final filter inversion, fabricated EXPAND removal.
+
+**Workflow that worked:** 2 proposer subagents → review & implement → reviewer
+subagent. 4 independent reviewers confirmed all 15 fixes correct. Reviewer
+caught one premature termination bug in the outer-loop convergence check.
+
+**Lesson:** When a spec compliance sprint doesn't improve results, question
+whether the SPEC is correct, not just the code. Cleanroom specs can misidentify
+algorithms. A source comparison against decompiled binaries is the definitive
+authority.
+
+---
+
 ### Markowitz Tie-Breaking: Absolute vs. Relative (Session 6)
 **FINDING:** The original Markowitz tie-breaking used absolute magnitude
 (`av > best_abs`), comparing raw element values across columns of different
