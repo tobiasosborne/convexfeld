@@ -170,6 +170,7 @@ int cxf_simplex_step3(SolverState *state, CxfEnv *env) {
                                : ((a > 0.0) ? state->work_lb[j] : ub);
 
             cxf_pivot_bound(env, state, j, fix, ub, 0);
+            state->bounds_propagated++;
         }
 
         state->basis->basic_vars[row] = -2;

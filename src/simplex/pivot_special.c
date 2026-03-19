@@ -132,6 +132,7 @@ int cxf_pivot_bound(void *env, void *state, int var, double new_value,
     ctx->work_ub[var] = new_value;
     if (basis != NULL && basis->var_status != NULL)
         basis->var_status[var] = CXF_VAR_FIXED;
+    ctx->matrix_transitions++;
     purge_matrix_entries(ctx, var);
     return CXF_OK;
 }

@@ -127,9 +127,9 @@ int cxf_simplex_step2(SolverState *state, CxfEnv *env) {
         create_flip_eta(state, j, row, coeff, flip_type);
 
         if (flip_type == 3) {
-            /* Both bounds crossed: delegate to pivot_bound */
             double fix = (coeff > 0) ? ub : lb;
             cxf_pivot_bound(env, state, j, fix, ub, 0);
+            state->bounds_propagated++;
         } else if (flip_type == 1) {
             state->work_x[j] = ub;
         } else {

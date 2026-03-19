@@ -56,6 +56,7 @@ static int convert_tight_constraints(SolverState *state, double feas_tol) {
         if (min_act >= -feas_tol && max_act <= feas_tol) {
             state->work_sense[i] = '=';
             converted++;
+            state->ineq_to_eq_count++;
 
             /* Notify pricing subsystem of constraint conversion */
             if (state->pricing != NULL)
