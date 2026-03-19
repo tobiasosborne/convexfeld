@@ -128,15 +128,16 @@ void test_step3_small_coeff_processed(void) {
  * Old code skipped; now should tighten ub to ~5.
  */
 void test_step2_small_coeff_processed(void) {
+    /* step2 is now BFRT post-processing (T1.1): operates on BASIC vars
+     * only. Var 0 is nonbasic in this setup → step2 is a no-op.
+     * Bounds should be unchanged. */
     CxfEnv env = {0};
     env.feasibility_tol = 1e-8;
-    double a = 1e-10;
-    SolverState *s = make_state(a, '<', 5e-10, 0.0, 100.0);
+    SolverState *s = make_state(1e-10, '<', 5e-10, 0.0, 100.0);
     double orig_ub = s->work_ub[0];
     int rc = cxf_simplex_step2(s, &env);
     TEST_ASSERT_EQUAL_INT(0, rc);
-    TEST_ASSERT(s->work_ub[0] < orig_ub - 1.0);
-    TEST_ASSERT_DOUBLE_WITHIN(1e-4, 5.0, s->work_ub[0]);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-12, orig_ub, s->work_ub[0]); /* unchanged */
     free_state(s);
 }
 

@@ -1,12 +1,18 @@
 /**
  * @file step2.c
- * @brief Variable-side bound propagation — cxf_simplex_step2 (v2 P3.20)
+ * @brief BFRT deferred bound-flip processing — cxf_simplex_step2
  *
- * For each dirty variable, scan its CSC column to compute implied bounds
- * from all constraints it appears in. Tighten where the implication is
- * stronger than the current bound.
+ * For each basic variable candidate, compute ratio = work_x[j] / pivot_coeff,
+ * classify against bounds, and apply bound flips. Creates Type 7 etas.
  *
- * Spec: docs/specs-v2/specs/modules/simplex_iteration.md
+ * Binary algorithm (T1.1 source comparison):
+ *   1. Get candidates from step2-specific pricing queue
+ *   2. For each BASIC variable (var_status >= 0 = row index):
+ *      - Find pivot coeff in CSR row
+ *      - ratio = work_x[j] / pivot_coeff
+ *   3. Classify: 0=none, 1=flip-upper, 2=flip-lower, 3=both
+ *   4. Create Type 7 eta for each flip
+ *   5. Call pivot_bound only for flip_type == 3
  */
 
 #include "convexfeld/cxf_solver.h"
@@ -20,216 +26,118 @@
 #include "simplex_internal.h"
 #include "../basis/basis_internal.h"
 
+/* Type 7 eta: BFRT bound flip record */
+#ifndef CXF_ETA_BOUND_FLIP
+#define CXF_ETA_BOUND_FLIP 7
+#endif
 
 /**
- * @brief Tighten one variable bound and propagate.
- *
- * Updates the bound, adjusts activity bounds via cxf_pivot_update,
- * and marks the variable dirty in the pricing subsystem.
- *
- * @return 1 if tightened, 0 if no change
+ * @brief Find pivot coefficient for column j in CSR row.
+ * @return coefficient value, or 0.0 if not found
  */
-static int tighten_bound(SolverState *state, int var, double new_val,
-                         int is_lb, double tol) {
-    double *bound = is_lb ? state->work_lb : state->work_ub;
-    double old = bound[var];
-
-    if (is_lb) {
-        if (new_val <= old + tol) return 0;
-    } else {
-        if (new_val >= old - tol) return 0;
+static double find_row_coeff(const SolverState *state, int row, int col) {
+    int64_t rs = state->csr_row_ptr[row];
+    int64_t re = state->csr_row_ptr[row + 1];
+    for (int64_t k = rs; k < re; k++) {
+        if (state->csr_col_idx[k] == col)
+            return state->csr_values[k];
     }
+    return 0.0;
+}
 
-    /* Check that tightening doesn't make bounds infeasible */
-    if (is_lb && new_val > state->work_ub[var] + tol) return 0;
-    if (!is_lb && new_val < state->work_lb[var] - tol) return 0;
+/**
+ * @brief Create a Type 7 (bound flip) eta record.
+ * @return 0 on success, -1 on allocation failure
+ */
+static int create_flip_eta(SolverState *state, int var, int row,
+                           double pivot_coeff, int flip_type) {
+    BasisState *basis = state->basis;
+    EtaVector *eta;
+    if (basis->eta_pool)
+        eta = (EtaVector *)cxf_eta_pool_alloc(basis->eta_pool,
+                                               sizeof(EtaVector));
+    else
+        eta = (EtaVector *)calloc(1, sizeof(EtaVector));
+    if (!eta) return -1;
 
-    /* Capture old bounds before mutation */
-    double old_lb = state->work_lb[var];
-    double old_ub = state->work_ub[var];
-    bound[var] = new_val;
-
-    if (var < state->num_vars) {
-        double new_lb = is_lb ? new_val : old_lb;
-        double new_ub = is_lb ? old_ub : new_val;
-        cxf_pivot_update(state, var, old_lb, new_lb, old_ub, new_ub,
-                         CXF_INFINITY);
-    }
-    if (state->pricing)
-        cxf_pricing_mark_dirty(state->pricing, var);
-
-    /* V2 simplex_iteration.md: create lightweight BOUND_CHANGE eta record */
-    if (state->basis != NULL) {
-        EtaVector *eta;
-        if (state->basis->eta_pool != NULL)
-            eta = (EtaVector *)cxf_eta_pool_alloc(state->basis->eta_pool,
-                                                    sizeof(EtaVector));
-        else
-            eta = (EtaVector *)calloc(1, sizeof(EtaVector));
-        if (eta != NULL) {
-            eta->type = CXF_ETA_BOUND_CHANGE;
-            eta->pivot_row = -1;
-            eta->entering_var = var;
-            eta->leaving_var = -1;
-            eta->pivot_elem = new_val;
-            eta->reduced_cost = old;  /* previous bound value */
-            eta->direction = is_lb ? 1 : -1;
-            eta->status = is_lb ? CXF_VAR_AT_LOWER : CXF_VAR_AT_UPPER;
-            eta->nnz = 0;
-            eta->indices = NULL;
-            eta->values = NULL;
-            eta->next = state->basis->eta_head;
-            state->basis->eta_head = eta;
-            state->basis->eta_count++;
-            state->eta_count = state->basis->eta_count;
-        }
-    }
-
-    return 1;
+    eta->type = CXF_ETA_BOUND_FLIP;
+    eta->pivot_row = row;
+    eta->entering_var = var;
+    eta->leaving_var = -1;
+    eta->pivot_elem = pivot_coeff;
+    eta->reduced_cost = state->work_x[var];
+    eta->direction = flip_type;
+    eta->status = (flip_type == 1) ? CXF_VAR_AT_UPPER : CXF_VAR_AT_LOWER;
+    eta->nnz = 0;
+    eta->indices = NULL;
+    eta->values = NULL;
+    eta->next = basis->eta_head;
+    basis->eta_head = eta;
+    basis->eta_count++;
+    state->eta_count = basis->eta_count;
+    return 0;
 }
 
 /*---------------------------------------------------------------------------
- * cxf_simplex_step2 — Variable-side bound propagation (v2 P3.20)
+ * cxf_simplex_step2 — BFRT deferred bound-flip processing
  *
- * For each dirty variable, scan its CSC column to compute implied bounds
- * from all constraints it appears in. Tighten where the implication is
- * stronger than the current bound.
+ * Iterates basic variables, computes ratio, classifies flip type,
+ * applies bound flips. Never returns CXF_INFEASIBLE.
  *---------------------------------------------------------------------------*/
 
 int cxf_simplex_step2(SolverState *state, CxfEnv *env) {
     if (!state || !env) return 0;
-    if (!state->pricing || !state->pricing->var_dirty) return 0;
-    if (!state->min_activity || !state->max_activity) return 0;
+    if (!state->basis || !state->basis->var_status) return 0;
+    if (!state->csr_row_ptr || !state->csr_col_idx || !state->csr_values)
+        return 0;
 
-    if (!state->csc_col_ptr) return 0;
-
+    BasisState *basis = state->basis;
     double tol = env->feasibility_tol;
-    int n = state->num_vars;
-    int tightened = 0;
+    int m = state->num_constrs;
+    int flips = 0;
 
-    for (int j = 0; j < n; j++) {
-        if (!state->pricing->var_dirty[j]) continue;
+    /* Process each basic variable (binary iterates pricing queue,
+     * we iterate basic_vars[] for correctness — O(m)) */
+    for (int row = 0; row < m; row++) {
+        int j = basis->basic_vars[row];
+        if (j < 0) continue;
+        if (j >= state->num_vars + m) continue;
 
-        /* Skip basic or already-fixed variables */
-        if (state->basis && state->basis->var_status[j] >= 0) continue;
+        /* Find pivot coefficient a_{row,j} in CSR row */
+        double coeff = find_row_coeff(state, row, j);
+        if (fabs(coeff) < CXF_MIN_PIVOT) continue;
+
+        /* Compute ratio */
+        double ratio = state->work_x[j] / coeff;
+
+        /* Classify ratio against variable bounds */
         double lb = state->work_lb[j];
         double ub = state->work_ub[j];
-        if (ub - lb < tol) continue;
 
-        /* Two-stage infeasibility check (simplex_iteration.md).
-         * Stage 1: preliminary — bounds crossed. Stage 2: confirmation —
-         * recompute activity from scratch, restore bounds, re-derive.
-         * Prevents false infeasibility from drifted activity bounds. */
-        if (lb > ub + tol) {
-            /* Stage 2: recompute activity for rows touching this var */
-            int64_t cs2 = state->csc_col_ptr[j];
-            int64_t ce2 = state->csc_col_ptr[j + 1];
-            int rows2[64]; int nr2 = 0;
-            for (int64_t k2 = cs2; k2 < ce2 && nr2 < 64; k2++)
-                rows2[nr2++] = state->csc_row_idx[k2];
-            if (nr2 > 0)
-                cxf_compute_activity_bounds(state, nr2, rows2);
+        int below = (ratio < lb - tol);
+        int above = (ratio > ub + tol);
+        int flip_type;
 
-            /* Restore bounds from saved originals and re-derive */
-            double safe_lb = state->saved_lb ? state->saved_lb[j] : lb;
-            double safe_ub = state->saved_ub ? state->saved_ub[j] : ub;
-            for (int64_t k2 = cs2; k2 < ce2; k2++) {
-                int r2 = state->csc_row_idx[k2];
-                double a2 = state->csc_values[k2];
-                if (fabs(a2) < CXF_MIN_PIVOT) continue;
-                double fmin = state->min_activity[r2];
-                double fmax = state->max_activity[r2];
-                if (fmin <= -CXF_INFINITY || fmax >= CXF_INFINITY) continue;
-                double rhs2 = (state->work_rhs) ? state->work_rhs[r2] : 0.0;
-                char s2 = state->work_sense ? state->work_sense[r2] : '<';
-                if (s2 == '<' || s2 == 'L' || s2 == '=' || s2 == 'E') {
-                    if (a2 > 0) {
-                        double iu = safe_lb + (rhs2 - fmin) / a2;
-                        if (iu < safe_ub) safe_ub = iu;
-                    } else {
-                        double il = safe_ub + (rhs2 - fmax) / a2;
-                        if (il > safe_lb) safe_lb = il;
-                    }
-                }
-                if (s2 == '>' || s2 == 'G' || s2 == '=' || s2 == 'E') {
-                    if (a2 > 0) {
-                        double il = safe_ub + (rhs2 - fmax) / a2;
-                        if (il > safe_lb) safe_lb = il;
-                    } else {
-                        double iu = safe_lb + (rhs2 - fmin) / a2;
-                        if (iu < safe_ub) safe_ub = iu;
-                    }
-                }
-            }
-            if (safe_lb > safe_ub + tol) return CXF_INFEASIBLE; /* Confirmed */
-            /* Confirmation failed: restore bounds and continue */
-            state->work_lb[j] = safe_lb;
-            state->work_ub[j] = safe_ub;
-            lb = safe_lb; ub = safe_ub;
-            if (ub - lb < tol) continue;
+        if (below && above) flip_type = 3;
+        else if (above)     flip_type = 1;
+        else if (below)     flip_type = 2;
+        else                continue; /* within bounds */
+
+        /* Create Type 7 eta */
+        create_flip_eta(state, j, row, coeff, flip_type);
+
+        if (flip_type == 3) {
+            /* Both bounds crossed: delegate to pivot_bound */
+            double fix = (coeff > 0) ? ub : lb;
+            cxf_pivot_bound(env, state, j, fix, ub, 0);
+        } else if (flip_type == 1) {
+            state->work_x[j] = ub;
+        } else {
+            state->work_x[j] = lb;
         }
-
-        /* Scan CSC column: for each constraint this variable appears in,
-         * compute implied bound from constraint activity */
-        int64_t cs = state->csc_col_ptr[j];
-        int64_t ce = state->csc_col_ptr[j + 1];
-
-        for (int64_t k = cs; k < ce; k++) {
-            int row = state->csc_row_idx[k];
-            double a = state->csc_values[k];
-            if (fabs(a) < CXF_MIN_PIVOT) continue;
-
-            double min_act = state->min_activity[row];
-            double max_act = state->max_activity[row];
-            if (min_act <= -CXF_INFINITY || max_act >= CXF_INFINITY) continue;
-
-            char sense = (state->work_sense) ? state->work_sense[row] : '<';
-
-            /* Implied bounds from constraint activity (Savelsbergh 1994).
-             * x_k <= l_k + (b_i - L_act_i) / a_ik  (for <= with a > 0)
-             * where L_act_i includes variable k's contribution. */
-            double rhs_i = (state->work_rhs) ? state->work_rhs[row] : 0.0;
-            if (sense == '<' || sense == 'L' || sense == '=' || sense == 'E') {
-                if (a > 0) {
-                    double impl_ub = lb + (rhs_i - min_act) / a;
-                    tightened += tighten_bound(state, j, impl_ub, 0, tol);
-                } else {
-                    double impl_lb = ub + (rhs_i - max_act) / a;
-                    tightened += tighten_bound(state, j, impl_lb, 1, tol);
-                }
-            }
-            if (sense == '>' || sense == 'G' || sense == '=' || sense == 'E') {
-                if (a > 0) {
-                    double impl_lb = ub + (rhs_i - max_act) / a;
-                    tightened += tighten_bound(state, j, impl_lb, 1, tol);
-                } else {
-                    double impl_ub = lb + (rhs_i - min_act) / a;
-                    tightened += tighten_bound(state, j, impl_ub, 0, tol);
-                }
-            }
-
-            /* Refresh bounds after possible tightening */
-            lb = state->work_lb[j];
-            ub = state->work_ub[j];
-        }
-
-        /* V2 simplex_iteration.md: if propagation fixed this variable,
-         * eliminate it via cxf_pivot_bound (eta + pricing + activity). */
-        if (state->work_ub[j] - state->work_lb[j] < CXF_BOUND_EQUALITY_TOL &&
-            state->basis && state->basis->var_status[j] < 0) {
-            double fix = 0.5 * (state->work_lb[j] + state->work_ub[j]);
-            int ret = cxf_pivot_bound(env, state, j, fix,
-                                      state->work_ub[j], 0);
-            if (ret != CXF_OK) return ret;
-        }
+        flips++;
     }
 
-    /* Clear dirty flags */
-    if (state->pricing->var_dirty && n > 0) {
-        for (int j = 0; j < n; j++) state->pricing->var_dirty[j] = 0;
-        state->pricing->num_dirty = 0;
-    }
-
-    state->flip_count += tightened;
+    state->flip_count += flips;
     return 0;
 }
