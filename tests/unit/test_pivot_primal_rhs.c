@@ -32,11 +32,12 @@ static double work_lb[2], work_ub[2], work_obj[2], work_x[2];
 static int var_status[2];
 static double work_rhs[2];
 
-/* CSC: var0 has coeff 3.0 in row0 and 1.5 in row1;
- *      var1 has coeff -2.0 in row0 */
+/* CSC: var0 has coeff 0.03 in row0 and 0.015 in row1;
+ *      var1 has coeff -0.02 in row0.
+ * Small coefficients so T2.14 guard (max_coeff*range <= tol) passes. */
 static int64_t csc_col_ptr[3] = {0, 2, 3};
 static int csc_row_idx[3]     = {0, 1, 0};
-static double csc_values[3]   = {3.0, 1.5, -2.0};
+static double csc_values[3]   = {0.03, 0.015, -0.02};
 
 /* Original model RHS (must never be modified) */
 static double model_rhs[2] = {100.0, 200.0};
@@ -72,6 +73,10 @@ void setUp(void) {
     test_state.work_obj = work_obj;
     test_state.work_x = work_x;
 
+    /* Reset CSC data (T2.13 invalidates csc_row_idx during pivot) */
+    csc_row_idx[0] = 0; csc_row_idx[1] = 1; csc_row_idx[2] = 0;
+    csc_values[0] = 0.03; csc_values[1] = 0.015; csc_values[2] = -0.02;
+
     /* Working CSC (SolverState owns these) */
     test_state.csc_col_ptr = csc_col_ptr;
     test_state.csc_row_idx = csc_row_idx;
@@ -104,7 +109,7 @@ void test_model_rhs_unchanged_after_pivot(void) {
      * var1 column: coeff -2.0 in row0
      * Expected: work_rhs[0] -= (-2.0)*10.0 = work_rhs[0] + 20.0 = 120.0
      * Model RHS must remain 100.0 and 200.0 */
-    int rc = cxf_pivot_primal(&test_env, &test_state, 1, 1e-8);
+    int rc = cxf_pivot_primal(&test_env, &test_state, 1, 1.0);
     TEST_ASSERT_EQUAL_INT(CXF_OK, rc);
 
     /* Model RHS must be completely untouched */
@@ -114,13 +119,14 @@ void test_model_rhs_unchanged_after_pivot(void) {
 
 void test_work_rhs_updated_correctly(void) {
     /* Pivot var1: fix at ub=10.0
-     * var1 column: coeff -2.0 in row0
-     * work_rhs[0] = 100.0 - (-2.0)*10.0 = 120.0
-     * work_rhs[1] unchanged = 200.0 */
-    int rc = cxf_pivot_primal(&test_env, &test_state, 1, 1e-8);
+     * var1 column: coeff -0.02 in row0
+     * work_rhs[0] = 100.0 - (-0.02)*10.0 = 100.2
+     * work_rhs[1] unchanged = 200.0
+     * Tolerance 1.0 so both T2.15 (2*1=2 < 10) and T2.14 (0.02*10=0.2 < 1) pass. */
+    int rc = cxf_pivot_primal(&test_env, &test_state, 1, 1.0);
     TEST_ASSERT_EQUAL_INT(CXF_OK, rc);
 
-    TEST_ASSERT_DOUBLE_WITHIN(1e-12, 120.0, work_rhs[0]);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-12, 100.2, work_rhs[0]);
     TEST_ASSERT_DOUBLE_WITHIN(1e-12, 200.0, work_rhs[1]);
 }
 
@@ -129,7 +135,7 @@ void test_model_rhs_unchanged_multi_row_pivot(void) {
      * var0 column: 3.0 in row0, 1.5 in row1
      * pivotValue=0 -> no RHS change expected (0*coeff=0)
      * Model RHS must still be untouched */
-    int rc = cxf_pivot_primal(&test_env, &test_state, 0, 1e-8);
+    int rc = cxf_pivot_primal(&test_env, &test_state, 0, 1.0);
     TEST_ASSERT_EQUAL_INT(CXF_OK, rc);
 
     TEST_ASSERT_DOUBLE_WITHIN(1e-15, 100.0, model_rhs[0]);
@@ -141,11 +147,11 @@ void test_model_rhs_unchanged_upper_bound_pivot(void) {
     work_obj[0] = -4.0;
 
     /* Pivot var0: RC=-4.0 -> fix at ub=10.0
-     * var0 column: 3.0 in row0, 1.5 in row1
-     * work_rhs[0] -= 3.0*10.0  => 100 - 30 = 70
-     * work_rhs[1] -= 1.5*10.0  => 200 - 15 = 185
+     * var0 column: 0.03 in row0, 0.015 in row1
+     * work_rhs[0] -= 0.03*10.0  => 100 - 0.3 = 99.7
+     * work_rhs[1] -= 0.015*10.0 => 200 - 0.15 = 199.85
      * Model RHS must remain 100 and 200 */
-    int rc = cxf_pivot_primal(&test_env, &test_state, 0, 1e-8);
+    int rc = cxf_pivot_primal(&test_env, &test_state, 0, 1.0);
     TEST_ASSERT_EQUAL_INT(CXF_OK, rc);
 
     /* Model RHS untouched */
@@ -153,8 +159,8 @@ void test_model_rhs_unchanged_upper_bound_pivot(void) {
     TEST_ASSERT_DOUBLE_WITHIN(1e-15, 200.0, model_rhs[1]);
 
     /* Working RHS correctly updated */
-    TEST_ASSERT_DOUBLE_WITHIN(1e-12, 70.0, work_rhs[0]);
-    TEST_ASSERT_DOUBLE_WITHIN(1e-12, 185.0, work_rhs[1]);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-12, 99.7, work_rhs[0]);
+    TEST_ASSERT_DOUBLE_WITHIN(1e-12, 199.85, work_rhs[1]);
 }
 
 void test_sequential_pivots_never_touch_model_rhs(void) {
@@ -162,10 +168,10 @@ void test_sequential_pivots_never_touch_model_rhs(void) {
     work_obj[0] = -2.0;  /* negative RC -> fix at ub=10 */
     work_obj[1] = -3.0;  /* negative RC -> fix at ub=10 */
 
-    int rc1 = cxf_pivot_primal(&test_env, &test_state, 1, 1e-8);
+    int rc1 = cxf_pivot_primal(&test_env, &test_state, 1, 1.0);
     TEST_ASSERT_EQUAL_INT(CXF_OK, rc1);
 
-    int rc2 = cxf_pivot_primal(&test_env, &test_state, 0, 1e-8);
+    int rc2 = cxf_pivot_primal(&test_env, &test_state, 0, 1.0);
     TEST_ASSERT_EQUAL_INT(CXF_OK, rc2);
 
     /* Model RHS must be completely untouched after both pivots */

@@ -88,13 +88,14 @@ void tearDown(void) {}
 /*=== V2 compliance: CXF_INFEASIBLE return code ===*/
 
 void test_tight_bounds_above_bound_eq_tol_succeeds(void) {
-    /* Bounds range = 1e-9 > CXF_BOUND_EQUALITY_TOL (1e-10).
-     * Per tolerances_constants.md Section 9 and numerical_stability.md
-     * Section C, this is NOT fixed — pivot should proceed. */
+    /* T2.15: Dynamic tolerance 2*tol >= range → INFEASIBLE.
+     * Use tol small enough that 2*tol < range for the pivot to proceed.
+     * Range = 1e-4, tol = 1e-5 → 2e-5 < 1e-4 → passes T2.15.
+     * T2.14: max_coeff=0.001 * 1e-4 = 1e-7 < 1e-5 → passes. */
     work_lb[0] = 5.0;
-    work_ub[0] = 5.0 + 1e-9;
+    work_ub[0] = 5.0 + 1e-4;
 
-    int rc = cxf_pivot_primal(&test_env, &test_state, 0, 1e-6);
+    int rc = cxf_pivot_primal(&test_env, &test_state, 0, 1e-5);
     TEST_ASSERT_EQUAL_INT(CXF_OK, rc);
 }
 

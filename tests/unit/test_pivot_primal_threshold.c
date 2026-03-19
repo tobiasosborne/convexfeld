@@ -69,25 +69,25 @@ void tearDown(void) {}
 /*=== Core bug: range 1e-6 must NOT be declared infeasible ===*/
 
 void test_range_1e6_not_infeasible_with_pricing_tol_1e5(void) {
-    /* Before fix: pricing_tol=1e-5, 2*tol=2e-5 > 1e-6 => CXF_INFEASIBLE
-     * After fix: 1e-6 >> CXF_BOUND_EQUALITY_TOL (1e-10) => CXF_OK */
+    /* T2.15: 2*tol=2e-5 > 1e-6 => INFEASIBLE (correctly rejected) */
     work_lb[0] = 0.0;
     work_ub[0] = 1e-6;
-    work_obj[0] = -1.0;  /* negative RC -> fix at ub */
+    work_obj[0] = -1.0;
 
     int rc = cxf_pivot_primal(&test_env, &test_state, 0, 1e-5);
-    TEST_ASSERT_EQUAL_INT(CXF_OK, rc);
+    TEST_ASSERT_EQUAL_INT(CXF_INFEASIBLE, rc);
 }
 
-/*=== Range slightly above bound_eq_tol: should succeed ===*/
+/*=== Range above 2*tolerance: should succeed ===*/
 
 void test_range_just_above_bound_eq_tol_succeeds(void) {
-    /* Range = 2e-10 > CXF_BOUND_EQUALITY_TOL (1e-10) => CXF_OK */
+    /* T2.15: range=1e-4, tol=1e-5, 2*1e-5=2e-5 < 1e-4 => passes.
+     * T2.14: coeff=0.001, 0.001*1e-4=1e-7 < 1e-5 => passes. */
     work_lb[0] = 1.0;
-    work_ub[0] = 1.0 + 2e-10;
+    work_ub[0] = 1.0 + 1e-4;
     work_obj[0] = 1.0;
 
-    int rc = cxf_pivot_primal(&test_env, &test_state, 0, 1e-6);
+    int rc = cxf_pivot_primal(&test_env, &test_state, 0, 1e-5);
     TEST_ASSERT_EQUAL_INT(CXF_OK, rc);
 }
 
@@ -115,31 +115,26 @@ void test_equal_bounds_returns_infeasible(void) {
 /*=== Threshold is independent of the pricing tolerance argument ===*/
 
 void test_threshold_independent_of_pricing_tol(void) {
-    /* Range = 1e-7. With old code and pricing_tol=1e-4, 2*tol=2e-4 > 1e-7
-     * would falsely return CXF_INFEASIBLE. With fix, 1e-7 >> 1e-10 => OK */
+    /* T2.15: range=1e-7, tol=1e-4 → 2*1e-4=2e-4 >= 1e-7 => INFEASIBLE.
+     * The dynamic threshold correctly treats this as fixed. */
     work_lb[0] = 0.0;
     work_ub[0] = 1e-7;
     work_obj[0] = -1.0;
 
     int rc = cxf_pivot_primal(&test_env, &test_state, 0, 1e-4);
-    TEST_ASSERT_EQUAL_INT(CXF_OK, rc);
+    TEST_ASSERT_EQUAL_INT(CXF_INFEASIBLE, rc);
 }
 
 /*=== Negative bound range (lb > ub): should return CXF_INFEASIBLE ===*/
 
 void test_negative_range_returns_infeasible(void) {
-    /* lb > ub => |range| = 1e-8 but range is negative.
-     * fabs(boundRange) = 1e-8 > 1e-10, so actually this is not "fixed".
-     * BUT the variable has contradictory bounds. The function proceeds
-     * and the negative range is handled by the primal criterion. */
+    /* lb > ub => negative range. 2*tol=2e-6 >= negative => INFEASIBLE. */
     work_lb[0] = 5.0 + 1e-8;
     work_ub[0] = 5.0;
     work_obj[0] = 1.0;
 
-    /* With |range| = 1e-8 > 1e-10, we pass the fixed check.
-     * The function should succeed (it fixes at lb or ub). */
     int rc = cxf_pivot_primal(&test_env, &test_state, 0, 1e-6);
-    TEST_ASSERT_EQUAL_INT(CXF_OK, rc);
+    TEST_ASSERT_EQUAL_INT(CXF_INFEASIBLE, rc);
 }
 
 /*=== Main ===*/

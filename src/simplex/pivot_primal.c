@@ -24,6 +24,7 @@
 #include <stdlib.h>
 
 #include "../basis/basis_internal.h"
+#include "simplex_internal.h"
 
 /** @brief Threshold for determining if objective coefficient is significant */
 #define TINY_THRESHOLD 1e-8
@@ -76,8 +77,8 @@ int cxf_pivot_primal(void *env, void *state, int var, double tolerance) {
 
     n = ctx->num_vars;
 
-    /* Validate variable index */
-    if (var < 0 || var >= n) {
+    /* Validate variable index — structural [0,n) plus slacks [n,n+m) */
+    if (var < 0 || var >= n + ctx->num_constrs) {
         return CXF_ERROR_INVALID_ARGUMENT;
     }
 
@@ -101,9 +102,24 @@ int cxf_pivot_primal(void *env, void *state, int var, double tolerance) {
     ub = ctx->work_ub[var];
     boundRange = ub - lb;
 
-    if (fabs(boundRange) < CXF_BOUND_EQUALITY_TOL) {
-        /* Variable is effectively fixed — cannot pivot */
+    if (2.0 * tolerance >= boundRange) {
+        /* Variable is effectively fixed (binary: 2*caller_tol >= range) */
         return CXF_INFEASIBLE;
+    }
+
+    /* T2.14: Max-coefficient feasibility guard (binary Phase 2).
+     * If max(|a_ij|) * bound_range > tolerance, fixing this variable
+     * would cause excessive numerical disturbance — skip silently. */
+    if (var < n && ctx->csc_col_ptr != NULL && ctx->csc_values != NULL) {
+        int64_t cs = ctx->csc_col_ptr[var];
+        int64_t ce = ctx->csc_col_ptr[var + 1];
+        double max_coeff = 0.0;
+        for (int64_t k = cs; k < ce; k++) {
+            double av = fabs(ctx->csc_values[k]);
+            if (av > max_coeff) max_coeff = av;
+        }
+        if (max_coeff * boundRange > tolerance)
+            return 0;  /* CXF_OK — skip unsafe fix */
     }
 
     /*
@@ -205,7 +221,15 @@ int cxf_pivot_primal(void *env, void *state, int var, double tolerance) {
                 ctx->work_rhs[row] -= coeff * pivotValue;
             }
         }
+
+        /* T2.13: Invalidate CSC entries (binary Phase 9: marks as -1) */
+        for (int64_t k = col_start; k < col_end; k++)
+            ctx->csc_row_idx[k] = -1;
     }
+
+    /* T2.13: Activity bound propagation (binary Phase 9).
+     * Variable fixed at pivotValue: bounds collapse from [lb,ub] to point. */
+    cxf_pivot_update(ctx, var, lb, pivotValue, ub, pivotValue, CXF_INFINITY);
 
     /*
      * Step 6: Eta vector creation (V2 pivot_operations.md)

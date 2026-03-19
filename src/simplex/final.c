@@ -61,10 +61,13 @@ int cxf_simplex_final(SolverState *state, CxfEnv *env, double *workOut) {
     }
 
     /* ---- Phase 1: Target value determination ---- */
+    /* Only structural variables (j < n) get fixing targets.
+     * T3.8: over-fixing slacks distorts constraint activities. */
     int fix_count = 0;
     int abort_early = 0;
     for (int j = 0; j < total; j++) {
         target[j] = NO_TARGET;
+        if (j >= n) continue; /* skip slacks */
         if (var_status[j] < 0) continue; /* skip nonbasic */
 
         /* Spec: abort if variable has special flags */
@@ -165,11 +168,13 @@ int cxf_simplex_final(SolverState *state, CxfEnv *env, double *workOut) {
 
     if (workOut != NULL) *workOut += (double)aff_count;
 
-    /* ---- Phase 4: Constraint feasibility check ---- */
-    int all_feasible = 1;
+    /* ---- Phase 4: Constraint feasibility check (partial fixing) ---- */
+    /* T2.11: For each violated row, cancel fixings for variables in that row.
+     * Repurpose visited[] (Phase 3 wrote 1 for affected): 2 = violated. */
     if (state->csr_row_ptr != NULL && state->csr_col_idx != NULL &&
-        state->csr_values != NULL && state->work_rhs != NULL) {
-        for (int a = 0; a < aff_count && all_feasible; a++) {
+        state->csr_values != NULL && state->work_rhs != NULL &&
+        state->work_sense != NULL) {
+        for (int a = 0; a < aff_count; a++) {
             int i = affected[a];
             double activity = 0.0;
             int64_t rs = state->csr_row_ptr[i];
@@ -181,7 +186,6 @@ int cxf_simplex_final(SolverState *state, CxfEnv *env, double *workOut) {
                     ? target[j] : state->work_x[j];
                 activity += state->csr_values[k] * val;
             }
-            /* Add slack */
             int slack = n + i;
             if (slack < total) {
                 double val = (target[slack] != NO_TARGET)
@@ -191,27 +195,49 @@ int cxf_simplex_final(SolverState *state, CxfEnv *env, double *workOut) {
 
             double rhs = state->work_rhs[i];
             char sense = state->work_sense[i];
+            int violated = 0;
             if ((sense == '<' || sense == 'L') && activity > rhs + feas_tol)
-                all_feasible = 0;
+                violated = 1;
             else if ((sense == '>' || sense == 'G') && activity < rhs - feas_tol)
-                all_feasible = 0;
+                violated = 1;
+            if (violated) visited[i] = 2;
+        }
+
+        /* Cancel fixings for variables in violated rows */
+        for (int j = 0; j < n; j++) {
+            if (target[j] == NO_TARGET) continue;
+            if (state->csc_col_ptr == NULL) continue;
+            int64_t cs = state->csc_col_ptr[j];
+            int64_t ce = state->csc_col_ptr[j + 1];
+            for (int64_t k = cs; k < ce; k++) {
+                int row = state->csc_row_idx[k];
+                if (row >= 0 && row < m && visited[row] == 2) {
+                    target[j] = NO_TARGET;
+                    break;
+                }
+            }
         }
     }
 
-    if (!all_feasible) {
+    /* Recount safe fixings after partial cancellation */
+    fix_count = 0;
+    for (int j = 0; j < total; j++)
+        if (target[j] != NO_TARGET) fix_count++;
+
+    if (fix_count == 0) {
         free(target); free(affected); free(visited);
-        return CXF_OK; /* Inequality violated → no fixings applied */
+        return CXF_OK;
     }
 
     if (workOut != NULL) *workOut += (double)fix_count;
 
     /* ---- Phase 5: Apply fixings via cxf_pivot_bound ---- */
-    /* cxf_pivot_bound adds work_obj[j]*new_value to obj_value, but after
-     * cxf_recompute_objective the full c^T x is already in obj_value.
-     * Subtract the current contribution first to avoid double-counting. */
+    /* T2.7: Zero work_obj[j] before pivot_bound so its incremental obj
+     * update adds zero. Recompute from scratch afterward — this avoids
+     * double-counting when work_x values shift via activity propagation. */
     for (int j = 0; j < total; j++) {
         if (target[j] == NO_TARGET) continue;
-        state->obj_value -= state->work_obj[j] * state->work_x[j];
+        state->work_obj[j] = 0.0;
         int rc = cxf_pivot_bound(env, state, j, target[j],
                                  state->work_ub[j], 0);
         if (rc != CXF_OK) {
@@ -224,15 +250,13 @@ int cxf_simplex_final(SolverState *state, CxfEnv *env, double *workOut) {
     if (state->pricing != NULL)
         cxf_pricing_update(state->pricing, state);
 
-    /* QA Q9: Post-fixing objective recomputation diagnostic.
-     * Catch accumulated drift from incremental updates. */
+    /* Recompute objective from scratch — work_obj[j]=0 for fixed vars,
+     * so this sums only unfixed variables. */
     {
         double recomputed = 0.0;
         for (int j = 0; j < total; j++)
             recomputed += state->work_obj[j] * state->work_x[j];
-        double thr = 1e-6 * (1.0 + fabs(recomputed));
-        if (fabs(recomputed - state->obj_value) > thr)
-            state->obj_value = recomputed;  /* Correct drift */
+        state->obj_value = recomputed;
     }
 
     free(target);
