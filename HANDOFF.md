@@ -1,10 +1,49 @@
 # Agent Handoff
 
-*Last updated: 2026-03-18*
+*Last updated: 2026-03-19*
 
 ---
 
-## STATUS: 147/147 tests pass. 43/114 Netlib. 30 NEW critical bugs found via source comparison. Master pushed.
+## STATUS: 147/147 tests. 15 surgical fixes from source comparison applied. Master pushed.
+
+### Session 2026-03-19: Source Comparison P0/P1 Surgical Fixes
+
+**15 fixes across 11 source files, 3 test files. All verified by reviewer subagents.**
+**Net: -50 lines (163 removed, 113 added). 147/147 tests pass.**
+
+| Fix | Issue | Severity | Description |
+|-----|-------|----------|-------------|
+| T2.4 | ugbs CLOSED | P0 | Pricing polarity — end_level.c kept basic vars, now keeps nonbasic |
+| T2.1 | seay CLOSED | P0 | Outer loop 5→100 for dual/auto, 10 for crossover |
+| T2.10 | — | P0 | Remove pre-pivot phase_end (binary: post-pivot only) |
+| T3.1 | — | P3 | Bland's rule deactivated (not in binary) |
+| T2.5 | 89i6 CLOSED | P0 | pivot_special: 4/5 errors (asymmetric RC, coeff scan, UNBOUNDED, flip) |
+| T2.6 | ddpq CLOSED | P0 | simplex_final Phase 1 filter inverted (basic, not nonbasic) |
+| T1.2 partial | 6g5e IN_PROGRESS | P0 | step3 fabricated infeasibility removed |
+| T2.9 | gjct CLOSED | P0 | Phase I false improving direction scan removed |
+| T3.4 | (gjct) | P0 | Phase I max(fresh,running) obj floor removed |
+| T3.3 | — | P3 | Pricing level carried forward at Phase I→II |
+| T2.12 | (6zjl) | P0 | EXPAND bound widening (Mechanism B) removed — fabricated |
+| T2.2 | 6zjl CLOSED | P0 | Perturbation mark_dirty removed (stops re-queuing degenerate vars) |
+| T3.2 | — | P3 | Convergence detection modulo gate removed + outer-loop check |
+| T3.11 | — | P3 | Cancellation rounding 1e-12 → 1e-6 |
+
+**Expected Netlib impact** (per comparison report estimates):
+- P0 surgical → 46→~60-70 Netlib (pricing polarity + outer loop = biggest impact)
+- Phase I fixes → UNKNOWN cluster (boeing1, grow15, grow22)
+- step3 infeasibility removal → sierra, maros
+- pivot_special → capri, scsd8
+
+**Remaining high-impact issues (not yet fixed):**
+- T1.1 (P0): step2 implements FBBT, should be BFRT post-processing — full rewrite
+- T1.2 full (P0): step3 constraint elimination — full rewrite
+- T1.3 (P0): Ratio test algorithm mismatch — full rewrite
+- T2.3 (P1): Proactive perturbation in first outer round
+- T2.5 error 5: Row elimination path in pivot_special
+- T2.7 (P2): simplex_final Phase 5 objective double-counting
+- T2.8 (P2): simplex_cleanup 8/11 phases stubbed
+- T2.11 (P2): simplex_final missing partial fixing path
+- T2.13-T2.15 (P2): pivot_primal matrix cleanup + guards
 
 ### !! CRITICAL: Source Comparison Report (2026-03-18) !!
 
