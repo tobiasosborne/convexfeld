@@ -80,23 +80,31 @@ int cxf_cleanup_propagate(SolverState *state, CxfEnv *env) {
             double lb = state->work_lb[j];
             double ub = state->work_ub[j];
 
-            /* Implied UB: leq+a>0 or geq+a<0 */
+            /* Implied UB: leq+a>0 or geq+a<0.
+             * Formula base and activity depend on coeff sign:
+             *   a>0: lb + (rhs - min_a)/a, check negUnbdCount
+             *   a<0: lb + (rhs - max_a)/a, check posUnbdCount */
             if ((leq && a > 0.0) || (geq && a < 0.0)) {
-                /* Sole-unbounded check: j contributes to neg direction? */
+                double act = (a > 0.0) ? min_a : max_a;
+                int cnt = (a > 0.0) ? nc : pc;
                 int sole = (a > 0.0) ? (lb <= -CXF_INFINITY)
                                      : (ub >= CXF_INFINITY);
-                if (nc == 0 || (nc == 1 && sole)) {
-                    double imp = lb + (rhs - min_a) / a;
+                if (cnt == 0 || (cnt == 1 && sole)) {
+                    double imp = lb + (rhs - act) / a;
                     if (imp < best_ub[j]) best_ub[j] = imp;
                 }
             }
 
-            /* Implied LB: leq+a<0 or geq+a>0 */
+            /* Implied LB: leq+a<0 or geq+a>0.
+             *   a>0: ub + (rhs - max_a)/a, check posUnbdCount
+             *   a<0: ub + (rhs - min_a)/a, check negUnbdCount */
             if ((leq && a < 0.0) || (geq && a > 0.0)) {
+                double act = (a > 0.0) ? max_a : min_a;
+                int cnt = (a > 0.0) ? pc : nc;
                 int sole = (a > 0.0) ? (ub >= CXF_INFINITY)
                                      : (lb <= -CXF_INFINITY);
-                if (pc == 0 || (pc == 1 && sole)) {
-                    double imp = ub + (rhs - max_a) / a;
+                if (cnt == 0 || (cnt == 1 && sole)) {
+                    double imp = ub + (rhs - act) / a;
                     if (imp > best_lb[j]) best_lb[j] = imp;
                 }
             }
