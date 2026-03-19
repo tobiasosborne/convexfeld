@@ -31,6 +31,7 @@
 
 #define STALL_THRESHOLD    50
 #define CUMULATIVE_STALL   200   /* perturbation.md: cumulative degenerate pivot cap */
+#define PROACTIVE_ITERS    2     /* T2.3: fire perturbation on first N iters of round 0 */
 
 /* Lifecycle */
 
@@ -168,6 +169,7 @@ int cxf_solve_lp(CxfModel *model) {
     for (int round = 0; round < max_rounds && !terminated; round++) {
         cxf_progress_snapshot(state, snap_buf);
         int inner_checks = 0;  /* convergence check count within this round */
+        int round_iter = 0;    /* per-round iteration counter for proactive perturbation */
 
         while (state->iteration < state->max_iterations) {
             /* Bland's rule removed — not in binary (T3.1).
@@ -181,19 +183,22 @@ int cxf_solve_lp(CxfModel *model) {
              * post-pivot only (T2.10). */
             int status;
 
-            /* (4) Perturbation — reactive on stall/degeneracy only.
-             * V2 solve_lp_core.md Phase 6 step 4: apply perturbation only
-             * "if the EXPAND procedure determines that the solver is
-             * stalling." Proactive early-iteration perturbation removed
-             * per convexfeld-9ksl. */
-            if (stall || state->degenerate_count > STALL_THRESHOLD ||
-                state->cumulative_degenerate > CUMULATIVE_STALL) {
-                cxf_simplex_perturbation(state, env);
-                stall = 0;
-                /* QA Q16: cumulative counter is NEVER reset — original adds
-                 * perturbedCount cumulatively. Removing reset makes the
-                 * second perturbation fire sooner on persistent degeneracy. */
+            /* (4) Perturbation — proactive in round 0, reactive after.
+             * T2.3: binary fires perturbation on first 2 iters of round 0
+             * regardless of stalling (crash basis typically degenerate).
+             * Later rounds: reactive on stall/degeneracy only. */
+            {
+                int do_perturb = (stall ||
+                                  state->degenerate_count > STALL_THRESHOLD ||
+                                  state->cumulative_degenerate > CUMULATIVE_STALL);
+                if (round == 0 && round_iter < PROACTIVE_ITERS)
+                    do_perturb = 1;
+                if (do_perturb) {
+                    cxf_simplex_perturbation(state, env);
+                    stall = 0;
+                }
             }
+            round_iter++;
 
             /* (5) Main simplex pivot */
             status = cxf_simplex_step(state, env);
