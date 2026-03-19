@@ -43,9 +43,18 @@ zero, variable already within feasTol of zero.
 call before Phase 9 tight constraint check. Activity bounds were stale
 after simplex_final fixings; now fresh.
 
-**All 30 source comparison items addressed.** Remaining high-effort items:
-- T2.5 error 5: Row elimination path in pivot_special (needs column elimination infrastructure)
-- T2.8: simplex_cleanup Phases 1-8 (implied bound propagation engine — very high effort)
+**T2.8 (implied bound propagation):** New file `cleanup_propagate.c` (140 LOC)
+implements Phases 3+4+8: variable classification, single-pass Savelsbergh
+implied bound computation, and variable fixing. Called from simplex_cleanup
+before Phase 9. Reviewer caught formula bug for a<0 cases — fixed.
+
+**T2.5e5 (row elimination):** Free/semi-free vars with moderate RC now get
+fixed at current value and all participating constraint rows eliminated.
+Was returning CXF_OK (no-op) because can_increase/can_decrease both require
+finite bounds.
+
+**All 30 source comparison items + 2 high-effort items addressed.** Remaining:
+- T2.8 Phase 5: Full iterative FBBT (worklist-driven, ~400 LOC — deferred)
 - T3.7: Eta-mode expansion in pricing (needs linked-list traversal mode)
 
 ### Session 2026-03-19: Source Comparison P0/P1 Surgical Fixes
