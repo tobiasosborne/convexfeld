@@ -87,8 +87,14 @@ int cxf_simplex_final(SolverState *state, CxfEnv *env, double *workOut) {
             if (ub >= CXF_INFINITY) { abort_early = 1; break; }
             target[j] = ub;
             fix_count++;
+        } else if (lb > -CXF_INFINITY && ub < CXF_INFINITY && lb != ub) {
+            /* T3.9: Zero RC at a zero bound — fix there */
+            double xj = state->work_x[j];
+            if (lb == 0.0 && fabs(xj) <= feas_tol)
+                { target[j] = 0.0; fix_count++; }
+            else if (ub == 0.0 && fabs(xj) <= feas_tol)
+                { target[j] = 0.0; fix_count++; }
         }
-        /* Zero RC: skip (keep unfixed) */
     }
 
     if (abort_early || fix_count == 0) {
