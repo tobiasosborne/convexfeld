@@ -292,6 +292,7 @@ int cxf_simplex_init(CxfModel *model, SolverState **stateP) {
     ctx->total_ftran_time = 0.0;
     ctx->ftran_count = 0;
     ctx->baseline_ftran = 0.0;
+    ctx->scale_factor = 1.0;  /* T3.6: work counter scale (binary default) */
 
     *stateP = ctx;
     return CXF_OK;

@@ -46,7 +46,7 @@ int cxf_simplex_post_iterate(CxfModel *model, SolverState *state,
         return CXF_ERROR_NULL_ARGUMENT;
 
     if (state->work_counter)
-        *state->work_counter += 1.0;
+        *state->work_counter += state->scale_factor;
 
     /* Check 1: Stall detection — only at refactor boundaries.
      * V2 simplex_iteration.md: stall detection runs at refactorization
